@@ -236,13 +236,13 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         page = self.state.current_page()
         if not page:
             if self.content.text_tabs.ocr_text:
-                self.content.text_tabs.ocr_text.value = ""
+                self.content.text_tabs.set_ocr_text("")
             if self.content.text_tabs.gt_text:
-                self.content.text_tabs.gt_text.value = ""
+                self.content.text_tabs.set_ground_truth_text("")
             return
         if self.content.text_tabs.ocr_text:
-            self.content.text_tabs.ocr_text.value = getattr(page, 'text', '') or ''
-        if hasattr(page, 'ground_truth_text') and self.content.text_tabs.gt_text:
+            self.content.text_tabs.set_ocr_text(getattr(page, 'text', '') or '')
+        if hasattr(page, 'ground_truth_text'):
             gt = (getattr(page, 'ground_truth_text', '') or '')
             if not gt.strip():  # attempt lookup if not already populated
                 try:
@@ -252,5 +252,6 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
                         gt = gt_lookup
                         page.ground_truth_text = gt_lookup  # cache on page
                 except Exception:  # noqa: BLE001
+                    # TODO Log this
                     pass
-            self.content.text_tabs.gt_text.value = gt if gt.strip() else ''
+            self.content.text_tabs.set_ground_truth_text(gt if gt.strip() else '')

@@ -101,10 +101,6 @@ class AppState:
     def current_page(self) -> Page | None:
         return self.project.current_page()
 
-    # Backwards compatibility if elsewhere still calls it
-    def _ocr_current_page(self):  # pragma: no cover
-        self.current_page_native = self.project.current_page()
-
     # --------------- Internal navigation helper with loading state ---------------
     def _navigate(self, nav_callable: Callable[[], None]):
         nav_callable()  # quick index change first
@@ -133,10 +129,7 @@ class AppState:
                     self.is_loading = False
                     self.notify()
 
-        if ui is not None:
-            ui.timer(0.05, _schedule_async_load, once=True)  # type: ignore[arg-type]
-        else:  # Non-UI fallback
-            _schedule_async_load()
+        _schedule_async_load()
 
     # --------------- Project Discovery ---------------
     def list_available_projects(self) -> dict[str, Path]:

@@ -33,7 +33,8 @@ if True:  # pragma: no cover
                     .props("color=primary")
                     .classes("self-center my-6 hidden")
                 )
-                with ui.splitter(value=65).classes("w-full h-[calc(100vh-170px)]") as main_split:
+                # Start with a 50/50 split between image and text tabs as requested
+                with ui.splitter(value=50).classes("w-full h-[calc(100vh-170px)]") as main_split:
                     self.splitter = main_split
                     with main_split.before:
                         self.image_tabs.build()

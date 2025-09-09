@@ -250,7 +250,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
                     gt_lookup = find_ground_truth_text(name, self.state.project.ground_truth_map)
                     if gt_lookup:
                         gt = gt_lookup
-                        page.ground_truth_text = gt_lookup  # cache on page
+                        page.add_ground_truth(gt_lookup)  # cache on page
                 except Exception:  # noqa: BLE001
                     # TODO Log this
                     pass

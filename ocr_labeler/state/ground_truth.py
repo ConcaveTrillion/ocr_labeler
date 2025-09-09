@@ -45,43 +45,8 @@ def load_ground_truth_map(directory: Path) -> dict[str, str]:
 
 
 def reload_ground_truth_into_project(state):  # type: ignore[override]
-    """Re-read pages.json and update ground truth on already-loaded pages."""
-    pages_json = state.project_root / "pages.json"
-    if not pages_json.exists():
-        logger.info("reload_ground_truth: no pages.json at %s", pages_json)
-        return
-    try:
-        data = json.loads(pages_json.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            logger.warning("reload_ground_truth: root not dict")
-            return
-        norm_map = _normalize_entries(data)
-        state.project.ground_truth_map = norm_map
-        updated = 0
-        for page in state.project.pages:
-            if page is None:
-                continue
-            key_variants = [
-                getattr(page, 'name', ''),
-                getattr(page, 'name', '').lower(),
-            ]
-            for kv in list(key_variants):
-                if '.' in kv:
-                    base = kv.rsplit('.', 1)[0]
-                    key_variants.append(base)
-                    key_variants.append(base.lower())
-            for kv in key_variants:
-                if kv in norm_map:
-                    try:
-                        page.ground_truth_text = norm_map[kv]  # type: ignore[attr-defined]
-                        updated += 1
-                        break
-                    except Exception:
-                        pass
-        logger.info("reload_ground_truth: updated ground truth on %d pages", updated)
-        state.notify()
-    except Exception as exc:  # pragma: no cover
-        logger.warning("reload_ground_truth failed: %s", exc)
+    pass
+    # TODO: this should instead allow remapping of ground truth to OCR
 
 
 def find_ground_truth_text(name: str, ground_truth_map: dict[str, str]) -> str | None:

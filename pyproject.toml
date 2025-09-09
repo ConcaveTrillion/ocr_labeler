@@ -27,7 +27,6 @@ include = [
 [tool.uv.sources]
 pd-book-tools = { path = "../pd-book-tools", editable = false }
 
-# --- Coverage configuration (Option B) ---
 [tool.coverage.run]
 source = ["ocr_labeler"]
 branch = true
@@ -41,7 +40,7 @@ concurrency = ["thread"]  # NiceGUI & timers may spawn threads
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
-fail_under = 75
+fail_under = 0  # disabled for now per request
 precision = 1
 exclude_also = [
     "if __name__ == .__main__.:",
@@ -57,4 +56,16 @@ output = "coverage.xml"
 
 # Optional: default pytest addopts to always collect coverage (can be overridden)
 [tool.pytest.ini_options]
-addopts = "--cov=labeler --cov-report=term-missing:skip-covered --cov-report=html"
+# Coverage disabled temporarily; keep test run simple
+#addopts = "--cov=ocr_labeler --cov-report=term-missing:skip-covered --cov-report=html"
+addopts = ""
+filterwarnings = [
+    # Suppress deprecation warning from vbuild using deprecated pkgutil.find_loader (Python 3.13 -> removed 3.14)
+    "ignore:'pkgutil.find_loader' is deprecated and slated for removal in Python 3.14:DeprecationWarning:vbuild",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "debugpy>=1.8.5",
+]

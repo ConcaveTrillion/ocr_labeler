@@ -2,14 +2,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 import asyncio
-from nicegui import ui
+from nicegui import ui, binding
 
 if True:  # pragma: no cover - UI helper container
     class ProjectLoadControls:
         """Project selection + path label row.
 
         Responsibilities:
-        - Discover available projects via AppState.list_available_projects()
         - Let user choose and load a project
         - Show the fully resolved selected project directory path (right aligned, wrapped)
         """
@@ -25,40 +24,81 @@ if True:  # pragma: no cover - UI helper container
         load_button: ui.button | None = None
 
         def build(self) -> ui.element:
+            # Ensure state project lists populated once at build time
+            if not getattr(self.state, 'available_projects', None):
+                try:
+                    self.state.refresh_projects()
+                except Exception:  # pragma: no cover
+                    pass
             with ui.row().classes("w-full items-center gap-2") as row:
                 self._row = row
-                self.select = ui.select(label="Project", options=[], with_input=False)
+
+                # Bind select options and value to AppState
+                self.select = ui.select(
+                    label="Project",
+                    options=self.state.project_keys,
+                    value=self.state.selected_project_key,
+                    with_input=False,
+                )
+                binding.bind_to(self.select, 'options', self.state, 'project_keys')
+                binding.bind_to(self.select, 'value', self.state, 'selected_project_key')
+
+                # Ensure options populated now that select exists (state may have been
+                # initialized before UI creation). Safe no-op if already current.
+                try:  # pragma: no cover - UI side effect
+                    self.state.refresh_projects()
+                except Exception:  # pragma: no cover - defensive
+                    pass
+
+                # Update tooltip when selection changes
+                def _update_tooltip():
+                    key = self.state.selected_project_key
+                    path = self.state.available_projects.get(key) if key else None
+                    if path:
+                        self.select.tooltip = str(path)
+                self.select.on('update:model-value', lambda e: _update_tooltip())
+                _update_tooltip()
+
+                # LOAD button bound disabled state to is_loading
                 self.load_button = ui.button("LOAD", on_click=self._load_selected_project)
+                # NiceGUI buttons don't have direct binding for disabled, do manual reaction
+                def _toggle_button():  # pragma: no cover - UI side effect
+                    if self.state.is_loading:
+                        try:
+                            self.load_button.disable()
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            self.load_button.enable()
+                        except Exception:
+                            pass
+                prev_on_change = self.state.on_change
+                def _chained():  # pragma: no cover - UI side effect
+                    if prev_on_change:
+                        try:
+                            prev_on_change()
+                        except Exception:
+                            pass
+                    _toggle_button()
+                self.state.on_change = _chained
+                _toggle_button()
+
                 ui.space()
                 self.path_label = ui.label("") \
                     .classes("text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden") \
                     .style("white-space:normal; word-break:break-all;")
+                try:
+                    binding.bind_text(self.path_label, self.state, 'project_root', lambda p: str(Path(p).resolve()))
+                except Exception:  # pragma: no cover - binding fallback
+                    self.update_path_label()
             return row
 
         # --- Data ops ---
-        def populate(self):  # pragma: no cover - UI side effects
+        def populate(self):  # pragma: no cover - kept for backward compatibility
+            # Now handled by reactive refresh_projects; just trigger refresh
             try:
-                projects = self.state.list_available_projects()
-                self._project_options = projects
-                if not self.select:
-                    return
-                opts = sorted(projects.keys())
-                self.select.options = opts if opts else ["(no projects found)"]
-                if opts:
-                    cur_key = Path(self.state.project_root).resolve().name
-                    if cur_key in projects:
-                        self.select.value = cur_key
-                    elif not getattr(self.select, 'value', None):
-                        self.select.value = opts[0]
-
-                    def _update_tooltip():
-                        key = getattr(self.select, 'value', None)
-                        path = self._project_options.get(key) if key else None
-                        if path:
-                            self.select.tooltip = str(path)
-                    self.select.on('update:model-value', lambda e: _update_tooltip())
-                    _update_tooltip()
-                self.update_path_label()
+                self.state.refresh_projects()
             except Exception as exc:  # noqa: BLE001
                 ui.notify(f"Project list failed: {exc}", type="warning")
 
@@ -69,13 +109,16 @@ if True:  # pragma: no cover - UI helper container
             immediately render the spinner (triggered by AppState.is_loading)
             while the blocking `AppState.load_project` runs in a thread.
             """
-            if not self.select or self.state.is_loading:
+            if self.state.is_loading:
                 return
-            key = getattr(self.select, 'value', None)
+            key = self.state.selected_project_key
             if not key:
                 ui.notify("No project selected", type="warning")
                 return
-            path = self._project_options.get(key)
+            # Ensure mapping is fresh
+            if not self.state.available_projects:
+                self.state.refresh_projects()
+            path = self.state.available_projects.get(key)
             if not path:
                 ui.notify("Project path missing", type="negative")
                 return

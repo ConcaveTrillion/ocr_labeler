@@ -1,16 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
-import hashlib
 import asyncio
 from nicegui import ui
 
-try:  # pragma: no cover
-    from cv2 import imencode as cv2_imencode  # type: ignore
-except Exception:  # pragma: no cover
-    cv2_imencode = None  # type: ignore
-
 from ..state import AppState
-from ..state.ground_truth import find_ground_truth_text
 from .header import HeaderBar
 from .content import ContentArea
 
@@ -173,85 +166,11 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             self._update_images()
             self._update_text()
 
-    # ------------------------------------------------------------ helpers
-    def _encode_np(self, np_img):  # pragma: no cover
-        if np_img is None:
-            return None
-        if cv2_imencode is not None:
-            try:
-                ok, buf = cv2_imencode(".png", np_img)
-                if ok:
-                    import base64
-                    return f"data:image/png;base64,{base64.b64encode(buf.tobytes()).decode('ascii')}"
-            except Exception:  # noqa: BLE001
-                pass
-        try:
-            cache_root = Path(self.state.project_root).resolve() / "_overlay_cache"
-            cache_root.mkdir(parents=True, exist_ok=True)
-            h = hashlib.sha256(np_img.tobytes()[:1024]).hexdigest()
-            fp = cache_root / f"{h}.png"
-            if not fp.exists() and cv2_imencode is not None:
-                ok, buf = cv2_imencode(".png", np_img)
-                if ok:
-                    fp.write_bytes(buf.tobytes())
-            return fp.as_posix()
-        except Exception:  # noqa: BLE001
-            return None
-
+    # --- refactored: delegate image/text update to tabs.py ---
     def _update_images(self):
-        if not self.content:
-            return
-        native = self.state.current_page_native
-        targets = [
-            ("Original", "cv2_numpy_page_image"),
-            ("Paragraphs", "cv2_numpy_page_image_paragraph_with_bboxes"),
-            ("Lines", "cv2_numpy_page_image_line_with_bboxes"),
-            ("Words", "cv2_numpy_page_image_word_with_bboxes"),
-            ("Mismatches", "cv2_numpy_page_image_matched_word_with_colors"),
-        ]
-        if not native:
-            for tab_name, _ in targets:
-                img = self.content.image_tabs.images.get(tab_name)
-                if img:
-                    img.set_source(None)
-                    img.set_visibility(False)
-            return
-        if hasattr(native, "refresh_page_images"):
-            try:
-                native.refresh_page_images()
-            except Exception:  # noqa: BLE001
-                pass
-        for tab_name, attr in targets:
-            img = self.content.image_tabs.images.get(tab_name)
-            if not img:
-                continue
-            np_img = getattr(native, attr, None)
-            src = self._encode_np(np_img)
-            img.set_source(src)
-            img.set_visibility(True if src else False)
+        if self.content and hasattr(self.content, "image_tabs"):
+            self.content.image_tabs.update_images(self.state)
 
     def _update_text(self):
-        if not self.content:
-            return
-        page = self.state.current_page()
-        if not page:
-            if self.content.text_tabs.ocr_text:
-                self.content.text_tabs.set_ocr_text("")
-            if self.content.text_tabs.gt_text:
-                self.content.text_tabs.set_ground_truth_text("")
-            return
-        if self.content.text_tabs.ocr_text:
-            self.content.text_tabs.set_ocr_text(getattr(page, 'text', '') or '')
-        if hasattr(page, 'ground_truth_text'):
-            gt = (getattr(page, 'ground_truth_text', '') or '')
-            if not gt.strip():  # attempt lookup if not already populated
-                try:
-                    name = getattr(page, 'name', '')
-                    gt_lookup = find_ground_truth_text(name, self.state.project.ground_truth_map)
-                    if gt_lookup:
-                        gt = gt_lookup
-                        page.add_ground_truth(gt_lookup)  # cache on page
-                except Exception:  # noqa: BLE001
-                    # TODO Log this
-                    pass
-            self.content.text_tabs.set_ground_truth_text(gt if gt.strip() else '')
+        if self.content and hasattr(self.content, "text_tabs"):
+            self.content.text_tabs.update_text(self.state)

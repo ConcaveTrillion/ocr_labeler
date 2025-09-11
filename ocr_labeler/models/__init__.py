@@ -1,5 +1,5 @@
-from .project import ProjectVM
+from .project import Project
 
 __all__ = [
-    'ProjectVM',
+    'Project',
 ]

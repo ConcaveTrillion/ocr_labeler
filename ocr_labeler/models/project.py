@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ProjectVM:
+class Project:
     """Project view model with lazy page instantiation.
 
     Instead of constructing a ``Page`` object for every image up-front, we keep the

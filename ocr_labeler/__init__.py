@@ -1,7 +1,7 @@
 from .app import NiceGuiLabeler
-from .models import ProjectVM
+from .models import Project
 
 __all__ = [
 	"NiceGuiLabeler",
-	"ProjectVM",
+	"Project",
 ]

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Callable
 import logging
 
-from ..models.project import ProjectVM
+from ..models.project import Project
 try:  # Lazy import; NiceGUI only needed at runtime in UI context
     from nicegui import ui  # type: ignore
 except Exception:  # pragma: no cover
@@ -20,7 +20,7 @@ class AppState:
     """Application State
 
     Responsibilities:
-    - Manage project load & associated lazy-loaded pages (via ProjectVM)
+    - Manage project load & associated lazy-loaded pages (via Project)
     - Coordinate navigation and individual OCR page loading
     - Provide ground truth reload capability
     - Expose bindings for the view layer
@@ -34,7 +34,7 @@ class AppState:
     monospace_font_name: str = "monospace"
     monospace_font_path: Optional[Path] = None
 
-    project: ProjectVM = field(default_factory=ProjectVM)
+    project: Project = field(default_factory=Project)
     current_page_native: object | None = None  # native pd_book_tools Page object after OCR
     on_change: Optional[Callable[[], None]] = None
     is_loading: bool = False
@@ -99,7 +99,7 @@ class AppState:
             page_loader = build_page_loader()
 
             placeholders: list[Page | None] = [None] * len(images)
-            self.project = ProjectVM(
+            self.project = Project(
                 pages=placeholders,
                 image_paths=images,  # type: ignore[arg-type]
                 current_page_index=0 if images else -1,

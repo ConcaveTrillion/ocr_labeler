@@ -16,7 +16,7 @@ import ocr_labeler.state.page_loader
 # Test doubles / utilities
 # ------------------------
 
-class DummyProjectVM:
+class DummyProject:
     def __init__(self, pages, image_paths, current_page_index, page_loader, ground_truth_map):
         self.pages = pages
         self.image_paths = image_paths
@@ -83,7 +83,7 @@ def _ensure_dummy_support_modules(monkeypatch):
 
 def _patch_project_vm(monkeypatch):
     import ocr_labeler.state.app_state as app_state_module
-    monkeypatch.setattr(app_state_module, "ProjectVM", DummyProjectVM, raising=True)
+    monkeypatch.setattr(app_state_module, "Project", DummyProject, raising=True)
 
 
 # ------------- Tests --------------
@@ -111,8 +111,8 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     state.load_project(tmp_path)
 
     assert state.project_root == tmp_path
-    # DummyProjectVM attributes
-    assert isinstance(state.project, DummyProjectVM)
+    # DummyProject attributes
+    assert isinstance(state.project, DummyProject)
     assert len(state.project.image_paths) == 2
     assert state.current_page_native == "page-0"
     assert state.is_loading is False

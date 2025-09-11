@@ -1,7 +1,8 @@
 from __future__ import annotations
 from nicegui import ui
 from .page_controls import PageControls
-from .tabs import ImageTabs, TextTabs
+from .image_tabs import ImageTabs
+from .text_tabs import TextTabs
 
 if True:  # pragma: no cover
     class ContentArea:

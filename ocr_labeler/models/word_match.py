@@ -26,6 +26,7 @@ class WordMatch:
     match_status: MatchStatus
     fuzz_score: Optional[float] = None
     word_index: Optional[int] = None
+    word_object: Optional[object] = None  # Reference to the original word object for image access
     
     @property
     def css_class(self) -> str:
@@ -36,6 +37,74 @@ class WordMatch:
     def is_match(self) -> bool:
         """Return True if this is a match (exact or fuzzy)."""
         return self.match_status in (MatchStatus.EXACT, MatchStatus.FUZZY)
+    
+    def get_cropped_image(self, page_image):
+        """Extract cropped word image from page image using bounding box."""
+        if not self.word_object or page_image is None:
+            logger.debug(f"No word_object ({self.word_object is not None}) or page_image ({page_image is not None}) for word: {self.ocr_text}")
+            return None
+            
+        try:
+            # Get bounding box from word object
+            bbox = getattr(self.word_object, 'bounding_box', None)
+            if not bbox:
+                logger.debug(f"No bounding_box found for word: {self.ocr_text}")
+                return None
+            
+            logger.debug(f"Processing bbox for word '{self.ocr_text}': {bbox}")
+            
+            # Use BoundingBox methods to get pixel coordinates
+            height, width = page_image.shape[:2]
+            logger.debug(f"Image dimensions: {height}x{width}")
+            
+            # Scale to image dimensions if normalized
+            if bbox.is_normalized:
+                logger.debug("Scaling normalized bbox")
+                # Use the scale method to convert to pixel coordinates
+                pixel_bbox = bbox.scale(width, height)
+            else:
+                logger.debug("Using non-normalized bbox directly")
+                pixel_bbox = bbox
+            
+            logger.debug(f"Pixel bbox: {pixel_bbox}")
+            
+            # Get integer coordinates using the BoundingBox properties
+            logger.debug(f"Getting coordinates from pixel_bbox.minX={pixel_bbox.minX}, type={type(pixel_bbox.minX)}")
+            x1 = int(pixel_bbox.minX)
+            y1 = int(pixel_bbox.minY)
+            x2 = int(pixel_bbox.maxX)
+            y2 = int(pixel_bbox.maxY)
+            
+            logger.debug(f"Extracted coordinates: ({x1}, {y1}, {x2}, {y2})")
+            
+            # Validate coordinates
+            if x1 >= x2 or y1 >= y2:
+                logger.debug(f"Invalid bbox coordinates: ({x1}, {y1}, {x2}, {y2})")
+                return None
+            
+            # Clamp coordinates to image bounds
+            x1 = max(0, min(x1, width - 1))
+            y1 = max(0, min(y1, height - 1))
+            x2 = max(x1 + 1, min(x2, width))
+            y2 = max(y1 + 1, min(y2, height))
+            
+            logger.debug(f"Clamped coordinates: ({x1}, {y1}, {x2}, {y2})")
+            
+            # Extract the cropped region
+            cropped = page_image[y1:y2, x1:x2]
+            
+            if cropped.size == 0:
+                logger.debug(f"Empty crop for bbox ({x1}, {y1}, {x2}, {y2})")
+                return None
+                
+            logger.debug(f"Successfully cropped word '{self.ocr_text}' to shape {cropped.shape}")
+            return cropped
+            
+        except Exception as e:
+            import traceback
+            logger.debug(f"Error cropping word image for '{self.ocr_text}': {e}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return None
 
 
 @dataclass 
@@ -45,6 +114,7 @@ class LineMatch:
     ocr_line_text: str
     ground_truth_line_text: str
     word_matches: List[WordMatch]
+    page_image: Optional[object] = None  # Reference to page image for cropping
     
     @property
     def exact_match_count(self) -> int:
@@ -97,14 +167,14 @@ class WordMatchViewModel:
                 return
                 
             for line_idx, line in enumerate(lines):
-                line_match = self._create_line_match(line_idx, line)
+                line_match = self._create_line_match(line_idx, line, page)
                 if line_match:
                     self.line_matches.append(line_match)
                     
         except Exception as e:
             logger.exception(f"Error updating word match view model: {e}")
     
-    def _create_line_match(self, line_idx: int, line) -> Optional[LineMatch]:
+    def _create_line_match(self, line_idx: int, line, page) -> Optional[LineMatch]:
         """Create a LineMatch from a line object."""
         try:
             # Get words from the line
@@ -123,11 +193,16 @@ class WordMatchViewModel:
                 if word_match:
                     word_matches.append(word_match)
             
+            page_image=getattr(page, 'cv2_numpy_page_image', None) if page else None
+            if page_image is None:
+                logger.error(f"No page image available for line {line_idx}")
+
             return LineMatch(
                 line_index=line_idx,
                 ocr_line_text=ocr_line_text,
                 ground_truth_line_text=ground_truth_line_text,
-                word_matches=word_matches
+                word_matches=word_matches,
+                page_image=page_image
             )
             
         except Exception as e:
@@ -146,7 +221,8 @@ class WordMatchViewModel:
                     ocr_text=ocr_text,
                     ground_truth_text='',
                     match_status=MatchStatus.UNMATCHED_OCR,
-                    word_index=word_idx
+                    word_index=word_idx,
+                    word_object=word
                 )
             
             # Check for exact match
@@ -156,7 +232,8 @@ class WordMatchViewModel:
                     ground_truth_text=ground_truth_text,
                     match_status=MatchStatus.EXACT,
                     fuzz_score=1.0,
-                    word_index=word_idx
+                    word_index=word_idx,
+                    word_object=word
                 )
             
             # Compute fuzzy score
@@ -189,7 +266,8 @@ class WordMatchViewModel:
                 ground_truth_text=ground_truth_text,
                 match_status=match_status,
                 fuzz_score=fuzz_score,
-                word_index=word_idx
+                word_index=word_idx,
+                word_object=word
             )
             
         except Exception as e:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from nicegui import ui
-from ..models.word_match import WordMatchViewModel
+from ..models.word_match import WordMatchViewModel, MatchStatus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,15 +16,28 @@ class WordMatchView:
         self.container = None
         self.summary_label = None
         self.lines_container = None
+        self.filter_selector = None
+        self.show_only_mismatches = True  # Default to showing only mismatched lines
 
     def build(self):
         """Build the UI components."""
         with ui.column().classes("full-width full-height") as container:
-            # Header card with summary stats
+            # Header card with summary stats and filter controls
             with ui.card():
-                with ui.row():
-                    ui.icon("analytics")
-                    self.summary_label = ui.label("No matches to display")
+                with ui.column():
+                    # Summary stats row
+                    with ui.row().classes("items-center"):
+                        ui.icon("analytics")
+                        self.summary_label = ui.label("No matches to display")
+
+                    # Filter controls row
+                    with ui.row().classes("items-center"):
+                        ui.icon("filter_list")
+                        self.filter_selector = ui.toggle(
+                            options=["Mismatched Lines", "All Lines"],
+                            value="Mismatched Lines"
+                        )
+                        self.filter_selector.on_value_change(self._on_filter_change)
 
             # Scrollable container for word matches
             with ui.scroll_area().classes("fit"):
@@ -67,13 +80,16 @@ class WordMatchView:
 
     def _update_lines_display(self):
         """Update the lines display with word matches."""
+        logger.info("_update_lines_display called")
         if not self.lines_container:
+            logger.info("No lines_container, returning")
             return
 
         # Clear existing content
         self.lines_container.clear()
 
         if not self.view_model.line_matches:
+            logger.info("No line matches in view model")
             with self.lines_container:
                 with ui.card():
                     with ui.card_section():
@@ -84,22 +100,38 @@ class WordMatchView:
                         )
             return
 
-        # Display each line match in cards
+        # Filter lines based on current selection
+        lines_to_display = self._filter_lines_for_display()
+
+        if not lines_to_display:
+            logger.info("No lines to display after filtering")
+            with self.lines_container:
+                with ui.card():
+                    with ui.card_section():
+                        ui.icon("filter_list_off")
+                        ui.label("No lines match the current filter")
+                        if self.show_only_mismatches:
+                            ui.label(
+                                "All lines have perfect matches. Try selecting 'All lines' to see them."
+                            )
+            return
+
+        # Display filtered line matches in cards
+        logger.info(f"Displaying {len(lines_to_display)} line matches")
         with self.lines_container:
-            for line_match in self.view_model.line_matches:
+            for line_match in lines_to_display:
                 self._create_line_card(line_match)
 
     def _create_line_card(self, line_match):
         """Create a card display for a single line match."""
         with ui.column():
-            with ui.row():
+            # Color background bar based on overall match status
+            status_classes = self._get_status_classes(line_match.overall_match_status.value)
+            with ui.row().classes(f"full-width p-2 rounded {status_classes}"):
                 # Header with line info and status
                 with ui.column():
-                    with ui.row():
-                        ui.icon("format_list_numbered")
+                    with ui.row().classes("items-center"):
                         ui.label(f"Line {line_match.line_index + 1}")
-                    # Statistics section in a separate area
-                    with ui.row():
                         ui.icon("bar_chart")
                         stats_items = [
                             f"✓ {line_match.exact_match_count}",
@@ -177,10 +209,11 @@ class WordMatchView:
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""
         status_icon = self._get_status_icon(word_match.match_status.value)
+        status_color_classes = self._get_status_color_classes(word_match.match_status.value)
 
         with ui.row():
             with ui.column():
-                ui.icon(status_icon)
+                ui.icon(status_icon).classes(status_color_classes)
                 if word_match.fuzz_score is not None:
                     ui.label(f"{word_match.fuzz_score:.2f}")
 
@@ -281,10 +314,62 @@ class WordMatchView:
         }
         return icon_map.get(status, "circle")
 
+    def _get_status_classes(self, status: str) -> str:
+        """Get CSS classes for match status background."""
+        class_map = {
+            "exact": "bg-green-100",        # Light green for exact matches
+            "fuzzy": "bg-yellow-100",       # Light yellow for fuzzy matches  
+            "mismatch": "bg-red-100",       # Light red for mismatches
+            "unmatched_ocr": "bg-gray-100", # Light gray for unmatched OCR
+            "unmatched_gt": "bg-blue-100",  # Light blue for unmatched GT
+        }
+        return class_map.get(status, "bg-gray-50")  # Default light gray
+
+    def _get_status_color_classes(self, status: str) -> str:
+        """Get Tailwind CSS classes for status icon colors."""
+        color_class_map = {
+            "exact": "text-green-600",        # Green for exact matches
+            "fuzzy": "text-yellow-600",       # Yellow/amber for fuzzy matches
+            "mismatch": "text-red-600",       # Red for mismatches
+            "unmatched_ocr": "text-gray-500", # Gray for unmatched OCR
+            "unmatched_gt": "text-blue-600",  # Blue for unmatched ground truth
+        }
+        return color_class_map.get(status, "text-gray-400")  # Default gray
+
     def set_fuzz_threshold(self, threshold: float):
         """Set the fuzzy matching threshold."""
         self.view_model.fuzz_threshold = threshold
         # Note: Would need to trigger a refresh of the current page to see changes
+
+    def _on_filter_change(self, event):
+        """Handle filter selection change."""
+        logger.info(f"Filter change event: {event}")
+        logger.info(f"Filter selector value: {self.filter_selector.value}")
+        self.show_only_mismatches = self.filter_selector.value == "Mismatched Lines"
+        logger.info(f"Show only mismatches: {self.show_only_mismatches}")
+        self._update_lines_display()
+
+    def _filter_lines_for_display(self):
+        """Filter lines based on current filter setting."""
+        logger.info(f"Filtering lines. Show only mismatches: {self.show_only_mismatches}")
+        logger.info(f"Total line matches: {len(self.view_model.line_matches)}")
+        
+        if not self.show_only_mismatches:
+            # Show all lines
+            logger.info("Returning all lines")
+            return self.view_model.line_matches
+        else:
+            # Show only lines with mismatches (any word that's not an exact match)
+            filtered_lines = []
+            for line_match in self.view_model.line_matches:
+                has_mismatch = any(
+                    wm.match_status != MatchStatus.EXACT
+                    for wm in line_match.word_matches
+                )
+                if has_mismatch:
+                    filtered_lines.append(line_match)
+            logger.info(f"Filtered to {len(filtered_lines)} lines with mismatches")
+            return filtered_lines
 
     def clear(self):
         """Clear the display."""

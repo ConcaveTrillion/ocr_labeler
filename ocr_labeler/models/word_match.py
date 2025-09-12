@@ -225,8 +225,8 @@ class WordMatchViewModel:
                     word_object=word
                 )
             
-            # Check for exact match
-            if hasattr(word, 'ground_truth_exact_match') and getattr(word, 'ground_truth_exact_match', False):
+            # First, do a strict exact text comparison - this is the ONLY way to be marked as exact
+            if ocr_text.strip() == ground_truth_text.strip():
                 return WordMatch(
                     ocr_text=ocr_text,
                     ground_truth_text=ground_truth_text,
@@ -236,7 +236,7 @@ class WordMatchViewModel:
                     word_object=word
                 )
             
-            # Compute fuzzy score
+            # If not exact, compute fuzzy score for non-exact matches
             fuzz_score = None
             if hasattr(word, 'fuzz_score_against') and callable(getattr(word, 'fuzz_score_against')):
                 try:
@@ -244,21 +244,13 @@ class WordMatchViewModel:
                 except Exception as e:
                     logger.debug(f"Error computing fuzz score for word {word_idx}: {e}")
             
-            # Determine match status based on fuzz score
-            if fuzz_score is not None:
-                if fuzz_score >= 1.0:
-                    match_status = MatchStatus.EXACT
-                elif fuzz_score >= self.fuzz_threshold:
-                    match_status = MatchStatus.FUZZY
-                else:
-                    match_status = MatchStatus.MISMATCH
+            # For non-exact matches, determine if it's fuzzy or mismatch based on score
+            if fuzz_score is not None and fuzz_score >= self.fuzz_threshold:
+                match_status = MatchStatus.FUZZY
             else:
-                # Fallback to simple text comparison
-                if ocr_text.strip().lower() == ground_truth_text.strip().lower():
-                    match_status = MatchStatus.EXACT
-                    fuzz_score = 1.0
-                else:
-                    match_status = MatchStatus.MISMATCH
+                match_status = MatchStatus.MISMATCH
+                # Set fuzz_score to 0.0 if it wasn't computed or is below threshold
+                if fuzz_score is None:
                     fuzz_score = 0.0
             
             return WordMatch(

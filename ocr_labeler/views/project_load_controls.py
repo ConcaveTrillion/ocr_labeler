@@ -89,7 +89,7 @@ if True:  # pragma: no cover - UI helper container
                     .classes("text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden") \
                     .style("white-space:normal; word-break:break-all;")
                 try:
-                    binding.bind_text(self.path_label, self.state, 'project_root', lambda p: str(Path(p).resolve()))
+                    binding.bind_text(self.path_label, self.state.project_state, 'project_root', lambda p: str(Path(p).resolve()))
                 except Exception:  # pragma: no cover - binding fallback
                     self.update_path_label()
             return row
@@ -124,7 +124,7 @@ if True:  # pragma: no cover - UI helper container
                 return
 
             # Set loading state so global spinner & hiding logic engage
-            self.state.is_loading = True
+            self.state.project_state.is_loading = True
             self.state.is_project_loading = True
             self.state.notify()
             for ctrl in (self.load_button, self.select):
@@ -142,7 +142,7 @@ if True:  # pragma: no cover - UI helper container
                 ui.notify(f"Loaded {key}", type="positive")
             except Exception as exc:  # noqa: BLE001
                 # Ensure loading state cleared if load_project failed early
-                self.state.is_loading = False
+                self.state.project_state.is_loading = False
                 self.state.notify()
                 ui.notify(f"Load failed: {exc}", type="negative")
             finally:
@@ -156,6 +156,6 @@ if True:  # pragma: no cover - UI helper container
         def update_path_label(self):  # pragma: no cover - formatting
             try:
                 if self.path_label:
-                    self.path_label.text = str(Path(self.state.project_root).resolve())
+                    self.path_label.text = str(Path(self.state.project_state.project_root).resolve())
             except Exception:
                 pass

@@ -39,7 +39,7 @@ class ImageTabs:
         return col
 
     def update_images(self, state):
-        native = state.current_page_native
+        native = state.project_state.current_page_native
         targets = [
             ("Original", "cv2_numpy_page_image"),
             ("Paragraphs", "cv2_numpy_page_image_paragraph_with_bboxes"),
@@ -84,7 +84,7 @@ class ImageTabs:
             except Exception:
                 pass
         try:
-            cache_root = Path(state.project_root).resolve() / "_overlay_cache"
+            cache_root = Path(state.project_state.project_root).resolve() / "_overlay_cache"
             cache_root.mkdir(parents=True, exist_ok=True)
             h = hashlib.sha256(np_img.tobytes()[:1024]).hexdigest()
             fp = cache_root / f"{h}.png"

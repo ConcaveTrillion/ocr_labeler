@@ -9,7 +9,6 @@ try:  # Lazy import; NiceGUI only needed at runtime in UI context
     from nicegui import ui  # type: ignore
 except Exception:  # pragma: no cover
     ui = None  # type: ignore
-from pd_book_tools.ocr.page import Page  # type: ignore
 
 
 logger = logging.getLogger(__name__)
@@ -99,47 +98,8 @@ class AppState:
             self.is_project_loading = False
             self.notify()
 
-    # --------------- Delegation to Project State ---------------
-    def reload_ground_truth(self):
-        """Reload ground truth by delegating to project state."""
-        self.project_state.reload_ground_truth()
 
-    def next_page(self):
-        """Navigate to next page by delegating to project state."""
-        self.project_state.next_page()
 
-    def prev_page(self):
-        """Navigate to previous page by delegating to project state."""
-        self.project_state.prev_page()
-
-    def goto_page_number(self, number: int):
-        """Navigate to specific page by delegating to project state."""
-        self.project_state.goto_page_number(number)
-
-    def current_page(self) -> Page | None:
-        """Get current page by delegating to project state."""
-        return self.project_state.current_page()
-
-    # --------------- Compatibility Properties ---------------
-    @property
-    def project_root(self) -> Path:
-        """Get project root from project state."""
-        return self.project_state.project_root
-    
-    @property
-    def project(self):
-        """Get project from project state."""
-        return self.project_state.project
-    
-    @property
-    def current_page_native(self):
-        """Get current page native object from project state."""
-        return self.project_state.current_page_native
-    
-    @current_page_native.setter
-    def current_page_native(self, value):
-        """Set current page native object on project state."""
-        self.project_state.current_page_native = value
     
     @property
     def is_loading(self) -> bool:

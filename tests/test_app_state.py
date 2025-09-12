@@ -110,11 +110,11 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
 
     state.load_project(tmp_path)
 
-    assert state.project_root == tmp_path
+    assert state.project_state.project_root == tmp_path
     # DummyProject attributes
-    assert isinstance(state.project, DummyProject)
-    assert len(state.project.image_paths) == 2
-    assert state.current_page_native == "page-0"
+    assert isinstance(state.project_state.project, DummyProject)
+    assert len(state.project_state.project.image_paths) == 2
+    assert state.project_state.current_page_native == "page-0"
     assert state.is_loading is False
     assert state.is_project_loading is False
     # Expect at least two notifications: entering & leaving loading phase
@@ -146,25 +146,25 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
     state.load_project(tmp_path)
 
     # Initial
-    assert state.current_page_native == "page-0"
+    assert state.project_state.current_page_native == "page-0"
 
-    state.next_page()
-    assert state.current_page_native == "page-1"
+    state.project_state.next_page()
+    assert state.project_state.current_page_native == "page-1"
     assert state.is_loading is False  # synchronous fallback path
 
-    state.next_page()
-    state.next_page()  # attempt to move beyond end
-    assert state.current_page_native == "page-2"
+    state.project_state.next_page()
+    state.project_state.next_page()  # attempt to move beyond end
+    assert state.project_state.current_page_native == "page-2"
 
-    state.prev_page()
-    assert state.current_page_native == "page-1"
+    state.project_state.prev_page()
+    assert state.project_state.current_page_native == "page-1"
 
-    state.goto_page_number(0)
-    assert state.current_page_native == "page-0"
+    state.project_state.goto_page_number(0)
+    assert state.project_state.current_page_native == "page-0"
 
     # Out-of-range should not change index
-    state.goto_page_number(99)
-    assert state.current_page_native == "page-0"
+    state.project_state.goto_page_number(99)
+    assert state.project_state.current_page_native == "page-0"
 
 
 def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
@@ -181,7 +181,7 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
     monkeypatch.setattr(gt_mod, "reload_ground_truth_into_project", fake_reload, raising=False)
 
     state = AppState()
-    state.reload_ground_truth()
+    state.project_state.reload_ground_truth()
     assert called.get("app_state") is state.project_state
 
 
@@ -242,7 +242,7 @@ def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
         observed.append(state.is_loading)
 
     state.on_change = on_change
-    state.next_page()  # Will attempt to go beyond end; index unchanged but navigation path runs
+    state.project_state.next_page()  # Will attempt to go beyond end; index unchanged but navigation path runs
     # Expect at least two observations: loading True then False
     assert True in observed
     assert observed[-1] is False
@@ -261,7 +261,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
 
     state = AppState()
     notifications = []
-    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.current_page_native))
+    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.project_state.current_page_native))
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
@@ -280,7 +280,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
     assert notifications[1] == (False, False, sentinel_page)  # End: loading=False, project_loading=False, page=sentinel
     assert state.is_loading is False
     assert state.is_project_loading is False
-    assert state.current_page_native is sentinel_page
+    assert state.project_state.current_page_native is sentinel_page
 
 
 def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
@@ -296,7 +296,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
 
     state = AppState()
     notifications = []
-    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.current_page_native))
+    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.project_state.current_page_native))
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
@@ -324,4 +324,4 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     assert notifications[0] == (True, False, None)  # Start: loading=True, project_loading=False, page=None
     assert state.is_loading is True  # Still loading since async task hasn't completed
     assert state.is_project_loading is False
-    assert state.current_page_native is None  # Not yet loaded
+    assert state.project_state.current_page_native is None  # Not yet loaded

@@ -55,7 +55,7 @@ class TextTabs:
             self.gt_text.set_value(text or "")
 
     def update_text(self, state):
-        page = state.current_page()
+        page = state.project_state.current_page()
         if not page:
             if hasattr(self, "ocr_text") and self.ocr_text:
                 self.set_ocr_text("")
@@ -69,7 +69,7 @@ class TextTabs:
             if not gt.strip():
                 try:
                     name = getattr(page, 'name', '')
-                    gt_lookup = find_ground_truth_text(name, state.project.ground_truth_map)
+                    gt_lookup = find_ground_truth_text(name, state.project_state.project.ground_truth_map)
                     if gt_lookup:
                         gt = gt_lookup
                         page.add_ground_truth(gt_lookup)

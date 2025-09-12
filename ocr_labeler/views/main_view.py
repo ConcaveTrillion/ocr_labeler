@@ -68,7 +68,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             n = 1
         if n < 1:
             n = 1
-        self.state.goto_page_number(n)
+        self.state.project_state.goto_page_number(n)
 
     # ------------------------------------------------------------ async navigation helpers
     def _prep_image_spinners(self):
@@ -82,14 +82,14 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             return
         self._prep_image_spinners()
         await asyncio.sleep(0)
-        self.state.prev_page()
+        self.state.project_state.prev_page()
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         if getattr(self.state, 'is_loading', False):
             return
         self._prep_image_spinners()
         await asyncio.sleep(0)
-        self.state.next_page()
+        self.state.project_state.next_page()
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         if getattr(self.state, 'is_loading', False):
@@ -107,12 +107,12 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         # background thread populates current_page_native and loading flips False.
         # Always compute current index & image name immediately for navigation feedback.
         # Only fetch full page object (with OCR) when not loading to avoid blocking.
-        current_index = getattr(self.state.project, 'current_page_index', -1)
+        current_index = getattr(self.state.project_state.project, 'current_page_index', -1)
         image_name = ''
-        if 0 <= current_index < len(self.state.project.image_paths):
-            image_name = self.state.project.image_paths[current_index].name
-        page = None if loading else self.state.current_page()
-        total = len(self.state.project.pages)
+        if 0 <= current_index < len(self.state.project_state.project.image_paths):
+            image_name = self.state.project_state.project.image_paths[current_index].name
+        page = None if loading else self.state.project_state.current_page()
+        total = len(self.state.project_state.project.pages)
 
 
         # Update project path label (keep header visible even while loading)
@@ -127,7 +127,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
                 self._global_loading.classes(add='hidden')
 
         # Content & placeholder visibility
-        no_project = not getattr(self.state.project, 'image_paths', [])
+        no_project = not getattr(self.state.project_state.project, 'image_paths', [])
         if self.content and self.content.root:
             # Keep overall root visible once a project is loaded; hide entirely only if no project.
             if no_project:

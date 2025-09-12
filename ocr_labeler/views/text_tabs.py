@@ -1,5 +1,6 @@
 from nicegui import ui
 from ..state.ground_truth import find_ground_truth_text
+from .word_match import WordMatchView
 
 
 class TextTabs:
@@ -9,6 +10,7 @@ class TextTabs:
         # Keep attribute names for external references, but these will hold code_editor instances.
         self.gt_text = None  # type: ignore[assignment]
         self.ocr_text = None  # type: ignore[assignment]
+        self.word_match_view = WordMatchView()
         self.container = None
         self._tabs = None
 
@@ -24,9 +26,9 @@ class TextTabs:
             with ui.tab_panels(text_tabs, value="Matches").classes(
                 "full-width full-height column"
             ):
-                # Matches placeholder
+                # Matches panel with word matching view
                 with ui.tab_panel("Matches").classes("full-width full-height column"):
-                    ui.label("(Not implemented yet)").classes("text-caption text-grey")
+                    self.word_match_view.build()
                 # Ground Truth panel
                 with ui.tab_panel("Ground Truth").classes(
                     "full-width full-height column"
@@ -61,6 +63,8 @@ class TextTabs:
                 self.set_ocr_text("")
             if hasattr(self, "gt_text") and self.gt_text:
                 self.set_ground_truth_text("")
+            if hasattr(self, "word_match_view") and self.word_match_view:
+                self.word_match_view.clear()
             return
         if hasattr(self, "ocr_text") and self.ocr_text:
             self.set_ocr_text(getattr(page, 'text', '') or '')
@@ -77,3 +81,7 @@ class TextTabs:
                     pass
             if hasattr(self, "set_ground_truth_text"):
                 self.set_ground_truth_text(gt if gt.strip() else '')
+        
+        # Update word match view
+        if hasattr(self, "word_match_view") and self.word_match_view:
+            self.word_match_view.update_from_page(page)

@@ -21,11 +21,12 @@ class NiceGuiLabeler:
         monospace_font_path: Optional[Path] = None,
     ) -> None:
         self.state = AppState(
-            project_root=project_root,
             base_projects_root=projects_root,
             monospace_font_name=monospace_font_name,
             monospace_font_path=monospace_font_path,
         )
+        # Set the initial project root in the project state
+        self.state.project_state.project_root = project_root
         self.view = LabelerView(self.state)
 
     def create_routes(self):

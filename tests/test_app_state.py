@@ -82,8 +82,8 @@ def _ensure_dummy_support_modules(monkeypatch):
 
 
 def _patch_project_vm(monkeypatch):
-    import ocr_labeler.state.app_state as app_state_module
-    monkeypatch.setattr(app_state_module, "Project", DummyProject, raising=True)
+    import ocr_labeler.state.project_state as project_state_module
+    monkeypatch.setattr(project_state_module, "Project", DummyProject, raising=True)
 
 
 # ------------- Tests --------------
@@ -104,7 +104,7 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     # Track notifications
     notifications = []
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     state.on_change = lambda: notifications.append(
         (state.is_loading, state.is_project_loading))
 
@@ -117,14 +117,15 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     assert state.current_page_native == "page-0"
     assert state.is_loading is False
     assert state.is_project_loading is False
-    # Expect two notifications: entering & leaving loading phase
-    assert len(notifications) == 2
+    # Expect at least two notifications: entering & leaving loading phase
+    # (may have more due to project state notifications)
+    assert len(notifications) >= 2
     assert notifications[0] == (True, True)   # start project load
     assert notifications[-1] == (False, False)  # end project load
 
 
 def test_load_project_nonexistent_directory_raises(tmp_path):
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     missing = tmp_path / "does_not_exist"
     with pytest.raises(FileNotFoundError):
         state.load_project(missing)
@@ -141,7 +142,7 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
     for i in range(3):
         (tmp_path / f"p{i}.png").write_bytes(b"")
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     state.load_project(tmp_path)
 
     # Initial
@@ -179,9 +180,9 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
 
     monkeypatch.setattr(gt_mod, "reload_ground_truth_into_project", fake_reload, raising=False)
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     state.reload_ground_truth()
-    assert called.get("app_state") is state
+    assert called.get("app_state") is state.project_state
 
 
 def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
@@ -202,7 +203,7 @@ def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
     projC.mkdir()
     (projC / "scan.JPG").write_bytes(b"")
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     result = state.list_available_projects()
     assert set(result.keys()) == {"projA", "projC"}
     assert result["projA"] == projA.resolve()
@@ -212,12 +213,12 @@ def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
 def test_list_available_projects_missing_base_returns_empty(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     # Do NOT create the base path
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     assert state.list_available_projects() == {}
 
 
 def test_notify_invokes_on_change_callback(tmp_path):
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     calls = []
     state.on_change = lambda: calls.append("notified")
     state.notify()
@@ -232,7 +233,7 @@ def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
     _patch_project_vm(monkeypatch)
 
     (tmp_path / "only.png").write_bytes(b"")
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     state.load_project(tmp_path)
 
     observed = []
@@ -258,19 +259,19 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
         nonlocal nav_called
         nav_called = True
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     notifications = []
     state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.current_page_native))
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
-    monkeypatch.setattr(state.project, "current_page", lambda: sentinel_page)
+    monkeypatch.setattr(state.project_state.project, "current_page", lambda: sentinel_page)
 
     # Mock asyncio.get_running_loop to raise RuntimeError (no loop)
     monkeypatch.setattr("asyncio.get_running_loop", lambda: (_ for _ in ()).throw(RuntimeError("no loop")))
 
-    # Call _navigate directly
-    state._navigate(mock_nav)
+    # Call _navigate directly on project_state
+    state.project_state._navigate(mock_nav)
 
     # Assertions
     assert nav_called  # nav_callable was called
@@ -293,13 +294,13 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
         nonlocal nav_called
         nav_called = True
 
-    state = AppState(project_root=tmp_path)
+    state = AppState()
     notifications = []
     state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.current_page_native))
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
-    monkeypatch.setattr(state.project, "current_page", lambda: sentinel_page)
+    monkeypatch.setattr(state.project_state.project, "current_page", lambda: sentinel_page)
 
     # Mock event loop
     mock_loop = type('MockLoop', (), {'create_task': lambda self, coro: None})()
@@ -313,8 +314,8 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
         # Don't call original to avoid unawaited coroutine warning
     mock_loop.create_task = mock_create_task
 
-    # Call _navigate directly
-    state._navigate(mock_nav)
+    # Call _navigate directly on project_state
+    state.project_state._navigate(mock_nav)
 
     # Assertions
     assert nav_called  # nav_callable was called

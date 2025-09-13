@@ -1,5 +1,6 @@
 from nicegui import ui
 
+from ..state.ground_truth import find_ground_truth_text
 from .word_match import WordMatchView
 
 
@@ -75,9 +76,20 @@ class TextTabs:
             else:
                 self.set_ocr_text("")
 
-        # Set ground truth text from page
+        # Set ground truth text from state mapping
         if hasattr(self, "gt_text") and hasattr(self, "set_ground_truth_text"):
-            gt_text = getattr(page, "ground_truth_text", "") or ""
+            # Get the original ground truth text from the project's ground truth mapping
+            if hasattr(page, "name") and hasattr(
+                state.project_state.project, "ground_truth_map"
+            ):
+                gt_text = (
+                    find_ground_truth_text(
+                        page.name, state.project_state.project.ground_truth_map
+                    )
+                    or ""
+                )
+            else:
+                gt_text = ""
             # Ensure gt_text is a string before calling strip()
             if isinstance(gt_text, str):
                 self.set_ground_truth_text(gt_text if gt_text.strip() else "")

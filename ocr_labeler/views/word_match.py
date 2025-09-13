@@ -74,6 +74,8 @@ class WordMatchView:
             f"✅ {stats['exact_matches']} exact ({stats['exact_percentage']:.1f}%) • "
             f"⚠️ {stats['fuzzy_matches']} fuzzy • "
             f"❌ {stats['mismatches']} mismatches • "
+            f"🔵 {stats['unmatched_gt']} unmatched GT • "
+            f"⚫ {stats['unmatched_ocr']} unmatched OCR • "
             f"🎯 {stats['match_percentage']:.1f}% match rate"
         )
         self.summary_label.set_text(summary_text)
@@ -138,6 +140,10 @@ class WordMatchView:
                             f"⚠ {line_match.fuzzy_match_count}",
                             f"✗ {line_match.mismatch_count}",
                         ]
+                        if line_match.unmatched_gt_count > 0:
+                            stats_items.append(f"🔵 {line_match.unmatched_gt_count}")
+                        if line_match.unmatched_ocr_count > 0:
+                            stats_items.append(f"⚫ {line_match.unmatched_ocr_count}")
                         ui.label(" • ".join(stats_items))
                     # with ui.row():
                     #     # Status chip
@@ -162,9 +168,15 @@ class WordMatchView:
             f"Creating word comparison table with {len(line_match.word_matches)} word matches"
         )
 
+        # Debug: Log the match statuses we're displaying
+        match_statuses = [wm.match_status.value for wm in line_match.word_matches]
+        logger.debug(f"Word match statuses: {match_statuses}")
+
         with ui.row():
             # Create a column for each word
-            for word_match in line_match.word_matches:
+            for word_idx, word_match in enumerate(line_match.word_matches):
+                logger.debug(f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}")
+                                    
                 with ui.column():
                     # Image cell
                     self._create_image_cell(word_match)
@@ -178,11 +190,15 @@ class WordMatchView:
     def _create_image_cell(self, word_match):
         """Create image cell for a word."""
         with ui.row().classes("fit"):
-            word_image = self._get_word_image(word_match)
-            if word_image:
-                ui.interactive_image(word_image).style("height: 2.25em")
+            # Unmatched GT words don't have images since they don't have word objects
+            if word_match.match_status == MatchStatus.UNMATCHED_GT:
+                ui.icon("text_fields").classes("text-blue-600").style("height: 2.25em")
             else:
-                ui.icon("image_not_supported")
+                word_image = self._get_word_image(word_match)
+                if word_image:
+                    ui.interactive_image(word_image).style("height: 2.25em")
+                else:
+                    ui.icon("image_not_supported")
 
     def _create_ocr_cell(self, word_match):
         """Create OCR text cell for a word."""
@@ -193,7 +209,11 @@ class WordMatchView:
                 if tooltip_content:
                     ocr_element.tooltip(tooltip_content)
             else:
-                ui.label("[empty]")
+                # Show different placeholders based on match status
+                if word_match.match_status == MatchStatus.UNMATCHED_GT:
+                    ui.label("[missing]").classes("text-blue-600")
+                else:
+                    ui.label("[empty]")
 
     def _create_gt_cell(self, word_match):
         """Create Ground Truth text cell for a word."""
@@ -360,6 +380,7 @@ class WordMatchView:
             return self.view_model.line_matches
         else:
             # Show only lines with mismatches (any word that's not an exact match)
+            # This includes fuzzy matches, mismatches, unmatched OCR, and unmatched GT
             filtered_lines = []
             for line_match in self.view_model.line_matches:
                 has_mismatch = any(

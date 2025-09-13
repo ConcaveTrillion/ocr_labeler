@@ -135,7 +135,7 @@ Development Notes
 -----------------
 - See `TODOs.md` for roadmap & phased feature list.
 - `AppState` in `ocr_labeler/state/app_state.py` handles navigation + lazy OCR.
-- UI composition lives in `ocr_labeler/view.py`.
+- UI composition lives in modular components under `ocr_labeler/views/`.
 - Minimal wrapper `NiceGuiLabeler` is in `ocr_labeler/app.py`.
 
 Future Enhancements (Short List)

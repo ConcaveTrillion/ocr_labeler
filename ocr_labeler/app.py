@@ -4,8 +4,8 @@ from typing import Optional
 import logging
 from nicegui import ui
 
-from .model import AppState
-from .view import LabelerView
+from .state.app_state import AppState
+from .views.main_view import LabelerView
 
 logger = logging.getLogger(__name__)
 

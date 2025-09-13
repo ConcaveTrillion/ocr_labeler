@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full test lint format pre-commit-check clean help
+.PHONY: install setup reinstall reset-venv reset-full test lint format pre-commit-check build clean help
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -53,6 +53,11 @@ pre-commit-check: ## Run pre-commit on all files
 	@echo "🪝 Running pre-commit on all files..."
 	uv run pre-commit run --all-files
 
+build: ## Build distribution packages (wheel and sdist)
+	@echo "📦 Building distribution packages..."
+	uv build
+	@echo "✅ Build complete! Check dist/ directory for packages."
+
 clean: ## Clean up cache and temporary files (keeps venv and UV cache)
 	@echo "🧹 Cleaning Python cache files..."
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -61,4 +66,7 @@ clean: ## Clean up cache and temporary files (keeps venv and UV cache)
 	@echo "🧹 Cleaning coverage files..."
 	rm -rf htmlcov/ 2>/dev/null || true
 	rm -f coverage.xml 2>/dev/null || true
+	@echo "🧹 Cleaning build artifacts..."
+	rm -rf dist/ 2>/dev/null || true
+	rm -rf build/ 2>/dev/null || true
 	@echo "✅ Cache cleanup complete!"

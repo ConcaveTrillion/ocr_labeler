@@ -45,7 +45,14 @@ cd ocr_labeler
 ```
 
 ### 3. Install Dependencies
-Using uv (preferred):
+Using the Makefile (recommended):
+```bash
+make install
+```
+
+This will install dependencies and set up pre-commit hooks for development.
+
+Alternatively, using uv directly:
 ```bash
 uv sync
 ```
@@ -130,9 +137,40 @@ Troubleshooting
 - No Pages Loaded: Confirm the project directory path is correct and contains supported image extensions.
 - Ground Truth Not Showing: Verify `pages.json` is valid JSON and keys match filenames (case insensitive); restart or click Open again.
 - Import Path Errors: Make sure `pd-book-tools` is cloned sibling to this project root so the relative path source defined in `pyproject.toml` resolves.
+- Environment Issues: Try `make reset` to rebuild the virtual environment, or `make reset-full` for a complete reset including UV cache.
 
-Development Notes
------------------
+Development Workflow
+--------------------
+
+### Makefile Commands
+The project includes a Makefile with convenient development commands:
+
+```bash
+make help        # Show all available commands
+make install     # Install dependencies and set up pre-commit hooks
+make test        # Run pytest test suite
+make lint        # Run ruff linting checks with fixes
+make format      # Format code with ruff
+make clean       # Clean cache files and temporary artifacts
+make reset       # Rebuild virtual environment (keeps UV cache)
+make reset-full  # Nuclear reset: clear all caches and redownload
+```
+
+### Running Tests
+```bash
+make test
+# or directly:
+uv run pytest
+```
+
+### Code Quality
+```bash
+make lint        # Lint and auto-fix issues
+make format      # Format code
+make pre-commit-check  # Run pre-commit hooks on all files
+```
+
+### Development Notes
 - See `TODOs.md` for roadmap & phased feature list.
 - `AppState` in `ocr_labeler/state/app_state.py` handles navigation + lazy OCR.
 - UI composition lives in modular components under `ocr_labeler/views/`.

@@ -26,6 +26,11 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
     - `word_match.WordMatchViewModel` - OCR/GT matching logic and statistics
   - **CLI**: `ocr_labeler.cli.main()` entry point with argparse
 
+## Code Generation
+Always use context7 when I need code generation, setup or configuration steps, or
+library/API documentation. This means you should automatically use the Context7 MCP
+tools to resolve library id and get library docs without me having to explicitly ask.
+
 ## Key library use:
   - `pd_book_tools`
     - `pd_book_tools/geometry/`: Primitive spatial types (`Point`, `BoundingBox`) with normalization semantics (normalized vs pixel). All downstream logic relies on correct `is_normalized` flags.

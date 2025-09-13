@@ -7,7 +7,7 @@ on:
     branches: [ master, main ]
 
 jobs:
-  pre-commit:
+  ci:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -29,33 +29,13 @@ jobs:
       run: make install
       working-directory: ocr_labeler
 
-    - name: Run pre-commit
-      run: make pre-commit-check
+    - name: Run CI pipeline
+      run: make ci
       working-directory: ocr_labeler
 
-  tests:
-    runs-on: ubuntu-latest
-    needs: pre-commit
-    steps:
-    - uses: actions/checkout@v4
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
       with:
-        path: ocr_labeler
-
-    - name: Checkout pd-book-tools dependency
-      uses: actions/checkout@v4
-      with:
-        repository: ConcaveTrillion/pd-book-tools
-        path: pd-book-tools
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
-
-    - name: Install dependencies and setup
-      run: make install
-      working-directory: ocr_labeler
-
-    - name: Run tests
-      run: make test
-      working-directory: ocr_labeler
+        name: distribution-packages
+        path: ocr_labeler/dist/
+        retention-days: 30

@@ -53,6 +53,14 @@ pre-commit-check: ## Run pre-commit on all files
 	@echo "🪝 Running pre-commit on all files..."
 	uv run pre-commit run --all-files
 
+ci: ## Run complete CI pipeline (install [idempotent], pre-commit, test, build)
+	@echo "🚀 Running complete CI pipeline..."
+	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory pre-commit-check
+	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory build
+	@echo "✅ CI pipeline complete!"
+
 build: ## Build distribution packages (wheel and sdist)
 	@echo "📦 Building distribution packages..."
 	uv build

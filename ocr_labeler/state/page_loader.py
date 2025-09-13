@@ -37,8 +37,7 @@ def build_page_loader(docTR_predictor=None):
         page_obj: Page = doc.pages[0]
 
         if ground_truth_string:
-            # TODO: run the ground truth string matching algorithm from pd_book_tools against the Page object using ground_truth_string
-            pass
+            page_obj.add_ground_truth(ground_truth_string)
 
         return page_obj
 

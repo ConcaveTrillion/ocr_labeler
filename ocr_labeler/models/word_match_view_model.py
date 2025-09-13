@@ -1,161 +1,16 @@
 """Word matching view model for displaying OCR vs Ground Truth comparisons."""
 
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import Optional, List
-from enum import Enum
 import logging
 
 from pd_book_tools.ocr.block import Block
 from pd_book_tools.ocr.page import Page
 
+from .word_match_model import WordMatch, MatchStatus
+from .line_match_model import LineMatch
+
 logger = logging.getLogger(__name__)
-
-
-class MatchStatus(Enum):
-    """Status of word matching between OCR and Ground Truth."""
-    EXACT = "exact"
-    FUZZY = "fuzzy" 
-    MISMATCH = "mismatch"
-    UNMATCHED_OCR = "unmatched_ocr"
-    UNMATCHED_GT = "unmatched_gt"
-
-
-@dataclass
-class WordMatch:
-    """Represents a single word match comparison."""
-    ocr_text: str
-    ground_truth_text: str
-    match_status: MatchStatus
-    fuzz_score: Optional[float] = None
-    word_index: Optional[int] = None
-    word_object: Optional[object] = None  # Reference to the original word object for image access
-    
-    @property
-    def css_class(self) -> str:
-        """Return CSS class for styling based on match status."""
-        return f"word-match-{self.match_status.value}"
-    
-    @property
-    def is_match(self) -> bool:
-        """Return True if this is a match (exact or fuzzy)."""
-        return self.match_status in (MatchStatus.EXACT, MatchStatus.FUZZY)
-    
-    def get_cropped_image(self, page_image):
-        """Extract cropped word image from page image using bounding box."""
-        if not self.word_object or page_image is None:
-            logger.debug(f"No word_object ({self.word_object is not None}) or page_image ({page_image is not None}) for word: {self.ocr_text}")
-            return None
-            
-        try:
-            # Get bounding box from word object
-            bbox = getattr(self.word_object, 'bounding_box', None)
-            if not bbox:
-                logger.debug(f"No bounding_box found for word: {self.ocr_text}")
-                return None
-            
-            logger.debug(f"Processing bbox for word '{self.ocr_text}': {bbox}")
-            
-            # Use BoundingBox methods to get pixel coordinates
-            height, width = page_image.shape[:2]
-            logger.debug(f"Image dimensions: {height}x{width}")
-            
-            # Scale to image dimensions if normalized
-            if bbox.is_normalized:
-                logger.debug("Scaling normalized bbox")
-                # Use the scale method to convert to pixel coordinates
-                pixel_bbox = bbox.scale(width, height)
-            else:
-                logger.debug("Using non-normalized bbox directly")
-                pixel_bbox = bbox
-            
-            logger.debug(f"Pixel bbox: {pixel_bbox}")
-            
-            # Get integer coordinates using the BoundingBox properties
-            logger.debug(f"Getting coordinates from pixel_bbox.minX={pixel_bbox.minX}, type={type(pixel_bbox.minX)}")
-            x1 = int(pixel_bbox.minX)
-            y1 = int(pixel_bbox.minY)
-            x2 = int(pixel_bbox.maxX)
-            y2 = int(pixel_bbox.maxY)
-            
-            logger.debug(f"Extracted coordinates: ({x1}, {y1}, {x2}, {y2})")
-            
-            # Validate coordinates
-            if x1 >= x2 or y1 >= y2:
-                logger.debug(f"Invalid bbox coordinates: ({x1}, {y1}, {x2}, {y2})")
-                return None
-            
-            # Clamp coordinates to image bounds
-            x1 = max(0, min(x1, width - 1))
-            y1 = max(0, min(y1, height - 1))
-            x2 = max(x1 + 1, min(x2, width))
-            y2 = max(y1 + 1, min(y2, height))
-            
-            logger.debug(f"Clamped coordinates: ({x1}, {y1}, {x2}, {y2})")
-            
-            # Extract the cropped region
-            cropped = page_image[y1:y2, x1:x2]
-            
-            if cropped.size == 0:
-                logger.debug(f"Empty crop for bbox ({x1}, {y1}, {x2}, {y2})")
-                return None
-                
-            logger.debug(f"Successfully cropped word '{self.ocr_text}' to shape {cropped.shape}")
-            return cropped
-            
-        except Exception as e:
-            import traceback
-            logger.debug(f"Error cropping word image for '{self.ocr_text}': {e}")
-            logger.debug(f"Traceback: {traceback.format_exc()}")
-            return None
-
-
-@dataclass 
-class LineMatch:
-    """Represents matching for a complete line."""
-    line_index: int
-    ocr_line_text: str
-    ground_truth_line_text: str
-    word_matches: List[WordMatch]
-    page_image: Optional[object] = None  # Reference to page image for cropping
-    
-    @property
-    def exact_match_count(self) -> int:
-        """Count of exactly matching words."""
-        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.EXACT)
-    
-    @property
-    def fuzzy_match_count(self) -> int:
-        """Count of fuzzy matching words.""" 
-        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.FUZZY)
-    
-    @property
-    def mismatch_count(self) -> int:
-        """Count of mismatched words."""
-        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.MISMATCH)
-    
-    @property
-    def unmatched_gt_count(self) -> int:
-        """Count of unmatched ground truth words."""
-        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.UNMATCHED_GT)
-    
-    @property
-    def unmatched_ocr_count(self) -> int:
-        """Count of unmatched OCR words."""
-        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.UNMATCHED_OCR)
-    
-    @property
-    def overall_match_status(self) -> MatchStatus:
-        """Overall status for the line."""
-        if not self.word_matches:
-            return MatchStatus.MISMATCH
-        
-        if all(wm.match_status == MatchStatus.EXACT for wm in self.word_matches):
-            return MatchStatus.EXACT
-        elif any(wm.is_match for wm in self.word_matches):
-            return MatchStatus.FUZZY
-        else:
-            return MatchStatus.MISMATCH
 
 
 class WordMatchViewModel:

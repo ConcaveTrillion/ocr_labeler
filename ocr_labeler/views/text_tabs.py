@@ -67,18 +67,10 @@ class TextTabs:
                 self.word_match_view.clear()
             return
         if hasattr(self, "ocr_text") and self.ocr_text:
-            self.set_ocr_text(getattr(page, 'text', '') or '')
+            ot = (getattr(page, 'text', '') or '')
+            self.set_ocr_text(ot if ot.strip() else '')
         if hasattr(page, 'ground_truth_text'):
             gt = (getattr(page, 'ground_truth_text', '') or '')
-            if not gt.strip():
-                try:
-                    name = getattr(page, 'name', '')
-                    gt_lookup = find_ground_truth_text(name, state.project_state.project.ground_truth_map)
-                    if gt_lookup:
-                        gt = gt_lookup
-                        page.add_ground_truth(gt_lookup)
-                except Exception:
-                    pass
             if hasattr(self, "set_ground_truth_text"):
                 self.set_ground_truth_text(gt if gt.strip() else '')
         

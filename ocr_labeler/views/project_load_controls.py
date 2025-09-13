@@ -2,7 +2,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 import asyncio
+import logging
 from nicegui import ui, binding
+from ocr_labeler.state import AppState
+
+logger = logging.getLogger(__name__)
 
 if True:  # pragma: no cover - UI helper container
     class ProjectLoadControls:
@@ -13,8 +17,8 @@ if True:  # pragma: no cover - UI helper container
         - Show the fully resolved selected project directory path (right aligned, wrapped)
         """
 
-        def __init__(self, state):
-            self.state = state
+        def __init__(self, state: AppState):
+            self.state: AppState = state
             self._project_options: Dict[str, Path] = {}
 
         # UI refs (populated in build)
@@ -29,7 +33,9 @@ if True:  # pragma: no cover - UI helper container
                 try:
                     self.state.refresh_projects()
                 except Exception:  # pragma: no cover
+                    logger.warning("Project refresh failed", exc_info=True)
                     pass
+            
             with ui.row().classes("w-full items-center gap-2") as row:
                 self._row = row
 
@@ -48,7 +54,7 @@ if True:  # pragma: no cover - UI helper container
                 try:  # pragma: no cover - UI side effect
                     self.state.refresh_projects()
                 except Exception:  # pragma: no cover - defensive
-                    pass
+                    logger.warning("Project refresh failed", exc_info=True)
 
                 # Update tooltip when selection changes
                 def _update_tooltip():
@@ -158,4 +164,5 @@ if True:  # pragma: no cover - UI helper container
                 if self.path_label:
                     self.path_label.text = str(Path(self.state.project_state.project_root).resolve())
             except Exception:
+                logger.warning("Path label update failed", exc_info=True)
                 pass

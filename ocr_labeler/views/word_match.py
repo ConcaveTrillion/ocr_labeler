@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 from nicegui import ui
-from ..models.word_match import WordMatchViewModel, MatchStatus
+from ..models.word_match_view_model import WordMatchViewModel
+from ..models.word_match_model import MatchStatus
 import logging
 
 logger = logging.getLogger(__name__)

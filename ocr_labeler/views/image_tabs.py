@@ -1,5 +1,5 @@
-from pathlib import Path
 import hashlib
+from pathlib import Path
 
 from nicegui import ui
 
@@ -80,11 +80,14 @@ class ImageTabs:
                 ok, buf = cv2_imencode(".png", np_img)
                 if ok:
                     import base64
+
                     return f"data:image/png;base64,{base64.b64encode(buf.tobytes()).decode('ascii')}"
             except Exception:
                 pass
         try:
-            cache_root = Path(state.project_state.project_root).resolve() / "_overlay_cache"
+            cache_root = (
+                Path(state.project_state.project_root).resolve() / "_overlay_cache"
+            )
             cache_root.mkdir(parents=True, exist_ok=True)
             h = hashlib.sha256(np_img.tobytes()[:1024]).hexdigest()
             fp = cache_root / f"{h}.png"

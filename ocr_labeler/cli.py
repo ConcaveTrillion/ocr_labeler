@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import argparse
 import logging
 import logging.config
 from pathlib import Path
+
 from .app import NiceGuiLabeler
 
 logger = logging.getLogger(__name__)

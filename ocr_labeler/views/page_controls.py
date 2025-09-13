@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from nicegui import ui
 
 if True:  # pragma: no cover - UI wrapper file
+
     class PageControls:
         """Navigation + open directory row."""
 
@@ -12,7 +14,9 @@ if True:  # pragma: no cover - UI wrapper file
             self._on_goto = on_goto
             # UI refs
             self.row = None
-            self.page_index_box = None  # non-interactive button-style box showing current page name
+            self.page_index_box = (
+                None  # non-interactive button-style box showing current page name
+            )
             self.dir_input = None
             self.page_input = None
             self.page_name = None
@@ -23,15 +27,20 @@ if True:  # pragma: no cover - UI wrapper file
                 self.row = row
                 # Non-clickable button-style box for current page (PNG filename)
                 self.page_index_box = (
-                    ui.button("-", on_click=lambda: None)
-                    .classes("pointer-events-none")  # visually identical to button, no interaction
+                    ui.button("-", on_click=lambda: None).classes(
+                        "pointer-events-none"
+                    )  # visually identical to button, no interaction
                 )
                 ui.button("Prev", on_click=self._on_prev)
                 ui.button("Next", on_click=self._on_next)
-                ui.button("Go To:", on_click=lambda: self._on_goto(self.page_input.value))
-                self.page_input = ui.number(label="Page", value=1, min=1, format="%d") \
-                    .on("keydown.enter", lambda e: self._on_goto(self.page_input.value)) \
+                ui.button(
+                    "Go To:", on_click=lambda: self._on_goto(self.page_input.value)
+                )
+                self.page_input = (
+                    ui.number(label="Page", value=1, min=1, format="%d")
+                    .on("keydown.enter", lambda e: self._on_goto(self.page_input.value))
                     .on("blur", lambda e: self._on_goto(self.page_input.value))
+                )
                 self.page_total = ui.label("")
             return row
 

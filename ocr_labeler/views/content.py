@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from nicegui import ui
-from .page_controls import PageControls
+
 from .image_tabs import ImageTabs
+from .page_controls import PageControls
 from .text_tabs import TextTabs
+
 
 class ContentArea:
     """Page controls + splitter containing image & text tabs."""
@@ -22,9 +25,9 @@ class ContentArea:
             self.root = root
             self.page_controls = PageControls(
                 self.state,
-                on_prev=self.callbacks['prev'],
-                on_next=self.callbacks['next'],
-                on_goto=self.callbacks['goto'],
+                on_prev=self.callbacks["prev"],
+                on_next=self.callbacks["next"],
+                on_goto=self.callbacks["goto"],
             )
             self.page_controls.build()
             # Page-level navigation spinner (smaller, inline)
@@ -34,7 +37,9 @@ class ContentArea:
                 .classes("self-center my-6 hidden")
             )
             # Start with a 50/50 split between image and text tabs as requested
-            with ui.splitter(value=50).classes("w-full h-[calc(100vh-170px)]") as main_split:
+            with ui.splitter(value=50).classes(
+                "w-full h-[calc(100vh-170px)]"
+            ) as main_split:
                 self.splitter = main_split
                 with main_split.before:
                     self.image_tabs.build()

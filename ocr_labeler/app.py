@@ -1,7 +1,9 @@
 from __future__ import annotations
+
+import logging
 from pathlib import Path
 from typing import Optional
-import logging
+
 from nicegui import ui
 
 from .state.app_state import AppState

@@ -1,14 +1,18 @@
 from __future__ import annotations
-from pathlib import Path
-from typing import Dict
+
 import asyncio
 import logging
-from nicegui import ui, binding
+from pathlib import Path
+from typing import Dict
+
+from nicegui import binding, ui
+
 from ocr_labeler.state import AppState
 
 logger = logging.getLogger(__name__)
 
 if True:  # pragma: no cover - UI helper container
+
     class ProjectLoadControls:
         """Project selection + path label row.
 
@@ -29,13 +33,13 @@ if True:  # pragma: no cover - UI helper container
 
         def build(self) -> ui.element:
             # Ensure state project lists populated once at build time
-            if not getattr(self.state, 'available_projects', None):
+            if not getattr(self.state, "available_projects", None):
                 try:
                     self.state.refresh_projects()
                 except Exception:  # pragma: no cover
                     logger.warning("Project refresh failed", exc_info=True)
                     pass
-            
+
             with ui.row().classes("w-full items-center gap-2") as row:
                 self._row = row
 
@@ -46,8 +50,10 @@ if True:  # pragma: no cover - UI helper container
                     value=self.state.selected_project_key,
                     with_input=False,
                 )
-                binding.bind_to(self.select, 'options', self.state, 'project_keys')
-                binding.bind_to(self.select, 'value', self.state, 'selected_project_key')
+                binding.bind_to(self.select, "options", self.state, "project_keys")
+                binding.bind_to(
+                    self.select, "value", self.state, "selected_project_key"
+                )
 
                 # Ensure options populated now that select exists (state may have been
                 # initialized before UI creation). Safe no-op if already current.
@@ -62,11 +68,15 @@ if True:  # pragma: no cover - UI helper container
                     path = self.state.available_projects.get(key) if key else None
                     if path:
                         self.select.tooltip = str(path)
-                self.select.on('update:model-value', lambda e: _update_tooltip())
+
+                self.select.on("update:model-value", lambda e: _update_tooltip())
                 _update_tooltip()
 
                 # LOAD button bound disabled state to is_loading
-                self.load_button = ui.button("LOAD", on_click=self._load_selected_project)
+                self.load_button = ui.button(
+                    "LOAD", on_click=self._load_selected_project
+                )
+
                 # NiceGUI buttons don't have direct binding for disabled, do manual reaction
                 def _toggle_button():  # pragma: no cover - UI side effect
                     if self.state.is_loading:
@@ -79,7 +89,9 @@ if True:  # pragma: no cover - UI helper container
                             self.load_button.enable()
                         except Exception:
                             pass
+
                 prev_on_change = self.state.on_change
+
                 def _chained():  # pragma: no cover - UI side effect
                     if prev_on_change:
                         try:
@@ -87,15 +99,25 @@ if True:  # pragma: no cover - UI helper container
                         except Exception:
                             pass
                     _toggle_button()
+
                 self.state.on_change = _chained
                 _toggle_button()
 
                 ui.space()
-                self.path_label = ui.label("") \
-                    .classes("text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden") \
+                self.path_label = (
+                    ui.label("")
+                    .classes(
+                        "text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden"
+                    )
                     .style("white-space:normal; word-break:break-all;")
+                )
                 try:
-                    binding.bind_text(self.path_label, self.state.project_state, 'project_root', lambda p: str(Path(p).resolve()))
+                    binding.bind_text(
+                        self.path_label,
+                        self.state.project_state,
+                        "project_root",
+                        lambda p: str(Path(p).resolve()),
+                    )
                 except Exception:  # pragma: no cover - binding fallback
                     self.update_path_label()
             return row
@@ -162,7 +184,9 @@ if True:  # pragma: no cover - UI helper container
         def update_path_label(self):  # pragma: no cover - formatting
             try:
                 if self.path_label:
-                    self.path_label.text = str(Path(self.state.project_state.project_root).resolve())
+                    self.path_label.text = str(
+                        Path(self.state.project_state.project_root).resolve()
+                    )
             except Exception:
                 logger.warning("Path label update failed", exc_info=True)
                 pass

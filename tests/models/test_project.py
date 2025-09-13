@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 from pd_book_tools.ocr.page import Page
+
 from ocr_labeler.models.project import Project
 
 
@@ -30,14 +32,18 @@ class TestProject:
 
     def test_ensure_page_no_loader(self):
         """Test _ensure_page without page_loader."""
-        vm = Project(image_paths=[Path("test.png")], pages=[None], ground_truth_map={"test.png": "Mock GT"})
+        vm = Project(
+            image_paths=[Path("test.png")],
+            pages=[None],
+            ground_truth_map={"test.png": "Mock GT"},
+        )
         page = vm._ensure_page(0)
         assert page is not None
         assert page.image_path == Path("test.png")
         assert page.name == "test.png"
         assert page.index == 0
 
-    @patch('ocr_labeler.state.ground_truth.find_ground_truth_text')
+    @patch("ocr_labeler.state.ground_truth.find_ground_truth_text")
     def test_ensure_page_with_loader_success(self, mock_find_gt):
         """Test _ensure_page with successful page_loader."""
         mock_page = Mock(spec=Page)
@@ -46,16 +52,16 @@ class TestProject:
             image_paths=[Path("test.png")],
             pages=[None],
             page_loader=mock_loader,
-            ground_truth_map={"test.png": "Mock GT"}
+            ground_truth_map={"test.png": "Mock GT"},
         )
         page = vm._ensure_page(0)
         assert page == mock_page
-        mock_loader.assert_called_once_with(Path("test.png"), 0, 'Mock GT')
+        mock_loader.assert_called_once_with(Path("test.png"), 0, "Mock GT")
         assert mock_page.image_path == Path("test.png")
         assert mock_page.name == "test.png"
         assert mock_page.index == 0
 
-    @patch('cv2.imread')
+    @patch("cv2.imread")
     def test_ensure_page_with_loader_exception(self, mock_cv2):
         """Test _ensure_page with page_loader raising exception."""
         mock_cv2.return_value = Mock()  # Mock image
@@ -64,7 +70,7 @@ class TestProject:
             image_paths=[Path("test.png")],
             pages=[None],
             page_loader=mock_loader,
-            ground_truth_map={"test.png": "Mock GT"}
+            ground_truth_map={"test.png": "Mock GT"},
         )
         page = vm._ensure_page(0)
         assert page is not None
@@ -72,12 +78,12 @@ class TestProject:
         assert page.name == "test.png"
         assert page.index == 0
         # Note: ground_truth_text assertion removed due to Page default
-        assert hasattr(page, 'cv2_numpy_page_image')
+        assert hasattr(page, "cv2_numpy_page_image")
 
     def test_current_page(self):
         """Test current_page method."""
         vm = Project(image_paths=[Path("test.png")], pages=[None])
-        with patch.object(vm, '_ensure_page', return_value=Mock()) as mock_ensure:
+        with patch.object(vm, "_ensure_page", return_value=Mock()) as mock_ensure:
             page = vm.current_page()
             mock_ensure.assert_called_once_with(0)
             assert page == mock_ensure.return_value
@@ -100,7 +106,10 @@ class TestProject:
 
     def test_goto_page_index(self):
         """Test goto_page_index method."""
-        vm = Project(image_paths=[Path("1.png"), Path("2.png"), Path("3.png")], pages=[None, None, None])
+        vm = Project(
+            image_paths=[Path("1.png"), Path("2.png"), Path("3.png")],
+            pages=[None, None, None],
+        )
         vm.goto_page_index(1)
         assert vm.current_page_index == 1
         vm.goto_page_index(-1)  # Clamp to 0

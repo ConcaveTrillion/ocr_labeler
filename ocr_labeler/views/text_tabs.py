@@ -1,5 +1,5 @@
 from nicegui import ui
-from ..state.ground_truth import find_ground_truth_text
+
 from .word_match import WordMatchView
 
 
@@ -66,14 +66,24 @@ class TextTabs:
             if hasattr(self, "word_match_view") and self.word_match_view:
                 self.word_match_view.clear()
             return
+        # Set OCR text from page
         if hasattr(self, "ocr_text") and self.ocr_text:
-            ot = (getattr(page, 'text', '') or '')
-            self.set_ocr_text(ot if ot.strip() else '')
-        if hasattr(page, 'ground_truth_text'):
-            gt = (getattr(page, 'ground_truth_text', '') or '')
-            if hasattr(self, "set_ground_truth_text"):
-                self.set_ground_truth_text(gt if gt.strip() else '')
-        
+            ocr_text = getattr(page, "text", "") or ""
+            # Ensure ocr_text is a string before calling strip()
+            if isinstance(ocr_text, str):
+                self.set_ocr_text(ocr_text if ocr_text.strip() else "")
+            else:
+                self.set_ocr_text("")
+
+        # Set ground truth text from page
+        if hasattr(self, "gt_text") and hasattr(self, "set_ground_truth_text"):
+            gt_text = getattr(page, "ground_truth_text", "") or ""
+            # Ensure gt_text is a string before calling strip()
+            if isinstance(gt_text, str):
+                self.set_ground_truth_text(gt_text if gt_text.strip() else "")
+            else:
+                self.set_ground_truth_text("")
+
         # Update word match view
         if hasattr(self, "word_match_view") and self.word_match_view:
             self.word_match_view.update_from_page(page)

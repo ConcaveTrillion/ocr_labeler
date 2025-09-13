@@ -9,6 +9,20 @@ dependencies = [
     "pd-book-tools>=0.1.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "debugpy>=1.8.5",
+]
+test = [
+    "pytest>=8.4.1",
+    "coverage>=7.0",
+]
+all-dev = [
+    {include-group = "dev"},
+    {include-group = "test"},
+]
+
 [project.scripts]
 ocr-labeler-ui = "ocr_labeler.cli:main"
 
@@ -62,10 +76,4 @@ addopts = ""
 filterwarnings = [
     # Suppress deprecation warning from vbuild using deprecated pkgutil.find_loader (Python 3.13 -> removed 3.14)
     "ignore:'pkgutil.find_loader' is deprecated and slated for removal in Python 3.14:DeprecationWarning:vbuild",
-]
-
-[dependency-groups]
-dev = [
-    "pytest>=8.4.1",
-    "debugpy>=1.8.5",
 ]

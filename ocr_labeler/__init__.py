@@ -4,9 +4,9 @@ from .state import AppState, ProjectState
 from .views import LabelerView
 
 __all__ = [
-	"NiceGuiLabeler",
-	"Project",
-	"AppState",
-	"ProjectState", 
-	"LabelerView",
+    "NiceGuiLabeler",
+    "Project",
+    "AppState",
+    "ProjectState",
+    "LabelerView",
 ]

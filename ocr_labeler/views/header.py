@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from nicegui import ui
+
 from .project_load_controls import ProjectLoadControls
 
 if True:  # pragma: no cover
+
     class HeaderBar:
         """Top header containing project load controls only."""
 

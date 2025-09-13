@@ -1,13 +1,14 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-import asyncio
-from pathlib import Path
-from typing import Optional, Callable
-import logging
 
-from ..models.project import Project
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Optional
+
 from pd_book_tools.ocr.page import Page  # type: ignore
 
+from ..models.project import Project
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,9 @@ class ProjectState:
     """
 
     project: Project = field(default_factory=Project)
-    current_page_native: object | None = None  # native pd_book_tools Page object after OCR
+    current_page_native: object | None = (
+        None  # native pd_book_tools Page object after OCR
+    )
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_loading: bool = False
     on_change: Optional[Callable[[], None]] = None
@@ -45,12 +48,18 @@ class ProjectState:
         directory = Path(directory)
         if not directory.exists():
             raise FileNotFoundError(directory)
-        
+
         self.is_loading = True
         self.notify()
         try:
             self.project_root = directory
-            images = sorted([p for p in directory.iterdir() if p.suffix.lower() in {".png", ".jpg", ".jpeg"}])
+            images = sorted(
+                [
+                    p
+                    for p in directory.iterdir()
+                    if p.suffix.lower() in {".png", ".jpg", ".jpeg"}
+                ]
+            )
 
             ground_truth_map = load_ground_truth_map(directory)
             page_loader = build_page_loader()
@@ -87,8 +96,10 @@ class ProjectState:
 
     def goto_page_number(self, number: int):
         """Navigate to a specific page number."""
+
         def action():
             self.project.goto_page_number(number)
+
         self._navigate(action)
 
     def current_page(self) -> Page | None:
@@ -121,7 +132,9 @@ class ProjectState:
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:  # no running loop at all
-                logger.info("No running event loop; falling back to synchronous page load")
+                logger.info(
+                    "No running event loop; falling back to synchronous page load"
+                )
                 # Fallback synchronous load
                 try:
                     page = self.project.current_page()
@@ -136,7 +149,9 @@ class ProjectState:
             try:
                 task = loop.create_task(coro)
                 # If a test replaced create_task with a stub that returns None or non-Task, close coro
-                if not isinstance(task, asyncio.Task):  # pragma: no cover - exercised in tests via mock
+                if not isinstance(
+                    task, asyncio.Task
+                ):  # pragma: no cover - exercised in tests via mock
                     try:
                         coro.close()
                     except Exception:  # pragma: no cover - defensive

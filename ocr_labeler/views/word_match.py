@@ -1,10 +1,13 @@
 """Word matching view component for displaying OCR vs Ground Truth comparisons with color coding."""
 
 from __future__ import annotations
-from nicegui import ui
-from ..models.word_match_view_model import WordMatchViewModel
-from ..models.word_match_model import MatchStatus
+
 import logging
+
+from nicegui import ui
+
+from ..models.word_match_model import MatchStatus
+from ..models.word_match_view_model import WordMatchViewModel
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ class WordMatchView:
                         ui.icon("filter_list")
                         self.filter_selector = ui.toggle(
                             options=["Mismatched Lines", "All Lines"],
-                            value="Mismatched Lines"
+                            value="Mismatched Lines",
                         )
                         self.filter_selector.on_value_change(self._on_filter_change)
 
@@ -129,7 +132,9 @@ class WordMatchView:
         """Create a card display for a single line match."""
         with ui.column():
             # Color background bar based on overall match status
-            status_classes = self._get_status_classes(line_match.overall_match_status.value)
+            status_classes = self._get_status_classes(
+                line_match.overall_match_status.value
+            )
             with ui.row().classes(f"full-width p-2 rounded {status_classes}"):
                 # Header with line info and status
                 with ui.column():
@@ -176,8 +181,10 @@ class WordMatchView:
         with ui.row():
             # Create a column for each word
             for word_idx, word_match in enumerate(line_match.word_matches):
-                logger.debug(f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}")
-                                    
+                logger.debug(
+                    f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}"
+                )
+
                 with ui.column():
                     # Image cell
                     self._create_image_cell(word_match)
@@ -230,7 +237,9 @@ class WordMatchView:
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""
         status_icon = self._get_status_icon(word_match.match_status.value)
-        status_color_classes = self._get_status_color_classes(word_match.match_status.value)
+        status_color_classes = self._get_status_color_classes(
+            word_match.match_status.value
+        )
 
         with ui.row():
             with ui.column():
@@ -311,8 +320,9 @@ class WordMatchView:
                 return None
 
             # Convert to base64 data URL for display in browser
-            import cv2
             import base64
+
+            import cv2
 
             # Encode image as PNG
             _, buffer = cv2.imencode(".png", cropped_img)
@@ -338,10 +348,10 @@ class WordMatchView:
     def _get_status_classes(self, status: str) -> str:
         """Get CSS classes for match status background."""
         class_map = {
-            "exact": "bg-green-100",        # Light green for exact matches
-            "fuzzy": "bg-yellow-100",       # Light yellow for fuzzy matches  
-            "mismatch": "bg-red-100",       # Light red for mismatches
-            "unmatched_ocr": "bg-gray-100", # Light gray for unmatched OCR
+            "exact": "bg-green-100",  # Light green for exact matches
+            "fuzzy": "bg-yellow-100",  # Light yellow for fuzzy matches
+            "mismatch": "bg-red-100",  # Light red for mismatches
+            "unmatched_ocr": "bg-gray-100",  # Light gray for unmatched OCR
             "unmatched_gt": "bg-blue-100",  # Light blue for unmatched GT
         }
         return class_map.get(status, "bg-gray-50")  # Default light gray
@@ -349,10 +359,10 @@ class WordMatchView:
     def _get_status_color_classes(self, status: str) -> str:
         """Get Tailwind CSS classes for status icon colors."""
         color_class_map = {
-            "exact": "text-green-600",        # Green for exact matches
-            "fuzzy": "text-yellow-600",       # Yellow/amber for fuzzy matches
-            "mismatch": "text-red-600",       # Red for mismatches
-            "unmatched_ocr": "text-gray-500", # Gray for unmatched OCR
+            "exact": "text-green-600",  # Green for exact matches
+            "fuzzy": "text-yellow-600",  # Yellow/amber for fuzzy matches
+            "mismatch": "text-red-600",  # Red for mismatches
+            "unmatched_ocr": "text-gray-500",  # Gray for unmatched OCR
             "unmatched_gt": "text-blue-600",  # Blue for unmatched ground truth
         }
         return color_class_map.get(status, "text-gray-400")  # Default gray
@@ -372,9 +382,11 @@ class WordMatchView:
 
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""
-        logger.info(f"Filtering lines. Show only mismatches: {self.show_only_mismatches}")
+        logger.info(
+            f"Filtering lines. Show only mismatches: {self.show_only_mismatches}"
+        )
         logger.info(f"Total line matches: {len(self.view_model.line_matches)}")
-        
+
         if not self.show_only_mismatches:
             # Show all lines
             logger.info("Returning all lines")

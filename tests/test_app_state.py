@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import sys
 import types
 from pathlib import Path
+
 import pytest
+
 from ocr_labeler.state.app_state import AppState
-import ocr_labeler.state.ground_truth
-import ocr_labeler.state.page_loader
 
 # ocr_labeler/state/test_app_state.py
 
@@ -16,8 +17,11 @@ import ocr_labeler.state.page_loader
 # Test doubles / utilities
 # ------------------------
 
+
 class DummyProject:
-    def __init__(self, pages, image_paths, current_page_index, page_loader, ground_truth_map):
+    def __init__(
+        self, pages, image_paths, current_page_index, page_loader, ground_truth_map
+    ):
         self.pages = pages
         self.image_paths = image_paths
         self.index = current_page_index
@@ -64,8 +68,15 @@ def _ensure_dummy_support_modules(monkeypatch):
     def fake_reload_ground_truth_into_project(app_state: AppState):
         pass
 
-    monkeypatch.setattr(gt_mod, "load_ground_truth_map", fake_load_ground_truth_map, raising=False)
-    monkeypatch.setattr(gt_mod, "reload_ground_truth_into_project", fake_reload_ground_truth_into_project, raising=False)
+    monkeypatch.setattr(
+        gt_mod, "load_ground_truth_map", fake_load_ground_truth_map, raising=False
+    )
+    monkeypatch.setattr(
+        gt_mod,
+        "reload_ground_truth_into_project",
+        fake_reload_ground_truth_into_project,
+        raising=False,
+    )
 
     # page_loader module
     pl_mod_name = "ocr_labeler.state.page_loader"
@@ -78,15 +89,19 @@ def _ensure_dummy_support_modules(monkeypatch):
     def fake_build_page_loader():
         return object()
 
-    monkeypatch.setattr(pl_mod, "build_page_loader", fake_build_page_loader, raising=False)
+    monkeypatch.setattr(
+        pl_mod, "build_page_loader", fake_build_page_loader, raising=False
+    )
 
 
 def _patch_project_vm(monkeypatch):
     import ocr_labeler.state.project_state as project_state_module
+
     monkeypatch.setattr(project_state_module, "Project", DummyProject, raising=True)
 
 
 # ------------- Tests --------------
+
 
 def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_path):
     _ensure_dummy_support_modules(monkeypatch)
@@ -94,8 +109,13 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
 
     # Add specific ground truth mapping (override for this test)
     import ocr_labeler.state.ground_truth as gt_mod
-    monkeypatch.setattr(gt_mod, "load_ground_truth_map",
-                        lambda directory: {"img0.png": "GT0"}, raising=False)
+
+    monkeypatch.setattr(
+        gt_mod,
+        "load_ground_truth_map",
+        lambda directory: {"img0.png": "GT0"},
+        raising=False,
+    )
 
     # Create image files
     (tmp_path / "img0.png").write_bytes(b"")
@@ -106,7 +126,8 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
 
     state = AppState()
     state.on_change = lambda: notifications.append(
-        (state.is_loading, state.is_project_loading))
+        (state.is_loading, state.is_project_loading)
+    )
 
     state.load_project(tmp_path)
 
@@ -120,7 +141,7 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     # Expect at least two notifications: entering & leaving loading phase
     # (may have more due to project state notifications)
     assert len(notifications) >= 2
-    assert notifications[0] == (True, True)   # start project load
+    assert notifications[0] == (True, True)  # start project load
     assert notifications[-1] == (False, False)  # end project load
 
 
@@ -178,7 +199,9 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
     def fake_reload(app_state):
         called["app_state"] = app_state
 
-    monkeypatch.setattr(gt_mod, "reload_ground_truth_into_project", fake_reload, raising=False)
+    monkeypatch.setattr(
+        gt_mod, "reload_ground_truth_into_project", fake_reload, raising=False
+    )
 
     state = AppState()
     state.project_state.reload_ground_truth()
@@ -255,20 +278,32 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
 
     # Mock nav_callable
     nav_called = False
+
     def mock_nav():
         nonlocal nav_called
         nav_called = True
 
     state = AppState()
     notifications = []
-    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.project_state.current_page_native))
+    state.on_change = lambda: notifications.append(
+        (
+            state.is_loading,
+            state.is_project_loading,
+            state.project_state.current_page_native,
+        )
+    )
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
-    monkeypatch.setattr(state.project_state.project, "current_page", lambda: sentinel_page)
+    monkeypatch.setattr(
+        state.project_state.project, "current_page", lambda: sentinel_page
+    )
 
     # Mock asyncio.get_running_loop to raise RuntimeError (no loop)
-    monkeypatch.setattr("asyncio.get_running_loop", lambda: (_ for _ in ()).throw(RuntimeError("no loop")))
+    monkeypatch.setattr(
+        "asyncio.get_running_loop",
+        lambda: (_ for _ in ()).throw(RuntimeError("no loop")),
+    )
 
     # Call _navigate directly on project_state
     state.project_state._navigate(mock_nav)
@@ -276,8 +311,16 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
     # Assertions
     assert nav_called  # nav_callable was called
     assert len(notifications) == 2  # Two notifications: start and end
-    assert notifications[0] == (True, False, None)  # Start: loading=True, project_loading=False, page=None
-    assert notifications[1] == (False, False, sentinel_page)  # End: loading=False, project_loading=False, page=sentinel
+    assert notifications[0] == (
+        True,
+        False,
+        None,
+    )  # Start: loading=True, project_loading=False, page=None
+    assert notifications[1] == (
+        False,
+        False,
+        sentinel_page,
+    )  # End: loading=False, project_loading=False, page=sentinel
     assert state.is_loading is False
     assert state.is_project_loading is False
     assert state.project_state.current_page_native is sentinel_page
@@ -290,28 +333,39 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
 
     # Mock nav_callable
     nav_called = False
+
     def mock_nav():
         nonlocal nav_called
         nav_called = True
 
     state = AppState()
     notifications = []
-    state.on_change = lambda: notifications.append((state.is_loading, state.is_project_loading, state.project_state.current_page_native))
+    state.on_change = lambda: notifications.append(
+        (
+            state.is_loading,
+            state.is_project_loading,
+            state.project_state.current_page_native,
+        )
+    )
 
     # Mock project.current_page to return a sentinel
     sentinel_page = object()
-    monkeypatch.setattr(state.project_state.project, "current_page", lambda: sentinel_page)
+    monkeypatch.setattr(
+        state.project_state.project, "current_page", lambda: sentinel_page
+    )
 
     # Mock event loop
-    mock_loop = type('MockLoop', (), {'create_task': lambda self, coro: None})()
+    mock_loop = type("MockLoop", (), {"create_task": lambda self, coro: None})()
     monkeypatch.setattr("asyncio.get_running_loop", lambda: mock_loop)
 
     # Track if create_task was called
     task_created = False
+
     def mock_create_task(coro):
         nonlocal task_created
         task_created = True
         # Don't call original to avoid unawaited coroutine warning
+
     mock_loop.create_task = mock_create_task
 
     # Call _navigate directly on project_state
@@ -320,8 +374,14 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     # Assertions
     assert nav_called  # nav_callable was called
     assert task_created  # Async task was scheduled
-    assert len(notifications) == 1  # Only start notification; end happens in async task (not in this sync test)
-    assert notifications[0] == (True, False, None)  # Start: loading=True, project_loading=False, page=None
+    assert (
+        len(notifications) == 1
+    )  # Only start notification; end happens in async task (not in this sync test)
+    assert notifications[0] == (
+        True,
+        False,
+        None,
+    )  # Start: loading=True, project_loading=False, page=None
     assert state.is_loading is True  # Still loading since async task hasn't completed
     assert state.is_project_loading is False
     assert state.project_state.current_page_native is None  # Not yet loaded

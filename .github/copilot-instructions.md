@@ -7,7 +7,7 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
 - Tech Stack: NiceGUI (web UI), Python 3.13+, `uv` package manager
 - Main components:
   - **Application Layer**: `ocr_labeler.app.NiceGuiLabeler` - main entry point
-  - **State Management**: 
+  - **State Management**:
     - `ocr_labeler.state.AppState` - application-wide state (project selection, UI settings)
     - `ocr_labeler.state.ProjectState` - project-specific state (navigation, lazy page loading)
     - `ocr_labeler.state.GroundTruth` - ground truth text management from `pages.json`
@@ -17,7 +17,7 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
     - `header.HeaderBar` - project controls and navigation
     - `content.ContentArea` - main content splitter with image/text tabs
     - `image_tabs.ImageTabs` - overlay image variants display
-    - `text_tabs.TextTabs` - OCR vs ground truth text comparison  
+    - `text_tabs.TextTabs` - OCR vs ground truth text comparison
     - `word_match.WordMatchView` - word-level matching with color coding and filtering
     - `page_controls.PageControls` - prev/next/goto navigation
     - `project_load_controls.ProjectLoadControls` - project directory selection
@@ -58,7 +58,7 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
   - `tests/test_app_state.py` - application state management (10 tests)
   - `tests/test_ground_truth.py` - ground truth loading and matching (21 tests)
   - `tests/test_project_state.py` - project navigation and loading (3 tests)
-  - `tests/test_ui_refactoring.py` - UI component integration (3 tests) 
+  - `tests/test_ui_refactoring.py` - UI component integration (3 tests)
   - `tests/models/test_project.py` - project model tests (12 tests)
 - Coverage configured in `pyproject.toml`, HTML reports in `htmlcov/`
 - Run tests: `uv run pytest`
@@ -69,12 +69,12 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
 - **Dependency manager**: `uv` (see README). Use `uv add <pkg>` for new deps; ensure version constraints remain compatible with Python >=3.13.
 - **Build**: `uv build` (hatchling backend)
 - **Package management**: Local editable dependency on `pd-book-tools` via relative path (`../pd-book-tools`)
-- **Quality tools**: 
+- **Quality tools**:
   - `pytest>=8.4.1` (testing)
   - `coverage` (test coverage, configured in pyproject.toml)
   - `debugpy>=1.8.5` (development debugging)
   - Note: `ruff`, `pre-commit`, `pylint`, `isort` not currently configured but can be added
-- **Development**: 
+- **Development**:
   - Run: `uv run ocr-labeler-ui <project-dir>`
   - Test: `uv run pytest`
   - Install deps: `uv sync`
@@ -107,6 +107,10 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
 - **Async Operations**: Use proper async/await for OCR and navigation to prevent blocking
 - **Error Resilience**: Handle missing dependencies gracefully (opencv, pd-book-tools features)
 - **Performance**: Use lazy loading, image caching, and debounced updates where appropriate
+- **Terminal Commands**: When using `run_in_terminal` tool, ALWAYS either:
+  - Use `uv run <command>` for Python commands (preferred)
+  - Prefix with `source .venv/bin/activate && <command>` for direct console scripts
+  - Never run `ocr-labeler-ui` or other console entry points without proper environment activation
 
 ## Common Patterns to Follow
 - **View Components**: Initialize with `__init__()`, build UI with `build()`, update with dedicated methods

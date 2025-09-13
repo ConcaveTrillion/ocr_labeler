@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from ocr_labeler.state.project_state import ProjectState
 
 
@@ -23,12 +24,12 @@ def test_project_state_notification():
 def test_project_state_delegation():
     """Test that ProjectState methods delegate correctly."""
     state = ProjectState()
-    
+
     # Test navigation methods exist and can be called
     # (These won't do much without a loaded project, but they shouldn't crash)
     state.next_page()
     state.prev_page()
     state.goto_page_number(1)
-    
+
     # Test current page returns None when no project loaded
     assert state.current_page() is None

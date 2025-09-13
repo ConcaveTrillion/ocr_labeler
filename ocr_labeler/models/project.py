@@ -1,9 +1,12 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
+
 from pd_book_tools.ocr.page import Page
+
 from ..state.ground_truth import find_ground_truth_text
 
 logger = logging.getLogger(__name__)

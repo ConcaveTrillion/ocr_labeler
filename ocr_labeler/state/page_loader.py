@@ -1,7 +1,8 @@
 # from __future__ import annotations
-from pathlib import Path
-from pd_book_tools.ocr.page import Page
 import logging
+from pathlib import Path
+
+from pd_book_tools.ocr.page import Page
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ def build_page_loader(docTR_predictor=None):
     def _get_predictor():
         if docTR_predictor is None:
             from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
+
             predictor = get_default_doctr_predictor()
         return predictor
 
@@ -28,6 +30,7 @@ def build_page_loader(docTR_predictor=None):
         # TODO: check save location to see if this page has already been processed, if so, deserialize that if rerun_ocr_and_match is False
 
         from pd_book_tools.ocr.document import Document
+
         predictor = _get_predictor()
         doc = Document.from_image_ocr_via_doctr(
             path,

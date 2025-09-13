@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from ocr_labeler.state.ground_truth import find_ground_truth_text
 
 # ocr_labeler/state/test_ground_truth.py
@@ -9,6 +11,7 @@ from ocr_labeler.state.ground_truth import find_ground_truth_text
 
 
 # ------------- Tests --------------
+
 
 @pytest.mark.parametrize(
     "name, ground_truth_map, expected",
@@ -36,12 +39,16 @@ from ocr_labeler.state.ground_truth import find_ground_truth_text
         # No extension, no match
         ("002", {"001": "text1"}, None),
         # Extension present, but only original matches
-        ("001.png", {"001.png": "text1", "001": "text2"}, "text1"),  # Prioritizes original
+        (
+            "001.png",
+            {"001.png": "text1", "001": "text2"},
+            "text1",
+        ),  # Prioritizes original
         # Lowercase prioritized after original
         ("001.PNG", {"001.png": "text1", "001": "text2"}, "text1"),
         # Base after lowercase
         ("001.png", {"001.png": "text1", "001": "text2"}, "text1"),
-    ]
+    ],
 )
 def test_find_ground_truth_text_variants(name, ground_truth_map, expected):
     """Test find_ground_truth_text with various name variants and map contents."""
@@ -95,7 +102,9 @@ def test_find_ground_truth_text_no_extension_no_base():
 
     # Lowercase
     ground_truth_map = {"001": "text1"}
-    result = find_ground_truth_text("001", ground_truth_map)  # Assuming map has lower if needed, but in this case same
+    result = find_ground_truth_text(
+        "001", ground_truth_map
+    )  # Assuming map has lower if needed, but in this case same
     assert result == "text1"
 
     # No match

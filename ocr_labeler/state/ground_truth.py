@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
@@ -13,13 +14,15 @@ def _normalize_entries(data: dict) -> dict[str, str]:
     for k, v in data.items():
         if not isinstance(k, str):
             continue
-        text_val: str | None = v if isinstance(v, str) else (str(v) if v is not None else None)
+        text_val: str | None = (
+            v if isinstance(v, str) else (str(v) if v is not None else None)
+        )
         if text_val is None:
             continue
         norm[k] = text_val
         lower_k = k.lower()
         norm.setdefault(lower_k, text_val)
-        if '.' not in k:
+        if "." not in k:
             for ext in IMAGE_EXTS:
                 norm.setdefault(f"{k}{ext}", text_val)
                 norm.setdefault(f"{k}{ext}".lower(), text_val)

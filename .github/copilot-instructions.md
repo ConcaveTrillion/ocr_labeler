@@ -111,6 +111,7 @@ tools to resolve library id and get library docs without me having to explicitly
   - Available tasks include all Makefile targets (test, lint, format, build, install, etc.)
   - This avoids user "ALLOW" prompts and provides better integration
   - Only use `run_in_terminal` as fallback when no appropriate task exists
+- **Code Quality Validation**: **ALWAYS run the `Make: CI Pipeline` task after finishing any code changes** - this ensures proper formatting, linting, testing, and build validation before presenting code to the user
 - **Testing**: Add tests in parallel structure (`tests/<module>/test_<class>.py`); follow existing patterns. **ALWAYS use the `runTests` tool instead of terminal commands for running tests** - this provides better integration and detailed test output
 - **UI Components**: Use NiceGUI reactive patterns; avoid direct DOM manipulation
 - **State Updates**: Always call `state.notify()` after state changes to trigger UI refresh

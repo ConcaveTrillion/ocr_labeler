@@ -14,10 +14,14 @@ dev = [
     "pre-commit>=4.3.0",
     "debugpy>=1.8.5",
     "ruff>=0.13.0",
+    "pytest-cov>=7.0.0",
 ]
 test = [
     "pytest>=8.4.1",
     "coverage>=7.0",
+    "pytest-cov>=7.0.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-mock>=3.15.0",
 ]
 all-dev = [
     {include-group = "dev"},

@@ -106,6 +106,11 @@ tools to resolve library id and get library docs without me having to explicitly
 - **Word Matching**: OCR vs GT alignment using fuzzy string matching with configurable thresholds
 
 ## Development Guidelines
+- **Task Execution Priority**: ALWAYS prefer VS Code tasks over terminal commands when available:
+  - Check for existing tasks in `.vscode/tasks.json` first (use `run_task` tool)
+  - Available tasks include all Makefile targets (test, lint, format, build, install, etc.)
+  - This avoids user "ALLOW" prompts and provides better integration
+  - Only use `run_in_terminal` as fallback when no appropriate task exists
 - **Testing**: Add tests in parallel structure (`tests/<module>/test_<class>.py`); follow existing patterns
 - **UI Components**: Use NiceGUI reactive patterns; avoid direct DOM manipulation
 - **State Updates**: Always call `state.notify()` after state changes to trigger UI refresh

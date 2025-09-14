@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -225,3 +227,99 @@ class ProjectState:
                     self.notify()
 
         _schedule_async_load()
+
+    def save_page(
+        self,
+        page: Optional[Page] = None,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> bool:
+        """Save a single page object to a file with both image copy and JSON metadata.
+
+        Creates two files in the save directory:
+        - <project_id>_<page_number>.png (or .jpg): Copy of original image
+        - <project_id>_<page_number>.json: Metadata with serialized Page object
+
+        Args:
+            page: Page object to save. If None, uses current page.
+            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project root directory name.
+
+        Returns:
+            bool: True if save was successful, False otherwise.
+
+        Example:
+            # Save current page with default settings
+            success = project_state.save_page()
+
+            # Save specific page with custom directory and project ID
+            success = project_state.save_page(
+                page=my_page,
+                save_directory="my-output/labeled-data",
+                project_id="book_chapter_1"
+            )
+        """
+        try:
+            # Use current page if none provided
+            if page is None:
+                page = self.current_page()
+                if page is None:
+                    logger.error("No current page available to save")
+                    return False
+
+            # Generate project ID if not provided
+            if project_id is None:
+                project_id = self.project_root.name
+
+            # Create save directory
+            save_dir = Path(save_directory)
+            save_dir.mkdir(parents=True, exist_ok=True)
+
+            # Get page number (1-based for filenames)
+            page_number = getattr(page, "index", 0) + 1
+
+            # Get original image path
+            image_path = getattr(page, "image_path", None)
+            if image_path is None:
+                logger.error("Page has no associated image_path")
+                return False
+
+            # Determine file extensions
+            image_suffix = Path(image_path).suffix.lower()
+            if image_suffix not in {".png", ".jpg", ".jpeg"}:
+                image_suffix = ".png"  # Default fallback
+
+            # Create file names
+            file_prefix = f"{project_id}_{page_number:03d}"
+            image_filename = f"{file_prefix}{image_suffix}"
+            json_filename = f"{file_prefix}.json"
+
+            # Copy image file
+            image_dest = save_dir / image_filename
+            shutil.copy2(image_path, image_dest)
+            logger.info(f"Copied image to: {image_dest}")
+
+            # Create JSON metadata with relative path (fallback to filename if not relative)
+            try:
+                relative_path = str(Path(image_path).relative_to(self.project_root))
+            except ValueError:
+                # If image_path is not relative to project_root, use just the filename
+                relative_path = Path(image_path).name
+
+            json_data = {
+                "source_lib": "doctr-pgdp-labeled",
+                "source_path": relative_path,
+                "pages": [page.to_dict()],
+            }
+
+            # Save JSON file
+            json_dest = save_dir / json_filename
+            with open(json_dest, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Saved JSON metadata to: {json_dest}")
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to save page: {e}")
+            return False

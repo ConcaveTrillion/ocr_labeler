@@ -32,7 +32,7 @@ def test_view_components_work_with_project_state():
     image_tabs.update_images(state)
 
     # Test TextTabs
-    text_tabs = TextTabs()
+    text_tabs = TextTabs(state)
     # This should not crash even with no project loaded
     text_tabs.update_text(state)
 

@@ -15,7 +15,7 @@ class ContentArea:
         self.callbacks = callbacks
         self.page_controls: PageControls | None = None
         self.image_tabs = ImageTabs()
-        self.text_tabs = TextTabs()
+        self.text_tabs = TextTabs(state)
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
         self.root = None

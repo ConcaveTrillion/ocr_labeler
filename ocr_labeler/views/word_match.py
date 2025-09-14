@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 class WordMatchView:
     """View component for displaying word-level OCR vs Ground Truth matching with color coding."""
 
-    def __init__(self):
+    def __init__(self, copy_gt_to_ocr_callback=None):
         self.view_model = WordMatchViewModel()
         self.container = None
         self.summary_label = None
         self.lines_container = None
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
+        self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
 
     def build(self):
         """Build the UI components."""
@@ -137,7 +138,8 @@ class WordMatchView:
             )
             with ui.row().classes(f"full-width p-2 rounded {status_classes}"):
                 # Header with line info and status
-                with ui.column():
+                with ui.row().classes("items-center justify-between"):
+                    # Left side: Line info and stats
                     with ui.row().classes("items-center"):
                         ui.label(f"Line {line_match.line_index + 1}")
                         ui.icon("bar_chart")
@@ -151,6 +153,32 @@ class WordMatchView:
                         if line_match.unmatched_ocr_count > 0:
                             stats_items.append(f"⚫ {line_match.unmatched_ocr_count}")
                         ui.label(" • ".join(stats_items))
+
+                    # Right side: Action button (only if not 100% match)
+                    logger.info(
+                        f"Line {line_match.line_index}: status={line_match.overall_match_status}, callback={self.copy_gt_to_ocr_callback is not None}"
+                    )
+                    if (
+                        line_match.overall_match_status != MatchStatus.EXACT
+                        and self.copy_gt_to_ocr_callback
+                    ):
+                        logger.info(
+                            f"Adding GT→OCR button for line {line_match.line_index}"
+                        )
+                        with ui.row():
+                            ui.button(
+                                "GT→OCR", icon="content_copy", color="primary"
+                            ).props("size=sm").tooltip(
+                                "Copy ground truth text to OCR text for all words in this line"
+                            ).on_click(
+                                lambda: self._handle_copy_gt_to_ocr(
+                                    line_match.line_index
+                                )
+                            )
+                    else:
+                        logger.info(
+                            f"Not adding button for line {line_match.line_index}: status={line_match.overall_match_status}, has_callback={self.copy_gt_to_ocr_callback is not None}"
+                        )
                     # with ui.row():
                     #     # Status chip
                     #     ui.chip(
@@ -404,6 +432,27 @@ class WordMatchView:
                     filtered_lines.append(line_match)
             logger.info(f"Filtered to {len(filtered_lines)} lines with mismatches")
             return filtered_lines
+
+    def _handle_copy_gt_to_ocr(self, line_index: int):
+        """Handle the GT→OCR button click."""
+        if self.copy_gt_to_ocr_callback:
+            try:
+                success = self.copy_gt_to_ocr_callback(line_index)
+                if success:
+                    ui.notify(
+                        f"Copied ground truth to OCR text for line {line_index + 1}",
+                        type="positive",
+                    )
+                else:
+                    ui.notify(
+                        f"No ground truth text found to copy in line {line_index + 1}",
+                        type="warning",
+                    )
+            except Exception as e:
+                logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
+                ui.notify(f"Error copying GT→OCR: {e}", type="negative")
+        else:
+            ui.notify("Copy function not available", type="warning")
 
     def clear(self):
         """Clear the display."""

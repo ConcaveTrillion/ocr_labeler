@@ -66,6 +66,14 @@ build: ## Build distribution packages (wheel and sdist)
 	uv build
 	@echo "✅ Build complete! Check dist/ directory for packages."
 
+run: ## Run the OCR labeler UI with current directory as project
+	@echo "🚀 Starting OCR Labeler UI..."
+	uv run ocr-labeler-ui .
+
+run-verbose: ## Run the OCR labeler UI with verbose logging
+	@echo "🚀 Starting OCR Labeler UI (verbose mode)..."
+	uv run ocr-labeler-ui . -vv
+
 clean: ## Clean up cache and temporary files (keeps venv and UV cache)
 	@echo "🧹 Cleaning Python cache files..."
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

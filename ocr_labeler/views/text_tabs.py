@@ -7,11 +7,18 @@ from .word_match import WordMatchView
 class TextTabs:
     """Right side textual data tabs (Matches placeholder, Ground Truth, OCR)."""
 
-    def __init__(self):
+    def __init__(self, state=None):
         # Keep attribute names for external references, but these will hold code_editor instances.
         self.gt_text = None  # type: ignore[assignment]
         self.ocr_text = None  # type: ignore[assignment]
-        self.word_match_view = WordMatchView()
+        self.state = state
+
+        # Create callback for GT→OCR copy functionality
+        copy_callback = None
+        if state and hasattr(state, "project_state"):
+            copy_callback = state.project_state.copy_ground_truth_to_ocr
+
+        self.word_match_view = WordMatchView(copy_gt_to_ocr_callback=copy_callback)
         self.container = None
         self._tabs = None
 

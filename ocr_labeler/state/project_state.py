@@ -106,6 +106,60 @@ class ProjectState:
         """Get the current page."""
         return self.project.current_page()
 
+    def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
+        """Copy ground truth text to OCR text for all words in the specified line.
+
+        Args:
+            line_index: Zero-based line index to process
+
+        Returns:
+            bool: True if any modifications were made, False otherwise
+        """
+        page = self.current_page()
+        if not page:
+            logger.warning("No current page available for GT→OCR copy")
+            return False
+
+        try:
+            lines = getattr(page, "lines", [])
+            if line_index < 0 or line_index >= len(lines):
+                logger.warning(
+                    f"Line index {line_index} out of range (0-{len(lines) - 1})"
+                )
+                return False
+
+            line = lines[line_index]
+            words = getattr(line, "words", [])
+            if not words:
+                logger.info(f"No words found in line {line_index}")
+                return False
+
+            modified_count = 0
+            for word_idx, word in enumerate(words):
+                gt_text = getattr(word, "ground_truth_text", "")
+                if gt_text:
+                    # Copy ground truth to OCR text
+                    word.text = gt_text
+                    modified_count += 1
+                    logger.debug(
+                        f"Copied GT→OCR for word {word_idx} in line {line_index}: '{gt_text}'"
+                    )
+
+            if modified_count > 0:
+                logger.info(
+                    f"Copied GT→OCR for {modified_count} words in line {line_index}"
+                )
+                # Trigger UI refresh to show updated matches
+                self.notify()
+                return True
+            else:
+                logger.info(f"No ground truth text found to copy in line {line_index}")
+                return False
+
+        except Exception as e:
+            logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
+            return False
+
     def _navigate(self, nav_callable: Callable[[], None]):
         """Internal navigation helper with loading state."""
         nav_callable()  # quick index change first

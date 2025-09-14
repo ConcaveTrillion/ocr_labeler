@@ -2,86 +2,293 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run OCR Labeler UI",
+            "label": "Make: Help",
             "type": "shell",
-            "command": "uv",
-            "args": [
-                "run",
-                "ocr-labeler-ui",
-                "."
-            ],
+            "command": "make",
+            "args": ["help"],
             "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
-                "panel": "new"
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
             },
-            "problemMatcher": [],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
+            "detail": "Show Makefile help message"
         },
         {
-            "label": "Run OCR Labeler UI (verbose)",
+            "label": "Make: Install",
             "type": "shell",
-            "command": "uv",
-            "args": [
-                "run",
-                "ocr-labeler-ui",
-                ".",
-                "-vv"
-            ],
+            "command": "make",
+            "args": ["install"],
             "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
-                "panel": "new"
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
             },
-            "problemMatcher": [],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
+            "detail": "Install dependencies and set up development environment"
         },
         {
-            "label": "Run Tests",
+            "label": "Make: Setup",
             "type": "shell",
-            "command": "uv",
-            "args": [
-                "run",
-                "pytest"
-            ],
+            "command": "make",
+            "args": ["setup"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Alias for install"
+        },
+        {
+            "label": "Make: Reinstall",
+            "type": "shell",
+            "command": "make",
+            "args": ["reinstall"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Alias for reset (backward compatibility)"
+        },
+        {
+            "label": "Make: Remove Virtual Environment",
+            "type": "shell",
+            "command": "make",
+            "args": ["remove-venv"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Remove the virtual environment"
+        },
+        {
+            "label": "Make: Reset Environment",
+            "type": "shell",
+            "command": "make",
+            "args": ["reset"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Rebuild virtual environment (keeps UV cache)"
+        },
+        {
+            "label": "Make: Test",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
             "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
-                "panel": "new"
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
             },
-            "problemMatcher": [],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
+            "detail": "Run tests via Makefile"
         },
         {
-            "label": "Install Dependencies",
+            "label": "Make: Lint",
             "type": "shell",
-            "command": "uv",
-            "args": [
-                "sync"
-            ],
+            "command": "make",
+            "args": ["lint"],
             "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
-                "panel": "new"
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
             },
-            "problemMatcher": [],
+            "detail": "Run linting checks with ruff"
+        },
+        {
+            "label": "Make: Format",
+            "type": "shell",
+            "command": "make",
+            "args": ["format"],
+            "group": "build",
             "options": {
                 "cwd": "${workspaceFolder}"
-            }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Format code with ruff"
+        },
+        {
+            "label": "Make: Pre-commit Check",
+            "type": "shell",
+            "command": "make",
+            "args": ["pre-commit-check"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run pre-commit on all files"
+        },
+        {
+            "label": "Make: CI Pipeline",
+            "type": "shell",
+            "command": "make",
+            "args": ["ci"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run complete CI pipeline (install, pre-commit, test, build)"
+        },
+        {
+            "label": "Make: Build",
+            "type": "shell",
+            "command": "make",
+            "args": ["build"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Build distribution packages (wheel and sdist)"
+        },
+        {
+            "label": "Make: Run OCR Labeler",
+            "type": "shell",
+            "command": "make",
+            "args": ["run"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run the OCR labeler UI with current directory as project",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "Make: Run OCR Labeler (Verbose)",
+            "type": "shell",
+            "command": "make",
+            "args": ["run-verbose"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run the OCR labeler UI with verbose logging",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "Make: Clean",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Clean up cache and temporary files (keeps venv and UV cache)"
         }
     ]
 }

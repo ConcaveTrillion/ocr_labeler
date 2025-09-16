@@ -24,27 +24,29 @@ class DummyProject:
     ):
         self.pages = pages
         self.image_paths = image_paths
-        self.index = current_page_index
+        self.current_page_index = (
+            current_page_index  # Use the same attribute name as real Project
+        )
         self.page_loader = page_loader
         self.ground_truth_map = ground_truth_map
 
     # Methods expected by AppState
     def current_page(self):
-        if not self.image_paths or self.index < 0:
+        if not self.image_paths or self.current_page_index < 0:
             return None
-        return f"page-{self.index}"
+        return f"page-{self.current_page_index}"
 
     def next_page(self):
-        if self.index < len(self.image_paths) - 1:
-            self.index += 1
+        if self.current_page_index < len(self.image_paths) - 1:
+            self.current_page_index += 1
 
     def prev_page(self):
-        if self.index > 0:
-            self.index -= 1
+        if self.current_page_index > 0:
+            self.current_page_index -= 1
 
     def goto_page_number(self, number: int):
         if 0 <= number < len(self.image_paths):
-            self.index = number
+            self.current_page_index = number
 
 
 def _ensure_dummy_support_modules(monkeypatch):
@@ -95,9 +97,34 @@ def _ensure_dummy_support_modules(monkeypatch):
 
 
 def _patch_project_vm(monkeypatch):
-    import ocr_labeler.state.project_state as project_state_module
+    """Mock ProjectOperations to return DummyProject instead of real Project"""
+    import ocr_labeler.state.project_state as proj_state_mod
 
-    monkeypatch.setattr(project_state_module, "Project", DummyProject, raising=True)
+    # Create a mock ProjectOperations class
+    class MockProjectOperations:
+        def create_project(self, project_dir, image_paths, ground_truth_map=None):
+            return DummyProject(
+                pages=[],  # Empty pages list for mock
+                image_paths=image_paths,
+                current_page_index=0,
+                page_loader=object(),  # Mock page loader
+                ground_truth_map=ground_truth_map or {},
+            )
+
+        def scan_project_directory(self, project_dir):
+            # Return the image files from the directory
+            from pathlib import Path
+
+            project_path = Path(project_dir)
+            image_extensions = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
+            return [
+                str(p)
+                for p in project_path.iterdir()
+                if p.is_file() and p.suffix.lower() in image_extensions
+            ]
+
+    # Patch the import in project_state module
+    monkeypatch.setattr(proj_state_mod, "ProjectOperations", MockProjectOperations)
 
 
 # ------------- Tests --------------

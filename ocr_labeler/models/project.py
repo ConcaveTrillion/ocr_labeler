@@ -7,9 +7,12 @@ from typing import Callable, Optional
 
 from pd_book_tools.ocr.page import Page
 
-from ..state.ground_truth import find_ground_truth_text
+from ..state.operations.page_operations import PageOperations
 
 logger = logging.getLogger(__name__)
+
+# Create a module-level PageOperations instance for use in Project methods
+_page_operations = PageOperations()
 
 
 @dataclass
@@ -57,7 +60,9 @@ class Project:
             if self.page_loader:
                 try:
                     gt_text = (
-                        find_ground_truth_text(img_path.name, self.ground_truth_map)
+                        _page_operations.find_ground_truth_text(
+                            img_path.name, self.ground_truth_map
+                        )
                         or ""
                     )
                     page_obj = self.page_loader(img_path, index, gt_text)
@@ -87,7 +92,7 @@ class Project:
                     page.index = index  # type: ignore[attr-defined]
                     # Add ground truth if available even for fallback page
                     try:
-                        gt_text = find_ground_truth_text(
+                        gt_text = _page_operations.find_ground_truth_text(
                             img_path.name, self.ground_truth_map
                         )
                         if gt_text is not None:
@@ -128,7 +133,7 @@ class Project:
                 page.name = img_path.name  # type: ignore[attr-defined]
                 page.index = index  # type: ignore[attr-defined]
                 try:
-                    gt_text = find_ground_truth_text(
+                    gt_text = _page_operations.find_ground_truth_text(
                         img_path.name, self.ground_truth_map
                     )
                     if gt_text is not None:

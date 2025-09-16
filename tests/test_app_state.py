@@ -54,27 +54,26 @@ def _ensure_dummy_support_modules(monkeypatch):
     Ensure ground_truth and page_loader modules exist and patch their functions.
     This accommodates either real modules (patched) or absence (dummy injected).
     """
-    # ground_truth module
-    gt_mod_name = "ocr_labeler.state.ground_truth"
-    if gt_mod_name in sys.modules:
-        gt_mod = sys.modules[gt_mod_name]
-    else:
-        gt_mod = types.ModuleType(gt_mod_name)
-        sys.modules[gt_mod_name] = gt_mod
+    # Import the operations classes for patching
+    from ocr_labeler.state.operations.page_operations import PageOperations
+    from ocr_labeler.state.operations.project_operations import ProjectOperations
 
-    def fake_load_ground_truth_map(directory: Path):
+    def fake_load_ground_truth_map(self, directory: Path):
         # Return simple mapping for deterministic behavior
         return {}
 
     # Placeholder; will be overridden in specific test where needed
-    def fake_reload_ground_truth_into_project(app_state: AppState):
+    def fake_reload_ground_truth_into_project(self, app_state: AppState):
         pass
 
     monkeypatch.setattr(
-        gt_mod, "load_ground_truth_map", fake_load_ground_truth_map, raising=False
+        PageOperations,
+        "load_ground_truth_map",
+        fake_load_ground_truth_map,
+        raising=False,
     )
     monkeypatch.setattr(
-        gt_mod,
+        ProjectOperations,
         "reload_ground_truth_into_project",
         fake_reload_ground_truth_into_project,
         raising=False,
@@ -135,12 +134,16 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     _patch_project_vm(monkeypatch)
 
     # Add specific ground truth mapping (override for this test)
-    import ocr_labeler.state.ground_truth as gt_mod
+    # Since ground truth is now in PageOperations, mock it there
+    from ocr_labeler.state.operations.page_operations import PageOperations
+
+    def mock_load_ground_truth_map(self, directory):
+        return {"img0.png": "GT0"}
 
     monkeypatch.setattr(
-        gt_mod,
+        PageOperations,
         "load_ground_truth_map",
-        lambda directory: {"img0.png": "GT0"},
+        mock_load_ground_truth_map,
         raising=False,
     )
 
@@ -219,15 +222,18 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
-    import ocr_labeler.state.ground_truth as gt_mod
+    from ocr_labeler.state.operations.project_operations import ProjectOperations
 
     called = {}
 
-    def fake_reload(app_state):
+    def fake_reload(self, app_state):
         called["app_state"] = app_state
 
     monkeypatch.setattr(
-        gt_mod, "reload_ground_truth_into_project", fake_reload, raising=False
+        ProjectOperations,
+        "reload_ground_truth_into_project",
+        fake_reload,
+        raising=False,
     )
 
     state = AppState()

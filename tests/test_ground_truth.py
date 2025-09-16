@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import pytest
 
-from ocr_labeler.state.ground_truth import find_ground_truth_text
+from ocr_labeler.state.operations.page_operations import PageOperations
 
 # ocr_labeler/state/test_ground_truth.py
 
 
 # Relative import of the code under test
+
+
+@pytest.fixture
+def page_operations():
+    """Fixture providing PageOperations instance for testing."""
+    return PageOperations()
 
 
 # ------------- Tests --------------
@@ -50,83 +56,85 @@ from ocr_labeler.state.ground_truth import find_ground_truth_text
         ("001.png", {"001.png": "text1", "001": "text2"}, "text1"),
     ],
 )
-def test_find_ground_truth_text_variants(name, ground_truth_map, expected):
+def test_find_ground_truth_text_variants(
+    page_operations, name, ground_truth_map, expected
+):
     """Test find_ground_truth_text with various name variants and map contents."""
-    result = find_ground_truth_text(name, ground_truth_map)
+    result = page_operations.find_ground_truth_text(name, ground_truth_map)
     assert result == expected
 
 
-def test_find_ground_truth_text_no_candidates():
+def test_find_ground_truth_text_no_candidates(page_operations):
     """Test with empty ground_truth_map."""
-    result = find_ground_truth_text("001.png", {})
+    result = page_operations.find_ground_truth_text("001.png", {})
     assert result is None
 
 
-def test_find_ground_truth_text_deduplication():
+def test_find_ground_truth_text_deduplication(page_operations):
     """Test that candidates are deduplicated, e.g., if name == name.lower()."""
     ground_truth_map = {"test": "text1"}
     # Name where lower is same as original
-    result = find_ground_truth_text("test", ground_truth_map)
+    result = page_operations.find_ground_truth_text("test", ground_truth_map)
     assert result == "text1"
     # Should not check twice (though hard to assert directly, ensure no error)
 
 
-def test_find_ground_truth_text_priority_order():
+def test_find_ground_truth_text_priority_order(page_operations):
     """Test priority: original, lowercase, base, lowercase base."""
     ground_truth_map = {
         "001.png": "original",
         "001": "base",
     }
     # Original should win
-    result = find_ground_truth_text("001.png", ground_truth_map)
+    result = page_operations.find_ground_truth_text("001.png", ground_truth_map)
     assert result == "original"
 
     # If original not present, base
     ground_truth_map.pop("001.png")
-    result = find_ground_truth_text("001.png", ground_truth_map)
+    result = page_operations.find_ground_truth_text("001.png", ground_truth_map)
     assert result == "base"
 
 
-def test_find_ground_truth_text_case_insensitive_base():
+def test_find_ground_truth_text_case_insensitive_base(page_operations):
     """Test case insensitive lookup for base name."""
     ground_truth_map = {"001": "text1"}
-    result = find_ground_truth_text("001.PNG", ground_truth_map)
+    result = page_operations.find_ground_truth_text("001.PNG", ground_truth_map)
     assert result == "text1"
 
 
-def test_find_ground_truth_text_no_extension_no_base():
+def test_find_ground_truth_text_no_extension_no_base(page_operations):
     """Test name without extension, only tries name and lowercase."""
     ground_truth_map = {"001": "text1"}
-    result = find_ground_truth_text("001", ground_truth_map)
+    result = page_operations.find_ground_truth_text("001", ground_truth_map)
     assert result == "text1"
 
     # Lowercase
     ground_truth_map = {"001": "text1"}
-    result = find_ground_truth_text(
+    result = page_operations.find_ground_truth_text(
         "001", ground_truth_map
     )  # Assuming map has lower if needed, but in this case same
     assert result == "text1"
 
     # No match
-    result = find_ground_truth_text("002", ground_truth_map)
+    result = page_operations.find_ground_truth_text("002", ground_truth_map)
     assert result is None
 
 
-def test_find_ground_truth_text_multiple_dots():
+def test_find_ground_truth_text_multiple_dots(page_operations):
     """Test with multiple dots in name, base is before last dot."""
     ground_truth_map = {"file.tar": "text1"}
-    result = find_ground_truth_text("file.tar.gz", ground_truth_map)
+    result = page_operations.find_ground_truth_text("file.tar.gz", ground_truth_map)
     assert result == "text1"
 
     # Lowercase
-    result = find_ground_truth_text("FILE.TAR.GZ", ground_truth_map)
+    result = page_operations.find_ground_truth_text("FILE.TAR.GZ", ground_truth_map)
     assert result == "text1"
 
 
-def test_find_ground_truth_text_empty_map():
+def test_find_ground_truth_text_empty_map(page_operations):
     """Test with empty map and various names."""
-    result = find_ground_truth_text("001.png", {})
+    result = page_operations.find_ground_truth_text("001.png", {})
     assert result is None
 
-    result = find_ground_truth_text("", {})
+    result = page_operations.find_ground_truth_text("", {})
     assert result is None

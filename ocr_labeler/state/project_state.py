@@ -68,10 +68,12 @@ class ProjectState:
         """Reload ground truth for the current project."""
         # Import inside method to allow test monkeypatching of module attribute
         try:
-            from .ground_truth import reload_ground_truth_into_project as _reload
+            from .operations.project_operations import ProjectOperations
+
+            project_ops = ProjectOperations()
+            project_ops.reload_ground_truth_into_project(self)
         except Exception:  # pragma: no cover - defensive
             return
-        _reload(self)
 
     def next_page(self):
         """Navigate to the next page."""
@@ -107,44 +109,20 @@ class ProjectState:
             logger.warning("No current page available for GT→OCR copy")
             return False
 
+        # Import inside method to allow test monkeypatching
         try:
-            lines = getattr(page, "lines", [])
-            if line_index < 0 or line_index >= len(lines):
-                logger.warning(
-                    f"Line index {line_index} out of range (0-{len(lines) - 1})"
-                )
-                return False
+            from .operations.line_operations import LineOperations
 
-            line = lines[line_index]
-            words = getattr(line, "words", [])
-            if not words:
-                logger.info(f"No words found in line {line_index}")
-                return False
+            line_ops = LineOperations()
+            result = line_ops.copy_ground_truth_to_ocr(page, line_index)
 
-            modified_count = 0
-            for word_idx, word in enumerate(words):
-                gt_text = getattr(word, "ground_truth_text", "")
-                if gt_text:
-                    # Copy ground truth to OCR text
-                    word.text = gt_text
-                    modified_count += 1
-                    logger.debug(
-                        f"Copied GT→OCR for word {word_idx} in line {line_index}: '{gt_text}'"
-                    )
-
-            if modified_count > 0:
-                logger.info(
-                    f"Copied GT→OCR for {modified_count} words in line {line_index}"
-                )
+            if result:
                 # Trigger UI refresh to show updated matches
                 self.notify()
-                return True
-            else:
-                logger.info(f"No ground truth text found to copy in line {line_index}")
-                return False
 
+            return result
         except Exception as e:
-            logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
+            logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
             return False
 
     def _navigate(self, nav_callable: Callable[[], None]):

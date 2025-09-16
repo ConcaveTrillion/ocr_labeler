@@ -11,9 +11,10 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
-from ...models.project import Project
+if TYPE_CHECKING:
+    from ...models.project import Project
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class ProjectOperations:
         except Exception:
             return False
 
-    def create_project(self, directory: Path, images: List[Path]) -> Project:
+    def create_project(self, directory: Path, images: List[Path]) -> "Project":
         """Create a Project object from directory and image paths.
 
         This method handles all the project creation logic including:
@@ -101,14 +102,15 @@ class ProjectOperations:
         """
         # Import here to avoid circular imports and allow for test monkeypatching
         try:
-            from ..ground_truth import load_ground_truth_map
             from ..page_loader import build_page_loader
+            from .page_operations import PageOperations
         except ImportError as e:
             logger.error(f"Failed to import required modules: {e}")
             raise
 
         # Load ground truth mapping if available
-        ground_truth_map = load_ground_truth_map(directory)
+        page_ops = PageOperations()
+        ground_truth_map = page_ops.load_ground_truth_map(directory)
         logger.info(f"Loaded ground truth mapping with {len(ground_truth_map)} entries")
 
         # Build page loader for OCR processing
@@ -117,6 +119,9 @@ class ProjectOperations:
 
         # Create placeholder pages (will be lazily loaded)
         placeholders = [None] * len(images)
+
+        # Import Project here to avoid circular imports
+        from ...models.project import Project
 
         # Create and return Project object
         project = Project(
@@ -134,7 +139,7 @@ class ProjectOperations:
 
     def save_project(
         self,
-        project: Project,
+        project: "Project",
         project_root: Path,
         save_directory: str = "local-data/labeled-projects",
         project_id: Optional[str] = None,
@@ -275,7 +280,7 @@ class ProjectOperations:
 
     def export_project(
         self,
-        project: Project,
+        project: "Project",
         project_root: Path,
         export_path: Path,
         format_type: str = "json",
@@ -440,3 +445,16 @@ class ProjectOperations:
             logger.exception(f"Failed to list saved projects: {e}")
 
         return saved_projects
+
+    def reload_ground_truth_into_project(self, state):  # type: ignore[misc]
+        """Reload ground truth data into an existing project.
+
+        Currently a placeholder for future implementation.
+
+        Parameters
+        ----------
+        state : AppState
+            Application state containing the project to update
+        """
+        pass
+        # TODO: this should instead allow remapping of ground truth to OCR

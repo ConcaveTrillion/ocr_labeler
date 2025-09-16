@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from ..state.ground_truth import find_ground_truth_text
+from ..state.operations.page_operations import PageOperations
 from .word_match import WordMatchView
 
 
@@ -8,6 +8,7 @@ class TextTabs:
     """Right side textual data tabs (Matches placeholder, Ground Truth, OCR)."""
 
     def __init__(self, state=None):
+        self._page_operations = PageOperations()
         # Keep attribute names for external references, but these will hold code_editor instances.
         self.gt_text = None  # type: ignore[assignment]
         self.ocr_text = None  # type: ignore[assignment]
@@ -90,7 +91,7 @@ class TextTabs:
                 state.project_state.project, "ground_truth_map"
             ):
                 gt_text = (
-                    find_ground_truth_text(
+                    self._page_operations.find_ground_truth_text(
                         page.name, state.project_state.project.ground_truth_map
                     )
                     or ""

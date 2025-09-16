@@ -43,9 +43,10 @@ class TestProject:
         assert page.name == "test.png"
         assert page.index == 0
 
-    @patch("ocr_labeler.state.ground_truth.find_ground_truth_text")
+    @patch("ocr_labeler.models.project._page_operations.find_ground_truth_text")
     def test_ensure_page_with_loader_success(self, mock_find_gt):
         """Test _ensure_page with successful page_loader."""
+        mock_find_gt.return_value = "Mock GT"
         mock_page = Mock(spec=Page)
         mock_loader = Mock(return_value=mock_page)
         vm = Project(

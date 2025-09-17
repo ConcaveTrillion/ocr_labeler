@@ -2,6 +2,63 @@
 
 Concise, project-specific guidance for AI coding agents contributing to this repo.
 
+## Dependency & Tooling Workflow
+
+- Makefile-based VS code tasks for all common operations (build, test, lint, format, install, etc.)
+- **Dependency manager**: `uv` (see README). Use `uv add <pkg>` for new deps; ensure version constraints remain compatible with Python >=3.13.
+- **Build**: `uv build` VIA `Make: Build` task (hatchling backend)
+- **Package management**: There is a local but non-editable dependency on `pd-book-tools` via relative path (`../pd-book-tools`)
+- **Quality tools**:
+  - `pytest>=8.4.1` (testing)
+  - `coverage` (test coverage, configured in pyproject.toml)
+  - `debugpy>=1.8.5` (development debugging)
+  - `ruff`, `pre-commit`
+
+## Development
+
+### Code Generation
+
+Always use context7 for finding library details when I need code generation, setup or configuration steps, or
+library/API documentation. This means you should automatically use the Context7 MCP
+tools to resolve library id and get library docs without me having to explicitly ask.
+
+### Task Execution Priority
+  - Check for existing tasks in `.vscode/tasks.json` first (use `run_task` tool)
+  - ALWAYS prefer VS Code tasks over terminal commands when available
+  - Available tasks include all Makefile targets (test, lint, format, build, install, etc.)
+    - Run: `Make: Run` task
+    - Test: `Make: Test` task or VS Code `runTests` tool
+    - Install deps: `Make: Install` task
+  - This avoids user "ALLOW" prompts and provides better integration
+  - Only use `run_in_terminal` as fallback when no appropriate task exists
+
+### Code Quality Validation
+
+ALWAYS run the `Make: CI Pipeline` task after finishing any code changes**
+This ensures proper formatting, linting, testing, and build validation before presenting code to the user
+
+## Testing & Coverage
+- Test runner: `Make: Test` task or VS Code `runTests` tool (uses `pytest` VIA with coverage via `coverage` package)
+- Coverage configured in `pyproject.toml`, HTML reports in `htmlcov/`
+- Coverage report: `uv run pytest --cov=ocr_labeler --cov-report=html`
+- Coverage currently disabled in default pytest config for simplicity
+- Add tests in parallel structure (`tests/<module>/<submodule>.../test_<class>.py`); follow existing patterns.
+- **CRITICAL: NEVER use `run_in_terminal` tool to run pytest directly - ALWAYS use the `runTests` tool or `Make: Test` task instead**
+  - this provides:
+    - better integration
+    - detailed test output
+    - avoids user prompts.
+  - Using terminal commands for AI testing violates project workflow requirements.
+
+
+
+
+## Adding New Test Cases
+- Add tests in similar folder structure (`tests/<submodule>/test_<class>.py`)
+- Follow existing naming patterns and test structures
+- Mock external dependencies (`pd-book-tools`, file system) appropriately
+- Test both success and failure paths for robustness
+
 ## Core Domain & Architecture
 - Purpose: NiceGUI-based web interface for processing public domain book scans. Performs OCR via `pd-book-tools`, displays overlays, and allows ground-truth comparison. Future: word-level editing and training data export.
 - Tech Stack: NiceGUI (web UI), Python 3.13+, `uv` package manager
@@ -26,10 +83,6 @@ Concise, project-specific guidance for AI coding agents contributing to this rep
     - `word_match.WordMatchViewModel` - OCR/GT matching logic and statistics
   - **CLI**: `ocr_labeler.cli.main()` entry point with argparse
 
-## Code Generation
-Always use context7 when I need code generation, setup or configuration steps, or
-library/API documentation. This means you should automatically use the Context7 MCP
-tools to resolve library id and get library docs without me having to explicitly ask.
 
 ## Key library use:
   - `pd_book_tools`
@@ -56,34 +109,10 @@ tools to resolve library id and get library docs without me having to explicitly
         - Similar aggregation pattern; recompute page bbox after structural edits.
         - Rendering/debug functions (drawing bboxes) rely on consistent pixel coordinates—ensure you normalize or scale before drawing.
 
-## Testing & Coverage
-- Test runner: `pytest` with coverage via `coverage` package (49 tests currently passing)
-- Current structure: Tests in `tests/` with parallel structure to source
-- Key test files:
-  - `tests/test_app_state.py` - application state management (10 tests)
-  - `tests/test_ground_truth.py` - ground truth loading and matching (21 tests)
-  - `tests/test_project_state.py` - project navigation and loading (3 tests)
-  - `tests/test_ui_refactoring.py` - UI component integration (3 tests)
-  - `tests/models/test_project.py` - project model tests (12 tests)
-- Coverage configured in `pyproject.toml`, HTML reports in `htmlcov/`
-- Run tests: `uv run pytest`
-- Coverage report: `uv run pytest --cov=ocr_labeler --cov-report=html`
-- Coverage currently disabled in default pytest config for simplicity
+### GPU support
 
-## Dependency & Tooling Workflow
-- **Dependency manager**: `uv` (see README). Use `uv add <pkg>` for new deps; ensure version constraints remain compatible with Python >=3.13.
-- **Build**: `uv build` (hatchling backend)
-- **Package management**: Local editable dependency on `pd-book-tools` via relative path (`../pd-book-tools`)
-- **Quality tools**:
-  - `pytest>=8.4.1` (testing)
-  - `coverage` (test coverage, configured in pyproject.toml)
-  - `debugpy>=1.8.5` (development debugging)
-  - Note: `ruff`, `pre-commit`, `pylint`, `isort` not currently configured but can be added
-- **Development**:
-  - Run: `uv run ocr-labeler-ui <project-dir>`
-  - Test: `uv run pytest`
-  - Install deps: `uv sync`
-- **GPU support**: Optional `opencv-python` for better image encoding performance; graceful fallback without it
+`opencv-python` for better image encoding performance; graceful fallback without it (generally)
+
 
 ## Current Implementation Status & Roadmap
 - **Completed**: Basic navigation, OCR overlay display, ground truth comparison, lazy page loading, word-level matching UI with color coding (`WordMatchView`, `WordMatchViewModel`)
@@ -105,21 +134,14 @@ tools to resolve library id and get library docs without me having to explicitly
 - **Image Overlays**: Generated via `pd-book-tools` CV functions with fallback caching
 - **Word Matching**: OCR vs GT alignment using fuzzy string matching with configurable thresholds
 
-## Development Guidelines
-- **Task Execution Priority**: ALWAYS prefer VS Code tasks over terminal commands when available:
-  - Check for existing tasks in `.vscode/tasks.json` first (use `run_task` tool)
-  - Available tasks include all Makefile targets (test, lint, format, build, install, etc.)
-  - This avoids user "ALLOW" prompts and provides better integration
-  - Only use `run_in_terminal` as fallback when no appropriate task exists
-- **Code Quality Validation**: **ALWAYS run the `Make: CI Pipeline` task after finishing any code changes** - this ensures proper formatting, linting, testing, and build validation before presenting code to the user
-- **Testing**: Add tests in parallel structure (`tests/<module>/test_<class>.py`); follow existing patterns. **ALWAYS use the `runTests` tool instead of terminal commands for running tests** - this provides better integration and detailed test output
+
 - **UI Components**: Use NiceGUI reactive patterns; avoid direct DOM manipulation
 - **State Updates**: Always call `state.notify()` after state changes to trigger UI refresh
 - **Async Operations**: Use proper async/await for OCR and navigation to prevent blocking
 - **Error Resilience**: Handle missing dependencies gracefully (opencv, pd-book-tools features)
 - **Performance**: Use lazy loading, image caching, and debounced updates where appropriate
 - **Terminal Commands**: When using `run_in_terminal` tool, ALWAYS either:
-  - Use `uv run <command>` for Python commands (preferred)
+  - Use `uv run <command>` for Python when you are forced to use run in terminal commands. If a vs code task exists, prefer that.
   - Prefix with `source .venv/bin/activate && <command>` for direct console scripts
   - Never run `ocr-labeler-ui` or other console entry points without proper environment activation
 
@@ -142,11 +164,6 @@ tools to resolve library id and get library docs without me having to explicitly
 - Don't create tight coupling between view components (use state as mediator)
 - Don't ignore loading states (users need feedback during async operations)
 
-## Adding New Test Cases
-- Add tests in similar folder structure (`tests/<submodule>/test_<class>.py`)
-- Follow existing naming patterns and test structures
-- Mock external dependencies (`pd-book-tools`, file system) appropriately
-- Test both success and failure paths for robustness
 
 ---
 For detailed feature roadmap and implementation tasks, see `TODOs.md`. Current focus is on word-level editing capabilities and persistence features.

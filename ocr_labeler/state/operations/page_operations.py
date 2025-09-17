@@ -11,7 +11,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 
 # Constants for ground truth operations
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
+
+
+class PageLoadInfo(NamedTuple):
+    """Information about a page's load availability and file paths."""
+
+    can_load: bool
+    json_filename: str
+    json_path: Path
+    file_prefix: str
 
 
 class PageOperations:
@@ -129,6 +138,180 @@ class PageOperations:
         except Exception as e:
             logger.exception(f"Failed to save page: {e}")
             return False
+
+    def load_page(
+        self,
+        page_number: int,
+        project_root: Path,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> Optional[Page]:
+        """Load a previously saved page from disk with metadata and image.
+
+        Looks for saved files in the save directory:
+        - <project_id>_<page_number>.json: Metadata with serialized Page object
+        - <project_id>_<page_number>.png (or .jpg): Image file (not directly loaded into Page)
+
+        Args:
+            page_number: Page number to load (1-based indexing to match save_page).
+            project_root: Root directory of the project.
+            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project_root name.
+
+        Returns:
+            Page: Loaded Page object if found and valid, None otherwise.
+
+        Example:
+            # Load page with default settings
+            operations = PageOperations()
+            page = operations.load_page(
+                page_number=1,
+                project_root=Path("/path/to/project")
+            )
+
+            # Load with custom directory and project ID
+            page = operations.load_page(
+                page_number=5,
+                project_root=Path("/path/to/project"),
+                save_directory="my-output/labeled-data",
+                project_id="book_chapter_1"
+            )
+        """
+        try:
+            if project_id is None:
+                project_id = project_root.name
+
+            save_dir = Path(save_directory)
+            if not save_dir.exists():
+                logger.info(f"Save directory does not exist: {save_dir}")
+                return None
+
+            file_prefix = f"{project_id}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            json_path = save_dir / json_filename
+
+            if not json_path.exists():
+                logger.info(f"Saved page not found: {json_path}")
+                return None
+
+            # Load JSON metadata
+            with open(json_path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+
+            # Validate JSON structure
+            if not isinstance(json_data, dict):
+                logger.error(f"Invalid JSON structure in {json_path}")
+                return None
+
+            pages_data = json_data.get("pages", [])
+            if not pages_data or not isinstance(pages_data, list):
+                logger.error(f"No pages data found in {json_path}")
+                return None
+
+            # Load the first (and should be only) page from the list
+            page_dict = pages_data[0]
+            if not isinstance(page_dict, dict):
+                logger.error(f"Invalid page data structure in {json_path}")
+                return None
+
+            # Reconstruct Page object from dictionary
+            page = Page.from_dict(page_dict)
+            logger.info(f"Successfully loaded page from: {json_path}")
+
+            return page
+
+        except Exception as e:
+            logger.exception(f"Failed to load page {page_number}: {e}")
+            return None
+
+    def can_load_page(
+        self,
+        page_number: int,
+        project_root: Path,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> PageLoadInfo:
+        """Check if a page can be loaded and return validation information.
+
+        Validates that the required JSON file exists for the specified page and
+        returns detailed information about the file paths and availability.
+
+        Args:
+            page_number: Page number to check (1-based indexing to match save_page).
+            project_root: Root directory of the project.
+            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project_root name.
+
+        Returns:
+            PageLoadInfo: Named tuple containing:
+                - can_load (bool): Whether the page can be loaded
+                - json_filename (str): Name of the JSON file
+                - json_path (Path): Full path to the JSON file
+                - file_prefix (str): File prefix used for naming
+
+        Example:
+            # Check if page can be loaded with default settings
+            operations = PageOperations()
+            load_info = operations.can_load_page(
+                page_number=1,
+                project_root=Path("/path/to/project")
+            )
+
+            if load_info.can_load:
+                print(f"Page can be loaded from: {load_info.json_path}")
+            else:
+                print(f"Page not available at: {load_info.json_path}")
+        """
+        try:
+            # Generate project ID if not provided
+            if project_id is None:
+                project_id = project_root.name
+
+            # Create save directory path
+            save_dir = Path(save_directory)
+
+            # Create file names (matching save_page format)
+            file_prefix = f"{project_id}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            json_path = save_dir / json_filename
+
+            # Check if save directory and JSON file exist
+            can_load = save_dir.exists() and json_path.exists()
+
+            if can_load:
+                # Additional validation: check if file is readable and has basic structure
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        json_data = json.load(f)
+
+                    # Basic structure validation
+                    if not isinstance(json_data, dict) or "pages" not in json_data:
+                        can_load = False
+                        logger.warning(f"Invalid JSON structure in {json_path}")
+                except Exception as e:
+                    can_load = False
+                    logger.warning(f"Cannot read or parse JSON file {json_path}: {e}")
+
+            return PageLoadInfo(
+                can_load=can_load,
+                json_filename=json_filename,
+                json_path=json_path,
+                file_prefix=file_prefix,
+            )
+
+        except Exception as e:
+            logger.exception(f"Failed to check page {page_number} availability: {e}")
+            # Return a safe default with the computed paths
+            file_prefix = f"{project_id or project_root.name}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            json_path = Path(save_directory) / json_filename
+
+            return PageLoadInfo(
+                can_load=False,
+                json_filename=json_filename,
+                json_path=json_path,
+                file_prefix=file_prefix,
+            )
 
     def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
         """Normalize ground truth entries for flexible filename lookup.

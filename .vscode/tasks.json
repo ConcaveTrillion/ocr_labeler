@@ -135,6 +135,25 @@
             "detail": "Run tests via Makefile"
         },
         {
+            "label": "Make: Coverage",
+            "type": "shell",
+            "command": "make",
+            "args": ["coverage"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run tests with coverage report"
+        },
+        {
             "label": "Make: Lint",
             "type": "shell",
             "command": "make",

@@ -40,6 +40,11 @@ test: ## Run tests
 	@echo "🧪 Running tests..."
 	uv run pytest
 
+coverage: ## Run tests with coverage report
+	@echo "🧪 Running tests with coverage..."
+	uv run pytest --cov=ocr_labeler --cov-report=html
+	@echo "📊 Coverage report generated in htmlcov/index.html"
+
 lint: ## Run linting checks
 	@echo "🔍 Running linting checks..."
 	uv run ruff check --select I --fix

@@ -31,6 +31,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             "prev": self._prev_async,
             "next": self._next_async,
             "goto": self._goto_async,
+            "save_page": self._save_page_async,
         }
         self.content = ContentArea(self.state, callbacks)
         self.content.build()
@@ -100,6 +101,30 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         self._prep_image_spinners()
         await asyncio.sleep(0)
         self._goto_page(value)
+
+    async def _save_page_async(self):  # pragma: no cover - UI side effects
+        """Save the current page asynchronously."""
+        if getattr(self.state, "is_loading", False):
+            return
+
+        page = self.state.project_state.current_page()
+        if not page:
+            ui.notify("No current page to save", type="warning")
+            return
+
+        try:
+            # Run save in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.state.project_state.save_current_page
+            )
+
+            if success:
+                ui.notify("Page saved successfully", type="positive")
+            else:
+                ui.notify("Failed to save page", type="negative")
+
+        except Exception as exc:  # noqa: BLE001
+            ui.notify(f"Save failed: {exc}", type="negative")
 
     # ------------------------------------------------------------ refresh
     def refresh(self):

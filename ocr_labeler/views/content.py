@@ -28,6 +28,7 @@ class ContentArea:
                 on_prev=self.callbacks["prev"],
                 on_next=self.callbacks["next"],
                 on_goto=self.callbacks["goto"],
+                on_save_page=self.callbacks.get("save_page"),
             )
             self.page_controls.build()
             # Page-level navigation spinner (smaller, inline)

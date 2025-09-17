@@ -30,6 +30,7 @@ if True:  # pragma: no cover - UI helper container
         select: ui.select | None = None
         path_label: ui.label | None = None
         load_button: ui.button | None = None
+        save_button: ui.button | None = None
 
         def build(self) -> ui.element:
             # Ensure state project lists populated once at build time

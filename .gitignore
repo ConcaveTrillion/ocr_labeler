@@ -11,9 +11,15 @@ wheels/
 
 # Tests
 .coverage
+htmlcov**
+.pytest_cache**
+.ruff_cache**
 
 # Logs
 *.log
 
 # VS Code personal workspace files
 *.code-workspace
+
+# local data
+local-data**

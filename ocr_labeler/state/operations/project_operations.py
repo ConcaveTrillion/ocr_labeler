@@ -102,7 +102,6 @@ class ProjectOperations:
         """
         # Import here to avoid circular imports and allow for test monkeypatching
         try:
-            from ..page_loader import build_page_loader
             from .page_operations import PageOperations
         except ImportError as e:
             logger.error(f"Failed to import required modules: {e}")
@@ -113,9 +112,9 @@ class ProjectOperations:
         ground_truth_map = page_ops.load_ground_truth_map(directory)
         logger.info(f"Loaded ground truth mapping with {len(ground_truth_map)} entries")
 
-        # Build page loader for OCR processing
-        page_loader = build_page_loader()
-        logger.info("Built page loader for OCR processing")
+        # Build initial page parser for OCR processing
+        page_parser = page_ops.build_initial_page_parser()
+        logger.info("Built initial page parser for OCR processing")
 
         # Create placeholder pages (will be lazily loaded)
         placeholders = [None] * len(images)
@@ -127,14 +126,11 @@ class ProjectOperations:
         project = Project(
             pages=placeholders,
             image_paths=images,
-            current_page_index=0 if images else -1,
-            page_loader=page_loader,
+            page_parser=page_parser,
             ground_truth_map=ground_truth_map,
         )
 
-        logger.info(
-            f"Created project with {len(images)} images, current index: {project.current_page_index}"
-        )
+        logger.info(f"Created project with {len(images)} images")
         return project
 
     def save_project(
@@ -144,6 +140,7 @@ class ProjectOperations:
         save_directory: str = "local-data/labeled-projects",
         project_id: Optional[str] = None,
         include_images: bool = True,
+        current_page_index: int = 0,
     ) -> bool:
         """Save an entire project to disk with all pages and metadata.
 
@@ -223,7 +220,7 @@ class ProjectOperations:
                 "source_path": str(project_root),
                 "total_pages": len(project.image_paths),
                 "saved_pages": saved_pages,
-                "current_page_index": project.current_page_index,
+                "current_page_index": current_page_index,
                 "include_images": include_images,
             }
 

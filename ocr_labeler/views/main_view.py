@@ -132,12 +132,10 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         project_loading = getattr(self.state, "is_project_loading", False)
         # Avoid calling current_page() while loading; it would synchronously create the page
         # and block the UI, defeating async navigation. We'll treat page as None until
-        # background thread populates current_page_native and loading flips False.
+        # background thread populates current page and loading flips False.
         # Always compute current index & image name immediately for navigation feedback.
         # Only fetch full page object (with OCR) when not loading to avoid blocking.
-        current_index = getattr(
-            self.state.project_state.project, "current_page_index", -1
-        )
+        current_index = self.state.project_state.current_page_index
         image_name = ""
         if 0 <= current_index < len(self.state.project_state.project.image_paths):
             image_name = self.state.project_state.project.image_paths[

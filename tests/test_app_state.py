@@ -24,29 +24,18 @@ class DummyProject:
     ):
         self.pages = pages
         self.image_paths = image_paths
-        self.current_page_index = (
-            current_page_index  # Use the same attribute name as real Project
-        )
-        self.page_loader = page_loader
+        # Note: current_page_index is no longer part of Project, but kept for compatibility
+        self.page_parser = page_loader  # Renamed from page_loader to page_parser
         self.ground_truth_map = ground_truth_map
 
-    # Methods expected by AppState
-    def current_page(self):
-        if not self.image_paths or self.current_page_index < 0:
+    # Methods expected by new Project API
+    def get_page(self, index: int):
+        if not self.image_paths or index < 0 or index >= len(self.image_paths):
             return None
-        return f"page-{self.current_page_index}"
+        return f"page-{index}"
 
-    def next_page(self):
-        if self.current_page_index < len(self.image_paths) - 1:
-            self.current_page_index += 1
-
-    def prev_page(self):
-        if self.current_page_index > 0:
-            self.current_page_index -= 1
-
-    def goto_page_number(self, number: int):
-        if 0 <= number < len(self.image_paths):
-            self.current_page_index = number
+    def page_count(self) -> int:
+        return len(self.image_paths) if self.image_paths else 0
 
 
 def _ensure_dummy_support_modules(monkeypatch):
@@ -87,11 +76,14 @@ def _ensure_dummy_support_modules(monkeypatch):
         pl_mod = types.ModuleType(pl_mod_name)
         sys.modules[pl_mod_name] = pl_mod
 
-    def fake_build_page_loader():
+    def fake_build_initial_page_parser():
         return object()
 
     monkeypatch.setattr(
-        pl_mod, "build_page_loader", fake_build_page_loader, raising=False
+        pl_mod,
+        "build_initial_page_parser",
+        fake_build_initial_page_parser,
+        raising=False,
     )
 
 
@@ -103,7 +95,8 @@ def _patch_project_vm(monkeypatch):
     class MockProjectOperations:
         def create_project(self, project_dir, image_paths, ground_truth_map=None):
             return DummyProject(
-                pages=[],  # Empty pages list for mock
+                pages=[None]
+                * len(image_paths),  # Create pages list to match image_paths
                 image_paths=image_paths,
                 current_page_index=0,
                 page_loader=object(),  # Mock page loader
@@ -165,7 +158,7 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     # DummyProject attributes
     assert isinstance(state.project_state.project, DummyProject)
     assert len(state.project_state.project.image_paths) == 2
-    assert state.project_state.current_page_native == "page-0"
+    assert state.project_state.current_page() == "page-0"
     assert state.is_loading is False
     assert state.is_project_loading is False
     # Expect at least two notifications: entering & leaving loading phase
@@ -197,25 +190,25 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
     state.load_project(tmp_path)
 
     # Initial
-    assert state.project_state.current_page_native == "page-0"
+    assert state.project_state.current_page() == "page-0"
 
     state.project_state.next_page()
-    assert state.project_state.current_page_native == "page-1"
+    assert state.project_state.current_page() == "page-1"
     assert state.is_loading is False  # synchronous fallback path
 
     state.project_state.next_page()
     state.project_state.next_page()  # attempt to move beyond end
-    assert state.project_state.current_page_native == "page-2"
+    assert state.project_state.current_page() == "page-2"
 
     state.project_state.prev_page()
-    assert state.project_state.current_page_native == "page-1"
+    assert state.project_state.current_page() == "page-1"
 
-    state.project_state.goto_page_number(0)
-    assert state.project_state.current_page_native == "page-0"
+    state.project_state.goto_page_number(1)  # 1-based page number -> index 0
+    assert state.project_state.current_page() == "page-0"
 
     # Out-of-range should not change index
     state.project_state.goto_page_number(99)
-    assert state.project_state.current_page_native == "page-0"
+    assert state.project_state.current_page() == "page-0"
 
 
 def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
@@ -311,26 +304,42 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
 
     # Mock nav_callable
     nav_called = False
+    nav_has_run = False
 
     def mock_nav():
-        nonlocal nav_called
+        nonlocal nav_called, nav_has_run
         nav_called = True
+        nav_has_run = True
 
     state = AppState()
-    notifications = []
-    state.on_change = lambda: notifications.append(
-        (
-            state.is_loading,
-            state.is_project_loading,
-            state.project_state.current_page_native,
-        )
-    )
 
-    # Mock project.current_page to return a sentinel
+    # Mock project.get_page to return a sentinel after first notification
     sentinel_page = object()
-    monkeypatch.setattr(
-        state.project_state.project, "current_page", lambda: sentinel_page
-    )
+    notification_count = 0
+
+    def mock_get_page(index):
+        # First call (during first notification) return None
+        # After first notification, return sentinel (simulating loaded page)
+        if notification_count > 1:
+            return sentinel_page
+        return None  # Empty project should return None initially
+
+    monkeypatch.setattr(state.project_state.project, "get_page", mock_get_page)
+
+    notifications = []
+
+    def capture_notification():
+        nonlocal notification_count
+        notification_count += 1
+        notifications.append(
+            (
+                state.is_loading,
+                state.is_project_loading,
+                state.project_state.current_page(),
+            )
+        )
+
+    state.on_change = capture_notification
 
     # Mock asyncio.get_running_loop to raise RuntimeError (no loop)
     monkeypatch.setattr(
@@ -356,7 +365,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
     )  # End: loading=False, project_loading=False, page=sentinel
     assert state.is_loading is False
     assert state.is_project_loading is False
-    assert state.project_state.current_page_native is sentinel_page
+    assert state.project_state.current_page() is sentinel_page
 
 
 def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
@@ -366,26 +375,42 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
 
     # Mock nav_callable
     nav_called = False
+    nav_has_run = False
 
     def mock_nav():
-        nonlocal nav_called
+        nonlocal nav_called, nav_has_run
         nav_called = True
+        nav_has_run = True
 
     state = AppState()
-    notifications = []
-    state.on_change = lambda: notifications.append(
-        (
-            state.is_loading,
-            state.is_project_loading,
-            state.project_state.current_page_native,
-        )
-    )
 
-    # Mock project.current_page to return a sentinel
+    # Mock project.get_page to return a sentinel after first notification
     sentinel_page = object()
-    monkeypatch.setattr(
-        state.project_state.project, "current_page", lambda: sentinel_page
-    )
+    notification_count = 0
+
+    def mock_get_page(index):
+        # First call (during first notification) return None
+        # Subsequent calls return sentinel (simulating loaded page)
+        if notification_count > 1:
+            return sentinel_page
+        return None  # Empty project should return None initially
+
+    monkeypatch.setattr(state.project_state.project, "get_page", mock_get_page)
+
+    notifications = []
+
+    def capture_notification():
+        nonlocal notification_count
+        notification_count += 1
+        notifications.append(
+            (
+                state.is_loading,
+                state.is_project_loading,
+                state.project_state.current_page(),
+            )
+        )
+
+    state.on_change = capture_notification
 
     # Mock event loop
     mock_loop = type("MockLoop", (), {"create_task": lambda self, coro: None})()
@@ -417,4 +442,4 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     )  # Start: loading=True, project_loading=False, page=None
     assert state.is_loading is True  # Still loading since async task hasn't completed
     assert state.is_project_loading is False
-    assert state.project_state.current_page_native is None  # Not yet loaded
+    assert state.project_state.current_page() is None  # Not yet loaded (mock behavior)

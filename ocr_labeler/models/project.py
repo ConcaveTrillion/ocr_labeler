@@ -28,14 +28,13 @@ class Project:
     # Parallel arrays: pages holds either a loaded Page or None placeholder.
     pages: list[Page | None] = field(default_factory=list)
     image_paths: list[Path] = field(default_factory=list)
-    current_page_index: int = 0
 
     # Ground Truth mapping loaded from a project-level pages.json file: {"001.png": "Ground truth text"}
     ground_truth_map: dict[str, str] = field(default_factory=dict)
 
     # Optional callable to lazily construct a full OCR Page from an image path.
     # Signature: (image_path: Path, index: int) -> Page
-    page_loader: Optional[Callable[[Path, int, str, Optional[bool]], Page]] = None
+    page_parser: Optional[Callable[[Path, int, str, Optional[bool]], Page]] = None
 
     def _ensure_page(self, index: int) -> Optional[Page]:
         """Ensure that the Page at *index* is loaded, loading it if necessary."""
@@ -55,9 +54,9 @@ class Project:
                 "_ensure_page: cache miss for index=%s path=%s (loader=%s)",
                 index,
                 img_path,
-                bool(self.page_loader),
+                bool(self.page_parser),
             )
-            if self.page_loader:
+            if self.page_parser:
                 try:
                     gt_text = (
                         _page_operations.find_ground_truth_text(
@@ -65,7 +64,7 @@ class Project:
                         )
                         or ""
                     )
-                    page_obj = self.page_loader(img_path, index, gt_text)
+                    page_obj = self.page_parser(img_path, index, gt_text)
                     logger.debug(
                         "_ensure_page: loader created page index=%s name=%s",
                         index,
@@ -153,38 +152,11 @@ class Project:
             logger.debug("_ensure_page: cache hit for index=%s", index)
         return self.pages[index]
 
-    def current_page(self) -> Optional[Page]:
-        logger.debug("current_page: index=%s", self.current_page_index)
-        return self._ensure_page(self.current_page_index)
+    def get_page(self, index: int) -> Optional[Page]:
+        """Get page at the specified index, loading it if necessary."""
+        logger.debug("get_page: index=%s", index)
+        return self._ensure_page(index)
 
-    def prev_page(self):
-        if self.current_page_index > 0:
-            self.current_page_index -= 1
-            logger.debug("prev_page: moved to index=%s", self.current_page_index)
-
-    def next_page(self):
-        if self.current_page_index < len(self.pages) - 1:
-            self.current_page_index += 1
-            logger.debug("next_page: moved to index=%s", self.current_page_index)
-
-    def goto_page_index(self, index: int):
-        """Jump to a page by zero-based index, clamping to valid range."""
-        if not self.pages:
-            self.current_page_index = -1
-            logger.warning("goto_page_index: empty pages list; index set to -1")
-            return
-        if index < 0:
-            logger.warning("goto_page_index: clamp %s -> 0", index)
-            index = 0
-        if index >= len(self.pages):
-            logger.warning(
-                "goto_page_index: clamp %s -> %s", index, len(self.pages) - 1
-            )
-            index = len(self.pages) - 1
-        self.current_page_index = index
-        logger.debug("goto_page_index: now at index=%s", self.current_page_index)
-
-    def goto_page_number(self, number: int):
-        """Jump to a page by 1-based page number (user facing)."""
-        logger.debug("goto_page_number: requested=%s", number)
-        self.goto_page_index(number - 1)
+    def page_count(self) -> int:
+        """Return the number of pages in this project."""
+        return len(self.pages)

@@ -39,7 +39,7 @@ class ImageTabs:
         return col
 
     def update_images(self, state):
-        native = state.project_state.current_page_native
+        native = state.project_state.current_page()
         targets = [
             ("Original", "cv2_numpy_page_image"),
             ("Paragraphs", "cv2_numpy_page_image_paragraph_with_bboxes"),

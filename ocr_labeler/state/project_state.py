@@ -26,9 +26,7 @@ class ProjectState:
     """
 
     project: Project = field(default_factory=Project)
-    current_page_native: object | None = (
-        None  # native pd_book_tools Page object after OCR
-    )
+    current_page_index: int = 0  # Navigation state managed here
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_loading: bool = False
     on_change: Optional[Callable[[], None]] = None
@@ -59,7 +57,8 @@ class ProjectState:
 
             # Use ProjectOperations to create the project
             self.project = operations.create_project(directory, images)
-            self.current_page_native = self.project.current_page() if images else None
+            # Reset navigation to first page
+            self.current_page_index = 0 if images else -1
         finally:
             self.is_loading = False
             self.notify()
@@ -77,23 +76,64 @@ class ProjectState:
 
     def next_page(self):
         """Navigate to the next page."""
-        self._navigate(self.project.next_page)
-
-    def prev_page(self):
-        """Navigate to the previous page."""
-        self._navigate(self.project.prev_page)
-
-    def goto_page_number(self, number: int):
-        """Navigate to a specific page number."""
 
         def action():
-            self.project.goto_page_number(number)
+            if self.current_page_index < self.project.page_count() - 1:
+                self.current_page_index += 1
+                logger.debug("next_page: moved to index=%s", self.current_page_index)
+            else:
+                logger.debug("next_page: already at last page, no change")
 
         self._navigate(action)
 
+    def prev_page(self):
+        """Navigate to the previous page."""
+
+        def action():
+            if self.current_page_index > 0:
+                self.current_page_index -= 1
+                logger.debug("prev_page: moved to index=%s", self.current_page_index)
+            else:
+                logger.debug("prev_page: already at first page, no change")
+
+        self._navigate(action)
+
+    def goto_page_number(self, number: int):
+        """Navigate to a specific page number."""
+        # Validate page number is in valid range (1-based)
+        if number < 1 or number > self.project.page_count():
+            logger.warning(
+                "goto_page_number: invalid page number %s (valid range: 1-%s)",
+                number,
+                self.project.page_count(),
+            )
+            return
+
+        def action():
+            self.goto_page_index(number - 1)
+
+        self._navigate(action)
+
+    def goto_page_index(self, index: int):
+        """Jump to a page by zero-based index, clamping to valid range."""
+        if not self.project.pages:
+            self.current_page_index = -1
+            logger.warning("goto_page_index: empty pages list; index set to -1")
+            return
+        if index < 0:
+            logger.warning("goto_page_index: clamp %s -> 0", index)
+            index = 0
+        if index >= self.project.page_count():
+            logger.warning(
+                "goto_page_index: clamp %s -> %s", index, self.project.page_count() - 1
+            )
+            index = self.project.page_count() - 1
+        self.current_page_index = index
+        logger.debug("goto_page_index: now at index=%s", self.current_page_index)
+
     def current_page(self) -> Page | None:
         """Get the current page."""
-        return self.project.current_page()
+        return self.project.get_page(self.current_page_index)
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -129,13 +169,12 @@ class ProjectState:
         """Internal navigation helper with loading state."""
         nav_callable()  # quick index change first
         self.is_loading = True
-        self.current_page_native = None
         self.notify()
 
         async def _background_load():
             try:
-                page = await asyncio.to_thread(self.project.current_page)
-                self.current_page_native = page
+                # Pre-load the page at the new index
+                await asyncio.to_thread(self.project.get_page, self.current_page_index)
             finally:
                 self.is_loading = False
                 self.notify()
@@ -156,8 +195,7 @@ class ProjectState:
                 )
                 # Fallback synchronous load
                 try:
-                    page = self.project.current_page()
-                    self.current_page_native = page
+                    self.project.get_page(self.current_page_index)
                 finally:
                     self.is_loading = False
                     self.notify()
@@ -183,8 +221,7 @@ class ProjectState:
                     pass
                 # Fallback synchronous load
                 try:
-                    page = self.project.current_page()
-                    self.current_page_native = page
+                    self.project.get_page(self.current_page_index)
                 finally:
                     self.is_loading = False
                     self.notify()

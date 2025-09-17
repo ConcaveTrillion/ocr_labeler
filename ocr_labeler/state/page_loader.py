@@ -7,8 +7,11 @@ from pd_book_tools.ocr.page import Page
 logger = logging.getLogger(__name__)
 
 
-def build_page_loader(docTR_predictor=None):
-    """Return a lazy page loader that performs OCR via DocTR when invoked.
+def build_initial_page_parser(docTR_predictor=None):
+    """Return an initial page parser that performs OCR via DocTR when invoked.
+
+    This creates a parser for the initial OCR processing of pages from images.
+    This is distinct from loading/saving work done on already processed pages.
 
     Separated for easier testing & potential alternative implementations (e.g.,
     different OCR engines or caching strategies).
@@ -21,7 +24,7 @@ def build_page_loader(docTR_predictor=None):
             predictor = get_default_doctr_predictor()
         return predictor
 
-    def _load_page(
+    def _parse_page(
         path: Path,
         index: int,
         ground_truth_string: str,
@@ -44,4 +47,4 @@ def build_page_loader(docTR_predictor=None):
 
         return page_obj
 
-    return _load_page
+    return _parse_page

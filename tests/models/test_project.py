@@ -12,9 +12,8 @@ class TestProject:
         vm = Project()
         assert vm.pages == []
         assert vm.image_paths == []
-        assert vm.current_page_index == 0
         assert vm.ground_truth_map == {}
-        assert vm.page_loader is None
+        assert vm.page_parser is None
 
     def test_initialization_with_values(self):
         """Test Project initialization with provided values."""
@@ -30,8 +29,8 @@ class TestProject:
         assert vm._ensure_page(-1) is None
         assert vm._ensure_page(0) is None  # No pages
 
-    def test_ensure_page_no_loader(self):
-        """Test _ensure_page without page_loader."""
+    def test_ensure_page_no_parser(self):
+        """Test _ensure_page without page_parser."""
         vm = Project(
             image_paths=[Path("test.png")],
             pages=[None],
@@ -44,33 +43,33 @@ class TestProject:
         assert page.index == 0
 
     @patch("ocr_labeler.models.project._page_operations.find_ground_truth_text")
-    def test_ensure_page_with_loader_success(self, mock_find_gt):
-        """Test _ensure_page with successful page_loader."""
+    def test_ensure_page_with_parser_success(self, mock_find_gt):
+        """Test _ensure_page with successful page_parser."""
         mock_find_gt.return_value = "Mock GT"
         mock_page = Mock(spec=Page)
-        mock_loader = Mock(return_value=mock_page)
+        mock_parser = Mock(return_value=mock_page)
         vm = Project(
             image_paths=[Path("test.png")],
             pages=[None],
-            page_loader=mock_loader,
+            page_parser=mock_parser,
             ground_truth_map={"test.png": "Mock GT"},
         )
         page = vm._ensure_page(0)
         assert page == mock_page
-        mock_loader.assert_called_once_with(Path("test.png"), 0, "Mock GT")
+        mock_parser.assert_called_once_with(Path("test.png"), 0, "Mock GT")
         assert mock_page.image_path == Path("test.png")
         assert mock_page.name == "test.png"
         assert mock_page.index == 0
 
     @patch("cv2.imread")
-    def test_ensure_page_with_loader_exception(self, mock_cv2):
-        """Test _ensure_page with page_loader raising exception."""
+    def test_ensure_page_with_parser_exception(self, mock_cv2):
+        """Test _ensure_page with page_parser raising exception."""
         mock_cv2.return_value = Mock()  # Mock image
-        mock_loader = Mock(side_effect=Exception("Load failed"))
+        mock_parser = Mock(side_effect=Exception("Load failed"))
         vm = Project(
             image_paths=[Path("test.png")],
             pages=[None],
-            page_loader=mock_loader,
+            page_parser=mock_parser,
             ground_truth_map={"test.png": "Mock GT"},
         )
         page = vm._ensure_page(0)
@@ -81,51 +80,18 @@ class TestProject:
         # Note: ground_truth_text assertion removed due to Page default
         assert hasattr(page, "cv2_numpy_page_image")
 
-    def test_current_page(self):
-        """Test current_page method."""
+    def test_get_page(self):
+        """Test get_page method."""
         vm = Project(image_paths=[Path("test.png")], pages=[None])
         with patch.object(vm, "_ensure_page", return_value=Mock()) as mock_ensure:
-            page = vm.current_page()
+            page = vm.get_page(0)
             mock_ensure.assert_called_once_with(0)
             assert page == mock_ensure.return_value
 
-    def test_prev_page(self):
-        """Test prev_page method."""
-        vm = Project(current_page_index=1)
-        vm.prev_page()
-        assert vm.current_page_index == 0
-        vm.prev_page()  # Already at 0
-        assert vm.current_page_index == 0
-
-    def test_next_page(self):
-        """Test next_page method."""
-        vm = Project(image_paths=[Path("1.png"), Path("2.png")], pages=[None, None])
-        vm.next_page()
-        assert vm.current_page_index == 1
-        vm.next_page()  # Already at last
-        assert vm.current_page_index == 1
-
-    def test_goto_page_index(self):
-        """Test goto_page_index method."""
-        vm = Project(
-            image_paths=[Path("1.png"), Path("2.png"), Path("3.png")],
-            pages=[None, None, None],
-        )
-        vm.goto_page_index(1)
-        assert vm.current_page_index == 1
-        vm.goto_page_index(-1)  # Clamp to 0
-        assert vm.current_page_index == 0
-        vm.goto_page_index(10)  # Clamp to 2
-        assert vm.current_page_index == 2
-
-    def test_goto_page_index_empty(self):
-        """Test goto_page_index with empty pages."""
+    def test_page_count(self):
+        """Test page_count method."""
         vm = Project()
-        vm.goto_page_index(0)
-        assert vm.current_page_index == -1
+        assert vm.page_count() == 0
 
-    def test_goto_page_number(self):
-        """Test goto_page_number method."""
         vm = Project(image_paths=[Path("1.png"), Path("2.png")], pages=[None, None])
-        vm.goto_page_number(2)  # 1-based
-        assert vm.current_page_index == 1
+        assert vm.page_count() == 2

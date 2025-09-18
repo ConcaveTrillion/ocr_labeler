@@ -26,6 +26,48 @@ class Project:
     # Ground Truth mapping loaded from a project-level pages.json file: {"001.png": "Ground truth text"}
     ground_truth_map: dict[str, str] = field(default_factory=dict)
 
+    # Project metadata
+    version: str = "1.0"
+    source_lib: str = "ocr-labeler"
+    project_id: str = ""
+    source_path: str = ""
+    total_pages: int = 0
+    saved_pages: int = 0
+    current_page_index: int = 0
+    include_images: bool = True
+    copied_images: int = 0
+
     def page_count(self) -> int:
         """Return the number of pages in this project."""
         return len(self.pages)
+
+    def to_dict(self) -> dict:
+        """Convert project metadata to dictionary for serialization."""
+        return {
+            "version": self.version,
+            "source_lib": self.source_lib,
+            "project_id": self.project_id,
+            "source_path": self.source_path,
+            "total_pages": self.total_pages,
+            "saved_pages": self.saved_pages,
+            "current_page_index": self.current_page_index,
+            "include_images": self.include_images,
+            "copied_images": self.copied_images,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Project":
+        """Create Project instance from metadata dictionary."""
+        # Create instance with metadata fields
+        project = cls(
+            version=data.get("version", "1.0"),
+            source_lib=data.get("source_lib", "ocr-labeler"),
+            project_id=data.get("project_id", ""),
+            source_path=data.get("source_path", ""),
+            total_pages=data.get("total_pages", 0),
+            saved_pages=data.get("saved_pages", 0),
+            current_page_index=data.get("current_page_index", 0),
+            include_images=data.get("include_images", True),
+            copied_images=data.get("copied_images", 0),
+        )
+        return project

@@ -123,6 +123,8 @@ class ProjectOperations:
             pages=placeholders,
             image_paths=images,
             ground_truth_map=ground_truth_map,
+            source_path=str(directory),
+            total_pages=len(images),
         )
 
         logger.info(f"Created project with {len(images)} images")
@@ -208,19 +210,16 @@ class ProjectOperations:
                         logger.warning(f"Failed to copy image {image_path}: {e}")
 
             # Save project metadata
-            project_metadata = {
-                "version": "1.0",
-                "source_lib": "ocr-labeler",
-                "project_id": project_id,
-                "source_path": str(project_root),
-                "total_pages": len(project.image_paths),
-                "saved_pages": saved_pages,
-                "current_page_index": current_page_index,
-                "include_images": include_images,
-            }
+            # Update project metadata with current values
+            project.project_id = project_id
+            project.source_path = str(project_root)
+            project.total_pages = len(project.image_paths)
+            project.saved_pages = saved_pages
+            project.current_page_index = current_page_index
+            project.include_images = include_images
+            project.copied_images = copied_images if include_images else 0
 
-            if include_images:
-                project_metadata["copied_images"] = copied_images
+            project_metadata = project.to_dict()
 
             project_json_path = project_dir / "project.json"
             with open(project_json_path, "w", encoding="utf-8") as f:
@@ -260,6 +259,16 @@ class ProjectOperations:
 
             with open(project_json_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
+
+            # Validate metadata structure using Project model
+            try:
+                from ...models.project import Project
+
+                # This will raise an exception if metadata is invalid
+                Project.from_dict(metadata)
+            except Exception as e:
+                logger.warning(f"Invalid project metadata structure: {e}")
+                # Continue anyway, as we don't want to break existing projects
 
             logger.info(
                 f"Loaded project metadata for: {metadata.get('project_id', 'unknown')}"

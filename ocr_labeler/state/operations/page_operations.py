@@ -542,7 +542,7 @@ class PageOperations:
                     norm.setdefault(f"{k}{ext}".lower(), text_val)
         return norm
 
-    def load_ground_truth_map(self, directory: Path) -> dict[str, str]:
+    async def load_ground_truth_map(self, directory: Path) -> dict[str, str]:
         """Load and normalize ground truth data from pages.json file.
 
         Parameters
@@ -555,13 +555,16 @@ class PageOperations:
         dict[str, str]
             Normalized ground truth mapping, empty dict if file not found or invalid
         """
+        import asyncio
+
         pages_json = directory / "pages.json"
-        if not pages_json.exists():
+        exists = await asyncio.to_thread(pages_json.exists)
+        if not exists:
             logger.info("No pages.json found in %s", directory)
             return {}
         try:
-            raw_text = pages_json.read_text(encoding="utf-8")
-            data = json.loads(raw_text)
+            raw_text = await asyncio.to_thread(pages_json.read_text, encoding="utf-8")
+            data = await asyncio.to_thread(json.loads, raw_text)
             if isinstance(data, dict):
                 norm = self._normalize_ground_truth_entries(data)
                 logger.info(

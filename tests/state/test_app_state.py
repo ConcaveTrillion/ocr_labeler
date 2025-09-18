@@ -62,13 +62,14 @@ class TestAppState:
         assert state.project_state.is_loading is True
         assert state.is_loading is True
 
-    def test_load_project_nonexistent_path(self):
+    @pytest.mark.asyncio
+    async def test_load_project_nonexistent_path(self):
         """Test that loading a nonexistent project raises FileNotFoundError."""
         state = AppState()
         nonexistent_path = Path("/nonexistent/path/to/project")
 
         with pytest.raises(FileNotFoundError):
-            state.load_project(nonexistent_path)
+            await state.load_project(nonexistent_path)
 
     def test_selected_project_path(self, tmp_path):
         """Test selected_project_path method returns correct path or None."""

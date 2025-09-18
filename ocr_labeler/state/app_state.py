@@ -80,7 +80,7 @@ class AppState:
             self.on_change()
 
     # --------------- Project Loading ---------------
-    def load_project(self, directory: Path):
+    async def load_project(self, directory: Path):
         """Load a project by delegating to project state.
 
         Manages application-level loading state and project selection synchronization.
@@ -101,7 +101,7 @@ class AppState:
                 self.selected_project_key = directory.name  # pragma: no cover
 
             # Delegate actual project loading to project state
-            self.project_state.load_project(directory)
+            await self.project_state.load_project(directory)
         finally:
             # Clear project-level loading state (page-level loading continues via navigation spinner logic)
             self.is_project_loading = False

@@ -33,7 +33,7 @@ class ProjectOperations:
     to avoid tight coupling with state management classes.
     """
 
-    def scan_project_directory(self, directory: Path) -> List[Path]:
+    async def scan_project_directory(self, directory: Path) -> List[Path]:
         """Scan a directory for image files and return sorted paths.
 
         Args:
@@ -46,25 +46,37 @@ class ProjectOperations:
             FileNotFoundError: If directory does not exist.
             ValueError: If directory is not a directory.
         """
+        import asyncio
+
         directory = Path(directory)
-        if not directory.exists():
+
+        # Check if directory exists and is a directory
+        exists = await asyncio.to_thread(directory.exists)
+        if not exists:
             raise FileNotFoundError(f"Directory does not exist: {directory}")
 
-        if not directory.is_dir():
+        is_dir = await asyncio.to_thread(directory.is_dir)
+        if not is_dir:
             raise ValueError(f"Path is not a directory: {directory}")
 
         # Find all image files with supported extensions
         image_extensions = {".png", ".jpg", ".jpeg"}
-        images = [
-            p
-            for p in directory.iterdir()
-            if p.is_file() and p.suffix.lower() in image_extensions
-        ]
+
+        # Get directory contents asynchronously
+        items = await asyncio.to_thread(list, directory.iterdir())
+
+        images = []
+        for p in items:
+            is_file = await asyncio.to_thread(p.is_file)
+            if is_file:
+                suffix = await asyncio.to_thread(lambda: p.suffix.lower())
+                if suffix in image_extensions:
+                    images.append(p)
 
         # Return sorted by name for consistent ordering
         return sorted(images)
 
-    def validate_project_directory(self, directory: Path) -> bool:
+    async def validate_project_directory(self, directory: Path) -> bool:
         """Validate that a directory can be used as a project directory.
 
         Args:
@@ -73,19 +85,23 @@ class ProjectOperations:
         Returns:
             bool: True if directory is valid for project loading.
         """
+        import asyncio
+
         try:
             directory = Path(directory)
-            if not directory.exists() or not directory.is_dir():
+            exists = await asyncio.to_thread(directory.exists)
+            is_dir = await asyncio.to_thread(directory.is_dir)
+            if not exists or not is_dir:
                 return False
 
             # Check if directory has at least one image file
-            images = self.scan_project_directory(directory)
+            images = await self.scan_project_directory(directory)
             return len(images) > 0
 
         except Exception:
             return False
 
-    def create_project(self, directory: Path, images: List[Path]) -> "Project":
+    async def create_project(self, directory: Path, images: List[Path]) -> "Project":
         """Create a Project object from directory and image paths.
 
         This method handles all the project creation logic including:
@@ -109,7 +125,7 @@ class ProjectOperations:
 
         # Load ground truth mapping if available
         page_ops = PageOperations()
-        ground_truth_map = page_ops.load_ground_truth_map(directory)
+        ground_truth_map = await page_ops.load_ground_truth_map(directory)
         logger.info(f"Loaded ground truth mapping with {len(ground_truth_map)} entries")
 
         # Create placeholder pages (will be lazily loaded)

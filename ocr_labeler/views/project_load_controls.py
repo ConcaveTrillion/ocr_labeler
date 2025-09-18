@@ -166,7 +166,7 @@ if True:  # pragma: no cover - UI helper container
             # Yield once to let UI update before heavy work
             await asyncio.sleep(0)
             try:
-                await asyncio.to_thread(self.state.load_project, path)
+                await self.state.load_project(path)
                 self.update_path_label()
                 ui.notify(f"Loaded {key}", type="positive")
             except Exception as exc:  # noqa: BLE001

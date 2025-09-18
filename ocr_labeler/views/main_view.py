@@ -57,9 +57,9 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         self.refresh()
 
     # ------------------------------------------------------------ actions
-    def _open_project_from_path(self, path: Path):
+    async def _open_project_from_path(self, path: Path):
         try:
-            self.state.load_project(path)
+            await self.state.load_project(path)
             if self.header_bar:
                 self.header_bar.project_controls.update_path_label()
         except Exception as exc:  # noqa: BLE001

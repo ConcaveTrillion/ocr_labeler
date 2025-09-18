@@ -37,7 +37,7 @@ class ProjectState:
         if self.on_change:
             self.on_change()
 
-    def load_project(self, directory: Path):
+    async def load_project(self, directory: Path):
         """Load images; lazily OCR each page via DocTR on first access.
 
         Reads pages.json (if present) mapping image filename -> ground truth text.
@@ -47,7 +47,7 @@ class ProjectState:
 
         # Validate directory and scan for images using operations
         directory = Path(directory)
-        images = operations.scan_project_directory(
+        images = await operations.scan_project_directory(
             directory
         )  # This will raise FileNotFoundError if needed
 
@@ -57,7 +57,7 @@ class ProjectState:
             self.project_root = directory
 
             # Use ProjectOperations to create the project
-            self.project = operations.create_project(directory, images)
+            self.project = await operations.create_project(directory, images)
             # Reset navigation to first page
             self.current_page_index = 0 if images else -1
         finally:

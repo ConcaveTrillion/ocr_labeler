@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio  # noqa: F401 - used in monkeypatch
 from pathlib import Path
 
 import pytest
@@ -82,7 +83,7 @@ def _patch_project_vm(monkeypatch):
 
     # Create a mock ProjectOperations class
     class MockProjectOperations:
-        def create_project(self, project_dir, image_paths, ground_truth_map=None):
+        async def create_project(self, project_dir, image_paths, ground_truth_map=None):
             return DummyProject(
                 pages=[None]
                 * len(image_paths),  # Create pages list to match image_paths
@@ -92,7 +93,7 @@ def _patch_project_vm(monkeypatch):
                 ground_truth_map=ground_truth_map or {},
             )
 
-        def scan_project_directory(self, project_dir):
+        async def scan_project_directory(self, project_dir):
             # Return the image files from the directory
             from pathlib import Path
 
@@ -111,7 +112,10 @@ def _patch_project_vm(monkeypatch):
 # ------------- Tests --------------
 
 
-def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_load_project_success_sets_state_and_clears_loading(
+    monkeypatch, tmp_path
+):
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
@@ -147,7 +151,7 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
             return f"page-{index}"
         return None
 
-    state.load_project(tmp_path)
+    await state.load_project(tmp_path)
 
     # Apply the mock after load_project creates the project_state
     monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
@@ -166,17 +170,19 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
     assert notifications[-1] == (False, False)  # end project load
 
 
-def test_load_project_nonexistent_directory_raises(tmp_path):
+@pytest.mark.asyncio
+async def test_load_project_nonexistent_directory_raises(tmp_path):
     state = AppState()
     missing = tmp_path / "does_not_exist"
     with pytest.raises(FileNotFoundError):
-        state.load_project(missing)
+        await state.load_project(missing)
     # Flags should remain default
     assert state.is_loading is False
     assert state.is_project_loading is False
 
 
-def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
@@ -185,7 +191,7 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
         (tmp_path / f"p{i}.png").write_bytes(b"")
 
     state = AppState()
-    state.load_project(tmp_path)
+    await state.load_project(tmp_path)
 
     # Mock ProjectState.get_page to return expected string format
     def mock_get_page(index):
@@ -197,6 +203,12 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
 
     # Initial
     assert state.project_state.current_page() == "page-0"
+
+    # Mock asyncio to force synchronous behavior for this test
+    def mock_get_running_loop():
+        raise RuntimeError("no loop")  # Force synchronous fallback
+
+    monkeypatch.setattr("asyncio.get_running_loop", mock_get_running_loop)
 
     state.project_state.next_page()
     assert state.project_state.current_page() == "page-1"
@@ -280,7 +292,8 @@ def test_notify_invokes_on_change_callback(tmp_path):
     assert calls == ["notified"]
 
 
-def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
     """
     Verify that is_loading is set True inside navigation and ends False after synchronous load.
     """
@@ -289,7 +302,7 @@ def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
 
     (tmp_path / "only.png").write_bytes(b"")
     state = AppState()
-    state.load_project(tmp_path)
+    await state.load_project(tmp_path)
 
     observed = []
 
@@ -297,6 +310,13 @@ def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path):
         observed.append(state.is_loading)
 
     state.on_change = on_change
+
+    # Mock asyncio to force synchronous behavior for this test
+    def mock_get_running_loop():
+        raise RuntimeError("no loop")  # Force synchronous fallback
+
+    monkeypatch.setattr("asyncio.get_running_loop", mock_get_running_loop)
+
     state.project_state.next_page()  # Will attempt to go beyond end; index unchanged but navigation path runs
     # Expect at least two observations: loading True then False
     assert True in observed

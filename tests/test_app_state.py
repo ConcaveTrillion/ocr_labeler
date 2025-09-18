@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -38,7 +36,7 @@ class DummyProject:
 
 def _ensure_dummy_support_modules(monkeypatch):
     """
-    Ensure ground_truth and page_loader modules exist and patch their functions.
+    Ensure page_operations modules exist and patch their functions.
     This accommodates either real modules (patched) or absence (dummy injected).
     """
     # Import the operations classes for patching
@@ -66,19 +64,12 @@ def _ensure_dummy_support_modules(monkeypatch):
         raising=False,
     )
 
-    # page_loader module
-    pl_mod_name = "ocr_labeler.state.page_loader"
-    if pl_mod_name in sys.modules:
-        pl_mod = sys.modules[pl_mod_name]
-    else:
-        pl_mod = types.ModuleType(pl_mod_name)
-        sys.modules[pl_mod_name] = pl_mod
-
-    def fake_build_initial_page_parser():
+    # page_operations module - mock build_initial_page_parser method
+    def fake_build_initial_page_parser(self, docTR_predictor=None):
         return object()
 
     monkeypatch.setattr(
-        pl_mod,
+        PageOperations,
         "build_initial_page_parser",
         fake_build_initial_page_parser,
         raising=False,

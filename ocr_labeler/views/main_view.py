@@ -6,6 +6,7 @@ from pathlib import Path
 from nicegui import ui
 
 from ..state import AppState
+from .callbacks import NavigationCallbacks
 from .content import ContentArea
 from .header import HeaderBar
 
@@ -26,13 +27,10 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         self.header_bar = HeaderBar(self.state)
         self.header_bar.build()
 
-        callbacks = {
-            "open_directory": self._open_project_from_path,  # kept for backward compatibility
-            "prev": self._prev_async,
-            "next": self._next_async,
-            "goto": self._goto_async,
-            "save_page": self._save_page_async,
-        }
+        callbacks = NavigationCallbacks(
+            save_page=self._save_page_async,
+            load_page=self._load_page_async,
+        )
         self.content = ContentArea(self.state, callbacks)
         self.content.build()
 
@@ -65,43 +63,6 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Open failed: {exc}", type="negative")
 
-    def _goto_page(self, raw_value):
-        try:
-            n = int(raw_value)
-        except Exception:  # noqa: BLE001
-            n = 1
-        if n < 1:
-            n = 1
-        self.state.project_state.goto_page_number(n)
-
-    # ------------------------------------------------------------ async navigation helpers
-    def _prep_image_spinners(self):
-        if self.content:
-            for name, img in self.content.image_tabs.images.items():  # noqa: F841
-                if img:
-                    img.set_visibility(False)
-
-    async def _prev_async(self):  # pragma: no cover - UI side effects
-        if getattr(self.state, "is_loading", False):
-            return
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        self.state.project_state.prev_page()
-
-    async def _next_async(self):  # pragma: no cover - UI side effects
-        if getattr(self.state, "is_loading", False):
-            return
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        self.state.project_state.next_page()
-
-    async def _goto_async(self, value):  # pragma: no cover - UI side effects
-        if getattr(self.state, "is_loading", False):
-            return
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        self._goto_page(value)
-
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
         if getattr(self.state, "is_loading", False):
@@ -125,6 +86,27 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
 
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Save failed: {exc}", type="negative")
+
+    async def _load_page_async(self):  # pragma: no cover - UI side effects
+        """Load the current page from saved files asynchronously."""
+        if getattr(self.state, "is_loading", False):
+            return
+
+        try:
+            # Run load in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.state.project_state.load_current_page
+            )
+
+            if success:
+                ui.notify("Page loaded successfully", type="positive")
+                # Trigger UI refresh to show loaded page
+                self.refresh()
+            else:
+                ui.notify("No saved page found for current page", type="warning")
+
+        except Exception as exc:  # noqa: BLE001
+            ui.notify(f"Load failed: {exc}", type="negative")
 
     # ------------------------------------------------------------ refresh
     def refresh(self):

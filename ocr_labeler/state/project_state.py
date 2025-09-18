@@ -274,3 +274,46 @@ class ProjectState:
             save_directory=save_directory,
             project_id=project_id,
         )
+
+    def load_current_page(
+        self,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> bool:
+        """Load the current page from saved files.
+
+        This is a convenience method that delegates to PageOperations.load_page
+        using the current page index from the project state.
+
+        Args:
+            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project root directory name.
+
+        Returns:
+            bool: True if load was successful, False otherwise.
+        """
+        page_index = self.current_page_index
+        if page_index < 0:
+            logger.error("No current page index available to load")
+            return False
+
+        operations = PageOperations()
+        loaded_page = operations.load_page(
+            page_number=page_index + 1,  # Convert to 1-based
+            project_root=self.project_root,
+            save_directory=save_directory,
+            project_id=project_id,
+        )
+
+        if loaded_page is None:
+            logger.warning(f"No saved page found for index {page_index}")
+            return False
+
+        # Replace the current page in the project
+        if 0 <= page_index < len(self.project.pages):
+            self.project.pages[page_index] = loaded_page
+            logger.info(f"Successfully loaded page at index {page_index}")
+            return True
+        else:
+            logger.error(f"Page index {page_index} out of range for project pages")
+            return False

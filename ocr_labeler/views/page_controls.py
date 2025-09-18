@@ -7,12 +7,15 @@ if True:  # pragma: no cover - UI wrapper file
     class PageControls:
         """Navigation + open directory row."""
 
-        def __init__(self, state, on_prev, on_next, on_goto, on_save_page=None):
+        def __init__(
+            self, state, on_prev, on_next, on_goto, on_save_page=None, on_load_page=None
+        ):
             self.state = state
             self._on_prev = on_prev
             self._on_next = on_next
             self._on_goto = on_goto
             self._on_save_page = on_save_page
+            self._on_load_page = on_load_page
             # UI refs
             self.row = None
             self.page_index_box = (
@@ -23,6 +26,7 @@ if True:  # pragma: no cover - UI wrapper file
             self.page_name = None
             self.page_total = None
             self.save_button = None
+            self.load_button = None
 
         def build(self) -> ui.element:
             with ui.row().classes("items-center gap-2") as row:
@@ -51,6 +55,13 @@ if True:  # pragma: no cover - UI wrapper file
                     self.save_button = ui.button(
                         "Save Page", on_click=self._on_save_page
                     ).classes("bg-green-600 hover:bg-green-700 text-white")
+
+                # Add Load Page button if callback provided
+                if self._on_load_page:
+                    ui.separator().props("vertical")
+                    self.load_button = ui.button(
+                        "Load Page", on_click=self._on_load_page
+                    ).classes("bg-blue-600 hover:bg-blue-700 text-white")
             return row
 
         # Convenience for refresh

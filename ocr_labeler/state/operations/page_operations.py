@@ -43,6 +43,14 @@ class PageOperations:
     to avoid tight coupling with state management classes.
     """
 
+    def __init__(self, docTR_predictor=None):
+        """Initialize PageOperations with its own page parser.
+
+        Args:
+            docTR_predictor: Optional predictor for OCR processing
+        """
+        self.page_parser = self.build_initial_page_parser(docTR_predictor)
+
     def build_initial_page_parser(self, docTR_predictor=None):
         """Return an initial page parser that performs OCR via DocTR when invoked.
 
@@ -358,6 +366,145 @@ class PageOperations:
                 json_path=json_path,
                 file_prefix=file_prefix,
             )
+
+    def ensure_page(
+        self,
+        index: int,
+        pages: list[Page | None],
+        image_paths: list[Path],
+        ground_truth_map: dict[str, str],
+    ) -> Optional[Page]:
+        """Ensure that the Page at index is loaded, loading it if necessary.
+
+        This method handles the state concern of lazy page loading, including:
+        - OCR processing via instance page_parser when available
+        - Ground truth text injection
+        - Fallback page creation for failed OCR
+        - Error handling and logging
+
+        Args:
+            index: Zero-based page index to ensure is loaded
+            pages: Mutable list of loaded pages (None means not yet loaded)
+            image_paths: List of image paths corresponding to pages
+            ground_truth_map: Mapping of image names to ground truth text
+
+        Returns:
+            Optional[Page]: The loaded page or None if index is invalid
+        """
+        if not pages:
+            logger.info("ensure_page: no pages loaded yet")
+            return None
+        if not (0 <= index < len(pages)):
+            logger.warning(
+                "ensure_page: index %s out of range (0..%s)",
+                index,
+                len(pages) - 1,
+            )
+            return None
+
+        if pages[index] is None:
+            img_path = Path(image_paths[index])  # Ensure it's a Path object
+            logger.debug(
+                "ensure_page: cache miss for index=%s path=%s (loader=%s)",
+                index,
+                img_path,
+                bool(self.page_parser),
+            )
+
+            if self.page_parser:
+                try:
+                    gt_text = (
+                        self.find_ground_truth_text(img_path.name, ground_truth_map)
+                        or ""
+                    )
+                    page_obj = self.page_parser(img_path, index, gt_text)
+                    logger.debug(
+                        "ensure_page: loader created page index=%s name=%s",
+                        index,
+                        getattr(page_obj, "name", img_path.name),
+                    )
+                    # Attach convenience attrs expected elsewhere
+                    if not hasattr(page_obj, "image_path"):
+                        page_obj.image_path = img_path  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "name"):
+                        page_obj.name = img_path.name  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "index"):
+                        page_obj.index = index  # type: ignore[attr-defined]
+                    pages[index] = page_obj
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception(
+                        "ensure_page: loader failed for index=%s path=%s; using fallback page",
+                        index,
+                        img_path,
+                    )
+                    # Fallback: still display original image even if OCR failed
+                    page = Page(width=0, height=0, page_index=index, items=[])
+                    page.image_path = img_path  # type: ignore[attr-defined]
+                    page.name = img_path.name  # type: ignore[attr-defined]
+                    page.index = index  # type: ignore[attr-defined]
+                    # Add ground truth if available even for fallback page
+                    try:
+                        gt_text = self.find_ground_truth_text(
+                            img_path.name, ground_truth_map
+                        )
+                        if gt_text is not None:
+                            page.add_ground_truth(gt_text)  # type: ignore[attr-defined]
+                            logger.debug(
+                                "ensure_page: injected ground truth (fallback) for %s",
+                                img_path.name,
+                            )
+                    except Exception:
+                        logger.exception(
+                            "ensure_page: ground truth injection failed (fallback) for %s",
+                            img_path.name,
+                        )
+                        pass
+                    try:  # best-effort load image
+                        from cv2 import imread as cv2_imread  # type: ignore
+
+                        img = cv2_imread(str(img_path))
+                        if img is not None:
+                            page.cv2_numpy_page_image = img  # type: ignore[attr-defined]
+                            logger.debug(
+                                "ensure_page: attached cv2 image for %s", img_path.name
+                            )
+                    except Exception:
+                        logger.debug(
+                            "ensure_page: cv2 load failed for %s", img_path.name
+                        )
+                        pass
+                    pages[index] = page
+            else:
+                # No loader provided: keep legacy minimal placeholder behavior
+                logger.debug(
+                    "ensure_page: no loader provided, creating placeholder page for index=%s",
+                    index,
+                )
+                page = Page(width=0, height=0, page_index=index, items=[])
+                page.image_path = img_path  # type: ignore[attr-defined]
+                page.name = img_path.name  # type: ignore[attr-defined]
+                page.index = index  # type: ignore[attr-defined]
+                try:
+                    gt_text = self.find_ground_truth_text(
+                        img_path.name, ground_truth_map
+                    )
+                    if gt_text is not None:
+                        page.add_ground_truth(gt_text)  # type: ignore[attr-defined]
+                        logger.debug(
+                            "ensure_page: injected ground truth (no-loader) for %s",
+                            img_path.name,
+                        )
+                except Exception:
+                    logger.exception(
+                        "ensure_page: ground truth injection failed (no-loader) for %s",
+                        img_path.name,
+                    )
+                    pass
+                pages[index] = page
+        else:
+            logger.debug("ensure_page: cache hit for index=%s", index)
+
+        return pages[index]
 
     def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
         """Normalize ground truth entries for flexible filename lookup.

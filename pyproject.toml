@@ -79,4 +79,6 @@ addopts = "--cov=ocr_labeler --cov-report=term-missing:skip-covered --cov-report
 filterwarnings = [
     # Suppress deprecation warning from vbuild using deprecated pkgutil.find_loader (Python 3.13 -> removed 3.14)
     "ignore:'pkgutil.find_loader' is deprecated and slated for removal in Python 3.14:DeprecationWarning:vbuild",
+    # Suppress deprecation warning from defusedxml (used by python-doctr dependency)
+    "ignore:defusedxml.cElementTree is deprecated*:DeprecationWarning:defusedxml.*",
 ]

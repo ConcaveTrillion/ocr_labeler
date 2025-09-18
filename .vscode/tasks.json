@@ -135,6 +135,25 @@
             "detail": "Run tests via Makefile"
         },
         {
+            "label": "Make: Test Verbose",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-verbose"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run tests with verbose output"
+        },
+        {
             "label": "Make: Coverage",
             "type": "shell",
             "command": "make",

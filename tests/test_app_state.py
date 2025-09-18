@@ -24,8 +24,6 @@ class DummyProject:
     ):
         self.pages = pages
         self.image_paths = image_paths
-        # Note: current_page_index is no longer part of Project, but kept for compatibility
-        self.page_parser = page_loader  # Renamed from page_loader to page_parser
         self.ground_truth_map = ground_truth_map
 
     # Methods expected by new Project API
@@ -152,7 +150,16 @@ def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_pat
         (state.is_loading, state.is_project_loading)
     )
 
+    # Mock ProjectState.get_page to return expected string format
+    def mock_get_page(index):
+        if 0 <= index < len(state.project_state.project.image_paths):
+            return f"page-{index}"
+        return None
+
     state.load_project(tmp_path)
+
+    # Apply the mock after load_project creates the project_state
+    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
 
     assert state.project_state.project_root == tmp_path
     # DummyProject attributes
@@ -188,6 +195,14 @@ def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
 
     state = AppState()
     state.load_project(tmp_path)
+
+    # Mock ProjectState.get_page to return expected string format
+    def mock_get_page(index):
+        if 0 <= index < len(state.project_state.project.image_paths):
+            return f"page-{index}"
+        return None
+
+    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
 
     # Initial
     assert state.project_state.current_page() == "page-0"
@@ -313,7 +328,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
 
     state = AppState()
 
-    # Mock project.get_page to return a sentinel after first notification
+    # Mock ProjectState.get_page to return a sentinel after first notification
     sentinel_page = object()
     notification_count = 0
 
@@ -324,7 +339,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
             return sentinel_page
         return None  # Empty project should return None initially
 
-    monkeypatch.setattr(state.project_state.project, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
 
     notifications = []
 
@@ -384,7 +399,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
 
     state = AppState()
 
-    # Mock project.get_page to return a sentinel after first notification
+    # Mock ProjectState.get_page to return a sentinel after first notification
     sentinel_page = object()
     notification_count = 0
 
@@ -395,7 +410,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
             return sentinel_page
         return None  # Empty project should return None initially
 
-    monkeypatch.setattr(state.project_state.project, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
 
     notifications = []
 

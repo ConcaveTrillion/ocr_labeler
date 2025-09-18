@@ -30,6 +30,7 @@ class ProjectState:
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_loading: bool = False
     on_change: Optional[Callable[[], None]] = None
+    page_ops: PageOperations = field(default_factory=PageOperations)
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -131,9 +132,25 @@ class ProjectState:
         self.current_page_index = index
         logger.debug("goto_page_index: now at index=%s", self.current_page_index)
 
+    def get_page(self, index: int) -> Optional[Page]:
+        """Get page at the specified index, loading it if necessary.
+
+        This method handles page loading directly through PageOperations,
+        bypassing the Project model's get_page method.
+        """
+        logger.debug("ProjectState.get_page: index=%s", index)
+
+        # Use PageOperations directly for state concerns
+        return self.page_ops.ensure_page(
+            index=index,
+            pages=self.project.pages,
+            image_paths=self.project.image_paths,
+            ground_truth_map=self.project.ground_truth_map,
+        )
+
     def current_page(self) -> Page | None:
         """Get the current page."""
-        return self.project.get_page(self.current_page_index)
+        return self.get_page(self.current_page_index)
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -174,7 +191,7 @@ class ProjectState:
         async def _background_load():
             try:
                 # Pre-load the page at the new index
-                await asyncio.to_thread(self.project.get_page, self.current_page_index)
+                await asyncio.to_thread(self.get_page, self.current_page_index)
             finally:
                 self.is_loading = False
                 self.notify()
@@ -195,7 +212,7 @@ class ProjectState:
                 )
                 # Fallback synchronous load
                 try:
-                    self.project.get_page(self.current_page_index)
+                    self.get_page(self.current_page_index)
                 finally:
                     self.is_loading = False
                     self.notify()
@@ -221,7 +238,7 @@ class ProjectState:
                     pass
                 # Fallback synchronous load
                 try:
-                    self.project.get_page(self.current_page_index)
+                    self.get_page(self.current_page_index)
                 finally:
                     self.is_loading = False
                     self.notify()

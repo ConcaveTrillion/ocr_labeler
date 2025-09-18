@@ -112,10 +112,6 @@ class ProjectOperations:
         ground_truth_map = page_ops.load_ground_truth_map(directory)
         logger.info(f"Loaded ground truth mapping with {len(ground_truth_map)} entries")
 
-        # Build initial page parser for OCR processing
-        page_parser = page_ops.build_initial_page_parser()
-        logger.info("Built initial page parser for OCR processing")
-
         # Create placeholder pages (will be lazily loaded)
         placeholders = [None] * len(images)
 
@@ -126,7 +122,6 @@ class ProjectOperations:
         project = Project(
             pages=placeholders,
             image_paths=images,
-            page_parser=page_parser,
             ground_truth_map=ground_truth_map,
         )
 

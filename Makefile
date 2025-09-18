@@ -40,6 +40,10 @@ test: ## Run tests
 	@echo "🧪 Running tests..."
 	uv run pytest
 
+test-verbose: ## Run tests with verbose output
+	@echo "🧪 Running tests (verbose mode)..."
+	uv run pytest -v
+
 coverage: ## Run tests with coverage report
 	@echo "🧪 Running tests with coverage..."
 	uv run pytest --cov=ocr_labeler --cov-report=html

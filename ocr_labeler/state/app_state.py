@@ -57,6 +57,8 @@ class AppState:
         """
         # Set up project state change notifications to propagate to app level
         self.project_state.on_change = self.notify
+        # Set up page state change notifications to also propagate to app level
+        self.project_state.page_state.on_change = self.notify
 
         try:
             self.available_projects = self.list_available_projects()

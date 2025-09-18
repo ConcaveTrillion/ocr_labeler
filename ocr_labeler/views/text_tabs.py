@@ -91,7 +91,7 @@ class TextTabs:
                 state.project_state.project, "ground_truth_map"
             ):
                 gt_text = (
-                    self._page_operations.find_ground_truth_text(
+                    state.project_state.page_state.find_ground_truth_text(
                         page.name, state.project_state.project.ground_truth_map
                     )
                     or ""

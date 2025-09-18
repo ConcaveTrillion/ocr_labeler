@@ -10,6 +10,7 @@ from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ..models.project import Project
 from .operations import PageOperations, ProjectOperations
+from .page_state import PageState
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,10 @@ class ProjectState:
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_loading: bool = False
     on_change: Optional[Callable[[], None]] = None
-    page_ops: PageOperations = field(default_factory=PageOperations)
+    page_state: PageState = field(default_factory=PageState)
+    page_ops: PageOperations = field(
+        default_factory=PageOperations
+    )  # For backward compatibility
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -60,6 +64,9 @@ class ProjectState:
             self.project = await operations.create_project(directory, images)
             # Reset navigation to first page
             self.current_page_index = 0 if images else -1
+
+            # Set project context for PageState
+            self.page_state.set_project_context(self.project, self.project_root)
         finally:
             self.is_loading = False
             self.notify()
@@ -135,12 +142,15 @@ class ProjectState:
     def get_page(self, index: int) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary.
 
-        This method handles page loading directly through PageOperations,
-        bypassing the Project model's get_page method.
+        This method delegates to PageState for page loading and caching,
+        with fallback to direct PageOperations for backward compatibility.
         """
-        logger.debug("ProjectState.get_page: index=%s", index)
+        # Try PageState first if it has project context
+        if self.page_state._project is not None:
+            return self.page_state.get_page(index)
 
-        # Use PageOperations directly for state concerns
+        # Fallback to direct PageOperations (for tests/backward compatibility)
+        logger.debug("ProjectState.get_page: using fallback (no PageState context)")
         return self.page_ops.ensure_page(
             index=index,
             pages=self.project.pages,
@@ -161,6 +171,15 @@ class ProjectState:
         Returns:
             bool: True if any modifications were made, False otherwise
         """
+        # Try PageState first if it has project context
+        if self.page_state._project is not None:
+            # Set up notification forwarding
+            self.page_state.on_change = self.on_change
+            return self.page_state.copy_ground_truth_to_ocr(
+                self.current_page_index, line_index
+            )
+
+        # Fallback to original implementation (for tests/backward compatibility)
         page = self.current_page()
         if not page:
             logger.warning("No current page available for GT→OCR copy")
@@ -250,9 +269,9 @@ class ProjectState:
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
     ) -> bool:
-        """Save the current page using PageOperations.
+        """Save the current page using PageState.
 
-        This is a convenience method that delegates to PageOperations.save_page
+        This is a convenience method that delegates to PageState.save_page
         using the current page from the project state.
 
         Args:
@@ -262,6 +281,17 @@ class ProjectState:
         Returns:
             bool: True if save was successful, False otherwise.
         """
+        # Try PageState first if it has project context
+        if self.page_state._project is not None:
+            # Set up notification forwarding
+            self.page_state.on_change = self.on_change
+            return self.page_state.save_page(
+                page_index=self.current_page_index,
+                save_directory=save_directory,
+                project_id=project_id,
+            )
+
+        # Fallback to original implementation (for tests/backward compatibility)
         page = self.current_page()
         if page is None:
             logger.error("No current page available to save")
@@ -282,7 +312,7 @@ class ProjectState:
     ) -> bool:
         """Load the current page from saved files.
 
-        This is a convenience method that delegates to PageOperations.load_page
+        This is a convenience method that delegates to PageState.load_page
         using the current page index from the project state.
 
         Args:
@@ -292,6 +322,17 @@ class ProjectState:
         Returns:
             bool: True if load was successful, False otherwise.
         """
+        # Try PageState first if it has project context
+        if self.page_state._project is not None:
+            # Set up notification forwarding
+            self.page_state.on_change = self.on_change
+            return self.page_state.load_page(
+                page_index=self.current_page_index,
+                save_directory=save_directory,
+                project_id=project_id,
+            )
+
+        # Fallback to original implementation (for tests/backward compatibility)
         page_index = self.current_page_index
         if page_index < 0:
             logger.error("No current page index available to load")

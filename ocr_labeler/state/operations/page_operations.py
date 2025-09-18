@@ -250,16 +250,36 @@ class PageOperations:
                 logger.debug(
                     f"Expected file {json_path} not found, searching for alternatives"
                 )
-                pattern = f"_{page_number:03d}.json"
-                matching_files = list(save_dir.glob(f"*{pattern}"))
+                # Try broader patterns to find any file for this page number
+                patterns = [
+                    f"_{page_number:03d}.json",  # _001.json
+                    f"*{page_number:03d}.json",  # *001.json (any prefix)
+                    f"*_{page_number:03d}.json",  # *_001.json
+                ]
+
+                matching_files = []
+                for pattern in patterns:
+                    files = list(save_dir.glob(pattern))
+                    if files:
+                        matching_files.extend(files)
+                        logger.debug(f"Pattern '{pattern}' found {len(files)} files")
+
                 if matching_files:
+                    # Use the first match
                     json_path = matching_files[0]
                     json_filename = json_path.name
                     # Extract project_id from the filename
                     file_prefix = json_filename.replace(".json", "")
                     logger.debug(f"Found alternative file: {json_path}")
                 else:
-                    logger.info(f"No saved page files found for page {page_number}")
+                    logger.info(
+                        f"No saved page files found for page {page_number} in {save_dir}"
+                    )
+                    # Log what files do exist for debugging
+                    all_json_files = list(save_dir.glob("*.json"))
+                    logger.info(
+                        f"Available JSON files: {[f.name for f in all_json_files]}"
+                    )
                     return None
 
             if not json_path.exists():
@@ -290,6 +310,16 @@ class PageOperations:
             page = Page.from_dict(page_dict)
             logger.info(f"Successfully loaded page from: {json_path}")
 
+            # Restore the original image path from source_path
+            source_path = json_data.get("source_path")
+            if source_path:
+                page.image_path = project_root / source_path  # type: ignore[attr-defined]
+                logger.debug(f"Restored image_path: {page.image_path}")
+            else:
+                logger.warning(
+                    f"No source_path found in {json_path}, checking for saved image"
+                )
+
             # Load the corresponding image file and attach it to the page
             # Try to find the image file (could be .png, .jpg, or .jpeg)
             image_path = None
@@ -298,6 +328,16 @@ class PageOperations:
                 if candidate_path.exists():
                     image_path = candidate_path
                     break
+
+            # If we don't have image_path from source_path, use the saved image as fallback
+            if not hasattr(page, "image_path") or page.image_path is None:
+                if image_path:
+                    page.image_path = image_path  # type: ignore[attr-defined]
+                    logger.debug(f"Using saved image as image_path: {image_path}")
+                else:
+                    logger.warning(
+                        f"No image_path available for loaded page from {json_path}"
+                    )
 
             if image_path:
                 try:
@@ -421,11 +461,15 @@ class PageOperations:
         pages: list[Page | None],
         image_paths: list[Path],
         ground_truth_map: dict[str, str],
+        project_root: Optional[Path] = None,
+        save_directory: str = "local-data/labeled-ocr",
+        force_ocr: bool = False,
     ) -> Optional[Page]:
         """Ensure that the Page at index is loaded, loading it if necessary.
 
         This method handles the state concern of lazy page loading, including:
-        - OCR processing via instance page_parser when available
+        - Prioritizing saved pages if available (unless force_ocr is True)
+        - OCR processing via instance page_parser when available or forced
         - Ground truth text injection
         - Fallback page creation for failed OCR
         - Error handling and logging
@@ -435,6 +479,9 @@ class PageOperations:
             pages: Mutable list of loaded pages (None means not yet loaded)
             image_paths: List of image paths corresponding to pages
             ground_truth_map: Mapping of image names to ground truth text
+            project_root: Root directory of the project (for loading saved pages)
+            save_directory: Directory where saved pages are stored
+            force_ocr: If True, skip loading saved page and force OCR processing
 
         Returns:
             Optional[Page]: The loaded page or None if index is invalid
@@ -453,12 +500,36 @@ class PageOperations:
         if pages[index] is None:
             img_path = Path(image_paths[index])  # Ensure it's a Path object
             logger.debug(
-                "ensure_page: cache miss for index=%s path=%s (loader=%s)",
+                "ensure_page: cache miss for index=%s path=%s (loader=%s, force_ocr=%s)",
                 index,
                 img_path,
                 bool(self.page_parser),
+                force_ocr,
             )
 
+            # Try to load from saved files first (unless forcing OCR)
+            if not force_ocr and project_root is not None:
+                try:
+                    loaded_page = self.load_page(
+                        page_number=index + 1,  # Convert to 1-based
+                        project_root=project_root,
+                        save_directory=save_directory,
+                        project_id=None,  # Will be derived from project_root.name
+                    )
+                    if loaded_page is not None:
+                        logger.debug(
+                            "ensure_page: loaded from saved for index=%s", index
+                        )
+                        pages[index] = loaded_page
+                        return pages[index]
+                except Exception as e:
+                    logger.debug(
+                        "ensure_page: failed to load saved page for index=%s: %s",
+                        index,
+                        e,
+                    )
+
+            # Fall back to OCR processing
             if self.page_parser:
                 try:
                     gt_text = (

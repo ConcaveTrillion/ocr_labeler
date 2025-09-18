@@ -21,7 +21,7 @@ class WordMatchViewModel:
         self.line_matches: List[LineMatch] = []
         self.fuzz_threshold: float = 0.8  # Threshold for fuzzy matches
 
-    def update_from_page(self, page) -> None:
+    def update_from_page(self, page: Page) -> None:
         """Update the view model from a Page object."""
         self.line_matches.clear()
 

@@ -2,41 +2,37 @@ from __future__ import annotations
 
 from nicegui import ui
 
-if True:  # pragma: no cover - UI wrapper file
 
-    class PageControls:
-        """Navigation + open directory row."""
+class PageControls:  # pragma: no cover - UI wrapper file
+    """Navigation + open directory row."""
 
-        def __init__(
-            self, state, on_prev, on_next, on_goto, on_save_page=None, on_load_page=None
-        ):
-            self.state = state
-            self._on_prev = on_prev
-            self._on_next = on_next
-            self._on_goto = on_goto
-            self._on_save_page = on_save_page
-            self._on_load_page = on_load_page
-            # UI refs
-            self.row = None
-            self.page_index_box = (
-                None  # non-interactive button-style box showing current page name
-            )
-            self.dir_input = None
-            self.page_input = None
-            self.page_name = None
-            self.page_total = None
-            self.save_button = None
-            self.load_button = None
+    def __init__(
+        self, state, on_prev, on_next, on_goto, on_save_page=None, on_load_page=None
+    ):
+        self.state = state
+        self._on_prev = on_prev
+        self._on_next = on_next
+        self._on_goto = on_goto
+        self._on_save_page = on_save_page
+        self._on_load_page = on_load_page
+        # UI refs
+        self.row = None
+        self.page_index_box = (
+            None  # non-interactive button-style box showing current page name
+        )
+        self.dir_input = None
+        self.page_input = None
+        self.page_name = None
+        self.page_total = None
+        self.save_button = None
+        self.load_button = None
+        self.reload_ocr_button = None
+        self.page_source_label = None
 
-        def build(self) -> ui.element:
-            with ui.row().classes("items-center gap-2") as row:
-                self.row = row
-                # Non-clickable button-style box for current page (PNG filename)
-                self.page_index_box = (
-                    ui.button("-", on_click=lambda: None).classes(
-                        "pointer-events-none"
-                    )  # visually identical to button, no interaction
-                )
+    def build(self) -> ui.element:
+        with ui.column().classes("gap-2") as container:
+            # First row: Navigation controls
+            with ui.row().classes("items-center gap-2"):
                 ui.button("Prev", on_click=self._on_prev)
                 ui.button("Next", on_click=self._on_next)
                 ui.button(
@@ -44,7 +40,10 @@ if True:  # pragma: no cover - UI wrapper file
                 )
                 self.page_input = (
                     ui.number(label="Page", value=1, min=1, format="%d")
-                    .on("keydown.enter", lambda e: self._on_goto(self.page_input.value))
+                    .on(
+                        "keydown.enter",
+                        lambda e: self._on_goto(self.page_input.value),
+                    )
                     .on("blur", lambda e: self._on_goto(self.page_input.value))
                 )
                 self.page_total = ui.label("")
@@ -62,18 +61,60 @@ if True:  # pragma: no cover - UI wrapper file
                     self.load_button = ui.button(
                         "Load Page", on_click=self._on_load_page
                     ).classes("bg-blue-600 hover:bg-blue-700 text-white")
-            return row
 
-        # Convenience for refresh
-        def set_page(self, index_plus_one: int, name: str, total: int):
-            # Update page name display box (styled like a disabled button)
-            if self.page_index_box:
-                try:
-                    # NiceGUI button stores its label text in .text
-                    self.page_index_box.text = name if name else "-"
-                except Exception:  # pragma: no cover - defensive
-                    pass
-            if self.page_input:
-                self.page_input.value = index_plus_one
-            if self.page_total:
-                self.page_total.text = f"/ {total}" if total else "/ 0"
+                # Add Reload with OCR button
+                ui.separator().props("vertical")
+                self.reload_ocr_button = ui.button(
+                    "Reload OCR", on_click=self._reload_with_ocr
+                ).classes("bg-orange-600 hover:bg-orange-700 text-white")
+
+            # Second row: Page info
+            with ui.row().classes("items-center gap-2"):
+                # Non-clickable button-style box for current page (PNG filename)
+                self.page_index_box = (
+                    ui.button("-", on_click=lambda: None).classes(
+                        "pointer-events-none"
+                    )  # visually identical to button, no interaction
+                )
+
+                # Page source indicator
+                ui.separator().props("vertical")
+                self.page_source_label = (
+                    ui.button("SOURCE: OCR", on_click=lambda: None).classes(
+                        "pointer-events-none"
+                    )  # visually identical to button, no interaction
+                )
+
+        return container
+
+    # Convenience for refresh
+    def set_page(self, index_plus_one: int, name: str, total: int):
+        # Update page name display box (styled like a disabled button)
+        if self.page_index_box:
+            try:
+                # NiceGUI button stores its label text in .text
+                self.page_index_box.text = name if name else "-"
+            except Exception:  # pragma: no cover - defensive
+                pass
+        if self.page_input:
+            self.page_input.value = index_plus_one
+        if self.page_total:
+            self.page_total.text = f"/ {total}" if total else "/ 0"
+
+        # Update page source
+        if self.page_source_label:
+            try:
+                # NiceGUI button stores its label text in .text
+                self.page_source_label.text = (
+                    self.state.project_state.current_page_source_text
+                )
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+    def _reload_with_ocr(self):
+        """Reload the current page with OCR processing."""
+        try:
+            self.state.project_state.reload_current_page_with_ocr()
+            ui.notify("Page reloaded with OCR", type="positive")
+        except Exception as e:
+            ui.notify(f"Failed to reload with OCR: {e}", type="negative")

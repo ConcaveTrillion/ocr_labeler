@@ -31,6 +31,9 @@ class PageState:
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
     _project_root: Optional[Path] = field(default=None, init=False)
+    page_sources: dict[int, str] = field(
+        default_factory=dict
+    )  # Track source of each page: 'ocr' or 'filesystem'
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -42,21 +45,29 @@ class PageState:
         self._project = project
         self._project_root = project_root
 
-    def get_page(self, index: int) -> Optional[Page]:
+    def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary."""
         if not self._project:
             logger.warning("PageState.get_page: no project context set")
             return None
 
-        logger.debug("PageState.get_page: index=%s", index)
+        logger.debug("PageState.get_page: index=%s, force_ocr=%s", index, force_ocr)
 
         # Use PageOperations directly for state concerns
-        return self.page_ops.ensure_page(
+        page = self.page_ops.ensure_page(
             index=index,
             pages=self._project.pages,
             image_paths=self._project.image_paths,
             ground_truth_map=self._project.ground_truth_map,
+            project_root=self._project_root,
+            force_ocr=force_ocr,
         )
+
+        # Mark as 'ocr' if loaded via OCR (either newly loaded or forced OCR)
+        if page is not None and (index not in self.page_sources or force_ocr):
+            self.page_sources[index] = "ocr"
+
+        return page
 
     def copy_ground_truth_to_ocr(self, page_index: int, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -153,6 +164,16 @@ class PageState:
             return False
 
         # Replace the page in the project
+        if 0 <= page_index < len(self._project.pages):
+            self._project.pages[page_index] = loaded_page
+            self.page_sources[page_index] = (
+                "filesystem"  # Mark as loaded from filesystem
+            )
+            logger.info(f"Successfully loaded page at index {page_index}")
+            return True
+        else:
+            logger.error(f"Page index {page_index} out of range for project pages")
+            return False
 
     def find_ground_truth_text(
         self, page_name: str, ground_truth_map: dict
@@ -167,3 +188,25 @@ class PageState:
             Ground truth text if found, None otherwise
         """
         return self.page_ops.find_ground_truth_text(page_name, ground_truth_map)
+
+    def get_page_source_text(self, page_index: int, is_loading: bool) -> str:
+        """Get the source text for a specific page.
+
+        Args:
+            page_index: Zero-based page index
+            is_loading: Whether OCR is currently loading
+
+        Returns:
+            Source text string
+        """
+        if is_loading:
+            return "SOURCE: OCR"
+        else:
+            page_source = self.page_sources.get(
+                page_index,
+                "ocr",  # Default to OCR if unknown
+            )
+            if page_source == "filesystem":
+                return "SOURCE: FILE"
+            else:
+                return "SOURCE: OCR"

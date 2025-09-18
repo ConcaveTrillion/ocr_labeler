@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from nicegui import ui
+from pd_book_tools.ocr.page import Page
 
 from ..models.word_match_model import MatchStatus
 from ..models.word_match_view_model import WordMatchViewModel
@@ -51,12 +52,11 @@ class WordMatchView:
         self.container = container
         return container
 
-    def update_from_page(self, page):
+    def update_from_page(self, page: Page) -> None:
         """Update the view with matches from a page."""
         try:
-            # Update the view model
+            # Update the view model with the new page
             self.view_model.update_from_page(page)
-
             # Update the UI
             self._update_summary()
             self._update_lines_display()

@@ -139,7 +139,7 @@ class ProjectState:
         self.current_page_index = index
         logger.debug("goto_page_index: now at index=%s", self.current_page_index)
 
-    def get_page(self, index: int) -> Optional[Page]:
+    def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary.
 
         This method delegates to PageState for page loading and caching,
@@ -147,7 +147,7 @@ class ProjectState:
         """
         # Try PageState first if it has project context
         if self.page_state._project is not None:
-            return self.page_state.get_page(index)
+            return self.page_state.get_page(index, force_ocr=force_ocr)
 
         # Fallback to direct PageOperations (for tests/backward compatibility)
         logger.debug("ProjectState.get_page: using fallback (no PageState context)")
@@ -161,6 +161,15 @@ class ProjectState:
     def current_page(self) -> Page | None:
         """Get the current page."""
         return self.get_page(self.current_page_index)
+
+    def reload_current_page_with_ocr(self):
+        """Reload the current page with OCR processing, bypassing any saved version."""
+        if 0 <= self.current_page_index < len(self.project.pages):
+            # Clear the cached page to force reload
+            self.project.pages[self.current_page_index] = None
+            # Reload with force_ocr=True
+            self.get_page(self.current_page_index, force_ocr=True)
+            self.notify()
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -353,8 +362,18 @@ class ProjectState:
         # Replace the current page in the project
         if 0 <= page_index < len(self.project.pages):
             self.project.pages[page_index] = loaded_page
+            self.page_state.page_sources[page_index] = (
+                "filesystem"  # Mark as loaded from filesystem
+            )
             logger.info(f"Successfully loaded page at index {page_index}")
             return True
         else:
             logger.error(f"Page index {page_index} out of range for project pages")
             return False
+
+    @property
+    def current_page_source_text(self) -> str:
+        """Get the source text for the current page."""
+        return self.page_state.get_page_source_text(
+            self.current_page_index, self.is_loading
+        )

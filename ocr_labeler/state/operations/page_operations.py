@@ -245,6 +245,23 @@ class PageOperations:
             json_filename = f"{file_prefix}.json"
             json_path = save_dir / json_filename
 
+            # If the expected file doesn't exist, try to find any matching file
+            if not json_path.exists():
+                logger.debug(
+                    f"Expected file {json_path} not found, searching for alternatives"
+                )
+                pattern = f"_{page_number:03d}.json"
+                matching_files = list(save_dir.glob(f"*{pattern}"))
+                if matching_files:
+                    json_path = matching_files[0]
+                    json_filename = json_path.name
+                    # Extract project_id from the filename
+                    file_prefix = json_filename.replace(".json", "")
+                    logger.debug(f"Found alternative file: {json_path}")
+                else:
+                    logger.info(f"No saved page files found for page {page_number}")
+                    return None
+
             if not json_path.exists():
                 logger.info(f"Saved page not found: {json_path}")
                 return None
@@ -272,6 +289,32 @@ class PageOperations:
             # Reconstruct Page object from dictionary
             page = Page.from_dict(page_dict)
             logger.info(f"Successfully loaded page from: {json_path}")
+
+            # Load the corresponding image file and attach it to the page
+            # Try to find the image file (could be .png, .jpg, or .jpeg)
+            image_path = None
+            for ext in IMAGE_EXTS:
+                candidate_path = save_dir / f"{file_prefix}{ext}"
+                if candidate_path.exists():
+                    image_path = candidate_path
+                    break
+
+            if image_path:
+                try:
+                    from cv2 import imread as cv2_imread
+
+                    img = cv2_imread(str(image_path))
+                    if img is not None:
+                        page.cv2_numpy_page_image = img
+                        logger.debug(
+                            f"Attached cv2 image for loaded page: {image_path}"
+                        )
+                    else:
+                        logger.warning(f"Failed to load image from: {image_path}")
+                except Exception as e:
+                    logger.warning(f"Error loading image {image_path}: {e}")
+            else:
+                logger.warning(f"No image file found for prefix: {file_prefix}")
 
             return page
 

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from ocr_labeler.state.operations import PageOperations
 
 
@@ -14,7 +16,8 @@ class TestCanLoadPage:
         self.page_operations = PageOperations()
         self.project_root = Path("/test/project")
 
-    def test_can_load_page_file_exists_valid_structure(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_file_exists_valid_structure(self, tmp_path):
         """Test can_load_page when file exists and has valid structure."""
         # Create a valid JSON file
         save_dir = tmp_path / "save_test"
@@ -31,7 +34,7 @@ class TestCanLoadPage:
             json.dump(json_data, f)
 
         # Test can_load_page
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -43,12 +46,13 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_file_not_exists(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_file_not_exists(self, tmp_path):
         """Test can_load_page when JSON file doesn't exist."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -60,11 +64,12 @@ class TestCanLoadPage:
         assert result.json_path == save_dir / "test_project_001.json"
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_directory_not_exists(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_directory_not_exists(self, tmp_path):
         """Test can_load_page when save directory doesn't exist."""
         save_dir = tmp_path / "nonexistent_directory"
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -76,7 +81,8 @@ class TestCanLoadPage:
         assert result.json_path == save_dir / "test_project_001.json"
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_invalid_json_structure(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_invalid_json_structure(self, tmp_path):
         """Test can_load_page when JSON file has invalid structure."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -93,7 +99,7 @@ class TestCanLoadPage:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(invalid_json_data, f)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -105,7 +111,8 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_corrupted_json(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_corrupted_json(self, tmp_path):
         """Test can_load_page when JSON file is corrupted/unparseable."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -116,7 +123,7 @@ class TestCanLoadPage:
         with open(json_file, "w", encoding="utf-8") as f:
             f.write("{ invalid json structure")
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -128,7 +135,8 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_generates_project_id_from_root(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_generates_project_id_from_root(self, tmp_path):
         """Test that project ID is generated from project_root when not provided."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -148,7 +156,7 @@ class TestCanLoadPage:
             json.dump(json_data, f)
 
         # Test without providing project_id
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=2,
             project_root=project_root,
             save_directory=str(save_dir),
@@ -160,7 +168,8 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "my_book_project_002"
 
-    def test_can_load_page_different_page_numbers(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_different_page_numbers(self, tmp_path):
         """Test can_load_page with different page numbers."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -179,7 +188,7 @@ class TestCanLoadPage:
 
         # Test existing pages
         for page_num in [1, 5, 10]:
-            result = self.page_operations.can_load_page(
+            result = await self.page_operations.can_load_page(
                 page_number=page_num,
                 project_root=self.project_root,
                 save_directory=str(save_dir),
@@ -192,7 +201,7 @@ class TestCanLoadPage:
 
         # Test non-existing pages
         for page_num in [2, 3, 4, 6, 7, 8, 9, 11]:
-            result = self.page_operations.can_load_page(
+            result = await self.page_operations.can_load_page(
                 page_number=page_num,
                 project_root=self.project_root,
                 save_directory=str(save_dir),
@@ -203,10 +212,11 @@ class TestCanLoadPage:
             assert result.json_filename == f"test_project_{page_num:03d}.json"
             assert result.file_prefix == f"test_project_{page_num:03d}"
 
-    def test_can_load_page_exception_handling(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_exception_handling(self, tmp_path):
         """Test can_load_page exception handling with invalid inputs."""
         # This should not crash even with problematic inputs
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=-1,  # Invalid page number
             project_root=Path("/nonexistent/path"),
             save_directory=str(tmp_path / "save_test"),
@@ -221,7 +231,8 @@ class TestCanLoadPage:
         assert isinstance(result.json_path, Path)
         assert result.file_prefix == "test_project_-01"
 
-    def test_can_load_page_custom_save_directory(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_custom_save_directory(self, tmp_path):
         """Test can_load_page with custom save directory."""
         custom_dir = tmp_path / "custom" / "save" / "location"
         custom_dir.mkdir(parents=True)
@@ -237,7 +248,7 @@ class TestCanLoadPage:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(json_data, f)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=3,
             project_root=self.project_root,
             save_directory=str(custom_dir),
@@ -249,7 +260,8 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "test_project_003"
 
-    def test_can_load_page_json_is_not_dict(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_json_is_not_dict(self, tmp_path):
         """Test can_load_page when JSON file contains non-dict data."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -260,7 +272,7 @@ class TestCanLoadPage:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(["not", "a", "dict"], f)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=1,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -272,12 +284,13 @@ class TestCanLoadPage:
         assert result.json_path == json_file
         assert result.file_prefix == "test_project_001"
 
-    def test_can_load_page_zero_page_number(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_zero_page_number(self, tmp_path):
         """Test can_load_page with page number 0 (edge case)."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=0,
             project_root=self.project_root,
             save_directory=str(save_dir),
@@ -289,7 +302,8 @@ class TestCanLoadPage:
         assert result.json_path == save_dir / "test_project_000.json"
         assert result.file_prefix == "test_project_000"
 
-    def test_can_load_page_large_page_number(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_can_load_page_large_page_number(self, tmp_path):
         """Test can_load_page with large page numbers."""
         save_dir = tmp_path / "save_test"
         save_dir.mkdir(parents=True)
@@ -305,7 +319,7 @@ class TestCanLoadPage:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(json_data, f)
 
-        result = self.page_operations.can_load_page(
+        result = await self.page_operations.can_load_page(
             page_number=999,
             project_root=self.project_root,
             save_directory=str(save_dir),

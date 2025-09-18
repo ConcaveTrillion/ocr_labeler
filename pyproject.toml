@@ -76,6 +76,7 @@ output = "coverage.xml"
 # Optional: default pytest addopts to always collect coverage (can be overridden)
 [tool.pytest.ini_options]
 addopts = "--cov=ocr_labeler --cov-report=term-missing:skip-covered --cov-report=html"
+asyncio_mode = "auto"
 filterwarnings = [
     # Suppress deprecation warning from vbuild using deprecated pkgutil.find_loader (Python 3.13 -> removed 3.14)
     "ignore:'pkgutil.find_loader' is deprecated and slated for removal in Python 3.14:DeprecationWarning:vbuild",

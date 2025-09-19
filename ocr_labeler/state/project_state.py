@@ -164,12 +164,11 @@ class ProjectState:
 
     def reload_current_page_with_ocr(self):
         """Reload the current page with OCR processing, bypassing any saved version."""
-        if 0 <= self.current_page_index < len(self.project.pages):
-            # Clear the cached page to force reload
-            self.project.pages[self.current_page_index] = None
-            # Reload with force_ocr=True
-            self.get_page(self.current_page_index, force_ocr=True)
-            self.notify()
+        # Ensure PageState has project context
+        self.page_state.set_project_context(self.project, self.project_root)
+        # Set up notification forwarding
+        self.page_state.on_change = self.on_change
+        self.page_state.reload_page_with_ocr(self.current_page_index)
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -180,35 +179,38 @@ class ProjectState:
         Returns:
             bool: True if any modifications were made, False otherwise
         """
-        # Try PageState first if it has project context
-        if self.page_state._project is not None:
-            # Set up notification forwarding
-            self.page_state.on_change = self.on_change
+        # Ensure PageState has project context
+        self.page_state.set_project_context(self.project, self.project_root)
+        # Set up notification forwarding
+        self.page_state.on_change = self.on_change
+
+        # Try PageState first if page is available
+        if self.page_state.get_page(self.current_page_index) is not None:
             return self.page_state.copy_ground_truth_to_ocr(
                 self.current_page_index, line_index
             )
+        else:
+            # Fall back to direct implementation for backward compatibility (tests)
+            page = self.current_page()
+            if not page:
+                logger.warning("No current page available for GT→OCR copy")
+                return False
 
-        # Fallback to original implementation (for tests/backward compatibility)
-        page = self.current_page()
-        if not page:
-            logger.warning("No current page available for GT→OCR copy")
-            return False
+            # Import inside method to allow test monkeypatching
+            try:
+                from .operations.line_operations import LineOperations
 
-        # Import inside method to allow test monkeypatching
-        try:
-            from .operations.line_operations import LineOperations
+                line_ops = LineOperations()
+                result = line_ops.copy_ground_truth_to_ocr(page, line_index)
 
-            line_ops = LineOperations()
-            result = line_ops.copy_ground_truth_to_ocr(page, line_index)
+                if result:
+                    # Trigger UI refresh to show updated matches
+                    self.notify()
 
-            if result:
-                # Trigger UI refresh to show updated matches
-                self.notify()
-
-            return result
-        except Exception as e:
-            logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
-            return False
+                return result
+            except Exception as e:
+                logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
+                return False
 
     def _navigate(self, nav_callable: Callable[[], None]):
         """Internal navigation helper with loading state."""
@@ -290,29 +292,32 @@ class ProjectState:
         Returns:
             bool: True if save was successful, False otherwise.
         """
-        # Try PageState first if it has project context
-        if self.page_state._project is not None:
-            # Set up notification forwarding
-            self.page_state.on_change = self.on_change
+        # Ensure PageState has project context
+        self.page_state.set_project_context(self.project, self.project_root)
+        # Set up notification forwarding
+        self.page_state.on_change = self.on_change
+
+        # Try PageState first if page is available
+        if self.page_state.get_page(self.current_page_index) is not None:
             return self.page_state.save_page(
                 page_index=self.current_page_index,
                 save_directory=save_directory,
                 project_id=project_id,
             )
+        else:
+            # Fall back to direct implementation for backward compatibility (tests)
+            page = self.current_page()
+            if page is None:
+                logger.error("No current page available to save")
+                return False
 
-        # Fallback to original implementation (for tests/backward compatibility)
-        page = self.current_page()
-        if page is None:
-            logger.error("No current page available to save")
-            return False
-
-        operations = PageOperations()
-        return operations.save_page(
-            page=page,
-            project_root=self.project_root,
-            save_directory=save_directory,
-            project_id=project_id,
-        )
+            operations = PageOperations()
+            return operations.save_page(
+                page=page,
+                project_root=self.project_root,
+                save_directory=save_directory,
+                project_id=project_id,
+            )
 
     def load_current_page(
         self,
@@ -331,45 +336,15 @@ class ProjectState:
         Returns:
             bool: True if load was successful, False otherwise.
         """
-        # Try PageState first if it has project context
-        if self.page_state._project is not None:
-            # Set up notification forwarding
-            self.page_state.on_change = self.on_change
-            return self.page_state.load_page(
-                page_index=self.current_page_index,
-                save_directory=save_directory,
-                project_id=project_id,
-            )
-
-        # Fallback to original implementation (for tests/backward compatibility)
-        page_index = self.current_page_index
-        if page_index < 0:
-            logger.error("No current page index available to load")
-            return False
-
-        operations = PageOperations()
-        loaded_page = operations.load_page(
-            page_number=page_index + 1,  # Convert to 1-based
-            project_root=self.project_root,
+        # Ensure PageState has project context
+        self.page_state.set_project_context(self.project, self.project_root)
+        # Set up notification forwarding
+        self.page_state.on_change = self.on_change
+        return self.page_state.load_page(
+            page_index=self.current_page_index,
             save_directory=save_directory,
             project_id=project_id,
         )
-
-        if loaded_page is None:
-            logger.warning(f"No saved page found for index {page_index}")
-            return False
-
-        # Replace the current page in the project
-        if 0 <= page_index < len(self.project.pages):
-            self.project.pages[page_index] = loaded_page
-            self.page_state.page_sources[page_index] = (
-                "filesystem"  # Mark as loaded from filesystem
-            )
-            logger.info(f"Successfully loaded page at index {page_index}")
-            return True
-        else:
-            logger.error(f"Page index {page_index} out of range for project pages")
-            return False
 
     @property
     def current_page_source_text(self) -> str:

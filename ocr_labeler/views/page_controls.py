@@ -114,7 +114,12 @@ class PageControls:  # pragma: no cover - UI wrapper file
     def _reload_with_ocr(self):
         """Reload the current page with OCR processing."""
         try:
-            self.state.project_state.reload_current_page_with_ocr()
+            current_page_index = getattr(
+                self.state.project_state, "current_page_index", 0
+            )
+            self.state.project_state.page_state.reload_current_page_with_ocr(
+                current_page_index
+            )
             ui.notify("Page reloaded with OCR", type="positive")
         except Exception as e:
             ui.notify(f"Failed to reload with OCR: {e}", type="negative")

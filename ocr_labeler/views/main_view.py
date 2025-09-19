@@ -9,6 +9,7 @@ from ..state import AppState
 from .callbacks import NavigationCallbacks
 from .content import ContentArea
 from .header import HeaderBar
+from .page_controls import PageControls
 
 
 class LabelerView:  # pragma: no cover - heavy UI wiring
@@ -18,6 +19,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         self.state = state
         self.state.on_change = self.refresh
         self.header_bar: HeaderBar | None = None
+        self.page_controls: PageControls | None = None
         self.content: ContentArea | None = None
         self._no_project_placeholder = None
         self._global_loading = None
@@ -31,6 +33,19 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             save_page=self._save_page_async,
             load_page=self._load_page_async,
         )
+
+        # Page controls (navigation, save/load)
+        self.page_controls = PageControls(
+            self.state,
+            on_prev=self._prev_async,
+            on_next=self._next_async,
+            on_goto=self._goto_async,
+            on_save_page=callbacks.save_page,
+            on_load_page=callbacks.load_page,
+        )
+        self.page_controls.build()
+
+        # Content area (images and text)
         self.content = ContentArea(self.state, callbacks)
         self.content.build()
 
@@ -76,7 +91,8 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         try:
             # Run save in background thread to avoid blocking UI
             success = await asyncio.to_thread(
-                self.state.project_state.save_current_page
+                self.state.project_state.page_state.save_current_page,
+                self.state.project_state.current_page_index,
             )
 
             if success:
@@ -95,7 +111,8 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         try:
             # Run load in background thread to avoid blocking UI
             success = await asyncio.to_thread(
-                self.state.project_state.load_current_page
+                self.state.project_state.page_state.load_current_page,
+                self.state.project_state.current_page_index,
             )
 
             if success:
@@ -107,6 +124,48 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
 
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Load failed: {exc}", type="negative")
+
+    # ------------------------------------------------------------ navigation methods
+    def _prep_image_spinners(self):
+        """Hide images during navigation transitions."""
+        if self.content and hasattr(self.content, "image_tabs"):
+            for name, img in self.content.image_tabs.images.items():  # noqa: F841
+                if img:
+                    img.set_visibility(False)
+
+    def _goto_page(self, raw_value):
+        """Navigate to a specific page number with validation."""
+        try:
+            n = int(raw_value)
+        except Exception:  # noqa: BLE001
+            n = 1
+        if n < 1:
+            n = 1
+        self.state.project_state.goto_page_number(n)
+
+    async def _prev_async(self):  # pragma: no cover - UI side effects
+        """Navigate to previous page."""
+        if getattr(self.state, "is_loading", False):
+            return
+        self._prep_image_spinners()
+        await asyncio.sleep(0)
+        self.state.project_state.prev_page()
+
+    async def _next_async(self):  # pragma: no cover - UI side effects
+        """Navigate to next page."""
+        if getattr(self.state, "is_loading", False):
+            return
+        self._prep_image_spinners()
+        await asyncio.sleep(0)
+        self.state.project_state.next_page()
+
+    async def _goto_async(self, value):  # pragma: no cover - UI side effects
+        """Navigate to specific page."""
+        if getattr(self.state, "is_loading", False):
+            return
+        self._prep_image_spinners()
+        await asyncio.sleep(0)
+        self._goto_page(value)
 
     # ------------------------------------------------------------ refresh
     def refresh(self):
@@ -163,14 +222,14 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
                 self._no_project_placeholder.classes(add="hidden")
 
         # Page meta
-        if self.content and self.content.page_controls:
+        if self.page_controls:
             if total:
                 # Use immediate index+1 and image filename while OCR loads
                 display_index = current_index + 1 if current_index >= 0 else 1
                 display_name = image_name or (page.name if page else "(no page)")
-                self.content.page_controls.set_page(display_index, display_name, total)
+                self.page_controls.set_page(display_index, display_name, total)
             else:
-                self.content.page_controls.set_page(1, "(no page)", 0)
+                self.page_controls.set_page(1, "(no page)", 0)
 
         # Images and text
         if not loading:

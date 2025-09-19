@@ -210,3 +210,90 @@ class PageState:
                 return "SOURCE: FILE"
             else:
                 return "SOURCE: OCR"
+
+    def reload_page_with_ocr(self, page_index: int) -> None:
+        """Reload a specific page with OCR processing, bypassing any saved version.
+
+        Args:
+            page_index: Zero-based page index to reload
+        """
+        if not self._project:
+            logger.warning("PageState.reload_page_with_ocr: no project context set")
+            return
+
+        if 0 <= page_index < len(self._project.pages):
+            # Clear the cached page to force reload
+            self._project.pages[page_index] = None
+            # Reload with force_ocr=True
+            self.get_page(page_index, force_ocr=True)
+            self.notify()
+        else:
+            logger.warning(
+                "PageState.reload_page_with_ocr: page_index %s out of range", page_index
+            )
+
+    def reload_current_page_with_ocr(self, current_page_index: int) -> None:
+        """Reload the current page with OCR processing, bypassing any saved version.
+
+        Args:
+            current_page_index: Zero-based index of the current page
+        """
+        self.reload_page_with_ocr(current_page_index)
+
+    def save_current_page(
+        self,
+        current_page_index: int,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> bool:
+        """Save the current page.
+
+        Args:
+            current_page_index: Zero-based index of the current page
+            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project root directory name.
+
+        Returns:
+            bool: True if save was successful, False otherwise.
+        """
+        return self.save_page(
+            page_index=current_page_index,
+            save_directory=save_directory,
+            project_id=project_id,
+        )
+
+    def load_current_page(
+        self,
+        current_page_index: int,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> bool:
+        """Load the current page from saved files.
+
+        Args:
+            current_page_index: Zero-based index of the current page
+            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            project_id: Project identifier. If None, derives from project root directory name.
+
+        Returns:
+            bool: True if load was successful, False otherwise.
+        """
+        return self.load_page(
+            page_index=current_page_index,
+            save_directory=save_directory,
+            project_id=project_id,
+        )
+
+    def copy_ground_truth_to_ocr_for_current_page(
+        self, current_page_index: int, line_index: int
+    ) -> bool:
+        """Copy ground truth text to OCR text for all words in the specified line on the current page.
+
+        Args:
+            current_page_index: Zero-based index of the current page
+            line_index: Zero-based line index to process
+
+        Returns:
+            bool: True if any modifications were made, False otherwise
+        """
+        return self.copy_ground_truth_to_ocr(current_page_index, line_index)

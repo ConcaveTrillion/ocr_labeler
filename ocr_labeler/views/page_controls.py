@@ -80,7 +80,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
                 # Page source indicator
                 ui.separator().props("vertical")
                 self.page_source_label = (
-                    ui.button("SOURCE: OCR", on_click=lambda: None).classes(
+                    ui.button("UNKNOWN", on_click=lambda: None).classes(
                         "pointer-events-none"
                     )  # visually identical to button, no interaction
                 )

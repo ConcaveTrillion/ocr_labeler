@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PageState:
-    """Page-specific state management.
+    """Page-specific state management. Oversees page loading, caching, and operations.
 
     Responsibilities:
     - Handle page loading and caching
@@ -34,6 +34,7 @@ class PageState:
     page_sources: dict[int, str] = field(
         default_factory=dict
     )  # Track source of each page: 'ocr' or 'filesystem'
+    current_page: Optional[Page] = field(default=None, init=False)
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -62,10 +63,6 @@ class PageState:
             project_root=self._project_root,
             force_ocr=force_ocr,
         )
-
-        # Mark as 'ocr' if loaded via OCR (either newly loaded or forced OCR)
-        if page is not None and (index not in self.page_sources or force_ocr):
-            self.page_sources[index] = "ocr"
 
         return page
 
@@ -100,7 +97,7 @@ class PageState:
             logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
             return False
 
-    def save_page(
+    def persist_page_to_file(
         self,
         page_index: int,
         save_directory: str = "local-data/labeled-ocr",
@@ -132,7 +129,7 @@ class PageState:
             project_id=project_id,
         )
 
-    def load_page(
+    def load_page_from_file(
         self,
         page_index: int,
         save_directory: str = "local-data/labeled-ocr",
@@ -162,6 +159,24 @@ class PageState:
         if loaded_page is None:
             logger.warning("No saved page found for index %s", page_index)
             return False
+
+        # Inject ground truth text if available
+        if hasattr(loaded_page, "name") and self._project.ground_truth_map:
+            page_name = getattr(loaded_page, "name", None)
+            if isinstance(page_name, str) and page_name:
+                gt_text = self.find_ground_truth_text(
+                    page_name, self._project.ground_truth_map
+                )
+                if gt_text:
+                    try:
+                        loaded_page.add_ground_truth(gt_text)
+                        logger.debug(
+                            f"Injected ground truth for loaded page {page_index}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to add ground truth to loaded page {page_index}: {e}"
+                        )
 
         # Replace the page in the project
         if 0 <= page_index < len(self._project.pages):
@@ -200,16 +215,18 @@ class PageState:
             Source text string
         """
         if is_loading:
-            return "SOURCE: OCR"
+            return "LOADING..."
+        elif not self._project:
+            return "(NO PROJECT)"
         else:
             page_source = self.page_sources.get(
                 page_index,
                 "ocr",  # Default to OCR if unknown
             )
             if page_source == "filesystem":
-                return "SOURCE: FILE"
+                return "LABELED"
             else:
-                return "SOURCE: OCR"
+                return "RAW OCR"
 
     def reload_page_with_ocr(self, page_index: int) -> None:
         """Reload a specific page with OCR processing, bypassing any saved version.
@@ -256,7 +273,7 @@ class PageState:
         Returns:
             bool: True if save was successful, False otherwise.
         """
-        return self.save_page(
+        return self.persist_page_to_file(
             page_index=current_page_index,
             save_directory=save_directory,
             project_id=project_id,
@@ -278,7 +295,7 @@ class PageState:
         Returns:
             bool: True if load was successful, False otherwise.
         """
-        return self.load_page(
+        return self.load_page_from_file(
             page_index=current_page_index,
             save_directory=save_directory,
             project_id=project_id,
@@ -297,3 +314,41 @@ class PageState:
             bool: True if any modifications were made, False otherwise
         """
         return self.copy_ground_truth_to_ocr(current_page_index, line_index)
+
+    def get_page_texts(self, page_index: int) -> tuple[str, str]:
+        """Get OCR and ground truth text for a page.
+
+        Args:
+            page_index: Zero-based page index
+
+        Returns:
+            Tuple of (ocr_text, ground_truth_text) where each is a string
+        """
+        if not self._project:
+            return "", ""
+
+        page = self.get_page(page_index)
+        if not page:
+            return "", ""
+
+        # Get OCR text from page
+        ocr_text = getattr(page, "text", "") or ""
+        if isinstance(ocr_text, str):
+            ocr_text = ocr_text if ocr_text.strip() else ""
+        else:
+            ocr_text = ""
+
+        # Get ground truth text from state mapping
+        gt_text = ""
+        if hasattr(page, "name") and self._project:
+            gt_text = (
+                self.find_ground_truth_text(page.name, self._project.ground_truth_map)
+                or ""
+            )
+
+        if isinstance(gt_text, str):
+            gt_text = gt_text if gt_text.strip() else ""
+        else:
+            gt_text = ""
+
+        return ocr_text, gt_text

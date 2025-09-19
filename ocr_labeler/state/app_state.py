@@ -35,7 +35,8 @@ class AppState:
     monospace_font_path: Optional[Path] = None
 
     # Project state management
-    project_state: ProjectState = field(default_factory=ProjectState)
+    projects: dict[str, ProjectState] = field(default_factory=dict)
+    current_project_key: str | None = None
     on_change: Optional[Callable[[], None]] = None
     is_project_loading: bool = False  # True only during full project load
 
@@ -55,11 +56,6 @@ class AppState:
         Ensures that any UI building against this state instance has an
         initial project list without needing an explicit manual call.
         """
-        # Set up project state change notifications to propagate to app level
-        self.project_state.on_change = self.notify
-        # Set up page state change notifications to also propagate to app level
-        self.project_state.page_state.on_change = self.notify
-
         try:
             self.available_projects = self.list_available_projects()
         except Exception:  # noqa: BLE001 - defensive
@@ -91,19 +87,25 @@ class AppState:
         if not directory.exists():
             raise FileNotFoundError(directory)
 
+        project_key = directory.resolve().name
+
         # Indicate a project-level loading phase so the UI can hide content & show spinner
         self.is_project_loading = True
         self.notify()
 
         try:
             # Keep selection in sync (used by bindings)
-            try:  # pragma: no cover - UI selection sync (not exercised in tests)
-                self.selected_project_key = directory.resolve().name
-            except Exception:  # pragma: no cover - defensive
-                self.selected_project_key = directory.name  # pragma: no cover
+            self.selected_project_key = project_key
+            self.current_project_key = project_key
+
+            # Get or create project state
+            if project_key not in self.projects:
+                self.projects[project_key] = ProjectState()
+                # Set up notifications for the new project state
+                self.projects[project_key].on_change = self.notify
 
             # Delegate actual project loading to project state
-            await self.project_state.load_project(directory)
+            await self.projects[project_key].load_project(directory)
         finally:
             # Clear project-level loading state (page-level loading continues via navigation spinner logic)
             self.is_project_loading = False
@@ -111,13 +113,39 @@ class AppState:
 
     @property
     def is_loading(self) -> bool:
-        """Get loading state from project state or app level."""
-        return self.project_state.is_loading or self.is_project_loading
+        """Get loading state from current project state or app level."""
+        if self.current_project_key and self.current_project_key in self.projects:
+            return (
+                self.projects[self.current_project_key].is_loading
+                or self.is_project_loading
+            )
+        # Check default project state if no current project
+        if hasattr(self, "_default_project_state"):
+            return self._default_project_state.is_loading or self.is_project_loading
+        return self.is_project_loading
 
     @is_loading.setter
     def is_loading(self, value: bool):
-        """Set loading state on project state."""
-        self.project_state.is_loading = value
+        """Set loading state on current project state."""
+        if self.current_project_key and self.current_project_key in self.projects:
+            self.projects[self.current_project_key].is_loading = value
+        else:
+            # Set on default project state if no current project
+            if not hasattr(self, "_default_project_state"):
+                self._default_project_state = ProjectState()
+                self._default_project_state.on_change = self.notify
+            self._default_project_state.is_loading = value
+
+    @property
+    def project_state(self) -> ProjectState:
+        """Get the current project state for backward compatibility."""
+        if self.current_project_key and self.current_project_key in self.projects:
+            return self.projects[self.current_project_key]
+        # Return a default empty project state if no current project
+        if not hasattr(self, "_default_project_state"):
+            self._default_project_state = ProjectState()
+            self._default_project_state.on_change = self.notify
+        return self._default_project_state
 
     # --------------- Project Discovery ---------------
     def list_available_projects(self) -> dict[str, Path]:

@@ -31,7 +31,9 @@ class ProjectState:
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_loading: bool = False
     on_change: Optional[Callable[[], None]] = None
-    page_state: PageState = field(default_factory=PageState)
+    page_states: dict[int, PageState] = field(
+        default_factory=dict
+    )  # Per-page state management
     page_ops: PageOperations = field(
         default_factory=PageOperations
     )  # For backward compatibility
@@ -40,6 +42,18 @@ class ProjectState:
         """Notify listeners of state changes."""
         if self.on_change:
             self.on_change()
+
+    def get_page_state(self, page_index: int) -> PageState:
+        """Get or create PageState for the specified page index.
+
+        Each page gets its own state management instance.
+        """
+        if page_index not in self.page_states:
+            page_state = PageState()
+            page_state.set_project_context(self.project, self.project_root)
+            page_state.on_change = self.on_change
+            self.page_states[page_index] = page_state
+        return self.page_states[page_index]
 
     async def load_project(self, directory: Path):
         """Load images; lazily OCR each page via DocTR on first access.
@@ -65,8 +79,8 @@ class ProjectState:
             # Reset navigation to first page
             self.current_page_index = 0 if images else -1
 
-            # Set project context for PageState
-            self.page_state.set_project_context(self.project, self.project_root)
+            # Clear page states for the new project
+            self.page_states.clear()
         finally:
             self.is_loading = False
             self.notify()
@@ -142,21 +156,10 @@ class ProjectState:
     def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary.
 
-        This method delegates to PageState for page loading and caching,
-        with fallback to direct PageOperations for backward compatibility.
+        This method delegates to the PageState for the specific page.
         """
-        # Try PageState first if it has project context
-        if self.page_state._project is not None:
-            return self.page_state.get_page(index, force_ocr=force_ocr)
-
-        # Fallback to direct PageOperations (for tests/backward compatibility)
-        logger.debug("ProjectState.get_page: using fallback (no PageState context)")
-        return self.page_ops.ensure_page(
-            index=index,
-            pages=self.project.pages,
-            image_paths=self.project.image_paths,
-            ground_truth_map=self.project.ground_truth_map,
-        )
+        page_state = self.get_page_state(index)
+        return page_state.get_page(index, force_ocr=force_ocr)
 
     def current_page(self) -> Page | None:
         """Get the current page."""
@@ -164,11 +167,8 @@ class ProjectState:
 
     def reload_current_page_with_ocr(self):
         """Reload the current page with OCR processing, bypassing any saved version."""
-        # Ensure PageState has project context
-        self.page_state.set_project_context(self.project, self.project_root)
-        # Set up notification forwarding
-        self.page_state.on_change = self.on_change
-        self.page_state.reload_page_with_ocr(self.current_page_index)
+        page_state = self.get_page_state(self.current_page_index)
+        page_state.reload_page_with_ocr(self.current_page_index)
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -179,14 +179,11 @@ class ProjectState:
         Returns:
             bool: True if any modifications were made, False otherwise
         """
-        # Ensure PageState has project context
-        self.page_state.set_project_context(self.project, self.project_root)
-        # Set up notification forwarding
-        self.page_state.on_change = self.on_change
+        page_state = self.get_page_state(self.current_page_index)
 
         # Try PageState first if page is available
-        if self.page_state.get_page(self.current_page_index) is not None:
-            return self.page_state.copy_ground_truth_to_ocr(
+        if page_state.get_page(self.current_page_index) is not None:
+            return page_state.copy_ground_truth_to_ocr(
                 self.current_page_index, line_index
             )
         else:
@@ -280,10 +277,9 @@ class ProjectState:
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
     ) -> bool:
-        """Save the current page using PageState.
+        """Save the current page using its PageState.
 
-        This is a convenience method that delegates to PageState.save_page
-        using the current page from the project state.
+        This is a convenience method that delegates to the PageState for the current page.
 
         Args:
             save_directory: Directory to save files (default: "local-data/labeled-ocr")
@@ -292,14 +288,11 @@ class ProjectState:
         Returns:
             bool: True if save was successful, False otherwise.
         """
-        # Ensure PageState has project context
-        self.page_state.set_project_context(self.project, self.project_root)
-        # Set up notification forwarding
-        self.page_state.on_change = self.on_change
+        page_state = self.get_page_state(self.current_page_index)
 
         # Try PageState first if page is available
-        if self.page_state.get_page(self.current_page_index) is not None:
-            return self.page_state.save_page(
+        if page_state.get_page(self.current_page_index) is not None:
+            return page_state.persist_page_to_file(
                 page_index=self.current_page_index,
                 save_directory=save_directory,
                 project_id=project_id,
@@ -326,8 +319,7 @@ class ProjectState:
     ) -> bool:
         """Load the current page from saved files.
 
-        This is a convenience method that delegates to PageState.load_page
-        using the current page index from the project state.
+        This is a convenience method that delegates to the PageState for the current page.
 
         Args:
             save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
@@ -336,11 +328,8 @@ class ProjectState:
         Returns:
             bool: True if load was successful, False otherwise.
         """
-        # Ensure PageState has project context
-        self.page_state.set_project_context(self.project, self.project_root)
-        # Set up notification forwarding
-        self.page_state.on_change = self.on_change
-        return self.page_state.load_page(
+        page_state = self.get_page_state(self.current_page_index)
+        return page_state.load_page_from_file(
             page_index=self.current_page_index,
             save_directory=save_directory,
             project_id=project_id,
@@ -349,6 +338,19 @@ class ProjectState:
     @property
     def current_page_source_text(self) -> str:
         """Get the source text for the current page."""
-        return self.page_state.get_page_source_text(
-            self.current_page_index, self.is_loading
-        )
+        page_state = self.get_page_state(self.current_page_index)
+        return page_state.get_page_source_text(self.current_page_index, self.is_loading)
+
+    @property
+    def current_ocr_text(self) -> str:
+        """Get the OCR text for the current page."""
+        page_state = self.get_page_state(self.current_page_index)
+        ocr_text, _ = page_state.get_page_texts(self.current_page_index)
+        return ocr_text
+
+    @property
+    def current_gt_text(self) -> str:
+        """Get the ground truth text for the current page."""
+        page_state = self.get_page_state(self.current_page_index)
+        _, gt_text = page_state.get_page_texts(self.current_page_index)
+        return gt_text

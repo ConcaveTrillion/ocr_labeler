@@ -520,6 +520,10 @@ class PageOperations:
                         logger.debug(
                             "ensure_page: loaded from saved for index=%s", index
                         )
+                        if not hasattr(loaded_page, "page_source"):
+                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
+                        else:
+                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
                         pages[index] = loaded_page
                         return pages[index]
                 except Exception as e:
@@ -549,6 +553,10 @@ class PageOperations:
                         page_obj.name = img_path.name  # type: ignore[attr-defined]
                     if not hasattr(page_obj, "index"):
                         page_obj.index = index  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "page_source"):
+                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
+                    else:
+                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
                     pages[index] = page_obj
                 except Exception:  # pragma: no cover - defensive
                     logger.exception(
@@ -556,11 +564,15 @@ class PageOperations:
                         index,
                         img_path,
                     )
+
                     # Fallback: still display original image even if OCR failed
                     page = Page(width=0, height=0, page_index=index, items=[])
                     page.image_path = img_path  # type: ignore[attr-defined]
                     page.name = img_path.name  # type: ignore[attr-defined]
                     page.index = index  # type: ignore[attr-defined]
+                    # set a flag to indicate OCR failure (add this attribute dynamically, page class doesn't have an ocr_failed attr)
+                    page.ocr_failed = True  # type: ignore[attr-defined]
+
                     # Add ground truth if available even for fallback page
                     try:
                         gt_text = self.find_ground_truth_text(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 from pathlib import Path
 from typing import Optional
@@ -61,13 +62,12 @@ class NiceGuiLabeler:
             if not font_path.exists():
                 logger.warning("DPSansMono.ttf not found at %s", font_path)
                 return
-            mount_path = "/_fonts"
-            # Serve containing directory so additional fonts could be added later
-            ui.add_static_files(mount_path, str(font_path.parent))  # type: ignore[arg-type]
+            with open(font_path, "rb") as f:
+                font_data = base64.b64encode(f.read()).decode("utf-8")
             css = f"""
             @font-face {{
                 font-family: 'DPSansMono';
-                src: url('{mount_path}/DPSansMono.ttf') format('truetype');
+                src: url('data:font/truetype;base64,{font_data}') format('truetype');
                 font-weight: normal;
                 font-style: normal;
                 font-display: swap;

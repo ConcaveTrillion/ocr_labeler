@@ -230,7 +230,12 @@ class WordMatchView:
             if word_match.match_status == MatchStatus.UNMATCHED_GT:
                 ui.icon("text_fields").classes("text-blue-600").style("height: 2.25em")
             else:
-                word_image = self._get_word_image(word_match)
+                try:
+                    word_image = self._get_word_image(word_match)
+                except Exception as e:
+                    logger.error(f"Error getting word image: {e}")
+                    word_image = None
+                    ui.icon("error").classes("text-red-600").style("height: 2.25em")
                 if word_image:
                     ui.interactive_image(word_image).style("height: 2.25em")
                 else:

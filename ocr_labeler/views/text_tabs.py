@@ -7,12 +7,15 @@ from .word_match import WordMatchView
 class TextTabs:
     """Right side textual data tabs (Matches placeholder, Ground Truth, OCR)."""
 
-    def __init__(self, state=None):
+    def __init__(self, state=None, on_save_page=None, on_load_page=None):
         self._page_operations = PageOperations()
         # Keep attribute names for external references, but these will hold code_editor instances.
         self.gt_text = None  # type: ignore[assignment]
         self.ocr_text = None  # type: ignore[assignment]
         self.state = state
+        # Keep for backward compatibility but no longer used
+        self._on_save_page = on_save_page
+        self._on_load_page = on_load_page
 
         # Create callback for GT→OCR copy functionality
         copy_callback = None

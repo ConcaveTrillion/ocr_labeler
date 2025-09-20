@@ -38,8 +38,8 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
                 on_prev=self._prev_async,
                 on_next=self._next_async,
                 on_goto=self._goto_async,
-                on_save_page=self.callbacks.save_page,
-                on_load_page=self.callbacks.load_page,
+                on_save_page=self.callbacks.save_page if self.callbacks else None,
+                on_load_page=self.callbacks.load_page if self.callbacks else None,
             )
             self.page_controls.build()
 

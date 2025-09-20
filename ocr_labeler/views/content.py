@@ -14,7 +14,11 @@ class ContentArea:
         self.state = state
         self.callbacks = callbacks
         self.image_tabs = ImageTabs()
-        self.text_tabs = TextTabs(state)
+        self.text_tabs = TextTabs(
+            state=state,
+            on_save_page=None,  # Moved to PageControls
+            on_load_page=None,  # Moved to PageControls
+        )
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
         self.root = None

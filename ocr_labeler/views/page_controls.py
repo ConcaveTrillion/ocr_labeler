@@ -48,20 +48,6 @@ class PageControls:  # pragma: no cover - UI wrapper file
                 )
                 self.page_total = ui.label("")
 
-                # Add Save Page button if callback provided
-                if self._on_save_page:
-                    ui.separator().props("vertical")
-                    self.save_button = ui.button(
-                        "Save Page", on_click=self._on_save_page
-                    ).classes("bg-green-600 hover:bg-green-700 text-white")
-
-                # Add Load Page button if callback provided
-                if self._on_load_page:
-                    ui.separator().props("vertical")
-                    self.load_button = ui.button(
-                        "Load Page", on_click=self._on_load_page
-                    ).classes("bg-blue-600 hover:bg-blue-700 text-white")
-
                 # Add Reload with OCR button
                 ui.separator().props("vertical")
                 self.reload_ocr_button = ui.button(
@@ -84,6 +70,19 @@ class PageControls:  # pragma: no cover - UI wrapper file
                         "pointer-events-none"
                     )  # visually identical to button, no interaction
                 )
+
+                # Save and Load buttons
+                if self._on_save_page:
+                    ui.separator().props("vertical")
+                    self.save_button = ui.button(
+                        "Save Page", on_click=self._on_save_page
+                    ).classes("bg-green-600 hover:bg-green-700 text-white")
+
+                if self._on_load_page:
+                    ui.separator().props("vertical")
+                    self.load_button = ui.button(
+                        "Load Page", on_click=self._on_load_page
+                    ).classes("bg-blue-600 hover:bg-blue-700 text-white")
 
         return container
 

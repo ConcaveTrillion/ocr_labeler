@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ocr_labeler.state import AppState
-from ocr_labeler.views.image_tabs import ImageTabs
-from ocr_labeler.views.text_tabs import TextTabs
+from ocr_labeler.views.projects.pages.image_tabs import ImageTabs
+from ocr_labeler.views.projects.pages.text_tabs import TextTabs
 
 
 def test_ui_uses_project_state():

@@ -7,8 +7,8 @@ import logging
 from nicegui import ui
 from pd_book_tools.ocr.page import Page
 
-from ..models.word_match_model import MatchStatus
-from ..models.word_match_view_model import WordMatchViewModel
+from ....models.word_match_model import MatchStatus
+from ....models.word_match_view_model import WordMatchViewModel
 
 logger = logging.getLogger(__name__)
 

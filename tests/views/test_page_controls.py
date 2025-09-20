@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-from ocr_labeler.views.page_controls import PageControls
+from ocr_labeler.views.projects.pages.page_controls import PageControls
 
 
 class TestPageControls:

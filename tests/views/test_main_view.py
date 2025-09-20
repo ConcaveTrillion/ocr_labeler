@@ -27,7 +27,7 @@ class TestMainView:
     @patch("ocr_labeler.views.main_view.ui")
     def test_project_view_has_load_page(self, mock_ui):
         """Test that ProjectView has load_page functionality."""
-        from ocr_labeler.views.project_view import ProjectView
+        from ocr_labeler.views.projects.project_view import ProjectView
 
         # Mock the required UI components
         mock_ui.page = Mock()

@@ -4,10 +4,10 @@ import asyncio
 
 from nicegui import ui
 
-from ..state import AppState
-from .callbacks import NavigationCallbacks
-from .content import ContentArea
-from .page_controls import PageControls
+from ...state import AppState
+from ..callbacks import NavigationCallbacks
+from .pages.content import ContentArea
+from .pages.page_controls import PageControls
 
 
 class ProjectView:  # pragma: no cover - heavy UI wiring

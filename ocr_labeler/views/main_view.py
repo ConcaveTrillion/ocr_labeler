@@ -5,8 +5,8 @@ from pathlib import Path
 from nicegui import ui
 
 from ..state import AppState
-from .header import HeaderBar
-from .project_view import ProjectView
+from .header.header import HeaderBar
+from .projects.project_view import ProjectView
 
 
 class LabelerView:  # pragma: no cover - heavy UI wiring
@@ -54,6 +54,14 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             )
         )
 
+        self._no_project_placeholder.bind_visibility_from(
+            target_object=self.state, target_name="current_project_key", value=None
+        )
+
+        self._global_loading.bind_visibility_from(
+            target_object=self.state, target_name="is_project_loading", value=True
+        )
+
         self.refresh()
 
     # ------------------------------------------------------------ actions
@@ -72,18 +80,12 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
 
     # ------------------------------------------------------------ refresh
     def refresh(self):
-        project_loading = getattr(self.state, "is_project_loading", False)
+        project_loading = self.state.is_project_loading
 
         # Update project path label (keep header visible even while loading)
         if self.header_bar:
+            # TODO: Bind this to state change instead of calling every refresh
             self.header_bar.project_controls.update_path_label()
-
-        # Toggle global spinner
-        if self._global_loading:
-            if project_loading:
-                self._global_loading.classes(remove="hidden")
-            else:
-                self._global_loading.classes(add="hidden")
 
         # Show/hide project view vs placeholder
         has_project = bool(getattr(self.state.project_state.project, "image_paths", []))

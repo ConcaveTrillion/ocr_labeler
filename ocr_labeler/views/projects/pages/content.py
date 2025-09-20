@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
-from .callbacks import NavigationCallbacks
+from ...callbacks import NavigationCallbacks
 from .image_tabs import ImageTabs
 from .text_tabs import TextTabs
 

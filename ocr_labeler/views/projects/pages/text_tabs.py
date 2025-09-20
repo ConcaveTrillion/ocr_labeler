@@ -1,6 +1,5 @@
 from nicegui import ui
 
-from ..state.operations.page_operations import PageOperations
 from .word_match import WordMatchView
 
 
@@ -10,20 +9,15 @@ class TextTabs:
     def __init__(
         self, page_state=None, page_index=0, on_save_page=None, on_load_page=None
     ):
-        self._page_operations = PageOperations()
         # Keep attribute names for external references, but these will hold code_editor instances.
-        self.gt_text = None  # type: ignore[assignment]
-        self.ocr_text = None  # type: ignore[assignment]
+        self.gt_text = None
+        self.ocr_text = None
         self.page_state = page_state
         self.page_index = page_index
 
         # Set the page index on the page_state so it knows which page to cache
         if page_state:
             page_state._current_page_index = page_index
-
-        # Keep for backward compatibility but no longer used
-        self._on_save_page = on_save_page
-        self._on_load_page = on_load_page
 
         # Create callback for GT→OCR copy functionality
         copy_callback = None

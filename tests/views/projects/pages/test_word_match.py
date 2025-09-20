@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 
 from ocr_labeler.state.project_state import ProjectState
-from ocr_labeler.views.word_match import WordMatchView
+from ocr_labeler.views.projects.pages.word_match import WordMatchView
 
 
 class TestGTToOCRCopy:
@@ -95,7 +95,9 @@ class TestGTToOCRCopy:
         view = WordMatchView(copy_gt_to_ocr_callback=mock_callback)
 
         # Mock ui.notify to avoid NiceGUI dependency in test
-        with patch("ocr_labeler.views.word_match.ui.notify") as mock_notify:
+        with patch(
+            "ocr_labeler.views.projects.pages.word_match.ui.notify"
+        ) as mock_notify:
             view._handle_copy_gt_to_ocr(0)
 
             mock_callback.assert_called_once_with(0)
@@ -109,7 +111,9 @@ class TestGTToOCRCopy:
 
         view = WordMatchView(copy_gt_to_ocr_callback=None)
 
-        with patch("ocr_labeler.views.word_match.ui.notify") as mock_notify:
+        with patch(
+            "ocr_labeler.views.projects.pages.word_match.ui.notify"
+        ) as mock_notify:
             view._handle_copy_gt_to_ocr(0)
 
             mock_notify.assert_called_once_with(

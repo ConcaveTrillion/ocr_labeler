@@ -12,6 +12,10 @@ try:  # Lazy import; NiceGUI only needed at runtime in UI context
 except Exception:  # pragma: no cover
     ui = None  # type: ignore
 
+try:  # Lazy import; NiceGUI only needed at runtime in UI context
+    from nicegui import binding  # type: ignore
+except Exception:  # pragma: no cover
+    binding = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,7 @@ class AppState:
     projects: dict[str, ProjectState] = field(default_factory=dict)
     current_project_key: str | None = None
     on_change: Optional[Callable[[], None]] = None
+
     is_project_loading: bool = False  # True only during full project load
 
     # Reactive project selection data for UI bindings

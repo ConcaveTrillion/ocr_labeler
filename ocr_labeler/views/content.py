@@ -15,7 +15,10 @@ class ContentArea:
         self.callbacks = callbacks
         self.image_tabs = ImageTabs()
         self.text_tabs = TextTabs(
-            state=state,
+            page_state=state.project_state.get_page_state(
+                state.project_state.current_page_index
+            ),
+            page_index=state.project_state.current_page_index,
             on_save_page=None,  # Moved to PageControls
             on_load_page=None,  # Moved to PageControls
         )

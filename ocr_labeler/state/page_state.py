@@ -36,6 +36,11 @@ class PageState:
     )  # Track source of each page: 'ocr' or 'filesystem'
     current_page: Optional[Page] = field(default=None, init=False)
 
+    # Cached text values for current page
+    _cached_page_index: int = field(default=-1, init=False)
+    _cached_ocr_text: str = field(default="", init=False)
+    _cached_gt_text: str = field(default="", init=False)
+
     def notify(self):
         """Notify listeners of state changes."""
         if self.on_change:
@@ -94,6 +99,7 @@ class PageState:
 
             if result:
                 # Trigger UI refresh to show updated matches
+                self._invalidate_text_cache()
                 self.notify()
 
             return result
@@ -189,6 +195,8 @@ class PageState:
                 "filesystem"  # Mark as loaded from filesystem
             )
             logger.info(f"Successfully loaded page at index {page_index}")
+            # Invalidate cache since page content changed
+            self._invalidate_text_cache()
             return True
         else:
             logger.error(f"Page index {page_index} out of range for project pages")
@@ -250,6 +258,8 @@ class PageState:
             # Ensure the page source is set to "ocr" since we forced OCR processing
             if page is not None:
                 self.page_sources[page_index] = "ocr"
+                # Invalidate cache since page content changed
+                self._invalidate_text_cache()
             self.notify()
         else:
             logger.warning(
@@ -359,3 +369,53 @@ class PageState:
             gt_text = ""
 
         return ocr_text, gt_text
+
+    @property
+    def current_ocr_text(self) -> str:
+        """Get the OCR text for the current page (cached for performance)."""
+        self._update_text_cache()
+        return self._cached_ocr_text
+
+    @property
+    def current_gt_text(self) -> str:
+        """Get the ground truth text for the current page (cached for performance)."""
+        self._update_text_cache()
+        return self._cached_gt_text
+
+    def _invalidate_text_cache(self):
+        """Invalidate the cached text values when page content changes."""
+        self._cached_page_index = -1
+        self._cached_ocr_text = ""
+        self._cached_gt_text = ""
+
+    def _update_text_cache(self, force: bool = False):
+        """Update cached text values for the current page."""
+        if force or self._cached_page_index != self._current_page_index:
+            # Only update cache if page is already loaded to avoid triggering OCR
+            if (
+                0 <= self._current_page_index < len(self._project.pages)
+                and self._project.pages[self._current_page_index] is not None
+            ):
+                self._cached_ocr_text, self._cached_gt_text = self.get_page_texts(
+                    self._current_page_index
+                )
+                self._cached_page_index = self._current_page_index
+            else:
+                # Page not loaded yet, keep old cache or set to loading
+                if self._cached_page_index == -1 or force:
+                    self._cached_ocr_text = "Loading..."
+                    self._cached_gt_text = "Loading..."
+                    self._cached_page_index = self._current_page_index
+
+    @property
+    def _current_page_index(self) -> int:
+        """Get the current page index (this would need to be set by the caller)."""
+        # For now, return 0 as a default - this should be set by the component using page_state
+        return getattr(self, "_page_index", 0)
+
+    @_current_page_index.setter
+    def _current_page_index(self, value: int):
+        """Set the current page index."""
+        if getattr(self, "_page_index", None) != value:
+            self._invalidate_text_cache()
+        self._page_index = value

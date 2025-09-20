@@ -32,9 +32,10 @@ def test_view_components_work_with_project_state():
     image_tabs.update_images(state)
 
     # Test TextTabs
-    text_tabs = TextTabs(state)
+    page_state = state.project_state.get_page_state(0)
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
     # This should not crash even with no project loaded
-    text_tabs.update_text(state)
+    text_tabs.update_text(page_state, 0)
 
 
 def test_project_state_direct_access_and_delegation_removal():

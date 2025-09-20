@@ -183,4 +183,9 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     def _update_text(self):
         if self.content and hasattr(self.content, "text_tabs"):
-            self.content.text_tabs.update_text(self.app_state)
+            page_state = self.app_state.project_state.get_page_state(
+                self.app_state.project_state.current_page_index
+            )
+            self.content.text_tabs.update_text(
+                page_state, self.app_state.project_state.current_page_index
+            )

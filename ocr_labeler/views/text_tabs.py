@@ -19,12 +19,7 @@ class TextTabs:
         if state and hasattr(state, "page_state"):
             # Create a wrapper that passes the current page index
             def copy_gt_callback(line_index: int) -> bool:
-                current_page_index = getattr(
-                    state.project_state, "current_page_index", 0
-                )
-                return state.project_state.page_state.copy_ground_truth_to_ocr_for_current_page(
-                    current_page_index, line_index
-                )
+                return state.project_state.copy_ground_truth_to_ocr(line_index)
 
             copy_callback = copy_gt_callback
 

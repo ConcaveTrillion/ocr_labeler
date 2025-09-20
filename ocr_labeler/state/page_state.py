@@ -64,6 +64,10 @@ class PageState:
             force_ocr=force_ocr,
         )
 
+        # Update page_sources dictionary based on the page's source
+        if page is not None and hasattr(page, "page_source"):
+            self.page_sources[index] = page.page_source
+
         return page
 
     def copy_ground_truth_to_ocr(self, page_index: int, line_index: int) -> bool:
@@ -242,7 +246,10 @@ class PageState:
             # Clear the cached page to force reload
             self._project.pages[page_index] = None
             # Reload with force_ocr=True
-            self.get_page(page_index, force_ocr=True)
+            page = self.get_page(page_index, force_ocr=True)
+            # Ensure the page source is set to "ocr" since we forced OCR processing
+            if page is not None:
+                self.page_sources[page_index] = "ocr"
             self.notify()
         else:
             logger.warning(

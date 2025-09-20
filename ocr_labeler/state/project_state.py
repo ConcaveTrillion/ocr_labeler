@@ -38,6 +38,13 @@ class ProjectState:
         default_factory=PageOperations
     )  # For backward compatibility
 
+    # Cached text values to avoid expensive recomputation during binding propagation
+    _cached_ocr_text: str = field(default="", init=False)
+    _cached_gt_text: str = field(default="", init=False)
+    _cached_page_index: int = field(
+        default=-1, init=False
+    )  # Track which page the cache is for
+
     def notify(self):
         """Notify listeners of state changes."""
         if self.on_change:
@@ -150,6 +157,11 @@ class ProjectState:
                 "goto_page_index: clamp %s -> %s", index, self.project.page_count() - 1
             )
             index = self.project.page_count() - 1
+
+        # Invalidate cache if page index actually changed
+        if self.current_page_index != index:
+            self._invalidate_text_cache()
+
         self.current_page_index = index
         logger.debug("goto_page_index: now at index=%s", self.current_page_index)
 
@@ -169,6 +181,8 @@ class ProjectState:
         """Reload the current page with OCR processing, bypassing any saved version."""
         page_state = self.get_page_state(self.current_page_index)
         page_state.reload_page_with_ocr(self.current_page_index)
+        # Invalidate cache since page content may have changed
+        self._invalidate_text_cache()
 
     def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -202,6 +216,7 @@ class ProjectState:
 
                 if result:
                     # Trigger UI refresh to show updated matches
+                    self._invalidate_text_cache()  # Invalidate cache since content changed
                     self.notify()
 
                 return result
@@ -219,6 +234,8 @@ class ProjectState:
             try:
                 # Pre-load the page at the new index
                 await asyncio.to_thread(self.get_page, self.current_page_index)
+                # Update text cache now that page is loaded
+                self._update_text_cache(force=True)
             finally:
                 self.is_loading = False
                 self.notify()
@@ -329,11 +346,15 @@ class ProjectState:
             bool: True if load was successful, False otherwise.
         """
         page_state = self.get_page_state(self.current_page_index)
-        return page_state.load_page_from_file(
+        success = page_state.load_page_from_file(
             page_index=self.current_page_index,
             save_directory=save_directory,
             project_id=project_id,
         )
+        if success:
+            # Invalidate cache since page content changed
+            self._invalidate_text_cache()
+        return success
 
     @property
     def current_page_source_text(self) -> str:
@@ -343,14 +364,38 @@ class ProjectState:
 
     @property
     def current_ocr_text(self) -> str:
-        """Get the OCR text for the current page."""
-        page_state = self.get_page_state(self.current_page_index)
-        ocr_text, _ = page_state.get_page_texts(self.current_page_index)
-        return ocr_text
+        """Get the OCR text for the current page (cached for performance)."""
+        self._update_text_cache()
+        return self._cached_ocr_text
 
     @property
     def current_gt_text(self) -> str:
-        """Get the ground truth text for the current page."""
-        page_state = self.get_page_state(self.current_page_index)
-        _, gt_text = page_state.get_page_texts(self.current_page_index)
-        return gt_text
+        """Get the ground truth text for the current page (cached for performance)."""
+        self._update_text_cache()
+        return self._cached_gt_text
+
+    def _invalidate_text_cache(self):
+        """Invalidate the cached text values when page content changes."""
+        self._cached_page_index = -1
+        self._cached_ocr_text = ""
+        self._cached_gt_text = ""
+
+    def _update_text_cache(self, force: bool = False):
+        """Update cached text values for the current page."""
+        if force or self.current_page_index != self._cached_page_index:
+            # Only update cache if page is already loaded to avoid triggering OCR
+            if (
+                0 <= self.current_page_index < len(self.project.pages)
+                and self.project.pages[self.current_page_index] is not None
+            ):
+                page_state = self.get_page_state(self.current_page_index)
+                self._cached_ocr_text, self._cached_gt_text = page_state.get_page_texts(
+                    self.current_page_index
+                )
+                self._cached_page_index = self.current_page_index
+            else:
+                # Page not loaded yet, keep old cache or set to loading
+                if self._cached_page_index == -1 or force:
+                    self._cached_ocr_text = "Loading..."
+                    self._cached_gt_text = "Loading..."
+                    self._cached_page_index = self.current_page_index

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from .project_state import ProjectState
 
@@ -41,7 +41,7 @@ class AppState:
     # Project state management
     projects: dict[str, ProjectState] = field(default_factory=dict)
     current_project_key: str | None = None
-    on_change: Optional[Callable[[], None]] = None
+    on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
 
     is_project_loading: bool = False  # True only during full project load
 
@@ -79,8 +79,9 @@ class AppState:
 
     # --------------- Notification ---------------
     def notify(self):
-        if self.on_change:
-            self.on_change()
+        """Notify listeners of state changes."""
+        for listener in self.on_change:
+            listener()
 
     # --------------- Project Loading ---------------
     async def load_project(self, directory: Path):
@@ -107,7 +108,7 @@ class AppState:
             if project_key not in self.projects:
                 self.projects[project_key] = ProjectState()
                 # Set up notifications for the new project state
-                self.projects[project_key].on_change = self.notify
+                self.projects[project_key].on_change.append(self.notify)
 
             # Delegate actual project loading to project state
             await self.projects[project_key].load_project(directory)
@@ -138,7 +139,7 @@ class AppState:
             # Set on default project state if no current project
             if not hasattr(self, "_default_project_state"):
                 self._default_project_state = ProjectState()
-                self._default_project_state.on_change = self.notify
+                self._default_project_state.on_change.append(self.notify)
             self._default_project_state.is_loading = value
 
     @property
@@ -149,7 +150,7 @@ class AppState:
         # Return a default empty project state if no current project
         if not hasattr(self, "_default_project_state"):
             self._default_project_state = ProjectState()
-            self._default_project_state.on_change = self.notify
+            self._default_project_state.on_change.append(self.notify)
         return self._default_project_state
 
     # --------------- Project Discovery ---------------

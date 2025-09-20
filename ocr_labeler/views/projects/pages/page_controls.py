@@ -1,14 +1,27 @@
 from __future__ import annotations
 
+import logging
+
 from nicegui import ui
+
+from ....state import ProjectState
+
+logger = logging.getLogger(__name__)
 
 
 class PageControls:  # pragma: no cover - UI wrapper file
     """Navigation + open directory row."""
 
     def __init__(
-        self, state, on_prev, on_next, on_goto, on_save_page=None, on_load_page=None
+        self,
+        state: ProjectState,
+        on_prev,
+        on_next,
+        on_goto,
+        on_save_page=None,
+        on_load_page=None,
     ):
+        logger.debug("Initializing PageControls")
         self.state = state
         self._on_prev = on_prev
         self._on_next = on_next
@@ -30,6 +43,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self.page_source_label = None
 
     def build(self) -> ui.element:
+        logger.debug("Building PageControls UI")
         with ui.column().classes("gap-2") as container:
             # First row: Navigation controls
             with ui.row().classes("items-center gap-2"):
@@ -88,6 +102,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
 
     # Convenience for refresh
     def set_page(self, index_plus_one: int, name: str, total: int):
+        logger.debug(f"Setting page to {index_plus_one}, name: {name}, total: {total}")
         # Update page name display box (styled like a disabled button)
         if self.page_index_box:
             try:
@@ -104,16 +119,17 @@ class PageControls:  # pragma: no cover - UI wrapper file
         if self.page_source_label:
             try:
                 # NiceGUI button stores its label text in .text
-                self.page_source_label.text = (
-                    self.state.project_state.current_page_source_text
-                )
+                self.page_source_label.text = self.state.current_page_source_text
             except Exception:  # pragma: no cover - defensive
                 pass
 
     def _reload_with_ocr(self):
         """Reload the current page with OCR processing."""
+        logger.debug("Reloading page with OCR")
         try:
-            self.state.project_state.reload_current_page_with_ocr()
+            self.state.reload_current_page_with_ocr()
+            logger.debug("Page reloaded with OCR successfully")
             ui.notify("Page reloaded with OCR", type="positive")
         except Exception as e:
+            logger.error(f"Failed to reload with OCR: {e}")
             ui.notify(f"Failed to reload with OCR: {e}", type="negative")

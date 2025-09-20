@@ -141,8 +141,8 @@ async def test_load_project_success_sets_state_and_clears_loading(
     notifications = []
 
     state = AppState()
-    state.on_change = lambda: notifications.append(
-        (state.is_loading, state.is_project_loading)
+    state.on_change.append(
+        lambda: notifications.append((state.is_loading, state.is_project_loading))
     )
 
     # Mock ProjectState.get_page to return expected string format
@@ -287,7 +287,7 @@ def test_list_available_projects_missing_base_returns_empty(monkeypatch, tmp_pat
 def test_notify_invokes_on_change_callback(tmp_path):
     state = AppState()
     calls = []
-    state.on_change = lambda: calls.append("notified")
+    state.on_change.append(lambda: calls.append("notified"))
     state.notify()
     assert calls == ["notified"]
 
@@ -309,7 +309,7 @@ async def test_navigation_triggers_loading_flag_transient(monkeypatch, tmp_path)
     def on_change():
         observed.append(state.is_loading)
 
-    state.on_change = on_change
+    state.on_change.append(on_change)
 
     # Mock asyncio to force synchronous behavior for this test
     def mock_get_running_loop():
@@ -365,7 +365,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
             )
         )
 
-    state.on_change = capture_notification
+    state.on_change.append(capture_notification)
 
     # Mock asyncio.get_running_loop to raise RuntimeError (no loop)
     monkeypatch.setattr(
@@ -436,7 +436,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
             )
         )
 
-    state.on_change = capture_notification
+    state.on_change.append(capture_notification)
 
     # Mock event loop
     mock_loop = type("MockLoop", (), {"create_task": lambda self, coro: None})()

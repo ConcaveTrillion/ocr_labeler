@@ -17,6 +17,10 @@ class WordMatchView:
     """View component for displaying word-level OCR vs Ground Truth matching with color coding."""
 
     def __init__(self, copy_gt_to_ocr_callback=None):
+        logger.debug(
+            "Initializing WordMatchView with copy_gt_to_ocr_callback=%s",
+            copy_gt_to_ocr_callback is not None,
+        )
         self.view_model = WordMatchViewModel()
         self.container = None
         self.summary_label = None
@@ -24,9 +28,11 @@ class WordMatchView:
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
+        logger.debug("WordMatchView initialization complete")
 
     def build(self):
         """Build the UI components."""
+        logger.debug("Building WordMatchView UI components")
         with ui.column().classes("full-width full-height") as container:
             # Header card with summary stats and filter controls
             with ui.card():
@@ -50,28 +56,38 @@ class WordMatchView:
                 self.lines_container = ui.column()
 
         self.container = container
+        logger.debug("WordMatchView UI build complete, container created")
         return container
 
     def update_from_page(self, page: Page) -> None:
         """Update the view with matches from a page."""
+        logger.debug(
+            "Updating WordMatchView from page with %d blocks",
+            len(page.blocks) if page.blocks else 0,
+        )
         try:
             # Update the view model with the new page
             self.view_model.update_from_page(page)
             # Update the UI
             self._update_summary()
             self._update_lines_display()
+            logger.debug("WordMatchView update complete")
 
         except Exception as e:
             logger.exception(f"Error updating word match view: {e}")
 
     def _update_summary(self):
         """Update the summary statistics display."""
+        logger.debug("Updating summary statistics")
         if not self.summary_label:
+            logger.debug("No summary_label available, skipping update")
             return
 
         stats = self.view_model.get_summary_stats()
+        logger.debug("Retrieved summary stats: %s", stats)
         if stats["total_words"] == 0:
             self.summary_label.set_text("Ready to analyze word matches")
+            logger.debug("Set summary to 'Ready to analyze' (no words)")
             return
 
         summary_text = (
@@ -84,6 +100,7 @@ class WordMatchView:
             f"🎯 {stats['match_percentage']:.1f}% match rate"
         )
         self.summary_label.set_text(summary_text)
+        logger.debug("Updated summary text: %s", summary_text)
 
     def _update_lines_display(self):
         """Update the lines display with word matches."""
@@ -131,6 +148,11 @@ class WordMatchView:
 
     def _create_line_card(self, line_match):
         """Create a card display for a single line match."""
+        logger.debug(
+            "Creating line card for line %d with status %s",
+            line_match.line_index,
+            line_match.overall_match_status.value,
+        )
         with ui.column():
             # Color background bar based on overall match status
             status_classes = self._get_status_classes(
@@ -155,14 +177,14 @@ class WordMatchView:
                         ui.label(" • ".join(stats_items))
 
                     # Right side: Action button (only if not 100% match)
-                    logger.info(
+                    logger.debug(
                         f"Line {line_match.line_index}: status={line_match.overall_match_status}, callback={self.copy_gt_to_ocr_callback is not None}"
                     )
                     if (
                         line_match.overall_match_status != MatchStatus.EXACT
                         and self.copy_gt_to_ocr_callback
                     ):
-                        logger.info(
+                        logger.debug(
                             f"Adding GT→OCR button for line {line_match.line_index}"
                         )
                         with ui.row():
@@ -176,7 +198,7 @@ class WordMatchView:
                                 )
                             )
                     else:
-                        logger.info(
+                        logger.debug(
                             f"Not adding button for line {line_match.line_index}: status={line_match.overall_match_status}, has_callback={self.copy_gt_to_ocr_callback is not None}"
                         )
                     # with ui.row():
@@ -191,10 +213,17 @@ class WordMatchView:
                 # Word comparison table
                 with ui.column():
                     self._create_word_comparison_table(line_match)
+        logger.debug("Line card creation complete for line %d", line_match.line_index)
 
     def _create_word_comparison_table(self, line_match):
         """Create a table layout with each column representing one complete word item."""
+        logger.debug(
+            "Creating word comparison table for line %d with %d word matches",
+            line_match.line_index,
+            len(line_match.word_matches),
+        )
         if not line_match.word_matches:
+            logger.debug("No word matches found for line %d", line_match.line_index)
             ui.label("No words found")
             return
 
@@ -222,6 +251,9 @@ class WordMatchView:
                     self._create_gt_cell(word_match)
                     # Status cell
                     self._create_status_cell(word_match)
+        logger.debug(
+            "Word comparison table creation complete for line %d", line_match.line_index
+        )
 
     def _create_image_cell(self, word_match):
         """Create image cell for a word."""
@@ -322,9 +354,13 @@ class WordMatchView:
 
     def _get_word_image(self, word_match):
         """Get cropped word image as base64 data URL."""
+        logger.debug(
+            "Getting word image for match with status %s", word_match.match_status.value
+        )
         try:
             # Get the current page from the view model to access page image
             if not self.view_model.line_matches:
+                logger.debug("No line matches in view model, cannot get word image")
                 return None
 
             # Find the line match that contains this word match
@@ -341,13 +377,22 @@ class WordMatchView:
                     break
 
             if not line_match or line_match.page_image is None:
+                logger.debug("No line match found or no page image available")
                 return None
 
+            logger.debug(
+                "Found line match with page image, attempting to crop word image"
+            )
             # Get cropped image from word match
             try:
                 cropped_img = word_match.get_cropped_image(line_match.page_image)
                 if cropped_img is None:
+                    logger.debug("Cropped image is None")
                     return None
+                logger.debug(
+                    "Successfully cropped image, shape: %s",
+                    cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
+                )
             except Exception as e:
                 logger.debug(f"Error cropping word image: {e}")
                 return None
@@ -360,8 +405,13 @@ class WordMatchView:
             # Encode image as PNG
             _, buffer = cv2.imencode(".png", cropped_img)
             img_base64 = base64.b64encode(buffer).decode("utf-8")
+            data_url = f"data:image/png;base64,{img_base64}"
+            logger.debug(
+                "Successfully encoded image as base64 data URL (length: %d)",
+                len(data_url),
+            )
 
-            return f"data:image/png;base64,{img_base64}"
+            return data_url
 
         except Exception as e:
             logger.debug(f"Error creating word image: {e}")
@@ -407,22 +457,25 @@ class WordMatchView:
 
     def _on_filter_change(self, event):
         """Handle filter selection change."""
-        logger.info(f"Filter change event: {event}")
-        logger.info(f"Filter selector value: {self.filter_selector.value}")
+        logger.debug(f"Filter change event triggered: {event}")
+        logger.debug(f"Filter selector value: {self.filter_selector.value}")
         self.show_only_mismatches = self.filter_selector.value == "Mismatched Lines"
-        logger.info(f"Show only mismatches: {self.show_only_mismatches}")
+        logger.debug(f"Show only mismatches set to: {self.show_only_mismatches}")
         self._update_lines_display()
+        logger.debug("Filter change handling complete")
 
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""
-        logger.info(
+        logger.debug(
             f"Filtering lines. Show only mismatches: {self.show_only_mismatches}"
         )
-        logger.info(f"Total line matches: {len(self.view_model.line_matches)}")
+        logger.debug(
+            f"Total line matches available: {len(self.view_model.line_matches)}"
+        )
 
         if not self.show_only_mismatches:
             # Show all lines
-            logger.info("Returning all lines")
+            logger.debug("Returning all lines (no filtering)")
             return self.view_model.line_matches
         else:
             # Show only lines with mismatches (any word that's not an exact match)
@@ -435,20 +488,34 @@ class WordMatchView:
                 )
                 if has_mismatch:
                     filtered_lines.append(line_match)
-            logger.info(f"Filtered to {len(filtered_lines)} lines with mismatches")
+                    logger.debug(
+                        f"Line {line_match.line_index} has mismatches, including in filtered results"
+                    )
+                else:
+                    logger.debug(
+                        f"Line {line_match.line_index} has no mismatches, excluding from filtered results"
+                    )
+            logger.debug(f"Filtered to {len(filtered_lines)} lines with mismatches")
             return filtered_lines
 
     def _handle_copy_gt_to_ocr(self, line_index: int):
         """Handle the GT→OCR button click."""
+        logger.debug("Handling GT→OCR copy for line index %d", line_index)
         if self.copy_gt_to_ocr_callback:
             try:
+                logger.debug("Calling copy_gt_to_ocr_callback for line %d", line_index)
                 success = self.copy_gt_to_ocr_callback(line_index)
                 if success:
+                    logger.debug("GT→OCR copy successful for line %d", line_index)
                     ui.notify(
                         f"Copied ground truth to OCR text for line {line_index + 1}",
                         type="positive",
                     )
                 else:
+                    logger.debug(
+                        "GT→OCR copy failed - no ground truth text found for line %d",
+                        line_index,
+                    )
                     ui.notify(
                         f"No ground truth text found to copy in line {line_index + 1}",
                         type="warning",
@@ -457,11 +524,16 @@ class WordMatchView:
                 logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
                 ui.notify(f"Error copying GT→OCR: {e}", type="negative")
         else:
+            logger.debug("No copy_gt_to_ocr_callback available")
             ui.notify("Copy function not available", type="warning")
 
     def clear(self):
         """Clear the display."""
+        logger.debug("Clearing WordMatchView display")
         if self.lines_container:
             self.lines_container.clear()
+            logger.debug("Cleared lines container")
         if self.summary_label:
             self.summary_label.set_text("No matches to display")
+            logger.debug("Reset summary label text")
+        logger.debug("WordMatchView clear complete")

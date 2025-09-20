@@ -87,17 +87,17 @@ class ProjectLoadControls:
                     except Exception:
                         pass
 
-            prev_on_change = self.state.on_change
+            # prev_on_change = self.state.on_change
 
-            def _chained():  # pragma: no cover - UI side effect
-                if prev_on_change:
-                    try:
-                        prev_on_change()
-                    except Exception:
-                        pass
-                _toggle_button()
+            # def _chained():  # pragma: no cover - UI side effect
+            #     if prev_on_change:
+            #         try:
+            #             prev_on_change()
+            #         except Exception:
+            #             pass
+            #     _toggle_button()
 
-            self.state.on_change = _chained
+            # self.state.on_change = _chained
             _toggle_button()
 
             ui.space()

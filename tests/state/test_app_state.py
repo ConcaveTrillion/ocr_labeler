@@ -24,7 +24,7 @@ class TestAppState:
         assert state.monospace_font_name == "monospace"
         assert state.monospace_font_path is None
         assert state.is_project_loading is False
-        assert state.on_change is None
+        assert state.on_change == []
 
         # Check that project_state is initialized
         assert state.project_state is not None
@@ -45,7 +45,7 @@ class TestAppState:
 
         # Test with callback
         called = []
-        state.on_change = lambda: called.append(True)
+        state.on_change.append(lambda: called.append(True))
         state.notify()
 
         assert len(called) == 1

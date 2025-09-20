@@ -57,6 +57,7 @@ lint: ## Run linting checks
 format: ## Format code
 	@echo "✨ Formatting code..."
 	uv run ruff format
+	@$(MAKE) --no-print-directory lint
 
 pre-commit-check: ## Run pre-commit on all files
 	@echo "🪝 Running pre-commit on all files..."

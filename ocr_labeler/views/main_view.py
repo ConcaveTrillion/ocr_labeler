@@ -18,7 +18,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
     def __init__(self, state: AppState):
         logger.debug("Initializing LabelerView with AppState")
         self.state = state
-        self.state.on_change = self.refresh
+        self.state.on_change.append(self.refresh)
         self.header_bar: HeaderBar | None = None
         self.project_view: ProjectView | None = None
         self._main_container = None
@@ -88,7 +88,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             if not self.project_view and self._content_container:
                 logger.debug("Creating new ProjectView instance")
                 with self._content_container:
-                    self.project_view = ProjectView(self.state)
+                    self.project_view = ProjectView(self.state.project_state)
                     self.project_view.build()
                 logger.debug("ProjectView created and built")
         except Exception as exc:  # noqa: BLE001
@@ -117,7 +117,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             # Create project view if project exists but view doesn't
             logger.debug("Creating ProjectView for loaded project")
             with self._content_container:
-                self.project_view = ProjectView(self.state)
+                self.project_view = ProjectView(self.state.project_state)
                 self.project_view.build()
             logger.debug("ProjectView created and built during refresh")
         elif self.project_view and not has_project:

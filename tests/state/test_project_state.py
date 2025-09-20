@@ -14,14 +14,14 @@ def test_project_state_initialization():
     assert state.current_page_index == 0
     assert state.current_page() is None  # No pages loaded yet
     assert state.is_loading is False
-    assert state.on_change is None
+    assert state.on_change == []
 
 
 def test_project_state_notification():
     """Test that ProjectState notification system works."""
     state = ProjectState()
     calls = []
-    state.on_change = lambda: calls.append("notified")
+    state.on_change.append(lambda: calls.append("notified"))
     state.notify()
     assert calls == ["notified"]
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
@@ -26,7 +26,7 @@ class PageState:
     """
 
     page_ops: PageOperations = field(default_factory=PageOperations)
-    on_change: Optional[Callable[[], None]] = None
+    on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
@@ -43,8 +43,8 @@ class PageState:
 
     def notify(self):
         """Notify listeners of state changes."""
-        if self.on_change:
-            self.on_change()
+        for listener in self.on_change:
+            listener()
 
     def set_project_context(self, project: Project, project_root: Path):
         """Set the project context for page operations."""
@@ -85,9 +85,11 @@ class PageState:
         Returns:
             bool: True if any modifications were made, False otherwise
         """
-        page = self.get_page(page_index)
+        page = self.current_page
         if not page:
-            logger.warning("No page available at index %s for GT→OCR copy", page_index)
+            logger.critical(
+                "No page available at index %s for GT→OCR copy.", page_index
+            )
             return False
 
         # Import inside method to allow test monkeypatching
@@ -376,11 +378,26 @@ class PageState:
         self._update_text_cache()
         return self._cached_ocr_text
 
+    @current_ocr_text.setter
+    def current_ocr_text(self, value: str):
+        """Set the OCR text for the current page (no-op as OCR text is read-only)."""
+        logger.warning("Attempted to set OCR text, but OCR text is read-only")
+
     @property
     def current_gt_text(self) -> str:
         """Get the ground truth text for the current page (cached for performance)."""
         self._update_text_cache()
         return self._cached_gt_text
+
+    @current_gt_text.setter
+    def current_gt_text(self, value: str):
+        """Set the ground truth text for the current page."""
+        if self._project and 0 <= self._current_page_index < len(self._project.pages):
+            page = self._project.pages[self._current_page_index]
+            if page and hasattr(page, "name"):
+                self._project.ground_truth_map[page.name] = value
+                self._invalidate_text_cache()
+                logger.debug(f"Updated ground truth for page {page.name}")
 
     def _invalidate_text_cache(self):
         """Invalidate the cached text values when page content changes."""

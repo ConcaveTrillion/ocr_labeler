@@ -29,7 +29,8 @@ class ProjectState:
     project: Project = field(default_factory=Project)
     current_page_index: int = 0  # Navigation state managed here
     project_root: Path = Path("../data/source-pgdp-data/output")
-    is_loading: bool = False
+    is_project_loading: bool = False
+    is_navigating: bool = False
     on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
     page_states: dict[int, PageState] = field(
         default_factory=dict
@@ -86,7 +87,7 @@ class ProjectState:
             directory
         )  # This will raise FileNotFoundError if needed
 
-        self.is_loading = True
+        self.is_project_loading = True
         self.notify()
         try:
             self.project_root = directory
@@ -100,7 +101,7 @@ class ProjectState:
             # Clear page states for the new project
             self.page_states.clear()
         finally:
-            self.is_loading = False
+            self.is_project_loading = False
             self.notify()
         logger.debug("load_project: completed, loaded %d images", len(images))
 
@@ -216,54 +217,11 @@ class ProjectState:
         self._invalidate_text_cache()
         logger.debug("reload_current_page_with_ocr: completed")
 
-    def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
-        """Copy ground truth text to OCR text for all words in the specified line.
-
-        Args:
-            line_index: Zero-based line index to process
-
-        Returns:
-            bool: True if any modifications were made, False otherwise
-        """
-        logger.debug("copy_ground_truth_to_ocr: called with line_index=%s", line_index)
-        page_state = self.get_page_state(self.current_page_index)
-
-        # Try PageState first if page is available
-        if page_state.get_page(self.current_page_index) is not None:
-            result = page_state.copy_ground_truth_to_ocr(
-                self.current_page_index, line_index
-            )
-        else:
-            # Fall back to direct implementation for backward compatibility (tests)
-            page = self.current_page()
-            if not page:
-                logger.warning("No current page available for GT→OCR copy")
-                return False
-
-            # Import inside method to allow test monkeypatching
-            try:
-                from .operations.line_operations import LineOperations
-
-                line_ops = LineOperations()
-                result = line_ops.copy_ground_truth_to_ocr(page, line_index)
-
-                if result:
-                    # Trigger UI refresh to show updated matches
-                    self._invalidate_text_cache()  # Invalidate cache since content changed
-                    self.notify()
-
-                return result
-            except Exception as e:
-                logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
-                return False
-        logger.debug("copy_ground_truth_to_ocr: completed, result=%s", result)
-        return result
-
     def _navigate(self, nav_callable: Callable[[], None]):
         """Internal navigation helper with loading state."""
         logger.debug("_navigate: called")
         nav_callable()  # quick index change first
-        self.is_loading = True
+        self.is_navigating = True
         self.notify()
 
         async def _background_load():
@@ -273,7 +231,7 @@ class ProjectState:
                 # Update text cache now that page is loaded
                 self._update_text_cache(force=True)
             finally:
-                self.is_loading = False
+                self.is_navigating = False
                 self.notify()
 
         def _schedule_async_load():
@@ -294,7 +252,8 @@ class ProjectState:
                 try:
                     self.get_page(self.current_page_index)
                 finally:
-                    self.is_loading = False
+                    self.is_project_loading = False
+                    self.is_navigating = False
                     self.notify()
                 return
 
@@ -320,7 +279,8 @@ class ProjectState:
                 try:
                     self.get_page(self.current_page_index)
                 finally:
-                    self.is_loading = False
+                    self.is_project_loading = False
+                    self.is_navigating = False
                     self.notify()
 
         _schedule_async_load()
@@ -412,7 +372,7 @@ class ProjectState:
         logger.debug("current_page_source_text: called")
         page_state = self.get_page_state(self.current_page_index)
         result = page_state.get_page_source_text(
-            self.current_page_index, self.is_loading
+            self.current_page_index, self.is_project_loading
         )
         logger.debug("current_page_source_text: returning text")
         return result

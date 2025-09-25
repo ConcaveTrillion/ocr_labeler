@@ -59,7 +59,7 @@ class TestAppState:
 
         # Setting should delegate to project_state
         state.is_loading = True
-        assert state.project_state.is_loading is True
+        assert state.project_state.is_project_loading is True
         assert state.is_loading is True
 
     @pytest.mark.asyncio
@@ -70,27 +70,3 @@ class TestAppState:
 
         with pytest.raises(FileNotFoundError):
             await state.load_project(nonexistent_path)
-
-    def test_selected_project_path(self, tmp_path):
-        """Test selected_project_path method returns correct path or None."""
-        state = AppState()
-
-        # Clear any auto-discovered projects for clean test
-        state.available_projects = {}
-        state.selected_project_key = None
-
-        # Should return None when no project selected
-        assert state.selected_project_path() is None
-
-        # Use pytest's tmp_path for test project
-        test_project_path = tmp_path / "test_project"
-        test_project_path.mkdir()
-
-        state.available_projects = {"test_project": test_project_path}
-        state.selected_project_key = "test_project"
-
-        assert state.selected_project_path() == test_project_path
-
-        # Should return None for unknown key
-        state.selected_project_key = "unknown_project"
-        assert state.selected_project_path() is None

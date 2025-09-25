@@ -13,7 +13,7 @@ def test_project_state_initialization():
     assert state.project is not None
     assert state.current_page_index == 0
     assert state.current_page() is None  # No pages loaded yet
-    assert state.is_loading is False
+    assert state.is_project_loading is False
     assert state.on_change == []
 
 

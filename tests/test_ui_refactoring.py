@@ -12,7 +12,7 @@ def test_ui_uses_project_state():
     assert state.project_state is not None
     assert hasattr(state.project_state, "project")
     assert hasattr(state.project_state, "current_page_index")
-    assert hasattr(state.project_state, "is_loading")
+    assert hasattr(state.project_state, "is_project_loading")
 
     # Test that navigation methods are properly delegated
     state.project_state.next_page()  # Should not crash
@@ -32,13 +32,13 @@ def test_project_state_direct_access_and_delegation_removal():
 
     # Test setters work
     state.is_loading = True
-    assert state.project_state.is_loading is True
+    assert state.project_state.is_project_loading is True
     assert (
         state.is_loading is True
     )  # Should be True because project_state.is_loading is True
 
     state.is_loading = False
-    assert state.project_state.is_loading is False
+    assert state.project_state.is_project_loading is False
 
     # Test that delegation methods and compatibility properties are no longer available
     assert not hasattr(state, "next_page")

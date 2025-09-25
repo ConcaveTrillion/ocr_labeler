@@ -74,7 +74,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     def refresh(self):
         """Refresh the project view based on current state."""
-        loading = self.project_state.is_loading
+        loading = self.project_state.is_project_loading
         logger.debug("Refreshing ProjectView - loading: %s", loading)
 
         # Always compute current index & image name immediately for navigation feedback.
@@ -159,7 +159,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     async def _prev_async(self):  # pragma: no cover - UI side effects
         """Navigate to previous page."""
-        if self.project_state.is_loading:
+        if self.project_state.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
             return
         logger.debug("Navigating to previous page")
@@ -170,7 +170,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
-        if self.project_state.is_loading:
+        if self.project_state.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
             return
         logger.debug("Navigating to next page")
@@ -181,7 +181,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
-        if self.project_state.is_loading:
+        if self.project_state.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
             return
         logger.debug("Navigating to page: %s", value)
@@ -192,7 +192,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
-        if self.project_state.is_loading:
+        if self.project_state.is_project_loading:
             logger.debug("Save blocked - currently loading")
             return
 
@@ -230,7 +230,7 @@ class ProjectView:  # pragma: no cover - heavy UI wiring
 
     async def _load_page_async(self):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
-        if self.project_state.is_loading:
+        if self.project_state.is_project_loading:
             logger.debug("Load blocked - currently loading")
             return
 

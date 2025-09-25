@@ -50,9 +50,21 @@ class AppState:
     project_keys: list[str] = field(
         default_factory=list
     )  # sorted keys for select options
-    selected_project_key: str | None = (
-        None  # currently selected project key (folder name)
-    )
+    _selected_project_key: str | None = None  # currently selected project key
+
+    @property
+    def selected_project_key(self) -> str | None:
+        """Get the currently selected project key."""
+        return self._selected_project_key
+
+    @selected_project_key.setter
+    def selected_project_key(self, value: str | None):
+        """Set the currently selected project key."""
+        if value != self._selected_project_key:
+            if value is not None and value not in self.project_keys:
+                raise ValueError(f"Invalid project key: {value}")
+            self._selected_project_key = value
+            self.notify()
 
     # --------------- Initialization Hook ---------------
     def __post_init__(self):  # pragma: no cover - simple initialization
@@ -89,6 +101,8 @@ class AppState:
 
         Manages application-level loading state and project selection synchronization.
         """
+        logger.debug(f"Loading project from directory: {directory}")
+
         directory = Path(directory)
         if not directory.exists():
             raise FileNotFoundError(directory)
@@ -122,25 +136,30 @@ class AppState:
         """Get loading state from current project state or app level."""
         if self.current_project_key and self.current_project_key in self.projects:
             return (
-                self.projects[self.current_project_key].is_loading
+                self.projects[self.current_project_key].is_project_loading
+                or self.projects[self.current_project_key].is_navigating
                 or self.is_project_loading
             )
         # Check default project state if no current project
         if hasattr(self, "_default_project_state"):
-            return self._default_project_state.is_loading or self.is_project_loading
+            return (
+                self._default_project_state.is_project_loading
+                or self._default_project_state.is_navigating
+                or self.is_project_loading
+            )
         return self.is_project_loading
 
     @is_loading.setter
     def is_loading(self, value: bool):
         """Set loading state on current project state."""
         if self.current_project_key and self.current_project_key in self.projects:
-            self.projects[self.current_project_key].is_loading = value
+            self.projects[self.current_project_key].is_project_loading = value
         else:
             # Set on default project state if no current project
             if not hasattr(self, "_default_project_state"):
                 self._default_project_state = ProjectState()
                 self._default_project_state.on_change.append(self.notify)
-            self._default_project_state.is_loading = value
+            self._default_project_state.is_project_loading = value
 
     @property
     def project_state(self) -> ProjectState:
@@ -245,8 +264,30 @@ class AppState:
         finally:
             self.notify()
 
-    # --------------- Convenience ---------------
-    def selected_project_path(self) -> Path | None:  # pragma: no cover - UI helper
-        if not self.selected_project_key:
-            return None
-        return self.available_projects.get(self.selected_project_key)
+    async def load_selected_project(self):
+        """Load the currently selected project.
+
+        Handles validation, loading state, and notifications for the selected project.
+        """
+        if self.is_loading:
+            return
+
+        key = self.selected_project_key
+        if not key:
+            # This shouldn't happen if UI is properly bound, but defensive
+            logger.warning("load_selected_project: no project selected")
+            return
+
+        # Ensure mapping is fresh
+        if not self.available_projects:
+            self.refresh_projects()
+
+        path = self.available_projects.get(key)
+        if not path:
+            logger.error(
+                "load_selected_project: selected project path missing for key %s", key
+            )
+            return
+
+        # The load_project method already handles loading state and notifications
+        await self.load_project(key, path)

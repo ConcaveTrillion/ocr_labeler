@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional
 
@@ -46,6 +47,18 @@ class PageState:
         for listener in self.on_change:
             listener()
 
+    def notify_on_completion(func):
+        """Decorator to call self.notify() after method completion."""
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            result = func(self, *args, **kwargs)
+            self.notify()
+            return result
+
+        return wrapper
+
+    @notify_on_completion
     def set_project_context(self, project: Project, project_root: Path):
         """Set the project context for page operations."""
         self._project = project
@@ -109,6 +122,7 @@ class PageState:
             logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
             return False
 
+    @notify_on_completion
     def persist_page_to_file(
         self,
         page_index: int,
@@ -141,6 +155,7 @@ class PageState:
             project_id=project_id,
         )
 
+    @notify_on_completion
     def load_page_from_file(
         self,
         page_index: int,
@@ -204,6 +219,7 @@ class PageState:
             logger.error(f"Page index {page_index} out of range for project pages")
             return False
 
+    @notify_on_completion
     def find_ground_truth_text(
         self, page_name: str, ground_truth_map: dict
     ) -> Optional[str]:
@@ -218,6 +234,7 @@ class PageState:
         """
         return self.page_ops.find_ground_truth_text(page_name, ground_truth_map)
 
+    @notify_on_completion
     def get_page_source_text(self, page_index: int, is_loading: bool) -> str:
         """Get the source text for a specific page.
 
@@ -242,6 +259,7 @@ class PageState:
             else:
                 return "RAW OCR"
 
+    @notify_on_completion
     def reload_page_with_ocr(self, page_index: int) -> None:
         """Reload a specific page with OCR processing, bypassing any saved version.
 
@@ -262,7 +280,6 @@ class PageState:
                 self.page_sources[page_index] = "ocr"
                 # Invalidate cache since page content changed
                 self._invalidate_text_cache()
-            self.notify()
         else:
             logger.warning(
                 "PageState.reload_page_with_ocr: page_index %s out of range", page_index
@@ -332,7 +349,7 @@ class PageState:
         Returns:
             bool: True if any modifications were made, False otherwise
         """
-        return self.copy_ground_truth_to_ocr(current_page_index, line_index)
+        return self.copy_ground_truth_to_ocr(self._current_page_index, line_index)
 
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
@@ -413,16 +430,29 @@ class PageState:
                 0 <= self._current_page_index < len(self._project.pages)
                 and self._project.pages[self._current_page_index] is not None
             ):
+                logger.debug(
+                    f"Updating text cache for page index {self._current_page_index}"
+                )
                 self._cached_ocr_text, self._cached_gt_text = self.get_page_texts(
                     self._current_page_index
                 )
                 self._cached_page_index = self._current_page_index
+                logger.debug(
+                    f"Updated text cache for page index {self._current_page_index}"
+                )
             else:
+                logger.debug(
+                    f"Page at index {self._current_page_index} not loaded; cannot update text cache"
+                )
                 # Page not loaded yet, keep old cache or set to loading
                 if self._cached_page_index == -1 or force:
+                    logger.debug(
+                        f"Setting text cache to 'Loading...' for page index {self._current_page_index}"
+                    )
                     self._cached_ocr_text = "Loading..."
                     self._cached_gt_text = "Loading..."
                     self._cached_page_index = self._current_page_index
+            self.notify()
 
     @property
     def _current_page_index(self) -> int:

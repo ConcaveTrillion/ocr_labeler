@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from nicegui import ui
 
+from ..models.app_state_nicegui_binding import AppStateNiceGuiBinding
+from ..models.project_state_nicegui_binding import ProjectStateNiceGuiBinding
 from ..state import AppState
 from .header.header import HeaderBar
 from .projects.project_view import ProjectView
@@ -18,7 +19,13 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
     def __init__(self, state: AppState):
         logger.debug("Initializing LabelerView with AppState")
         self.state = state
-        self.state.on_change.append(self.refresh)
+        self.state_model: AppStateNiceGuiBinding = AppStateNiceGuiBinding(self.state)
+        self.project_state_model: ProjectStateNiceGuiBinding = (
+            ProjectStateNiceGuiBinding(self.state.project_state)
+        )
+        logger.debug("AppStateNiceGuiBinding created and linked to AppState")
+        logger.debug("ProjectStateNiceGuiBinding created and linked to ProjectState")
+
         self.header_bar: HeaderBar | None = None
         self.project_view: ProjectView | None = None
         self._main_container = None
@@ -31,7 +38,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
     def mount(self):
         logger.debug("Mounting LabelerView components")
         # Header must be a top-level layout element (direct child of page)
-        self.header_bar = HeaderBar(self.state)
+        self.header_bar = HeaderBar(self.state_model, self.project_state_model)
         self.header_bar.build()
         logger.debug("Header bar mounted")
 
@@ -64,48 +71,22 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
         )
 
         self._no_project_placeholder.bind_visibility_from(
-            target_object=self.state, target_name="current_project_key", value=None
+            target_object=self.state_model, target_name="selected_project_key", value=""
         )
 
         self._global_loading.bind_visibility_from(
-            target_object=self.state, target_name="is_project_loading", value=True
+            target_object=self.state_model, target_name="is_project_loading", value=True
         )
 
         logger.debug("Global loading spinner and bindings configured")
         self.refresh()
         logger.debug("LabelerView mounting complete")
 
-    # ------------------------------------------------------------ actions
-    async def _open_project_from_path(self, path: Path):
-        logger.debug(f"Opening project from path: {path}")
-        try:
-            await self.state.load_project(path)
-            logger.debug(f"Successfully loaded project from {path}")
-            if self.header_bar:
-                self.header_bar.project_controls.update_path_label()
-                logger.debug("Updated header path label")
-            # Create project view when project is loaded
-            if not self.project_view and self._content_container:
-                logger.debug("Creating new ProjectView instance")
-                with self._content_container:
-                    self.project_view = ProjectView(self.state.project_state)
-                    self.project_view.build()
-                logger.debug("ProjectView created and built")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"Failed to open project from {path}: {exc}")
-            ui.notify(f"Open failed: {exc}", type="negative")
-
     # ------------------------------------------------------------ refresh
     def refresh(self):
         logger.debug("Refreshing LabelerView")
         project_loading = self.state.is_project_loading
         logger.debug(f"Project loading state: {project_loading}")
-
-        # Update project path label (keep header visible even while loading)
-        if self.header_bar:
-            # TODO: Bind this to state change instead of calling every refresh
-            self.header_bar.project_controls.update_path_label()
-            logger.debug("Updated header project path label")
 
         # Show/hide project view vs placeholder
         has_project = bool(getattr(self.state.project_state.project, "image_paths", []))
@@ -133,13 +114,7 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             logger.debug("Refreshing existing ProjectView")
             self.project_view.refresh()
 
-        # Placeholder visibility
-        if self._no_project_placeholder:
-            if has_project or project_loading:
-                self._no_project_placeholder.classes(add="hidden")
-                logger.debug("Hiding no-project placeholder")
-            else:
-                self._no_project_placeholder.classes(remove="hidden")
-                logger.debug("Showing no-project placeholder")
+        # Placeholder visibility is now handled by binding to state_model.selected_project_key
+        # No manual management needed here
 
         logger.debug("LabelerView refresh complete")

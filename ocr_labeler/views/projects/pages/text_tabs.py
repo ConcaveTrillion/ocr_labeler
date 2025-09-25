@@ -27,15 +27,17 @@ class TextTabsModel:
             logger.debug("Registered page state change listener")
         self.update()
 
-    def __setattr__(self, name: str, value):
-        """Intercept attribute changes to propagate to PageState."""
-        super().__setattr__(name, value)
-        if name == "gt_text" and self._page_state:
-            logger.debug(f"Propagating GT text change to PageState: '{value[:50]}...'")
-            self._page_state.current_gt_text = value
-        elif name == "ocr_text" and self._page_state:
-            logger.debug(f"Propagating OCR text change to PageState: '{value[:50]}...'")
-            self._page_state.current_ocr_text = value
+    # Only propagate one-way from PageState to model
+    #
+    # def __setattr__(self, name: str, value):
+    #     """Intercept attribute changes to propagate to PageState."""
+    #     super().__setattr__(name, value)
+    #     if name == "gt_text" and self._page_state:
+    #         logger.debug(f"Propagating GT text change to PageState: '{value[:50]}...'")
+    #         self._page_state.current_gt_text = value
+    #     elif name == "ocr_text" and self._page_state:
+    #         logger.debug(f"Propagating OCR text change to PageState: '{value[:50]}...'")
+    #         self._page_state.current_ocr_text = value
 
     def update(self):
         """Sync model from PageState."""

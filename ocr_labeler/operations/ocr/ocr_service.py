@@ -1,13 +1,20 @@
 """OCR service for text recognition operations."""
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from ...models.project import Project
-from .page_operations import PageOperations
+from pd_book_tools.ocr.page import Page  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+class OCREngine(Enum):
+    """Supported OCR engines."""
+
+    DOCTR = "doctr"
+    TESSERACT = "tesseract"
 
 
 class OCRService:
@@ -17,24 +24,77 @@ class OCRService:
     abstracting away the details of page processing and text recognition.
     """
 
-    def __init__(self, page_operations: Optional[PageOperations] = None):
+    def __init__(self, docTR_predictor=None, ocr_engine: OCREngine = OCREngine.DOCTR):
         """Initialize the OCR service.
 
         Args:
-            page_operations: Page operations instance. If not provided,
-                           a new instance will be created.
+            docTR_predictor: Optional predictor for DocTR processing
+            ocr_engine: OCR engine to use (defaults to DocTR)
         """
-        self.page_operations = page_operations or PageOperations()
-        logger.debug("OCRService initialized")
+        self.docTR_predictor = docTR_predictor
+        self.ocr_engine = ocr_engine
+        self._predictor = None
+        logger.debug("OCRService initialized with engine: %s", ocr_engine.value)
 
-    async def process_page(
-        self, image_path: Path, project: Optional[Project] = None
-    ) -> Optional[object]:
+    def _get_predictor(self):
+        """Get or create the DocTR predictor."""
+        if self._predictor is None:
+            if self.docTR_predictor is not None:
+                self._predictor = self.docTR_predictor
+            else:
+                from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
+
+                self._predictor = get_default_doctr_predictor()
+        return self._predictor
+
+    async def _process_page_with_doctr(
+        self, image_path: Path, source_identifier: str
+    ) -> Page:
+        """Process a page using DocTR OCR engine.
+
+        Args:
+            image_path: Path to the image file
+            source_identifier: Identifier for the page source
+
+        Returns:
+            Processed page object
+        """
+        from pd_book_tools.ocr.document import Document
+
+        predictor = self._get_predictor()
+        doc = Document.from_image_ocr_via_doctr(
+            image_path,
+            source_identifier=source_identifier,
+            predictor=predictor,
+        )
+        return doc.pages[0]
+
+    async def _process_page_with_tesseract(
+        self, image_path: Path, source_identifier: str
+    ) -> Page:
+        """Process a page using Tesseract OCR engine.
+
+        Args:
+            image_path: Path to the image file
+            source_identifier: Identifier for the page source
+
+        Returns:
+            Processed page object
+        """
+        from pd_book_tools.ocr.document import Document
+
+        # Use Tesseract via pd_book_tools
+        doc = Document.from_image_ocr_via_tesseract(
+            image_path,
+            source_identifier=source_identifier,
+        )
+        return doc.pages[0]
+
+    async def process_page(self, image_path: Path) -> Optional[Page]:
         """Process a page with OCR.
 
         Args:
             image_path: Path to the image file to process.
-            project: Optional project context for processing.
 
         Returns:
             The processed page object, or None if processing failed.
@@ -42,37 +102,56 @@ class OCRService:
         try:
             logger.debug(f"Processing page: {image_path}")
 
-            # Use page operations to process the image
-            # Note: This is a simplified interface - the actual implementation
-            # would depend on the specific page operations API
-            page = await self.page_operations.ensure_page(image_path, project)
-
-            if page:
-                logger.info(f"Successfully processed page: {image_path}")
-                return page
+            # Process the image with the selected OCR engine
+            if self.ocr_engine == OCREngine.DOCTR:
+                page_obj = await self._process_page_with_doctr(
+                    image_path, image_path.name
+                )
+            elif self.ocr_engine == OCREngine.TESSERACT:
+                page_obj = await self._process_page_with_tesseract(
+                    image_path, image_path.name
+                )
             else:
-                logger.warning(f"Failed to process page: {image_path}")
-                return None
+                raise ValueError(f"Unsupported OCR engine: {self.ocr_engine}")
+
+            # Attach convenience attributes
+            page_obj.image_path = image_path  # type: ignore[attr-defined]
+            page_obj.name = image_path.name  # type: ignore[attr-defined]
+            page_obj.index = 0  # type: ignore[attr-defined]
+            page_obj.page_source = self.ocr_engine.value  # type: ignore[attr-defined]
+
+            # Load and attach the image
+            try:
+                from cv2 import imread as cv2_imread
+
+                img = cv2_imread(str(image_path))
+                if img is not None:
+                    page_obj.cv2_numpy_page_image = img  # type: ignore[attr-defined]
+                    logger.debug("Attached cv2 image for OCR page: %s", image_path.name)
+            except Exception:
+                logger.debug("cv2 load failed for OCR page: %s", image_path.name)
+
+            logger.info(f"Successfully processed page: {image_path}")
+            return page_obj
 
         except Exception as e:
             logger.exception(f"Error processing page {image_path}: {e}")
             return None
 
     async def process_pages_batch(
-        self, image_paths: list[Path], project: Optional[Project] = None
-    ) -> list[Optional[object]]:
+        self, image_paths: list[Path]
+    ) -> list[Optional[Page]]:
         """Process multiple pages with OCR.
 
         Args:
             image_paths: List of paths to image files to process.
-            project: Optional project context for processing.
 
         Returns:
             List of processed page objects, with None for failed pages.
         """
         results = []
         for image_path in image_paths:
-            page = await self.process_page(image_path, project)
+            page = await self.process_page(image_path)
             results.append(page)
 
         successful = sum(1 for r in results if r is not None)

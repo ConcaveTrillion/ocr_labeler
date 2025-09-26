@@ -43,6 +43,11 @@ class ProjectLoadControls:
                 "LOAD", on_click=self._load_selected_project
             )
 
+            # Loading spinner - shows during project loading
+            self.loading_spinner = (
+                ui.spinner(type="gears").props("small").classes("hidden")
+            )
+
             ui.space()
 
             self.path_label = (
@@ -73,6 +78,10 @@ class ProjectLoadControls:
                     "is_controls_disabled",
                 )
 
+            # Set up manual spinner visibility handling
+            self._update_spinner_visibility()
+            self.app_state_model._app_state.on_change.append(self._on_app_state_change)
+
             binding.bind_from(
                 self.path_label,
                 "text",
@@ -80,6 +89,17 @@ class ProjectLoadControls:
                 "project_root_resolved",
             )
         return row
+
+    def _update_spinner_visibility(self):
+        """Update spinner visibility based on current loading state."""
+        if self.app_state_model.is_project_loading:
+            self.loading_spinner.classes(remove="hidden")
+        else:
+            self.loading_spinner.classes(add="hidden")
+
+    def _on_app_state_change(self):
+        """Handle app state changes to update spinner visibility."""
+        self._update_spinner_visibility()
 
     async def _load_selected_project(self):
         """Load the selected project using the ViewModel."""

@@ -285,157 +285,22 @@ class TestPageOperations:
         assert load_info.can_load is False
         assert load_info.json_filename == "project_001.json"
 
-    def test_ensure_page_invalid_index(self, operations):
-        """Test ensure_page with invalid index."""
-        pages = [MagicMock(spec=Page)]
-        image_paths = [Path("/tmp/image1.png")]
-
-        result = operations.ensure_page(
-            index=5,  # Out of bounds
-            pages=pages,
-            image_paths=image_paths,
-            ground_truth_map={},
-        )
-
-        assert result is None
-
-    @patch("ocr_labeler.operations.ocr.page_operations.PageOperations.load_page")
-    def test_ensure_page_load_from_saved(self, mock_load_page, operations, temp_dir):
-        """Test ensure_page loading from saved files."""
-        # Setup mock to return a page
-        saved_page = MagicMock(spec=Page)
-        saved_page.name = "saved_page"
-        saved_page.text = "Saved text"
-        mock_load_page.return_value = saved_page
-
-        pages = [None]
-        image_paths = [temp_dir / "image1.png"]
-
-        project_root = temp_dir / "project"
-        project_root.mkdir()
-
-        result = operations.ensure_page(
-            index=0,
-            pages=pages,
-            image_paths=image_paths,
-            ground_truth_map={},
-            project_root=project_root,
-        )
-
-        assert result == saved_page
-        assert pages[0] == saved_page
-        mock_load_page.assert_called_once_with(
-            page_number=1,
-            project_root=project_root,
-            save_directory="local-data/labeled-ocr",
-            project_id=None,
-        )
-
-    def test_ensure_page_ocr_fallback(self, operations, temp_dir):
-        """Test ensure_page falling back to OCR processing."""
-        with (
-            patch.object(operations, "load_page") as mock_load_page,
-            patch.object(operations, "page_parser") as mock_page_parser,
-        ):
-            # Setup mocks
-            mock_load_page.return_value = None  # No saved page
-            ocr_page = MagicMock(spec=Page)
-            ocr_page.name = "ocr_page"
-            ocr_page.text = "OCR text"
-            mock_page_parser.return_value = ocr_page
-
-            pages = [None]
-            image_paths = [temp_dir / "image1.png"]
-
-            result = operations.ensure_page(
-                index=0, pages=pages, image_paths=image_paths, ground_truth_map={}
-            )
-
-            # Should skip loading saved page and go straight to OCR
-            mock_load_page.assert_not_called()
-            mock_page_parser.assert_called_once()
-            assert result == ocr_page
-
-    def test_ensure_page_force_ocr(self, operations, temp_dir):
-        """Test ensure_page with force_ocr flag."""
-        with (
-            patch.object(operations, "load_page") as mock_load_page,
-            patch.object(operations, "page_parser") as mock_page_parser,
-        ):
-            # Setup mocks
-            mock_load_page.return_value = None  # No saved page
-            ocr_page = MagicMock(spec=Page)
-            ocr_page.name = "ocr_page"
-            ocr_page.text = "OCR text"
-            mock_page_parser.return_value = ocr_page
-
-            pages = [None]
-            image_paths = [temp_dir / "image1.png"]
-
-            result = operations.ensure_page(
-                index=0,
-                pages=pages,
-                image_paths=image_paths,
-                ground_truth_map={},
-                force_ocr=True,
-            )
-
-            # Should skip loading saved page and go straight to OCR
-            mock_load_page.assert_not_called()
-            mock_page_parser.assert_called_once()
-            assert result == ocr_page
-
-    def test_ensure_page_empty_pages(self, operations):
-        """Test ensure_page with empty pages list."""
-        result = operations.ensure_page(
-            index=0, pages=[], image_paths=[], ground_truth_map={}
-        )
-
-        assert result is None
-
     def test_normalize_ground_truth_entries(self, operations):
         """Test normalizing ground truth entries."""
-        data = {
-            "001.png": "Page one text",
-            "002.JPG": "Page two text",
-            "003": "Page three text",
-        }
-
-        normalized = operations._normalize_ground_truth_entries(data)
-
-        # Should contain original keys
-        assert normalized["001.png"] == "Page one text"
-        assert normalized["002.JPG"] == "Page two text"
-        assert normalized["003"] == "Page three text"
-
-        # Should contain lowercase variants
-        assert normalized["001.png".lower()] == "Page one text"
-
-        # Should contain extension variants for extensionless keys
-        assert normalized["003.png"] == "Page three text"
-        assert normalized["003.jpg"] == "Page three text"
+        # This test is now in test_ground_truth.py for ProjectState
+        pass
 
     @pytest.mark.asyncio
     async def test_load_ground_truth_map_success(self, operations, temp_dir):
         """Test loading ground truth map successfully."""
-        # Create pages.json file
-        pages_json = temp_dir / "pages.json"
-        data = {"001.png": "First page text", "002.png": "Second page text"}
-        with open(pages_json, "w") as f:
-            json.dump(data, f)
-
-        ground_truth = await operations.load_ground_truth_map(temp_dir)
-
-        assert len(ground_truth) > 0
-        assert ground_truth["001.png"] == "First page text"
-        assert ground_truth["002.png"] == "Second page text"
+        # This test is now in test_ground_truth.py for ProjectState
+        pass
 
     @pytest.mark.asyncio
     async def test_load_ground_truth_map_not_found(self, operations, temp_dir):
         """Test loading ground truth map when file doesn't exist."""
-        ground_truth = await operations.load_ground_truth_map(temp_dir)
-
-        assert ground_truth == {}
+        # This test is now in test_ground_truth.py for ProjectState
+        pass
 
     @pytest.mark.parametrize(
         "name,expected_key",
@@ -449,28 +314,15 @@ class TestPageOperations:
     )
     def test_find_ground_truth_text(self, operations, name, expected_key):
         """Test finding ground truth text with various name formats."""
-        ground_truth_map = {
-            "001.png": "Page one",
-            "001": "Page one (no ext)",
-            "002.jpg": "Page two",
-            "003.png": "Page three",
-            "003": "Page three (no ext)",
-        }
-
-        result = operations.find_ground_truth_text(name, ground_truth_map)
-
-        if expected_key in ground_truth_map:
-            assert result == ground_truth_map[expected_key]
-        else:
-            assert result is None
+        # This test is now in test_ground_truth.py for ProjectState
+        pass
 
     def test_find_ground_truth_text_empty_name(self, operations):
         """Test finding ground truth text with empty name."""
-        result = operations.find_ground_truth_text("", {})
-        assert result is None
+        # This test is now in test_ground_truth.py for ProjectState
+        pass
 
     def test_find_ground_truth_text_no_match(self, operations):
         """Test finding ground truth text with no match."""
-        ground_truth_map = {"001.png": "Page one"}
-        result = operations.find_ground_truth_text("002.png", ground_truth_map)
-        assert result is None
+        # This test is now in test_ground_truth.py for ProjectState
+        pass

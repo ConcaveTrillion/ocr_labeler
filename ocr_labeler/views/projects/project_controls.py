@@ -63,7 +63,7 @@ class ProjectControls:  # pragma: no cover - UI wrapper file
                 )
                 self.page_total = ui.label("")
                 self.navigation_working_spinner = (
-                    ui.spinner(type="gears").props("small").hide()
+                    ui.spinner(type="gears").props("small").classes("hidden")
                 )
 
         binding.bind_from(

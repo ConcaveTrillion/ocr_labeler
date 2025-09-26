@@ -2,26 +2,20 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ocr_labeler.operations.ocr.ocr_service import OCRService
-from ocr_labeler.operations.ocr.page_operations import PageOperations
+from ocr_labeler.operations.ocr.ocr_service import OCREngine, OCRService
 
 
 class TestOCRService:
     """Test OCRService class methods."""
 
     @pytest.fixture
-    def mock_page_operations(self):
-        """Create a mock page operations instance."""
-        return MagicMock(spec=PageOperations)
-
-    @pytest.fixture
-    def service(self, mock_page_operations):
-        """Create OCRService instance with mocked dependencies."""
-        return OCRService(page_operations=mock_page_operations)
+    def service(self):
+        """Create OCRService instance."""
+        return OCRService()
 
     @pytest.fixture
     def temp_image(self):
@@ -31,83 +25,136 @@ class TestOCRService:
         yield temp_path
         temp_path.unlink(missing_ok=True)
 
-    def test_init_with_page_operations(self, mock_page_operations):
-        """Test initializing service with provided page operations."""
-        service = OCRService(page_operations=mock_page_operations)
-        assert service.page_operations == mock_page_operations
-
-    def test_init_without_page_operations(self):
-        """Test initializing service without page operations (creates default)."""
+    def test_init_default(self):
+        """Test initializing service with default parameters."""
         service = OCRService()
-        assert isinstance(service.page_operations, PageOperations)
+        assert service.docTR_predictor is None
+        assert service._predictor is None
+        assert service.ocr_engine == OCREngine.DOCTR
+
+    def test_init_with_predictor(self):
+        """Test initializing service with custom predictor."""
+        mock_predictor = MagicMock()
+        service = OCRService(docTR_predictor=mock_predictor)
+        assert service.docTR_predictor == mock_predictor
+        assert service.ocr_engine == OCREngine.DOCTR
+
+    def test_init_with_engine(self):
+        """Test initializing service with different OCR engine."""
+        service = OCRService(ocr_engine=OCREngine.TESSERACT)
+        assert service.ocr_engine == OCREngine.TESSERACT
 
     @pytest.mark.asyncio
-    async def test_process_page_success(
-        self, service, mock_page_operations, temp_image
-    ):
+    async def test_process_page_success(self, service, temp_image):
         """Test successful page processing."""
-        # Setup mock
-        mock_page = MagicMock()
-        mock_page_operations.ensure_page = AsyncMock(return_value=mock_page)
+        # Mock the OCR processing
+        with patch.object(service, "_get_predictor") as mock_get_predictor:
+            mock_predictor = MagicMock()
+            mock_get_predictor.return_value = mock_predictor
 
-        result = await service.process_page(temp_image)
+            # Mock the Document.from_image_ocr_via_doctr
+            with patch("pd_book_tools.ocr.document.Document") as mock_document:
+                mock_doc = MagicMock()
+                mock_page = MagicMock()
+                mock_doc.pages = [mock_page]
+                mock_document.from_image_ocr_via_doctr.return_value = mock_doc
 
-        assert result == mock_page
-        mock_page_operations.ensure_page.assert_called_once_with(temp_image, None)
+                # Mock cv2.imread
+                with patch("cv2.imread", return_value=MagicMock()):
+                    result = await service.process_page(temp_image)
+
+                    assert result == mock_page
+                    mock_document.from_image_ocr_via_doctr.assert_called_once_with(
+                        temp_image,
+                        source_identifier=temp_image.name,
+                        predictor=mock_predictor,
+                    )
 
     @pytest.mark.asyncio
-    async def test_process_page_failure(
-        self, service, mock_page_operations, temp_image
-    ):
+    async def test_process_page_failure(self, service, temp_image):
         """Test page processing failure."""
-        # Setup mock to return None
-        mock_page_operations.ensure_page = AsyncMock(return_value=None)
+        # Mock the OCR processing to raise an exception
+        with patch.object(service, "_get_predictor") as mock_get_predictor:
+            mock_predictor = MagicMock()
+            mock_get_predictor.return_value = mock_predictor
+
+            # Mock the Document.from_image_ocr_via_doctr to raise exception
+            with patch("pd_book_tools.ocr.document.Document") as mock_document:
+                mock_document.from_image_ocr_via_doctr.side_effect = Exception(
+                    "OCR failed"
+                )
+
+                result = await service.process_page(temp_image)
+
+                assert result is None
+
+    @pytest.mark.asyncio
+    async def test_process_page_with_tesseract_engine(self, temp_image):
+        """Test page processing with Tesseract engine."""
+        service = OCRService(ocr_engine=OCREngine.TESSERACT)
+
+        # Mock the Tesseract processing
+        with patch("pd_book_tools.ocr.document.Document") as mock_document:
+            mock_doc = MagicMock()
+            mock_page = MagicMock()
+            mock_doc.pages = [mock_page]
+            mock_document.from_image_ocr_via_tesseract.return_value = mock_doc
+
+            # Mock cv2.imread
+            with patch("cv2.imread", return_value=MagicMock()):
+                result = await service.process_page(temp_image)
+
+                assert result == mock_page
+                mock_document.from_image_ocr_via_tesseract.assert_called_once_with(
+                    temp_image,
+                    source_identifier=temp_image.name,
+                )
+                assert result.page_source == "tesseract"  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_process_page_unsupported_engine(self, temp_image):
+        """Test page processing with unsupported OCR engine."""
+        # Create a mock engine that's not supported
+        from unittest.mock import MagicMock
+
+        mock_engine = MagicMock()
+        mock_engine.value = "unsupported"
+
+        service = OCRService(ocr_engine=mock_engine)
 
         result = await service.process_page(temp_image)
 
         assert result is None
-        mock_page_operations.ensure_page.assert_called_once_with(temp_image, None)
 
     @pytest.mark.asyncio
-    async def test_process_page_with_project(
-        self, service, mock_page_operations, temp_image
-    ):
-        """Test page processing with project context."""
-        mock_project = MagicMock()
-        mock_page = MagicMock()
-        mock_page_operations.ensure_page = AsyncMock(return_value=mock_page)
-
-        result = await service.process_page(temp_image, mock_project)
-
-        assert result == mock_page
-        mock_page_operations.ensure_page.assert_called_once_with(
-            temp_image, mock_project
-        )
-
-    @pytest.mark.asyncio
-    async def test_process_pages_batch(self, service, mock_page_operations):
+    async def test_process_pages_batch(self, service):
         """Test batch processing of multiple pages."""
         image_paths = [Path("/tmp/image1.png"), Path("/tmp/image2.png")]
-        mock_pages = [MagicMock(), None]  # One success, one failure
 
-        mock_page_operations.ensure_page = AsyncMock(side_effect=mock_pages)
+        # Mock process_page to return different results
+        with patch.object(
+            service, "process_page", new_callable=AsyncMock
+        ) as mock_process_page:
+            mock_process_page.side_effect = [
+                MagicMock(),
+                None,
+            ]  # One success, one failure
 
-        results = await service.process_pages_batch(image_paths)
+            results = await service.process_pages_batch(image_paths)
 
-        assert len(results) == 2
-        assert results[0] == mock_pages[0]
-        assert results[1] == mock_pages[1]
+            assert len(results) == 2
+            assert results[0] is not None
+            assert results[1] is None
 
-        # Verify ensure_page was called for each image
-        assert mock_page_operations.ensure_page.call_count == 2
+            # Verify process_page was called for each image
+            assert mock_process_page.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_process_pages_batch_empty_list(self, service, mock_page_operations):
+    async def test_process_pages_batch_empty_list(self, service):
         """Test batch processing with empty image list."""
         results = await service.process_pages_batch([])
 
         assert results == []
-        mock_page_operations.ensure_page.assert_not_called()
 
     def test_get_supported_formats(self, service):
         """Test getting supported image formats."""

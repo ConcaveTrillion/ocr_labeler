@@ -12,6 +12,7 @@ from ..operations.ocr.page_operations import PageOperations
 
 if TYPE_CHECKING:
     from ..models.project import Project
+    from .project_state import ProjectState
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,9 @@ class PageState:
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
     _project_root: Optional[Path] = field(default=None, init=False)
+    _project_state: Optional["ProjectState"] = field(
+        default=None, init=False
+    )  # Reference to parent ProjectState
     page_sources: dict[int, str] = field(
         default_factory=dict
     )  # Track source of each page: 'ocr' or 'filesystem'
@@ -59,28 +63,24 @@ class PageState:
         return wrapper
 
     @notify_on_completion
-    def set_project_context(self, project: Project, project_root: Path):
+    def set_project_context(
+        self, project: Project, project_root: Path, project_state: "ProjectState"
+    ):
         """Set the project context for page operations."""
         self._project = project
         self._project_root = project_root
+        self._project_state = project_state
 
     def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary."""
-        if not self._project:
-            logger.warning("PageState.get_page: no project context set")
+        if not self._project_state:
+            logger.warning("PageState.get_page: no project state set")
             return None
 
         logger.debug("PageState.get_page: index=%s, force_ocr=%s", index, force_ocr)
 
-        # Use PageOperations directly for state concerns
-        page = self.page_ops.ensure_page(
-            index=index,
-            pages=self._project.pages,
-            image_paths=self._project.image_paths,
-            ground_truth_map=self._project.ground_truth_map,
-            project_root=self._project_root,
-            force_ocr=force_ocr,
-        )
+        # Delegate to ProjectState for page loading
+        page = self._project_state.ensure_page(index, force_ocr=force_ocr)
 
         # Update page_sources dictionary based on the page's source
         if page is not None and hasattr(page, "page_source"):

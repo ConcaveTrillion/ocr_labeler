@@ -1,6 +1,8 @@
 """Project operations for OCR labeling tasks.
 
-This module contains operations that can be performed on projects, such as saving,
+This module contains operations that can be performed on    async def create_project(
+        self, directory: Path, images: list[Path], ground_truth_map: Optional[dict[str, str]] = None
+    ) -> "Project":projects, such as saving,
 loading, exporting, and other project-level persistence functionality. These operations
 are separated from state management to maintain clear architectural boundaries.
 """
@@ -101,32 +103,46 @@ class ProjectOperations:
         except Exception:
             return False
 
-    async def create_project(self, directory: Path, images: List[Path]) -> "Project":
+    async def create_project(
+        self,
+        directory: Path,
+        images: List[Path],
+        ground_truth_map: Optional[dict[str, str]] = None,
+    ) -> "Project":
         """Create a Project object from directory and image paths.
 
         This method handles all the project creation logic including:
-        - Loading ground truth mapping
+        - Loading ground truth mapping (if not provided)
         - Building page loader
         - Creating Project object with proper initialization
 
         Args:
             directory: Project root directory.
             images: List of image file paths.
+            ground_truth_map: Optional pre-loaded ground truth mapping.
 
         Returns:
             Project: Initialized Project object.
         """
         # Import here to avoid circular imports and allow for test monkeypatching
-        try:
-            from ..ocr.page_operations import PageOperations
-        except ImportError as e:
-            logger.error(f"Failed to import required modules: {e}")
-            raise
+        # Use provided ground truth mapping or load if not provided
+        if ground_truth_map is None:
+            try:
+                from ..ocr.page_operations import PageOperations
+            except ImportError as e:
+                logger.error(f"Failed to import required modules: {e}")
+                raise
 
-        # Load ground truth mapping if available
-        page_ops = PageOperations()
-        ground_truth_map = await page_ops.load_ground_truth_map(directory)
-        logger.info(f"Loaded ground truth mapping with {len(ground_truth_map)} entries")
+            # Load ground truth mapping if available
+            page_ops = PageOperations()
+            ground_truth_map = await page_ops.load_ground_truth_map(directory)
+            logger.info(
+                f"Loaded ground truth mapping with {len(ground_truth_map)} entries"
+            )
+        else:
+            logger.info(
+                f"Using provided ground truth mapping with {len(ground_truth_map)} entries"
+            )
 
         # Create placeholder pages (will be lazily loaded)
         placeholders = [None] * len(images)

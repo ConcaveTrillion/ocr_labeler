@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,9 @@ from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
 
 logger = logging.getLogger(__name__)
+
+# Constants for ground truth operations
+IMAGE_EXTS = (".png", ".jpg", ".jpeg")
 
 
 @dataclass
@@ -61,7 +65,7 @@ class ProjectState:
         logger.debug("get_page_state: called with page_index=%s", page_index)
         if page_index not in self.page_states:
             page_state = PageState()
-            page_state.set_project_context(self.project, self.project_root)
+            page_state.set_project_context(self.project, self.project_root, self)
             page_state.on_change.append(self.notify)
             self.page_states[page_index] = page_state
         logger.debug("get_page_state: returning page_state for index %s", page_index)
@@ -96,8 +100,12 @@ class ProjectState:
             self.project_root = directory
 
             logger.debug("load_project: creating project with %d images", len(images))
-            # Use ProjectOperations to create the project
-            self.project = await operations.create_project(directory, images)
+            # Load ground truth mapping using project state's method
+            ground_truth_map = await self.load_ground_truth_map(directory)
+            # Use ProjectOperations to create the project with the ground truth map
+            self.project = await operations.create_project(
+                directory, images, ground_truth_map
+            )
             # Reset navigation to first page
             self.current_page_index = 0 if images else -1
 
@@ -188,13 +196,127 @@ class ProjectState:
     def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary.
 
-        This method delegates to the PageState for the specific page.
+        This method delegates to ensure_page for lazy loading.
         """
         logger.debug("get_page: called with index=%s, force_ocr=%s", index, force_ocr)
-        page_state = self.get_page_state(index)
-        result = page_state.get_page(index, force_ocr=force_ocr)
+        result = self.ensure_page(index, force_ocr=force_ocr)
         logger.debug("get_page: returning page for index %s", index)
         return result
+
+    def ensure_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
+        """Ensure that the Page at index is loaded, loading it if necessary.
+
+        This method handles the state concern of lazy page loading, including:
+        - Prioritizing saved pages if available (unless force_ocr is True)
+        - OCR processing via page operations when available or forced
+        - Ground truth text injection
+        - Fallback page creation for failed OCR
+        - Error handling and logging
+
+        Args:
+            index: Zero-based page index to ensure is loaded
+            force_ocr: If True, skip loading saved page and force OCR processing
+
+        Returns:
+            Optional[Page]: The loaded page or None if index is invalid
+        """
+        if not self.project.pages:
+            logger.info("ensure_page: no pages loaded yet")
+            return None
+        if not (0 <= index < len(self.project.pages)):
+            logger.warning(
+                "ensure_page: index %s out of range (0..%s)",
+                index,
+                len(self.project.pages) - 1,
+            )
+            return None
+
+        if self.project.pages[index] is None:
+            img_path = Path(
+                self.project.image_paths[index]
+            )  # Ensure it's a Path object
+            logger.debug(
+                "ensure_page: cache miss for index=%s path=%s (force_ocr=%s)",
+                index,
+                img_path,
+                force_ocr,
+            )
+
+            # Try to load from saved files first (unless forcing OCR)
+            if not force_ocr and self.project_root is not None:
+                try:
+                    loaded_page = self.page_ops.load_page(
+                        page_number=index + 1,  # Convert to 1-based
+                        project_root=self.project_root,
+                        save_directory="local-data/labeled-ocr",
+                        project_id=None,  # Will be derived from project_root.name
+                    )
+                    if loaded_page is not None:
+                        logger.debug(
+                            "ensure_page: loaded from saved for index=%s", index
+                        )
+                        if not hasattr(loaded_page, "page_source"):
+                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
+                        else:
+                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
+                        self.project.pages[index] = loaded_page
+                        return self.project.pages[index]
+                except Exception as e:
+                    logger.debug(
+                        "ensure_page: failed to load saved page for index=%s: %s",
+                        index,
+                        e,
+                    )
+
+            # Fall back to OCR processing
+            if self.page_ops.page_parser:
+                try:
+                    gt_text = (
+                        self.find_ground_truth_text(
+                            img_path.name, self.project.ground_truth_map
+                        )
+                        or ""
+                    )
+                    page_obj = self.page_ops.page_parser(img_path, index, gt_text)
+                    logger.debug(
+                        "ensure_page: loader created page index=%s name=%s",
+                        index,
+                        getattr(page_obj, "name", img_path.name),
+                    )
+                    # Attach convenience attrs expected elsewhere
+                    if not hasattr(page_obj, "image_path"):
+                        page_obj.image_path = img_path  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "name"):
+                        page_obj.name = img_path.name  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "index"):
+                        page_obj.index = index  # type: ignore[attr-defined]
+                    if not hasattr(page_obj, "page_source"):
+                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
+                    else:
+                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
+                    self.project.pages[index] = page_obj
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception(
+                        "ensure_page: loader failed for index=%s path=%s; using fallback page",
+                        index,
+                        img_path,
+                    )
+
+                    # Fallback: still display original image even if OCR failed
+                    self.project.pages[index] = self.create_fallback_page(
+                        index, img_path
+                    )
+            else:
+                # No loader provided: keep legacy minimal placeholder behavior
+                logger.debug(
+                    "ensure_page: no loader provided, creating placeholder page for index=%s",
+                    index,
+                )
+                self.project.pages[index] = self.create_fallback_page(index, img_path)
+        else:
+            logger.debug("ensure_page: cache hit for index=%s", index)
+
+        return self.project.pages[index]
 
     def current_page(self) -> Page | None:
         """Get the current page."""
@@ -419,3 +541,155 @@ class ProjectState:
                     )
                     self._cached_page_index = self.current_page_index
         logger.debug("_update_text_cache: completed")
+
+    def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
+        """Normalize ground truth entries for flexible filename lookup.
+
+        Creates multiple lookup keys for each entry:
+        - Original key
+        - Lowercase variant
+        - With/without file extensions
+
+        Parameters
+        ----------
+        data : dict
+            Raw ground truth data from JSON
+
+        Returns
+        -------
+        dict[str, str]
+            Normalized lookup dictionary with multiple keys per entry
+        """
+        norm: dict[str, str] = {}
+        for k, v in data.items():
+            if not isinstance(k, str):
+                continue
+            text_val: str | None = (
+                v if isinstance(v, str) else (str(v) if v is not None else None)
+            )
+            if text_val is None:
+                continue
+            norm[k] = text_val
+            lower_k = k.lower()
+            norm.setdefault(lower_k, text_val)
+            if "." not in k:
+                for ext in IMAGE_EXTS:
+                    norm.setdefault(f"{k}{ext}", text_val)
+                    norm.setdefault(f"{k}{ext}".lower(), text_val)
+        return norm
+
+    async def load_ground_truth_map(self, directory: Path) -> dict[str, str]:
+        """Load and normalize ground truth data from pages.json file.
+
+        Parameters
+        ----------
+        directory : Path
+            Directory containing pages.json file
+
+        Returns
+        -------
+        dict[str, str]
+            Normalized ground truth mapping, empty dict if file not found or invalid
+        """
+        import asyncio
+
+        pages_json = directory / "pages.json"
+        exists = await asyncio.to_thread(pages_json.exists)
+        if not exists:
+            logger.info("No pages.json found in %s", directory)
+            return {}
+        try:
+            raw_text = await asyncio.to_thread(pages_json.read_text, encoding="utf-8")
+            data = await asyncio.to_thread(json.loads, raw_text)
+            if isinstance(data, dict):
+                norm = self._normalize_ground_truth_entries(data)
+                logger.info(
+                    "Loaded %d ground truth entries from %s", len(norm), pages_json
+                )
+                return norm
+            logger.warning("pages.json root is not an object (dict): %s", pages_json)
+        except Exception as exc:  # pragma: no cover - robustness
+            logger.warning("Failed to load pages.json (%s): %s", pages_json, exc)
+        return {}
+
+    def find_ground_truth_text(
+        self, name: str, ground_truth_map: dict[str, str]
+    ) -> str | None:
+        """Find ground truth text for a given page name using variant lookup.
+
+        The normalization process adds multiple keys (with/without extension, lowercase).
+        This helper attempts a list of variants in priority order to find a match.
+
+        Parameters
+        ----------
+        name : str
+            The image filename (e.g. "001.png") or bare page identifier
+        ground_truth_map : dict[str, str]
+            Normalized mapping produced by ``load_ground_truth_map``
+
+        Returns
+        -------
+        str | None
+            Ground truth text if found, None otherwise
+        """
+        if not name:
+            return None
+        candidates: list[str] = []
+        # Original provided name
+        candidates.append(name)
+        # Lowercase variant
+        candidates.append(name.lower())
+        # If name has extension, add base name variants; else add ext variants (handled by normalization)
+        if "." in name:
+            base = name.rsplit(".", 1)[0]
+            candidates.extend([base, base.lower()])
+        # Deduplicate while preserving order
+        seen = set()
+        for c in candidates:
+            if c in seen:
+                continue
+            seen.add(c)
+            if c in ground_truth_map:
+                return ground_truth_map[c]
+        return None
+
+    def create_fallback_page(
+        self,
+        index: int,
+        img_path: Path,
+    ) -> Page:
+        """Create a fallback page when OCR fails, attaching image and ground truth if available.
+
+        Args:
+            index: Zero-based page index.
+            img_path: Path to the image file.
+
+        Returns:
+            Page: A basic fallback page object.
+        """
+        page = Page(width=0, height=0, page_index=index, items=[])
+        page.image_path = img_path  # type: ignore[attr-defined]
+        page.name = img_path.name  # type: ignore[attr-defined]
+        page.index = index  # type: ignore[attr-defined]
+        page.ocr_failed = True  # type: ignore[attr-defined]
+
+        # Add ground truth if available
+        gt_text = self.find_ground_truth_text(
+            img_path.name, self.project.ground_truth_map
+        )
+        if gt_text:
+            page.add_ground_truth(gt_text)  # type: ignore[attr-defined]
+            logger.debug("Injected ground truth for fallback page: %s", img_path.name)
+
+        # Best-effort load image
+        try:
+            from cv2 import imread as cv2_imread
+
+            img = cv2_imread(str(img_path))
+            if img is not None:
+                page.cv2_numpy_page_image = img  # type: ignore[attr-defined]
+                logger.debug("Attached cv2 image for fallback page: %s", img_path.name)
+        except Exception:
+            logger.debug("cv2 load failed for fallback page: %s", img_path.name)
+
+        return page

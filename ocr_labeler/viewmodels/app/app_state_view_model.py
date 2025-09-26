@@ -177,7 +177,10 @@ class AppStateViewModel(BaseViewModel):
 
     async def load_selected_project(self):
         """Load the currently selected project."""
+        import traceback
+
         logger.warning(
             "load_selected_project is deprecated, use command_load_selected_project instead"
         )
+        logger.warning("Call stack: %s", traceback.format_stack())
         await self.command_load_selected_project()

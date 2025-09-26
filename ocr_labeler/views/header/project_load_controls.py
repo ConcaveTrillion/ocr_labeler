@@ -90,7 +90,7 @@ class ProjectLoadControls:
 
         try:
             ui.notify(f"Loading {key}", type="info")
-            await self.app_state_model.load_selected_project()
+            await self.app_state_model.command_load_selected_project()
             ui.notify(f"Loaded {key}", type="positive")
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Load failed: {exc}", type="negative")

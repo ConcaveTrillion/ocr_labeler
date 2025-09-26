@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 @binding.bindable_dataclass
-class PageStateNiceGuiBinding:
+class PageStateViewModel:
     _page_state: PageState
 
     current_ocr_text: str = ""
@@ -17,7 +17,7 @@ class PageStateNiceGuiBinding:
 
     def __init__(self, page_state: PageState):
         logger.debug(
-            f"Initializing PageStateNiceGuiBinding with page_state: {page_state is not None}"
+            f"Initializing PageStateViewModel with page_state: {page_state is not None}"
         )
 
         if page_state is not None and isinstance(page_state, PageState):
@@ -27,17 +27,17 @@ class PageStateNiceGuiBinding:
             logger.debug("Registered page state change listener")
         else:
             logger.error(
-                "Page state of type PageState not provided to PageStateNiceGuiBinding!"
+                "Page state of type PageState not provided to PageStateViewModel!"
             )
             raise ValueError(
-                "Page state of type PageState not provided to PageStateNiceGuiBinding!"
+                "Page state of type PageState not provided to PageStateViewModel!"
             )
         self.update()
 
     # Only propagate one-way from PageState to model, not vice versa
     def update(self):
         """Sync model from PageState via state change listener."""
-        logger.debug("Updating PageStateNiceGuiBinding from PageState")
+        logger.debug("Updating PageStateViewModel from PageState")
         if self._page_state:
             self.current_ocr_text = self._page_state.current_ocr_text
             self.current_gt_text = self._page_state.current_gt_text
@@ -49,13 +49,11 @@ class PageStateNiceGuiBinding:
                 logger.debug(f"Current OCR text length: {len(self.current_ocr_text)}")
                 logger.debug(f"Current GT text length: {len(self.current_gt_text)}")
                 logger.debug(f"Page source text: {self.page_source_text}")
-                logger.debug("PageStateNiceGuiBinding update complete")
+                logger.debug("PageStateViewModel update complete")
         else:
-            logger.error(
-                "No page state available when updating PageStateNiceGuiBinding!"
-            )
+            logger.error("No page state available when updating PageStateViewModel!")
             raise ValueError(
-                "No page state available when updating PageStateNiceGuiBinding!"
+                "No page state available when updating PageStateViewModel!"
             )
 
     def update_page_source(self, page_index: int, is_loading: bool = False):

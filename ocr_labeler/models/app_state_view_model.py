@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @binding.bindable_dataclass
-class AppStateNiceGuiBinding:
+class AppStateViewModel:
     _app_state: AppState
 
     is_loading: bool = False
@@ -17,10 +17,11 @@ class AppStateNiceGuiBinding:
     project_keys: list[str] = field(default_factory=list)
     selected_project_key: str = ""
     selected_project_path: str = ""
+    is_project_loaded: bool = False
 
     def __init__(self, app_state: AppState):
         logger.debug(
-            f"Initializing AppStateNiceGuiBinding with app_state: {app_state is not None}"
+            f"Initializing AppStateViewModel with app_state: {app_state is not None}"
         )
 
         if app_state is not None and isinstance(app_state, AppState):
@@ -30,17 +31,17 @@ class AppStateNiceGuiBinding:
             logger.debug("Registered app state change listener")
         else:
             logger.error(
-                "App state of type AppState not provided to AppStateNiceGuiBinding!"
+                "App state of type AppState not provided to AppStateViewModel!"
             )
             raise ValueError(
-                "App state of type AppState not provided to AppStateNiceGuiBinding!"
+                "App state of type AppState not provided to AppStateViewModel!"
             )
         self.update()
 
     # Only propagate one-way from AppState to model, not vice versa
     def update(self):
         """Sync model from AppState via state change listener."""
-        logger.debug("Updating AppStateNiceGuiBinding from AppState")
+        logger.debug("Updating AppStateViewModel from AppState")
         if self._app_state:
             self.is_loading = self._app_state.is_loading
             self.is_project_loading = self._app_state.is_project_loading
@@ -63,13 +64,11 @@ class AppStateNiceGuiBinding:
                 logger.debug(f"Project Keys: {self.project_keys}")
                 logger.debug(f"Selected Project Key: {self.selected_project_key}")
                 logger.debug(f"Selected Project Path: {self.selected_project_path}")
-                logger.debug("AppStateNiceGuiBinding update complete")
+                logger.debug("AppStateViewModel update complete")
 
         else:
-            logger.error("No app state available when updating AppStateNiceGuiBinding!")
-            raise ValueError(
-                "No app state available when updating AppStateNiceGuiBinding!"
-            )
+            logger.error("No app state available when updating AppStateViewModel!")
+            raise ValueError("No app state available when updating AppStateViewModel!")
 
     def update_selected_project(self, key: str):
         """Update the selected project key in the underlying AppState."""
@@ -93,3 +92,15 @@ class AppStateNiceGuiBinding:
         """Listener for AppState changes; update model properties."""
         logger.debug("App State change detected, updating model")
         self.update()
+
+    async def load_selected_project(self):
+        """Load the currently selected project.
+
+        This method encapsulates the business logic for loading a project,
+        delegating to the underlying AppState while maintaining MVVM separation.
+        """
+        if self._app_state:
+            await self._app_state.load_selected_project()
+        else:
+            logger.error("No app state available when loading selected project!")
+            raise ValueError("No app state available when loading selected project!")

@@ -4,8 +4,8 @@ import logging
 
 from nicegui import ui
 
-from ..models.app_state_nicegui_binding import AppStateNiceGuiBinding
-from ..models.project_state_nicegui_binding import ProjectStateNiceGuiBinding
+from ..models.app_state_view_model import AppStateViewModel
+from ..models.project_state_view_model import ProjectStateViewModel
 from ..state import AppState
 from .header.header import HeaderBar
 from .projects.project_view import ProjectView
@@ -19,13 +19,12 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
     def __init__(self, state: AppState):
         logger.debug("Initializing LabelerView with AppState")
         self.state = state
-        self.state_model: AppStateNiceGuiBinding = AppStateNiceGuiBinding(self.state)
-        self.project_state_model: ProjectStateNiceGuiBinding = (
-            ProjectStateNiceGuiBinding(self.state.project_state)
+        self.state_model: AppStateViewModel = AppStateViewModel(self.state)
+        self.project_state_model: ProjectStateViewModel = ProjectStateViewModel(
+            self.state.project_state, self.state_model
         )
-        logger.debug("AppStateNiceGuiBinding created and linked to AppState")
-        logger.debug("ProjectStateNiceGuiBinding created and linked to ProjectState")
-
+        logger.debug("AppStateViewModel created and linked to AppState")
+        logger.debug("ProjectStateViewModel created and linked to ProjectState")
         self.header_bar: HeaderBar | None = None
         self.project_view: ProjectView | None = None
         self._main_container = None
@@ -109,8 +108,8 @@ class LabelerView:  # pragma: no cover - heavy UI wiring
             )
             pass
 
-        # Refresh project view if it exists
-        if self.project_view:
+        # Refresh project view if it exists and not loading
+        if self.project_view and not self.state.is_project_loading:
             logger.debug("Refreshing existing ProjectView")
             self.project_view.refresh()
 

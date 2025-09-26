@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Dict
 
 from nicegui import binding, ui
 
-from ...models.app_state_nicegui_binding import AppStateNiceGuiBinding
-from ...models.project_state_nicegui_binding import ProjectStateNiceGuiBinding
-from ...state import AppState
+from ...models.app_state_view_model import AppStateViewModel
+from ...models.project_state_view_model import ProjectStateViewModel
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +20,11 @@ class ProjectLoadControls:
 
     def __init__(
         self,
-        app_state_model: AppStateNiceGuiBinding,
-        project_state_model: ProjectStateNiceGuiBinding,
+        app_state_model: AppStateViewModel,
+        project_state_model: ProjectStateViewModel,
     ):
         self.app_state_model = app_state_model
         self.project_state_model = project_state_model
-        # Keep a reference to the raw state for operations that need it
-        self._raw_app_state: AppState = app_state_model._app_state
-        self._project_options: Dict[str, Path] = {}
-
-    # UI refs (populated in build)
-    _row: ui.element | None = None
-    select: ui.select | None = None
-    path_label: ui.label | None = None
-    load_project_button: ui.button | None = None
 
     def build(self) -> ui.element:
         with ui.row().classes("w-full items-center gap-2") as row:
@@ -75,11 +63,14 @@ class ProjectLoadControls:
                 self.select, "tooltip", self.app_state_model, "selected_project_path"
             )
 
-            # bind controls disabled state to "is busy" state
+            # bind controls disabled state to combined busy/loading state
             controls = [self.select, self.load_project_button]
             for control in controls:
                 binding.bind_from(
-                    control, "disabled", self.project_state_model, "is_busy"
+                    control,
+                    "disabled",
+                    self.project_state_model,
+                    "is_controls_disabled",
                 )
 
             binding.bind_from(
@@ -91,7 +82,7 @@ class ProjectLoadControls:
         return row
 
     async def _load_selected_project(self):
-        """Load the selected project using the state layer."""
+        """Load the selected project using the ViewModel."""
         key = self.app_state_model.selected_project_key
         if not key:
             ui.notify("No project selected", type="warning")
@@ -99,7 +90,7 @@ class ProjectLoadControls:
 
         try:
             ui.notify(f"Loading {key}", type="info")
-            await self._raw_app_state.load_selected_project()
+            await self.app_state_model.load_selected_project()
             ui.notify(f"Loaded {key}", type="positive")
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Load failed: {exc}", type="negative")

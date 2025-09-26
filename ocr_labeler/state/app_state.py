@@ -61,8 +61,6 @@ class AppState:
     def selected_project_key(self, value: str | None):
         """Set the currently selected project key."""
         if value != self._selected_project_key:
-            if value is not None and value not in self.project_keys:
-                raise ValueError(f"Invalid project key: {value}")
             self._selected_project_key = value
             self.notify()
 
@@ -75,17 +73,18 @@ class AppState:
         """
         try:
             self.available_projects = self.list_available_projects()
-        except Exception:  # noqa: BLE001 - defensive
+        except Exception:
             logger.exception("__post_init__: failed to list available projects")
             self.available_projects = {}
+
         # Directly derive keys and set default selection to first project (if any)
         # without attempting to match current project_root or loading anything.
         try:
             self.project_keys = sorted(self.available_projects.keys())
             if self.project_keys:
                 self.selected_project_key = self.project_keys[0]
-        except Exception:  # pragma: no cover - defensive
-            logger.debug(
+        except Exception:
+            logger.exception(
                 "__post_init__: deriving initial project keys failed", exc_info=True
             )
 
@@ -290,4 +289,4 @@ class AppState:
             return
 
         # The load_project method already handles loading state and notifications
-        await self.load_project(key, path)
+        await self.load_project(path)

@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from pd_book_tools.ocr.page import Page  # type: ignore
+from pd_book_tools.ocr.page import Page
 
 from ..models.project import Project
 from .operations import PageOperations, ProjectOperations
@@ -118,7 +119,22 @@ class ProjectState:
             return
         logger.debug("reload_ground_truth: completed")
 
-    def next_page(self):
+    class NavigationResult:
+        """Result of a navigation attempt."""
+
+        class NavigationStatus(Enum):
+            SUCCESS = "success"
+            FAILURE = "failure"
+            NO_OP = "no_op"
+
+        def __init__(self, success: bool, message: str = ""):
+            self.success = success
+            self.message = message
+
+        def __bool__(self):
+            return self.success
+
+    def next_page(self) -> NavigationResult:
         """Navigate to the next page."""
         logger.debug("next_page: called, current_index=%s", self.current_page_index)
 
@@ -127,7 +143,7 @@ class ProjectState:
                 self.current_page_index += 1
                 logger.debug("next_page: moved to index=%s", self.current_page_index)
             else:
-                logger.debug("next_page: already at last page, no change")
+                logger.warning("next_page: already at last page, no change")
 
         self._navigate(action)
         logger.debug("next_page: completed")
@@ -141,7 +157,7 @@ class ProjectState:
                 self.current_page_index -= 1
                 logger.debug("prev_page: moved to index=%s", self.current_page_index)
             else:
-                logger.debug("prev_page: already at first page, no change")
+                logger.warning("prev_page: already at first page, no change")
 
         self._navigate(action)
         logger.debug("prev_page: completed")
@@ -170,7 +186,7 @@ class ProjectState:
         if not self.project.pages:
             self.current_page_index = -1
             logger.warning("goto_page_index: empty pages list; index set to -1")
-            return
+            raise ValueError("No pages available to navigate")
         if index < 0:
             logger.warning("goto_page_index: clamp %s -> 0", index)
             index = 0

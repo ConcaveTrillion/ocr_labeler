@@ -5,7 +5,7 @@ import logging
 
 from nicegui import binding, ui
 
-from ...models.project_state_nicegui_binding import ProjectStateNiceGuiBinding
+from ...models.project_state_view_model import ProjectStateViewModel
 from ...state import ProjectState
 
 logger = logging.getLogger(__name__)
@@ -39,8 +39,8 @@ class ProjectControls:  # pragma: no cover - UI wrapper file
         )
         self.page_total = None
 
-        self.project_controls_model: ProjectStateNiceGuiBinding = (
-            ProjectStateNiceGuiBinding(self.project_state)
+        self.project_controls_model: ProjectStateViewModel = ProjectStateViewModel(
+            self.project_state
         )
 
         logger.debug("ProjectControls initialization complete")
@@ -67,26 +67,17 @@ class ProjectControls:  # pragma: no cover - UI wrapper file
                 )
 
         binding.bind_from(
-            self.prev_button,
-            "props.disabled",
-            self.project_controls_model,
-            "is_navigating",
-        )
-        binding.bind_from(
-            self.next_button, "props.disabled", self.state, "is_navigating"
-        )
-        binding.bind_from(
-            self.goto_button, "props.disabled", self.state, "is_navigating"
-        )
-        binding.bind_from(
-            self.page_input, "props.disabled", self.state, "is_navigating"
-        )
-        binding.bind_from(
             self.navigation_working_spinner,
             "hidden",
-            self.state,
+            self.project_controls_model,
             "is_navigating",
             invert=True,
+        )
+        binding.bind_from(
+            self.page_total,
+            "text",
+            self.project_controls_model,
+            "page_total",
         )
 
         return self.container
@@ -109,11 +100,18 @@ class ProjectControls:  # pragma: no cover - UI wrapper file
 
         # Enable/disable buttons based on current index
         if self.prev_button:
-            self.prev_button.props("disabled", current_index <= 0)
+            self.prev_button.props(
+                "disabled", (not self.project_controls_model.can_navigate_prev)
+            )
         if self.next_button:
-            self.next_button.props("disabled", current_index >= total_pages - 1)
+            self.next_button.props(
+                "disabled", (not self.project_controls_model.can_navigate_next)
+            )
         if self.goto_button:
-            self.goto_button.props("disabled", total_pages == 0)
+            self.goto_button.props(
+                "disabled",
+                (not self.project_controls_model.can_navigate) or total_pages == 0,
+            )
 
         logger.debug(
             f"Set page input to {self.page_input.value}, total pages {total_pages}"

@@ -1,7 +1,7 @@
 from nicegui import ui
 
-from ...models.app_state_nicegui_binding import AppStateNiceGuiBinding
-from ...models.project_state_nicegui_binding import ProjectStateNiceGuiBinding
+from ...models.app_state_view_model import AppStateViewModel
+from ...models.project_state_view_model import ProjectStateViewModel
 from .project_load_controls import ProjectLoadControls
 
 
@@ -10,8 +10,8 @@ class HeaderBar:
 
     def __init__(
         self,
-        app_state_model: AppStateNiceGuiBinding,
-        project_state_model: ProjectStateNiceGuiBinding,
+        app_state_model: AppStateViewModel,
+        project_state_model: ProjectStateViewModel,
     ):
         self.app_state_model = app_state_model
         self.project_state_model = project_state_model

@@ -374,10 +374,9 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
     )
 
     # Call _navigate directly on project_state
-    state.project_state._navigate(mock_nav)
+    state.project_state._navigate()
 
     # Assertions
-    assert nav_called  # nav_callable was called
     assert len(notifications) == 2  # Two notifications: start and end
     assert notifications[0] == (
         True,
@@ -453,10 +452,9 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     mock_loop.create_task = mock_create_task
 
     # Call _navigate directly on project_state
-    state.project_state._navigate(mock_nav)
+    state.project_state._navigate()
 
     # Assertions
-    assert nav_called  # nav_callable was called
     assert task_created  # Async task was scheduled
     assert (
         len(notifications) == 1

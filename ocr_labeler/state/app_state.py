@@ -5,17 +5,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from ..operations.persistence.project_discovery_operations import (
+    ProjectDiscoveryOperations,
+)
 from .project_state import ProjectState
-
-try:  # Lazy import; NiceGUI only needed at runtime in UI context
-    from nicegui import ui  # type: ignore
-except Exception:  # pragma: no cover
-    ui = None  # type: ignore
-
-try:  # Lazy import; NiceGUI only needed at runtime in UI context
-    from nicegui import binding  # type: ignore
-except Exception:  # pragma: no cover
-    binding = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -181,53 +174,9 @@ class AppState:
         A "project" is any immediate subdirectory containing at least one image file
         (*.png|*.jpg|*.jpeg). If the root doesn't exist, returns an empty dict.
         """
-        # Determine discovery base: explicit override -> legacy fixed path.
-        discovery_root: Path
-        if self.base_projects_root is not None:
-            try:
-                discovery_root = Path(self.base_projects_root).expanduser().resolve()
-            except Exception:  # pragma: no cover - resolution error
-                logger.critical(
-                    "Failed to resolve custom projects root %s",
-                    self.base_projects_root,
-                    exc_info=True,
-                )
-                return {}
-        else:
-            try:
-                discovery_root = (
-                    Path("~/ocr/data/source-pgdp-data/output").expanduser().resolve()
-                )
-            except Exception:  # pragma: no cover - path resolution errors
-                logger.critical("Project root path resolution failed", exc_info=True)
-                return {}
-        try:
-            base_root = discovery_root
-        except Exception:  # pragma: no cover - path resolution errors
-            logger.critical("Project root path resolution failed", exc_info=True)
-            return {}
-        if not base_root.exists():  # pragma: no cover - environment dependent
-            logger.critical("No project root found", exc_info=True)
-            return {}
-        projects: dict[str, Path] = {}
-        try:
-            for d in sorted(p for p in base_root.iterdir() if p.is_dir()):
-                try:
-                    if any(
-                        f.suffix.lower() in {".png", ".jpg", ".jpeg"}
-                        for f in d.iterdir()
-                        if f.is_file()
-                    ):
-                        projects[d.name] = d
-                except Exception:  # noqa: BLE001 - skip unreadable child
-                    logger.critical(
-                        "Failed to read project directory %s", d, exc_info=True
-                    )
-                    continue
-        except Exception:  # pragma: no cover - defensive
-            logger.critical("Project discovery failed", exc_info=True)
-            return {}
-        return projects
+        return ProjectDiscoveryOperations.list_available_projects(
+            self.base_projects_root
+        )
 
     # --------------- Project Discovery (reactive helper) ---------------
     def refresh_projects(self):  # pragma: no cover - UI driven
@@ -237,14 +186,18 @@ class AppState:
         """
         try:
             # Re-scan for available projects
-            self.available_projects = self.list_available_projects()
+            self.available_projects = (
+                ProjectDiscoveryOperations.list_available_projects(
+                    self.base_projects_root
+                )
+            )
             projects = self.available_projects or {}
             logger.debug(
                 "refresh_projects: building keys from available_projects (count=%d, names=%s)",
                 len(projects),
                 sorted(projects.keys()),
             )
-            self.project_keys = sorted(projects.keys())
+            self.project_keys = ProjectDiscoveryOperations.get_project_keys(projects)
 
             # Only assign a default if none chosen yet or existing choice no longer valid.
             if (
@@ -252,7 +205,9 @@ class AppState:
                 or self.selected_project_key not in projects
             ):
                 self.selected_project_key = (
-                    self.project_keys[0] if self.project_keys else None
+                    ProjectDiscoveryOperations.get_default_project_key(
+                        self.project_keys
+                    )
                 )
         except Exception:  # pragma: no cover - defensive
             logger.exception(

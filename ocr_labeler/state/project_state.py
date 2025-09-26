@@ -3,14 +3,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Callable, List, Optional
 
 from pd_book_tools.ocr.page import Page
 
 from ..models.project import Project
+from ..operations.ocr.navigation_operations import NavigationOperations
 from ..operations.ocr.page_operations import PageOperations
+from ..operations.ocr.text_operations import TextOperations
 from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
 
@@ -120,65 +121,48 @@ class ProjectState:
             return
         logger.debug("reload_ground_truth: completed")
 
-    class NavigationResult:
-        """Result of a navigation attempt."""
-
-        class NavigationStatus(Enum):
-            SUCCESS = "success"
-            FAILURE = "failure"
-            NO_OP = "no_op"
-
-        def __init__(self, success: bool, message: str = ""):
-            self.success = success
-            self.message = message
-
-        def __bool__(self):
-            return self.success
-
-    def next_page(self) -> NavigationResult:
+    def next_page(self):
         """Navigate to the next page."""
         logger.debug("next_page: called, current_index=%s", self.current_page_index)
 
-        def action():
-            if self.current_page_index < self.project.page_count() - 1:
-                self.current_page_index += 1
-                logger.debug("next_page: moved to index=%s", self.current_page_index)
-            else:
-                logger.warning("next_page: already at last page, no change")
+        result = NavigationOperations.next_page(
+            self.current_page_index, self.project.page_count() - 1
+        )
+        if result:
+            self.current_page_index += 1
+            logger.debug("next_page: moved to index=%s", self.current_page_index)
+        else:
+            logger.warning("next_page: already at last page, no change")
 
-        self._navigate(action)
+        self._navigate()
         logger.debug("next_page: completed")
 
     def prev_page(self):
         """Navigate to the previous page."""
         logger.debug("prev_page: called, current_index=%s", self.current_page_index)
 
-        def action():
-            if self.current_page_index > 0:
-                self.current_page_index -= 1
-                logger.debug("prev_page: moved to index=%s", self.current_page_index)
-            else:
-                logger.warning("prev_page: already at first page, no change")
+        result = NavigationOperations.prev_page(self.current_page_index)
+        if result:
+            self.current_page_index -= 1
+            logger.debug("prev_page: moved to index=%s", self.current_page_index)
+        else:
+            logger.warning("prev_page: already at first page, no change")
 
-        self._navigate(action)
+        self._navigate()
         logger.debug("prev_page: completed")
 
     def goto_page_number(self, number: int):
         """Navigate to a specific page number."""
         logger.debug("goto_page_number: called with number=%s", number)
-        # Validate page number is in valid range (1-based)
-        if number < 1 or number > self.project.page_count():
-            logger.warning(
-                "goto_page_number: invalid page number %s (valid range: 1-%s)",
-                number,
-                self.project.page_count(),
-            )
-            return
 
-        def action():
-            self.goto_page_index(number - 1)
+        result, target_index = NavigationOperations.goto_page_number(
+            number, self.project.page_count()
+        )
+        if result:
+            self.goto_page_index(target_index)
+        else:
+            logger.warning("goto_page_number: invalid page number %s", number)
 
-        self._navigate(action)
         logger.debug("goto_page_number: completed")
 
     def goto_page_index(self, index: int):
@@ -188,21 +172,18 @@ class ProjectState:
             self.current_page_index = -1
             logger.warning("goto_page_index: empty pages list; index set to -1")
             raise ValueError("No pages available to navigate")
-        if index < 0:
-            logger.warning("goto_page_index: clamp %s -> 0", index)
-            index = 0
-        if index >= self.project.page_count():
-            logger.warning(
-                "goto_page_index: clamp %s -> %s", index, self.project.page_count() - 1
-            )
-            index = self.project.page_count() - 1
 
-        # Invalidate cache if page index actually changed
-        if self.current_page_index != index:
-            self._invalidate_text_cache()
-
-        self.current_page_index = index
-        logger.debug("goto_page_index: now at index=%s", self.current_page_index)
+        result, clamped_index = NavigationOperations.goto_page_index(
+            index, self.project.page_count() - 1
+        )
+        if result:
+            # Invalidate cache if page index actually changed
+            if self.current_page_index != clamped_index:
+                self._invalidate_text_cache()
+            self.current_page_index = clamped_index
+            logger.debug("goto_page_index: now at index=%s", self.current_page_index)
+        else:
+            logger.warning("goto_page_index: navigation failed for index %s", index)
 
     def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary.
@@ -234,10 +215,9 @@ class ProjectState:
         self._invalidate_text_cache()
         logger.debug("reload_current_page_with_ocr: completed")
 
-    def _navigate(self, nav_callable: Callable[[], None]):
+    def _navigate(self):
         """Internal navigation helper with loading state."""
         logger.debug("_navigate: called")
-        nav_callable()  # quick index change first
         self.is_navigating = True
         self.notify()
 
@@ -387,10 +367,8 @@ class ProjectState:
     def current_page_source_text(self) -> str:
         """Get the source text for the current page."""
         logger.debug("current_page_source_text: called")
-        page_state = self.get_page_state(self.current_page_index)
-        result = page_state.get_page_source_text(
-            self.current_page_index, self.is_project_loading
-        )
+        page = self.current_page()
+        result = TextOperations.get_page_source_text(page, self.is_project_loading)
         logger.debug("current_page_source_text: returning text")
         return result
 
@@ -421,21 +399,23 @@ class ProjectState:
     def _update_text_cache(self, force: bool = False):
         """Update cached text values for the current page."""
         logger.debug("_update_text_cache: called with force=%s", force)
-        if force or self.current_page_index != self._cached_page_index:
+        if TextOperations.should_update_text_cache(
+            self.current_page_index, self._cached_page_index, force
+        ):
             # Only update cache if page is already loaded to avoid triggering OCR
-            if (
-                0 <= self.current_page_index < len(self.project.pages)
-                and self.project.pages[self.current_page_index] is not None
+            if TextOperations.is_page_loaded_for_cache(
+                self.project.pages, self.current_page_index
             ):
-                page_state = self.get_page_state(self.current_page_index)
-                self._cached_ocr_text, self._cached_gt_text = page_state.get_page_texts(
-                    self.current_page_index
+                page = self.project.pages[self.current_page_index]
+                self._cached_ocr_text, self._cached_gt_text = (
+                    TextOperations.get_page_texts(page, self.project.ground_truth_map)
                 )
                 self._cached_page_index = self.current_page_index
             else:
                 # Page not loaded yet, keep old cache or set to loading
                 if self._cached_page_index == -1 or force:
-                    self._cached_ocr_text = "Loading..."
-                    self._cached_gt_text = "Loading..."
+                    self._cached_ocr_text, self._cached_gt_text = (
+                        TextOperations.get_loading_text()
+                    )
                     self._cached_page_index = self.current_page_index
         logger.debug("_update_text_cache: completed")

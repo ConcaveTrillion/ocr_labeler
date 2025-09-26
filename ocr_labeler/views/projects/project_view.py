@@ -6,6 +6,7 @@ from typing import Any
 
 from nicegui import ui
 
+from ...viewmodels.project.page_state_view_model import PageStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..callbacks import NavigationCallbacks
 from ..shared.base_view import BaseView
@@ -29,6 +30,7 @@ class ProjectView(
         logger.debug("Initializing ProjectView with ProjectStateViewModel")
         super().__init__(viewmodel)
 
+        self.page_state_viewmodel: PageStateViewModel | None = None
         self.page_controls: PageControls | None = None
         self.content: ContentArea | None = None
         self.callbacks: NavigationCallbacks | None = None
@@ -37,6 +39,19 @@ class ProjectView(
     def build(self):
         """Build the project view UI components."""
         logger.debug("Building ProjectView UI components")
+
+        # Create page state viewmodel only if project_state is available
+        if getattr(self.viewmodel, "_project_state", None) is not None:
+            self.page_state_viewmodel = PageStateViewModel(
+                self.viewmodel._project_state
+            )
+            logger.debug("PageStateViewModel created")
+        else:
+            logger.error(
+                "Cannot create PageStateViewModel - no project state available"
+            )
+            # Build an empty column so the UI can continue; refresh will retry later
+            return ui.column()
 
         # Root container for the entire project view
         with ui.column().classes("w-full h-full") as self._root:
@@ -60,14 +75,11 @@ class ProjectView(
             logger.debug("Page controls built")
 
             # Content area (images and text)
-            # Note: ContentArea still takes the old state - this will need to be updated
-            # For now, we'll access the state through the viewmodel
-            if hasattr(self.viewmodel, "_project_state"):
-                self.content = ContentArea(
-                    self.viewmodel._project_state.current_page_state, self.callbacks
-                )
-                self.content.build()
-                logger.debug("Content area built")
+            self.content = ContentArea(
+                page_state_viewmodel=self.page_state_viewmodel, callbacks=self.callbacks
+            )
+            self.content.build()
+            logger.debug("Content area built")
 
         logger.debug("ProjectView UI build completed")
         self.mark_as_built()
@@ -116,6 +128,8 @@ class ProjectView(
                     self.content.splitter.classes(remove="hidden")
                     self.content.page_spinner.classes(add="hidden")
                     logger.debug("Showing content splitter, hiding page spinner")
+                    # Show images when content is visible
+                    self._show_images()
 
         # Page meta
         if self.page_controls:
@@ -134,12 +148,8 @@ class ProjectView(
                 self.page_controls.set_page(1, "(no page)", 0)
                 logger.debug("No pages available, set page controls to default state")
 
-        # Images and text
-        if not loading:
-            logger.debug("Not loading, updating images")
-            self._update_images()
-        else:
-            logger.debug("Still loading, skipping image update")
+        # Images are now updated automatically through data binding
+        # No need for manual _update_images call
 
     def _prep_image_spinners(self):
         """Hide images during navigation transitions."""
@@ -150,6 +160,16 @@ class ProjectView(
                     img.set_visibility(False)
                     logger.debug("Hidden image: %s", name)
         logger.debug("Image spinners preparation completed")
+
+    def _show_images(self):
+        """Show images after navigation completes."""
+        logger.debug("Showing images after navigation")
+        if self.content and hasattr(self.content, "image_tabs"):
+            for name, img in self.content.image_tabs.images.items():  # noqa: F841
+                if img:
+                    img.set_visibility(True)
+                    logger.debug("Shown image: %s", name)
+        logger.debug("Images shown")
 
     def _goto_page(self, raw_value):
         """Navigate to a specific page number with validation."""

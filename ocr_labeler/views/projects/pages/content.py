@@ -4,7 +4,7 @@ import logging
 
 from nicegui import ui
 
-from ....state import PageState
+from ....viewmodels.project.page_state_view_model import PageStateViewModel
 from ...callbacks import NavigationCallbacks
 from .image_tabs import ImageTabs
 from .text_tabs import TextTabs
@@ -15,15 +15,17 @@ logger = logging.getLogger(__name__)
 class ContentArea:
     """Image & text tabs content area (page controls moved to separate component)."""
 
-    def __init__(self, page_state: PageState, callbacks: NavigationCallbacks):
+    def __init__(
+        self, page_state_viewmodel: PageStateViewModel, callbacks: NavigationCallbacks
+    ):
         logger.debug("Initializing ContentArea")
-        self.page_state = page_state
+        self.page_state_viewmodel = page_state_viewmodel
         self.callbacks = callbacks
         logger.debug("Creating ImageTabs component")
-        self.image_tabs = ImageTabs(page_state=self.page_state)
+        self.image_tabs = ImageTabs(page_state_viewmodel=self.page_state_viewmodel)
         logger.debug("Creating TextTabs component")
         self.text_tabs = TextTabs(
-            page_state=self.page_state,
+            page_state=self.page_state_viewmodel._page_state,
             on_save_page=None,  # Moved to PageControls
             on_load_page=None,  # Moved to PageControls
         )

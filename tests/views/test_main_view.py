@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import Mock, patch
 
 from ocr_labeler.state import AppState
+from ocr_labeler.viewmodels.main_view_model import MainViewModel
 from ocr_labeler.views.main_view import LabelerView
 
 
@@ -14,11 +15,12 @@ class TestMainView:
     def setup_method(self):
         """Set up test fixtures."""
         self.app_state = AppState()
-        self.main_view = LabelerView(self.app_state)
+        self.main_view_model = MainViewModel(self.app_state)
+        self.main_view = LabelerView(self.main_view_model)
 
     def test_main_view_initialization(self):
         """Test that MainView initializes correctly."""
-        assert self.main_view.state == self.app_state
+        assert self.main_view.viewmodel == self.main_view_model
         assert self.main_view.header_bar is None
         assert self.main_view.project_view is None
         assert self.main_view._no_project_placeholder is None
@@ -36,8 +38,8 @@ class TestMainView:
         mock_ui.icon = Mock()
         mock_ui.label = Mock()
 
-        # Create a project view
-        project_view = ProjectView(self.app_state)
+        # Create a project view with the viewmodel
+        project_view = ProjectView(self.main_view_model.project_state_viewmodel)
 
         # The project view should have load_page functionality
         assert hasattr(project_view, "_load_page_async")

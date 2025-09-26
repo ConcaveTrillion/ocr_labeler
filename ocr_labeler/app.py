@@ -8,6 +8,7 @@ from typing import Optional
 from nicegui import ui
 
 from .state.app_state import AppState
+from .viewmodels.main_view_model import MainViewModel
 from .views.main_view import LabelerView
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,10 @@ class NiceGuiLabeler:
         )
         # Set the initial project root in the project state
         self.state.project_state.project_root = project_root
-        self.view = LabelerView(self.state)
+
+        # Create view model and view
+        self.viewmodel = MainViewModel(self.state)
+        self.view = LabelerView(self.viewmodel)
         logger.debug("NiceGuiLabeler initialization complete")
 
     def create_routes(self):
@@ -45,7 +49,7 @@ class NiceGuiLabeler:
 
         @ui.page("/")
         def index():  # noqa: D401
-            self.view.mount()
+            self.view.build()
 
         logger.debug("Routes creation complete")
 

@@ -1,27 +1,38 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from nicegui import ui
 
-from ...viewmodels.app.app_state_view_model import AppStateViewModel
-from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
+from ..shared.base_view import BaseView
 from .project_load_controls import ProjectLoadControls
 
+if TYPE_CHECKING:
+    from ...viewmodels.main_view_model import MainViewModel
 
-class HeaderBar:
+
+class HeaderBar(BaseView["MainViewModel"]):
     """Top header containing project load controls only."""
 
-    def __init__(
-        self,
-        app_state_model: AppStateViewModel,
-        project_state_model: ProjectStateViewModel,
-    ):
-        self.app_state_model = app_state_model
-        self.project_state_model = project_state_model
+    def __init__(self, viewmodel: MainViewModel):
+        """Initialize the header bar with its view model.
+
+        Args:
+            viewmodel: The main view model containing app and project state.
+        """
+        super().__init__(viewmodel)
         self.project_controls = ProjectLoadControls(
-            app_state_model, project_state_model
+            viewmodel.app_state_viewmodel, viewmodel.project_state_viewmodel
         )
-        self.header = None
 
     def build(self):
-        with ui.header().classes("p-2 flex flex-col gap-2") as header:
-            self.header = header
+        """Build the header UI components."""
+        with ui.header().classes("p-2 flex flex-col gap-2") as self._root:
             self.project_controls.build()
-        return header
+        self.mark_as_built()
+        return self._root
+
+    def refresh(self):
+        """Refresh the header based on current view model state."""
+        # Header content is mostly static, but we could refresh controls if needed
+        pass

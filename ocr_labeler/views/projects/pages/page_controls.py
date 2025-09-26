@@ -4,7 +4,7 @@ import logging
 
 from nicegui import ui
 
-from ....state import ProjectState
+from ....viewmodels.project.project_state_view_model import ProjectStateViewModel
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
 
     def __init__(
         self,
-        state: ProjectState,
+        viewmodel: ProjectStateViewModel,
         on_prev,
         on_next,
         on_goto,
@@ -22,7 +22,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
         on_load_page=None,
     ):
         logger.debug("Initializing PageControls")
-        self.state = state
+        self.viewmodel = viewmodel
         self._on_prev = on_prev
         self._on_next = on_next
         self._on_goto = on_goto
@@ -118,8 +118,14 @@ class PageControls:  # pragma: no cover - UI wrapper file
         # Update page source
         if self.page_source_label:
             try:
-                # NiceGUI button stores its label text in .text
-                self.page_source_label.text = self.state.current_page_source_text
+                # For now, access through the underlying state
+                # TODO: Add page source to viewmodel
+                if hasattr(self.viewmodel, "_project_state"):
+                    self.page_source_label.text = (
+                        self.viewmodel._project_state.current_page_source_text
+                    )
+                else:
+                    self.page_source_label.text = "UNKNOWN"
             except Exception:  # pragma: no cover - defensive
                 pass
 
@@ -127,9 +133,15 @@ class PageControls:  # pragma: no cover - UI wrapper file
         """Reload the current page with OCR processing."""
         logger.debug("Reloading page with OCR")
         try:
-            self.state.reload_current_page_with_ocr()
-            logger.debug("Page reloaded with OCR successfully")
-            ui.notify("Page reloaded with OCR", type="positive")
+            # For now, access through the underlying state
+            # TODO: Add reload command to viewmodel
+            if hasattr(self.viewmodel, "_project_state"):
+                self.viewmodel._project_state.reload_current_page_with_ocr()
+                logger.debug("Page reloaded with OCR successfully")
+                ui.notify("Page reloaded with OCR", type="positive")
+            else:
+                logger.error("Cannot reload OCR - no access to project state")
+                ui.notify("Cannot reload OCR - state not available", type="negative")
         except Exception as e:
             logger.error(f"Failed to reload with OCR: {e}")
             ui.notify(f"Failed to reload with OCR: {e}", type="negative")

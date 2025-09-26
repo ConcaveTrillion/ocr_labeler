@@ -3,29 +3,60 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import field
 from typing import List, Optional
 
+from nicegui import binding
 from pd_book_tools.ocr.block import Block
 from pd_book_tools.ocr.page import Page
 
 from ...models.line_match_model import LineMatch
 from ...models.word_match_model import MatchStatus, WordMatch
+from ..shared.base_viewmodel import BaseViewModel
 
 logger = logging.getLogger(__name__)
 
 
-class WordMatchViewModel:
+@binding.bindable_dataclass
+class WordMatchViewModel(BaseViewModel):
     """View model for word-level OCR vs Ground Truth matching display."""
 
+    # UI-bound properties
+    line_matches: List[LineMatch] = field(default_factory=list)
+    fuzz_threshold: float = 0.8  # Threshold for fuzzy matches
+
+    # Filtering and display options
+    show_exact_matches: bool = True
+    show_fuzzy_matches: bool = True
+    show_mismatches: bool = True
+    show_unmatched_ocr: bool = True
+    show_unmatched_gt: bool = True
+
+    # Statistics
+    total_words: int = 0
+    exact_matches_count: int = 0
+    fuzzy_matches_count: int = 0
+    mismatches_count: int = 0
+    unmatched_gt_count: int = 0
+    unmatched_ocr_count: int = 0
+    exact_percentage: float = 0.0
+    match_percentage: float = 0.0
+
     def __init__(self):
-        self.line_matches: List[LineMatch] = []
-        self.fuzz_threshold: float = 0.8  # Threshold for fuzzy matches
+        super().__init__()
+        # Initialize with empty state
+        self._update_statistics()
 
     def update_from_page(self, page: Page) -> None:
         """Update the view model from a Page object."""
+        old_line_matches = self.line_matches.copy()
+
         self.line_matches.clear()
 
         if not page:
+            self._update_statistics()
+            if old_line_matches != self.line_matches:
+                self.notify_property_changed("line_matches", self.line_matches)
             return
 
         # Get lines from the page using the convenience method
@@ -33,6 +64,9 @@ class WordMatchViewModel:
             lines = page.lines if hasattr(page, "lines") else []
             if not lines:
                 logger.debug("No lines found in page")
+                self._update_statistics()
+                if old_line_matches != self.line_matches:
+                    self.notify_property_changed("line_matches", self.line_matches)
                 return
 
             logger.debug(f"Found {len(lines)} lines in page")
@@ -44,6 +78,12 @@ class WordMatchViewModel:
 
         except Exception as e:
             logger.exception(f"Error updating word match view model: {e}")
+
+        self._update_statistics()
+
+        # Notify changes
+        if old_line_matches != self.line_matches:
+            self.notify_property_changed("line_matches", self.line_matches)
 
     def _create_line_match(
         self, line_idx: int, line: Block, page: Page
@@ -219,27 +259,265 @@ class WordMatchViewModel:
             logger.exception(f"Error creating word match for word {word_idx}: {e}")
             return None
 
+    def _update_statistics(self):
+        """Update statistics based on current line matches."""
+        old_total = self.total_words
+        old_exact = self.exact_matches_count
+        old_fuzzy = self.fuzzy_matches_count
+        old_mismatches = self.mismatches_count
+        old_unmatched_gt = self.unmatched_gt_count
+        old_unmatched_ocr = self.unmatched_ocr_count
+        old_exact_pct = self.exact_percentage
+        old_match_pct = self.match_percentage
+
+        self.total_words = sum(len(lm.word_matches) for lm in self.line_matches)
+        self.exact_matches_count = sum(lm.exact_match_count for lm in self.line_matches)
+        self.fuzzy_matches_count = sum(lm.fuzzy_match_count for lm in self.line_matches)
+        self.mismatches_count = sum(lm.mismatch_count for lm in self.line_matches)
+        self.unmatched_gt_count = sum(lm.unmatched_gt_count for lm in self.line_matches)
+        self.unmatched_ocr_count = sum(
+            lm.unmatched_ocr_count for lm in self.line_matches
+        )
+
+        self.exact_percentage = (
+            (self.exact_matches_count / self.total_words * 100)
+            if self.total_words > 0
+            else 0.0
+        )
+        self.match_percentage = (
+            (
+                (self.exact_matches_count + self.fuzzy_matches_count)
+                / self.total_words
+                * 100
+            )
+            if self.total_words > 0
+            else 0.0
+        )
+
+        # Notify changes
+        changes = [
+            ("total_words", old_total, self.total_words),
+            ("exact_matches_count", old_exact, self.exact_matches_count),
+            ("fuzzy_matches_count", old_fuzzy, self.fuzzy_matches_count),
+            ("mismatches_count", old_mismatches, self.mismatches_count),
+            ("unmatched_gt_count", old_unmatched_gt, self.unmatched_gt_count),
+            ("unmatched_ocr_count", old_unmatched_ocr, self.unmatched_ocr_count),
+            ("exact_percentage", old_exact_pct, self.exact_percentage),
+            ("match_percentage", old_match_pct, self.match_percentage),
+        ]
+
+        for prop_name, old_val, new_val in changes:
+            if old_val != new_val:
+                self.notify_property_changed(prop_name, new_val)
+
     def get_summary_stats(self) -> dict:
         """Get summary statistics for all matches."""
-        total_words = sum(len(lm.word_matches) for lm in self.line_matches)
-        exact_matches = sum(lm.exact_match_count for lm in self.line_matches)
-        fuzzy_matches = sum(lm.fuzzy_match_count for lm in self.line_matches)
-        mismatches = sum(lm.mismatch_count for lm in self.line_matches)
-        unmatched_gt = sum(lm.unmatched_gt_count for lm in self.line_matches)
-        unmatched_ocr = sum(lm.unmatched_ocr_count for lm in self.line_matches)
-
         return {
-            "total_words": total_words,
-            "exact_matches": exact_matches,
-            "fuzzy_matches": fuzzy_matches,
-            "mismatches": mismatches,
-            "unmatched_gt": unmatched_gt,
-            "unmatched_ocr": unmatched_ocr,
-            "exact_percentage": (exact_matches / total_words * 100)
-            if total_words > 0
-            else 0,
-            "total_matches": exact_matches + fuzzy_matches,
-            "match_percentage": ((exact_matches + fuzzy_matches) / total_words * 100)
-            if total_words > 0
-            else 0,
+            "total_words": self.total_words,
+            "exact_matches": self.exact_matches_count,
+            "fuzzy_matches": self.fuzzy_matches_count,
+            "mismatches": self.mismatches_count,
+            "unmatched_gt": self.unmatched_gt_count,
+            "unmatched_ocr": self.unmatched_ocr_count,
+            "exact_percentage": self.exact_percentage,
+            "total_matches": self.exact_matches_count + self.fuzzy_matches_count,
+            "match_percentage": self.match_percentage,
         }
+
+    # Command methods for UI actions
+
+    def command_set_fuzz_threshold(self, threshold: float) -> bool:
+        """Command to set the fuzzy matching threshold.
+
+        Args:
+            threshold: New threshold value (0.0 to 1.0).
+
+        Returns:
+            True if threshold was set successfully.
+        """
+        try:
+            if not (0.0 <= threshold <= 1.0):
+                logger.warning(
+                    f"Invalid fuzz threshold {threshold}, must be between 0.0 and 1.0"
+                )
+                return False
+
+            old_threshold = self.fuzz_threshold
+            self.fuzz_threshold = threshold
+
+            if old_threshold != self.fuzz_threshold:
+                self.notify_property_changed("fuzz_threshold", self.fuzz_threshold)
+                logger.debug(
+                    f"Fuzz threshold changed from {old_threshold} to {threshold}"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Error setting fuzz threshold to {threshold}: {e}")
+            return False
+
+    def command_toggle_match_type_filter(self, match_type: str, enabled: bool) -> bool:
+        """Command to toggle visibility of a match type.
+
+        Args:
+            match_type: Type of match to toggle ('exact', 'fuzzy', 'mismatch', 'unmatched_ocr', 'unmatched_gt').
+            enabled: Whether to show this match type.
+
+        Returns:
+            True if filter was toggled successfully.
+        """
+        try:
+            filter_map = {
+                "exact": "show_exact_matches",
+                "fuzzy": "show_fuzzy_matches",
+                "mismatch": "show_mismatches",
+                "unmatched_ocr": "show_unmatched_ocr",
+                "unmatched_gt": "show_unmatched_gt",
+            }
+
+            if match_type not in filter_map:
+                logger.warning(f"Unknown match type filter: {match_type}")
+                return False
+
+            attr_name = filter_map[match_type]
+            old_value = getattr(self, attr_name)
+            setattr(self, attr_name, enabled)
+
+            if old_value != enabled:
+                self.notify_property_changed(attr_name, enabled)
+                logger.debug(
+                    f"Filter {attr_name} changed from {old_value} to {enabled}"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Error toggling filter {match_type}: {e}")
+            return False
+
+    def command_reset_filters(self) -> bool:
+        """Command to reset all filters to show everything.
+
+        Returns:
+            True if filters were reset successfully.
+        """
+        try:
+            old_filters = {
+                "show_exact_matches": self.show_exact_matches,
+                "show_fuzzy_matches": self.show_fuzzy_matches,
+                "show_mismatches": self.show_mismatches,
+                "show_unmatched_ocr": self.show_unmatched_ocr,
+                "show_unmatched_gt": self.show_unmatched_gt,
+            }
+
+            self.show_exact_matches = True
+            self.show_fuzzy_matches = True
+            self.show_mismatches = True
+            self.show_unmatched_ocr = True
+            self.show_unmatched_gt = True
+
+            # Notify changes
+            for attr_name, old_value in old_filters.items():
+                new_value = getattr(self, attr_name)
+                if old_value != new_value:
+                    self.notify_property_changed(attr_name, new_value)
+
+            logger.debug("All filters reset to show all match types")
+            return True
+
+        except Exception:
+            logger.exception("Error resetting filters")
+            return False
+
+    def command_get_filtered_line_matches(self) -> List[LineMatch]:
+        """Command to get line matches filtered according to current filter settings.
+
+        Returns:
+            List of filtered LineMatch objects.
+        """
+        try:
+            filtered_lines = []
+
+            for line_match in self.line_matches:
+                filtered_words = []
+
+                for word_match in line_match.word_matches:
+                    should_include = False
+
+                    if (
+                        word_match.match_status == MatchStatus.EXACT
+                        and self.show_exact_matches
+                    ):
+                        should_include = True
+                    elif (
+                        word_match.match_status == MatchStatus.FUZZY
+                        and self.show_fuzzy_matches
+                    ):
+                        should_include = True
+                    elif (
+                        word_match.match_status == MatchStatus.MISMATCH
+                        and self.show_mismatches
+                    ):
+                        should_include = True
+                    elif (
+                        word_match.match_status == MatchStatus.UNMATCHED_OCR
+                        and self.show_unmatched_ocr
+                    ):
+                        should_include = True
+                    elif (
+                        word_match.match_status == MatchStatus.UNMATCHED_GT
+                        and self.show_unmatched_gt
+                    ):
+                        should_include = True
+
+                    if should_include:
+                        filtered_words.append(word_match)
+
+                # Only include lines that have words after filtering
+                if filtered_words:
+                    filtered_line = LineMatch(
+                        line_index=line_match.line_index,
+                        ocr_line_text=line_match.ocr_line_text,
+                        ground_truth_line_text=line_match.ground_truth_line_text,
+                        word_matches=filtered_words,
+                        page_image=line_match.page_image,
+                    )
+                    filtered_lines.append(filtered_line)
+
+            return filtered_lines
+
+        except Exception:
+            logger.exception("Error getting filtered line matches")
+            return self.line_matches.copy()  # Return unfiltered on error
+
+    def command_get_display_stats(self) -> dict:
+        """Command to get statistics formatted for display.
+
+        Returns:
+            Dictionary with formatted statistics.
+        """
+        try:
+            stats = self.get_summary_stats()
+            return {
+                "total_words": f"{stats['total_words']:,}",
+                "exact_matches": f"{stats['exact_matches']:,}",
+                "fuzzy_matches": f"{stats['fuzzy_matches']:,}",
+                "mismatches": f"{stats['mismatches']:,}",
+                "unmatched_gt": f"{stats['unmatched_gt']:,}",
+                "unmatched_ocr": f"{stats['unmatched_ocr']:,}",
+                "exact_percentage": f"{stats['exact_percentage']:.1f}%",
+                "match_percentage": f"{stats['match_percentage']:.1f}%",
+            }
+        except Exception:
+            logger.exception("Error getting display stats")
+            return {
+                "total_words": "0",
+                "exact_matches": "0",
+                "fuzzy_matches": "0",
+                "mismatches": "0",
+                "unmatched_gt": "0",
+                "unmatched_ocr": "0",
+                "exact_percentage": "0.0%",
+                "match_percentage": "0.0%",
+            }

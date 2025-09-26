@@ -118,7 +118,7 @@ class ProjectOperations:
         """
         # Import here to avoid circular imports and allow for test monkeypatching
         try:
-            from .page_operations import PageOperations
+            from ..ocr.page_operations import PageOperations
         except ImportError as e:
             logger.error(f"Failed to import required modules: {e}")
             raise

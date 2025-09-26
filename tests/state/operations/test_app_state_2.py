@@ -41,8 +41,8 @@ def _ensure_dummy_support_modules(monkeypatch):
     This accommodates either real modules (patched) or absence (dummy injected).
     """
     # Import the operations classes for patching
-    from ocr_labeler.state.operations.page_operations import PageOperations
-    from ocr_labeler.state.operations.project_operations import ProjectOperations
+    from ocr_labeler.operations.ocr.page_operations import PageOperations
+    from ocr_labeler.operations.persistence.project_operations import ProjectOperations
 
     def fake_load_ground_truth_map(self, directory: Path):
         # Return simple mapping for deterministic behavior
@@ -121,7 +121,7 @@ async def test_load_project_success_sets_state_and_clears_loading(
 
     # Add specific ground truth mapping (override for this test)
     # Since ground truth is now in PageOperations, mock it there
-    from ocr_labeler.state.operations.page_operations import PageOperations
+    from ocr_labeler.operations.ocr.page_operations import PageOperations
 
     def mock_load_ground_truth_map(self, directory):
         return {"img0.png": "GT0"}
@@ -233,7 +233,7 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
-    from ocr_labeler.state.operations.project_operations import ProjectOperations
+    from ocr_labeler.operations.persistence.project_operations import ProjectOperations
 
     called = {}
 

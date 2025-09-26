@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable, List, Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
-from .operations import PageOperations
+from ..operations.ocr.page_operations import PageOperations
 
 if TYPE_CHECKING:
     from ..models.project import Project
@@ -107,7 +107,7 @@ class PageState:
 
         # Import inside method to allow test monkeypatching
         try:
-            from .operations.line_operations import LineOperations
+            from ..operations.ocr.line_operations import LineOperations
 
             line_ops = LineOperations()
             result = line_ops.copy_ground_truth_to_ocr(page, line_index)

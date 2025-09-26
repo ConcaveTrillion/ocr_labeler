@@ -4,9 +4,9 @@ import logging
 
 from nicegui import ui
 
-from ..models.app_state_view_model import AppStateViewModel
-from ..models.project_state_view_model import ProjectStateViewModel
 from ..state import AppState
+from ..viewmodels.app.app_state_view_model import AppStateViewModel
+from ..viewmodels.project.project_state_view_model import ProjectStateViewModel
 from .header.header import HeaderBar
 from .projects.project_view import ProjectView
 

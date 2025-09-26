@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 from pd_book_tools.ocr.page import Page
 
-from ocr_labeler.state.operations import PageOperations
+from ocr_labeler.operations.ocr import PageOperations
 from ocr_labeler.state.project_state import ProjectState
 
 

@@ -10,7 +10,8 @@ from typing import Callable, List, Optional
 from pd_book_tools.ocr.page import Page
 
 from ..models.project import Project
-from .operations import PageOperations, ProjectOperations
+from ..operations.ocr.page_operations import PageOperations
+from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ class ProjectState:
         logger.debug("reload_ground_truth: called")
         # Import inside method to allow test monkeypatching of module attribute
         try:
-            from .operations.project_operations import ProjectOperations
+            from ..operations.persistence.project_operations import ProjectOperations
 
             project_ops = ProjectOperations()
             project_ops.reload_ground_truth_into_project(self)

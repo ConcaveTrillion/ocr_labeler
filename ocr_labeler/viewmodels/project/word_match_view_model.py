@@ -8,8 +8,8 @@ from typing import List, Optional
 from pd_book_tools.ocr.block import Block
 from pd_book_tools.ocr.page import Page
 
-from .line_match_model import LineMatch
-from .word_match_model import MatchStatus, WordMatch
+from ...models.line_match_model import LineMatch
+from ...models.word_match_model import MatchStatus, WordMatch
 
 logger = logging.getLogger(__name__)
 

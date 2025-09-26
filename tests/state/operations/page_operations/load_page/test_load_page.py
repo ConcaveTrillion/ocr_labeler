@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from ocr_labeler.state.operations import PageOperations
+from ocr_labeler.operations.ocr import PageOperations
 
 
 class TestLoadPage:
@@ -33,7 +33,7 @@ class TestLoadPage:
 
         # Mock Page.from_dict to avoid dependency on actual Page implementation
         with patch(
-            "ocr_labeler.state.operations.page_operations.Page"
+            "ocr_labeler.operations.ocr.page_operations.Page"
         ) as mock_page_class:
             mock_page = Mock()
             mock_page_class.from_dict.return_value = mock_page
@@ -143,7 +143,7 @@ class TestLoadPage:
 
         # Mock Page.from_dict
         with patch(
-            "ocr_labeler.state.operations.page_operations.Page"
+            "ocr_labeler.operations.ocr.page_operations.Page"
         ) as mock_page_class:
             mock_page = Mock()
             mock_page_class.from_dict.return_value = mock_page

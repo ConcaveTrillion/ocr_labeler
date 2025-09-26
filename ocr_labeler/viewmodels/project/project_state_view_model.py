@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import binding
 
-from ..state import ProjectState
+from ...state import ProjectState
 
 if TYPE_CHECKING:
     from .app_state_view_model import AppStateViewModel

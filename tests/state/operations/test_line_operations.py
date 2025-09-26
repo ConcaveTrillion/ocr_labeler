@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from ocr_labeler.state.operations.line_operations import LineOperations
+from ocr_labeler.operations.ocr.line_operations import LineOperations
 
 
 class TestLineOperations:

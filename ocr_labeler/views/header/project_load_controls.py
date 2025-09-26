@@ -4,8 +4,8 @@ import logging
 
 from nicegui import binding, ui
 
-from ...models.app_state_view_model import AppStateViewModel
-from ...models.project_state_view_model import ProjectStateViewModel
+from ...viewmodels.app.app_state_view_model import AppStateViewModel
+from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 
 logger = logging.getLogger(__name__)
 

@@ -57,7 +57,7 @@ def test_load_current_page_success(tmp_path):
         json.dump(json_data, f)
 
     # Mock Page.from_dict and the page operations
-    with patch("ocr_labeler.state.operations.page_operations.Page") as mock_page_class:
+    with patch("ocr_labeler.operations.ocr.page_operations.Page") as mock_page_class:
         mock_page = Mock()
         mock_page_class.from_dict.return_value = mock_page
 
@@ -155,7 +155,7 @@ def test_load_current_page_generates_project_id_from_root(tmp_path):
         json.dump(json_data, f)
 
     # Mock Page.from_dict
-    with patch("ocr_labeler.state.operations.page_operations.Page") as mock_page_class:
+    with patch("ocr_labeler.operations.ocr.page_operations.Page") as mock_page_class:
         mock_page = Mock()
         mock_page_class.from_dict.return_value = mock_page
 

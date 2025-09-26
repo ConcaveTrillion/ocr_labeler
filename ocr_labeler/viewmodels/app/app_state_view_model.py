@@ -3,7 +3,7 @@ from dataclasses import field
 
 from nicegui import binding
 
-from ..state import AppState
+from ...state import AppState
 
 logger = logging.getLogger(__name__)
 

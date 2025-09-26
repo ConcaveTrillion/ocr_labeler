@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ocr_labeler.state.operations.page_operations import PageOperations
+from ocr_labeler.operations.ocr.page_operations import PageOperations
 
 # ocr_labeler/state/test_ground_truth.py
 

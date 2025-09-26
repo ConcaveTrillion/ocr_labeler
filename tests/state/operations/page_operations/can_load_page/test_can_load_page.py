@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ocr_labeler.state.operations import PageOperations
+from ocr_labeler.operations.ocr import PageOperations
 
 
 class TestCanLoadPage:

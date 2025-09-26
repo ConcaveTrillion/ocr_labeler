@@ -72,6 +72,25 @@ class MainViewModel(BaseViewModel):
         ]:
             self._update_derived_properties()
 
+        # Update project state view model when current project changes
+        if property_name == "is_project_loaded" and value and self.app_state_viewmodel:
+            # When a project is loaded, update the project state view model to point to the current project state
+            current_project_state = self.app_state_viewmodel._app_state.project_state
+            if current_project_state != self.project_state_viewmodel._project_state:
+                logger.debug(
+                    "Updating project state view model to point to loaded project"
+                )
+                # Update the underlying project state reference
+                self.project_state_viewmodel._project_state = current_project_state
+                # Re-register the change listener
+                current_project_state.on_change.append(
+                    self.project_state_viewmodel._on_project_state_change
+                )
+                # Update the view model
+                self.project_state_viewmodel.update()
+                # Update derived properties again now that project state view model is updated
+                self._update_derived_properties()
+
     def _on_project_state_changed(self, property_name: str, value):
         """Handle project state view model property changes."""
         logger.debug(f"Project state changed: {property_name} = {value}")
@@ -84,15 +103,47 @@ class MainViewModel(BaseViewModel):
         """Update properties derived from child view models."""
         if self.app_state_viewmodel and self.project_state_viewmodel:
             # Check if we have a project loaded
-            self.has_project = (
+            new_has_project = (
                 bool(self.app_state_viewmodel.selected_project_key)
                 and self.app_state_viewmodel.is_project_loaded
                 and self.project_state_viewmodel.page_total > 0
             )
 
             # Update view visibility
-            self.show_project_view = self.has_project
-            self.show_placeholder = not self.has_project
+            new_show_project_view = new_has_project
+            new_show_placeholder = not new_has_project
+
+            # Track old values safely (avoid accessing bindable properties during init)
+            try:
+                old_has_project = self.has_project
+                old_show_project_view = self.show_project_view
+                old_show_placeholder = self.show_placeholder
+            except AttributeError:
+                # During initialization, properties might not be accessible yet
+                old_has_project = None
+                old_show_project_view = None
+                old_show_placeholder = None
+
+            # Update properties
+            self.has_project = new_has_project
+            self.show_project_view = new_show_project_view
+            self.show_placeholder = new_show_placeholder
+
+            # Notify listeners of property changes only if values actually changed
+            if old_has_project is not None and old_has_project != self.has_project:
+                self.notify_property_changed("has_project", self.has_project)
+            if (
+                old_show_project_view is not None
+                and old_show_project_view != self.show_project_view
+            ):
+                self.notify_property_changed(
+                    "show_project_view", self.show_project_view
+                )
+            if (
+                old_show_placeholder is not None
+                and old_show_placeholder != self.show_placeholder
+            ):
+                self.notify_property_changed("show_placeholder", self.show_placeholder)
 
             logger.debug(
                 f"Updated derived properties: has_project={self.has_project}, "

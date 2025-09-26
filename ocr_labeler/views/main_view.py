@@ -72,9 +72,8 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         # Set up data bindings
         if self.viewmodel.app_state_viewmodel:
             self._no_project_placeholder.bind_visibility_from(
-                target_object=self.viewmodel.app_state_viewmodel,
-                target_name="selected_project_key",
-                value="",
+                target_object=self.viewmodel,
+                target_name="show_placeholder",
             )
 
             self._global_loading.bind_visibility_from(
@@ -110,6 +109,12 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             with self._content_container:
                 self.project_view = ProjectView(self.viewmodel.project_state_viewmodel)
                 self.project_view.build()
+                # Bind project view visibility to show_project_view
+                if hasattr(self.project_view, "_root") and self.project_view._root:
+                    self.project_view._root.bind_visibility_from(
+                        target_object=self.viewmodel,
+                        target_name="show_project_view",
+                    )
             logger.debug("ProjectView created and built during refresh")
         elif self.project_view and not show_project_view:
             # Hide project view if no project

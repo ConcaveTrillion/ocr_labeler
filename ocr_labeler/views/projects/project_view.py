@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from nicegui import ui
 
@@ -271,13 +272,7 @@ class ProjectView(
             logger.error("Load failed: %s", exc)
             ui.notify(f"Load failed: {exc}", type="negative")
 
-    # --- refactored: delegate image/text update to tabs.py ---
-    def _update_images(self):
-        logger.debug("Updating images via content.image_tabs")
-        if self.content and hasattr(self.content, "image_tabs"):
-            # Note: This still uses the old state - needs to be updated
-            if hasattr(self.viewmodel, "_project_state"):
-                self.content.image_tabs.update_images(self.viewmodel._project_state)
-                logger.debug("Images updated successfully")
-        else:
-            logger.warning("Cannot update images - content or image_tabs not available")
+    def _on_viewmodel_property_changed(self, property_name: str, value: Any):
+        """Handle view model property changes by refreshing the view."""
+        logger.debug(f"View model property changed: {property_name} = {value}")
+        self.refresh()

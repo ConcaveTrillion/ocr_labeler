@@ -44,8 +44,8 @@ class WordMatchViewModel(BaseViewModel):
 
     def __init__(self):
         super().__init__()
-        # Initialize with empty state
-        self._update_statistics()
+        # Initialize with empty state - statistics will be updated when page data is loaded
+        # Don't call _update_statistics() here as binding properties aren't ready yet
 
     def update_from_page(self, page: Page) -> None:
         """Update the view model from a Page object."""
@@ -261,6 +261,10 @@ class WordMatchViewModel(BaseViewModel):
 
     def _update_statistics(self):
         """Update statistics based on current line matches."""
+        # Check if binding properties are initialized (avoid accessing during __init__)
+        if not hasattr(self, "total_words"):
+            return
+
         old_total = self.total_words
         old_exact = self.exact_matches_count
         old_fuzzy = self.fuzzy_matches_count

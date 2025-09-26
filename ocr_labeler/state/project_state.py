@@ -190,6 +190,10 @@ class ProjectState:
                 self._invalidate_text_cache()
             self.current_page_index = clamped_index
             logger.debug("goto_page_index: now at index=%s", self.current_page_index)
+            # Notify listeners of the change
+            self.notify()
+            # Start async loading of the new page
+            self._navigate()
         else:
             logger.warning("goto_page_index: navigation failed for index %s", index)
 

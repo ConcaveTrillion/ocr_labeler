@@ -24,6 +24,20 @@ class AppStateViewModel(BaseViewModel):
     selected_project_path: str = ""
     is_project_loaded: bool = False
 
+    def __setattr__(self, name, value):
+        """Override to ensure both NiceGUI binding and custom listeners work."""
+        super().__setattr__(name, value)  # Calls NiceGUI's bindable __setattr__
+        # Notify custom listeners for properties that have them
+        if hasattr(self, "_property_changed_callbacks") and name in [
+            "is_loading",
+            "is_project_loading",
+            "project_keys",
+            "selected_project_key",
+            "selected_project_path",
+            "is_project_loaded",
+        ]:
+            self.notify_property_changed(name, value)
+
     def __init__(self, app_state: AppState):
         logger.debug(
             f"Initializing AppStateViewModel with app_state: {app_state is not None}"
@@ -50,6 +64,7 @@ class AppStateViewModel(BaseViewModel):
         """Sync model from AppState via state change listener."""
         logger.debug("Updating AppStateViewModel from AppState")
         if self._app_state:
+            # Update properties
             self.is_loading = self._app_state.is_loading
             self.is_project_loading = self._app_state.is_project_loading
             self.project_keys = (
@@ -64,11 +79,7 @@ class AppStateViewModel(BaseViewModel):
                 and self.selected_project_key in self._app_state.available_projects
                 else ""
             )
-            self.is_project_loaded = bool(
-                self._app_state.selected_project_key
-                and self._app_state.selected_project_key
-                in self._app_state.available_projects
-            )
+            self.is_project_loaded = bool(self._app_state.current_project_key)
 
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"Is Loading: {self.is_loading}")

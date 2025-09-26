@@ -182,7 +182,7 @@ class ProjectStateViewModel(BaseViewModel):
                 return False
 
             # Use the project's navigation method
-            self._project_state.project.navigate_to_page(page_index)
+            self._project_state.goto_page_index(page_index)
             return True
 
         except Exception as e:

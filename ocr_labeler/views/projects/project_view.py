@@ -34,6 +34,8 @@ class ProjectView(
         self.page_controls: PageControls | None = None
         self.content: ContentArea | None = None
         self.callbacks: NavigationCallbacks | None = None
+        # Track whether a refresh request arrived before build completed
+        self._pending_refresh: bool = False
         logger.debug("ProjectView initialized successfully")
 
     def build(self):
@@ -83,6 +85,15 @@ class ProjectView(
 
         logger.debug("ProjectView UI build completed")
         self.mark_as_built()
+        # If property changes arrived before the view was built, apply one
+        # deferred refresh now that the view is ready.
+        try:
+            if getattr(self, "_pending_refresh", False):
+                logger.debug("Applying pending refresh after build completion")
+                self.refresh()
+                self._pending_refresh = False
+        except Exception:
+            logger.debug("Deferred refresh failed", exc_info=True)
         return self._root
 
     def refresh(self):
@@ -154,11 +165,39 @@ class ProjectView(
     def _prep_image_spinners(self):
         """Hide images during navigation transitions."""
         logger.debug("Preparing image spinners for navigation transition")
+        # Immediately hide the main content splitter and show the page-level
+        # spinner so the user sees immediate feedback that navigation started.
+        try:
+            if self.content and self.content.splitter and self.content.page_spinner:
+                # Hide the content area
+                self.content.splitter.classes(add="hidden")
+                # Show the page-level spinner
+                self.content.page_spinner.classes(remove="hidden")
+                logger.debug("Hid content splitter and showed page spinner")
+        except Exception:
+            logger.debug("Failed to toggle splitter/spinner immediately", exc_info=True)
+
+        # Also hide individual images (if any) to free up rendering work
         if self.content and hasattr(self.content, "image_tabs"):
             for name, img in self.content.image_tabs.images.items():  # noqa: F841
                 if img:
-                    img.set_visibility(False)
-                    logger.debug("Hidden image: %s", name)
+                    try:
+                        img.set_visibility(False)
+                        logger.debug("Hidden image: %s", name)
+                    except Exception:
+                        logger.debug("Failed to hide image: %s", name, exc_info=True)
+
+        # Clear/hide the matches panel immediately so it doesn't flash stale data
+        try:
+            if (
+                self.content
+                and hasattr(self.content, "text_tabs")
+                and getattr(self.content.text_tabs, "word_match_view", None)
+            ):
+                self.content.text_tabs.word_match_view.clear()
+                logger.debug("Cleared word matches for navigation transition")
+        except Exception:
+            logger.debug("Failed to clear word matches", exc_info=True)
         logger.debug("Image spinners preparation completed")
 
     def _show_images(self):
@@ -192,34 +231,128 @@ class ProjectView(
         """Navigate to previous page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
+            ui.notify("Navigation blocked: project is loading", type="warning")
             return
+        # Notify user that navigation attempt started and show diagnostic state
+        vm = self.viewmodel
+        try:
+            idx = getattr(vm, "current_page_index", -1)
+            total = getattr(vm, "page_total", 0)
+            can_prev = getattr(vm, "can_navigate_prev", False)
+            controls_disabled = getattr(vm, "is_controls_disabled", False)
+            ui.notify(
+                f"Attempting prev — idx={idx}, total={total}, can_prev={can_prev}, disabled={controls_disabled}",
+                type="info",
+            )
+        except Exception:
+            ui.notify("Attempting prev", type="info")
+
         logger.debug("Navigating to previous page")
         self._prep_image_spinners()
         await asyncio.sleep(0)
-        self.viewmodel.command_navigate_prev()
-        logger.debug("Previous page navigation completed")
+        success = self.viewmodel.command_navigate_prev()
+        if not success:
+            ui.notify("Navigation prevented by viewmodel (prev)", type="warning")
+            logger.debug("Previous page navigation prevented by viewmodel")
+        else:
+            logger.debug("Previous page navigation completed")
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
+            ui.notify("Navigation blocked: project is loading", type="warning")
             return
+        # Ensure viewmodel is up-to-date with underlying state before attempting
+        vm = self.viewmodel
+        try:
+            # Try to refresh computed properties from the current project state
+            try:
+                vm.update()
+            except Exception:
+                # Non-fatal; continue to diagnostics
+                logger.debug("vm.update() raised during debug refresh", exc_info=True)
+
+            idx = getattr(vm, "current_page_index", -1)
+            total = getattr(vm, "page_total", 0)
+            can_next = getattr(vm, "can_navigate_next", False)
+            controls_disabled = getattr(vm, "is_controls_disabled", False)
+            is_navigating = getattr(vm, "is_navigating", False)
+            is_busy = getattr(vm, "is_busy", False)
+
+            # Inspect underlying project pages cache where available
+            next_page_cached = None
+            try:
+                ps = getattr(vm, "_project_state", None)
+                if ps and hasattr(ps, "project") and ps.project and ps.project.pages:
+                    tgt = idx + 1
+                    if 0 <= tgt < len(ps.project.pages):
+                        next_page_cached = ps.project.pages[tgt]
+            except Exception:
+                next_page_cached = None
+
+            ui.notify(
+                f"Attempting next — idx={idx}, total={total}, can_next={can_next}, disabled={controls_disabled}, navigating={is_navigating}, busy={is_busy}, next_cached={'yes' if next_page_cached is not None else 'no'}",
+                type="info",
+            )
+        except Exception:
+            ui.notify("Attempting next (diagnostics unavailable)", type="info")
+
         logger.debug("Navigating to next page")
         self._prep_image_spinners()
         await asyncio.sleep(0)
-        self.viewmodel.command_navigate_next()
-        logger.debug("Next page navigation completed")
+        success = self.viewmodel.command_navigate_next()
+        if not success:
+            # Provide clearer reason to the user where possible
+            reason = "unknown"
+            try:
+                if getattr(vm, "page_total", 0) <= 1:
+                    reason = "only one page available"
+                elif getattr(vm, "is_controls_disabled", False):
+                    reason = "controls disabled"
+                elif not getattr(vm, "can_navigate_next", False):
+                    reason = "cannot navigate next (viewmodel)"
+            except Exception:
+                reason = "inspection-failed"
+            ui.notify(
+                f"Navigation prevented by viewmodel (next): {reason}", type="warning"
+            )
+            logger.debug("Next page navigation prevented by viewmodel: %s", reason)
+        else:
+            ui.notify("Navigation started to next page", type="positive")
+            logger.debug("Next page navigation completed")
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
+            ui.notify("Navigation blocked: project is loading", type="warning")
             return
+        # Notify user that navigation attempt started and show diagnostic state
+        vm = self.viewmodel
+        try:
+            idx = getattr(vm, "current_page_index", -1)
+            total = getattr(vm, "page_total", 0)
+            can_nav = getattr(vm, "can_navigate", False)
+            controls_disabled = getattr(vm, "is_controls_disabled", False)
+            ui.notify(
+                f"Attempting goto {value} — idx={idx}, total={total}, can_navigate={can_nav}, disabled={controls_disabled}",
+                type="info",
+            )
+        except Exception:
+            ui.notify(f"Attempting goto {value}", type="info")
+
         logger.debug("Navigating to page: %s", value)
         self._prep_image_spinners()
         await asyncio.sleep(0)
-        self._goto_page(value)
-        logger.debug("Goto page navigation completed for value: %s", value)
+        success = self.viewmodel.command_navigate_to_page(int(value) - 1)
+        if not success:
+            ui.notify("Navigation prevented by viewmodel (goto)", type="warning")
+            logger.debug(
+                "Goto page navigation prevented by viewmodel for value: %s", value
+            )
+        else:
+            logger.debug("Goto page navigation completed for value: %s", value)
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
@@ -295,4 +428,17 @@ class ProjectView(
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""
         logger.debug(f"View model property changed: {property_name} = {value}")
-        self.refresh()
+        # If view hasn't been built yet, defer the refresh to avoid spurious
+        # UI operations and websocket sends. The build() method will apply a
+        # deferred refresh after marking the view built.
+        if not self.is_built:
+            logger.debug(
+                "View model change received but view is not built yet; deferring refresh"
+            )
+            self._pending_refresh = True
+            return
+
+        try:
+            self.refresh()
+        except Exception:
+            logger.exception("Error refreshing ProjectView on property change")

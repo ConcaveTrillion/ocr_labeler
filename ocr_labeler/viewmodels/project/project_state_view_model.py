@@ -33,6 +33,10 @@ class ProjectStateViewModel(BaseViewModel):
     can_navigate_prev: bool = False
     can_navigate_next: bool = False
     is_controls_disabled: bool = False
+    # Convenience computed properties for direct UI binding
+    prev_disabled: bool = False
+    next_disabled: bool = False
+    goto_disabled: bool = False
 
     def __init__(
         self,
@@ -149,15 +153,39 @@ class ProjectStateViewModel(BaseViewModel):
             self.is_busy or app_loading or self.can_navigate_override
         )
 
+        # Derived disabled flags for direct UI binding convenience. These
+        # combine the global "controls disabled" flag with per-direction
+        # availability so UI elements can bind to a single boolean.
+        self.prev_disabled = self.is_controls_disabled or (not self.can_navigate_prev)
+        self.next_disabled = self.is_controls_disabled or (not self.can_navigate_next)
+        self.goto_disabled = self.is_controls_disabled or (not self.can_navigate)
+
     def _on_project_state_change(self):
         """Listener for ProjectState changes; update model properties."""
         logger.debug("Project State change detected, updating model")
+        # Update internal properties from the ProjectState
         self.update()
+        # Notify any view listeners that the viewmodel state has changed so views
+        # can refresh. Use a generic property name to avoid having to enumerate
+        # every changed attribute here.
+        try:
+            self.notify_property_changed("project_state", True)
+        except Exception:
+            logger.debug(
+                "Failed to notify property change for project_state", exc_info=True
+            )
 
     def _on_app_state_change(self):
         """Listener for AppState changes; update computed properties."""
         logger.debug("App State change detected, updating computed properties")
         self._update_navigation_properties()
+        # Notify listeners so UI can re-evaluate derived flags that depend on AppState
+        try:
+            self.notify_property_changed("app_state", True)
+        except Exception:
+            logger.debug(
+                "Failed to notify property change for app_state", exc_info=True
+            )
 
     # Command methods for UI actions
 

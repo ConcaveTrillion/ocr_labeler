@@ -47,9 +47,12 @@ class PageControls:  # pragma: no cover - UI wrapper file
         with ui.column().classes("gap-2") as container:
             # First row: Navigation controls
             with ui.row().classes("items-center gap-2"):
-                ui.button("Prev", on_click=self._on_prev)
-                ui.button("Next", on_click=self._on_next)
-                ui.button(
+                # Prev: disabled when controls are disabled or cannot navigate prev
+                self.prev_button = ui.button("Prev", on_click=self._on_prev)
+                # Next: disabled when controls are disabled or cannot navigate next
+                self.next_button = ui.button("Next", on_click=self._on_next)
+                # Go To: disable when controls are disabled
+                self.goto_button = ui.button(
                     "Go To:", on_click=lambda: self._on_goto(self.page_input.value)
                 )
                 self.page_input = (
@@ -67,6 +70,60 @@ class PageControls:  # pragma: no cover - UI wrapper file
                 self.reload_ocr_button = ui.button(
                     "Reload OCR", on_click=self._reload_with_ocr
                 ).classes("bg-orange-600 hover:bg-orange-700 text-white")
+
+                # Bind disabled state from viewmodel using NiceGUI binding helpers.
+                # Use the viewmodel's derived boolean properties (prev_disabled,
+                # next_disabled, goto_disabled, and is_controls_disabled) so the
+                # UI updates reactively without polling.
+                try:
+                    from nicegui import binding
+
+                    # Buttons: bind their `disabled` property directly from the
+                    # viewmodel derived flags.
+                    binding.bind_from(
+                        self.prev_button, "disabled", self.viewmodel, "prev_disabled"
+                    )
+                    binding.bind_from(
+                        self.next_button, "disabled", self.viewmodel, "next_disabled"
+                    )
+
+                    # GoTo and page input
+                    binding.bind_from(
+                        self.goto_button, "disabled", self.viewmodel, "goto_disabled"
+                    )
+                    if self.page_input:
+                        binding.bind_from(
+                            self.page_input,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
+
+                    # Reload/Save/Load buttons disabled when controls disabled
+                    if self.reload_ocr_button:
+                        binding.bind_from(
+                            self.reload_ocr_button,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
+                    if self.save_button:
+                        binding.bind_from(
+                            self.save_button,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
+                    if self.load_button:
+                        binding.bind_from(
+                            self.load_button,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
+                except Exception:
+                    # Defensive - if binding fails, ignore and leave controls enabled
+                    pass
 
             # Second row: Page info
             with ui.row().classes("items-center gap-2"):

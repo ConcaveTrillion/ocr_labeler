@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
+import pytest
+from nicegui.testing import User
+
+from ocr_labeler import app
 from ocr_labeler.state import AppState
 from ocr_labeler.viewmodels.main_view_model import MainViewModel
 from ocr_labeler.views.main_view import LabelerView
@@ -43,3 +47,19 @@ class TestMainView:
 
         # The project view should have load_page functionality
         assert hasattr(project_view, "_load_page_async")
+
+
+@pytest.mark.module_under_test(app)
+async def test_main_view_placeholder_display(user: User):
+    """Test that the main view displays the no project placeholder correctly."""
+    # Create the app instance and set up routes
+    from pathlib import Path
+
+    labeler = app.NiceGuiLabeler(project_root=Path("."))
+    labeler.create_routes()
+
+    # Open the page and check that it loads without errors
+    await user.open("/")
+    # With User fixture, we can check that the page opened successfully
+    # The User fixture is primarily for simulating user interactions
+    await user.should_see("No Project Loaded")

@@ -45,7 +45,15 @@ class ProjectLoadControls:
 
             # Loading spinner - shows during project loading
             self.loading_spinner = (
-                ui.spinner(type="gears").props("small").classes("hidden")
+                ui.spinner(type="gears").props("small").mark("spinner")
+            )
+
+            # Bind spinner visibility to project loading state
+            binding.bind_from(
+                self.loading_spinner,
+                "visible",
+                self.app_state_model,
+                "is_project_loading",
             )
 
             ui.space()
@@ -68,7 +76,7 @@ class ProjectLoadControls:
                 self.select, "tooltip", self.app_state_model, "selected_project_path"
             )
 
-            # bind controls disabled state to combined busy/loading state
+            # Bind controls disabled state to combined busy/loading state
             controls = [self.select, self.load_project_button]
             for control in controls:
                 binding.bind_from(
@@ -78,10 +86,6 @@ class ProjectLoadControls:
                     "is_controls_disabled",
                 )
 
-            # Set up manual spinner visibility handling
-            self._update_spinner_visibility()
-            self.app_state_model._app_state.on_change.append(self._on_app_state_change)
-
             binding.bind_from(
                 self.path_label,
                 "text",
@@ -90,22 +94,16 @@ class ProjectLoadControls:
             )
         return row
 
-    def _update_spinner_visibility(self):
-        """Update spinner visibility based on current loading state."""
-        if self.app_state_model.is_project_loading:
-            self.loading_spinner.classes(remove="hidden")
-        else:
-            self.loading_spinner.classes(add="hidden")
-
-    def _on_app_state_change(self):
-        """Handle app state changes to update spinner visibility."""
-        self._update_spinner_visibility()
-
     async def _load_selected_project(self):
         """Load the selected project using the ViewModel."""
         key = self.app_state_model.selected_project_key
         if not key:
             ui.notify("No project selected", type="warning")
+            return
+
+        # Prevent multiple clicks during loading
+        if self.project_state_model.is_controls_disabled:
+            logger.debug("Load button clicked while disabled, ignoring")
             return
 
         try:

@@ -219,7 +219,6 @@ class PageState:
             logger.error(f"Page index {page_index} out of range for project pages")
             return False
 
-    @notify_on_completion
     def find_ground_truth_text(
         self, page_name: str, ground_truth_map: dict
     ) -> Optional[str]:
@@ -234,7 +233,6 @@ class PageState:
         """
         return self.page_ops.find_ground_truth_text(page_name, ground_truth_map)
 
-    @notify_on_completion
     def get_page_source_text(self, page_index: int, is_loading: bool) -> str:
         """Get the source text for a specific page.
 

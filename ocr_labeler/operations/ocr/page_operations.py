@@ -498,3 +498,44 @@ class PageOperations:
             logger.debug("cv2 load failed for fallback page: %s", img_path.name)
 
         return page
+
+    def find_ground_truth_text(
+        self, name: str, ground_truth_map: dict[str, str]
+    ) -> str | None:
+        """Find ground truth text for a given page name using variant lookup.
+
+        The normalization process adds multiple keys (with/without extension, lowercase).
+        This helper attempts a list of variants in priority order to find a match.
+
+        Parameters
+        ----------
+        name : str
+            The image filename (e.g. "001.png") or bare page identifier
+        ground_truth_map : dict[str, str]
+            Normalized mapping produced by ``load_ground_truth_map``
+
+        Returns
+        -------
+        str | None
+            Ground truth text if found, None otherwise
+        """
+        if not name:
+            return None
+        candidates: list[str] = []
+        # Original provided name
+        candidates.append(name)
+        # Lowercase variant
+        candidates.append(name.lower())
+        # If name has extension, add base name variants; else add ext variants (handled by normalization)
+        if "." in name:
+            base = name.rsplit(".", 1)[0]
+            candidates.extend([base, base.lower()])
+        # Deduplicate while preserving order
+        seen = set()
+        for c in candidates:
+            if c in seen:
+                continue
+            seen.add(c)
+            if c in ground_truth_map:
+                return ground_truth_map[c]
+        return None

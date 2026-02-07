@@ -14,3 +14,4 @@ class NavigationCallbacks:
     load_page: Optional[Callable[[], Awaitable[None]]] = None
     refine_bboxes: Optional[Callable[[], Awaitable[None]]] = None
     expand_refine_bboxes: Optional[Callable[[], Awaitable[None]]] = None
+    reload_ocr: Optional[Callable[[], Awaitable[None]]] = None

@@ -77,33 +77,44 @@ class NiceGuiLabeler:
             ui.run(host=host, port=port, reload=False)
 
     def _inject_font(self):  # pragma: no cover (UI side effect)
-        """Inject DPSansMono font (hardcoded) if available.
+        """Inject monospace font.
 
-        Looks for packaged font at fonts/DPSansMono.ttf relative to this file. If present,
-        embeds as a data URL and sets a CSS variable + body monospace fallback.
+        Priority:
+        1. AppState.monospace_font_path (if provided)
+        2. Packaged DPSansMono.ttf font at fonts/DPSansMono.ttf
         """
-        logger.debug("Attempting to inject DPSansMono font")
+        logger.debug("Attempting to inject monospace font")
         try:
-            pkg_dir = Path(__file__).resolve().parent
-            font_path = pkg_dir / "fonts" / "DPSansMono.ttf"
-            logger.debug("Looking for font at path: %s", font_path)
+            # 1. Try custom font path from state
+            font_path = self.state.monospace_font_path
+            if font_path and font_path.exists():
+                logger.debug("Using custom font path: %s", font_path)
+            else:
+                # 2. Fall back to packaged DPSansMono.ttf
+                pkg_dir = Path(__file__).resolve().parent
+                font_path = pkg_dir / "fonts" / "DPSansMono.ttf"
+                logger.debug("Looking for bundled font at path: %s", font_path)
+
             if not font_path.exists():
-                logger.warning("DPSansMono.ttf not found at %s", font_path)
+                logger.warning("No monospace font found at %s", font_path)
                 return
+
             logger.debug("Font file found, reading and encoding")
             with open(font_path, "rb") as f:
                 font_data = base64.b64encode(f.read()).decode("utf-8")
             logger.debug("Font encoded successfully, size: %d bytes", len(font_data))
+
+            font_family = self.state.monospace_font_name or "CustomMonospace"
             css = f"""
             @font-face {{
-                font-family: 'DPSansMono';
+                font-family: '{font_family}';
                 src: url('data:font/truetype;base64,{font_data}') format('truetype');
                 font-weight: normal;
                 font-style: normal;
                 font-display: swap;
             }}
-            body, .monospace, textarea {{
-                font-family: 'DPSansMono', {self.state.monospace_font_name}, monospace !important;
+            body, .monospace, textarea, .CodeMirror, .CodeMirror-line {{
+                font-family: '{font_family}', monospace !important;
             }}
             """
             ui.add_head_html(f"<style>{css}</style>")

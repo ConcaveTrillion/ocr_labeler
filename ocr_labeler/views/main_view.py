@@ -29,7 +29,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         self._main_container = None
         self._content_container = None
         self._no_project_placeholder = None
-        self._global_loading = None
+        self._project_loading_overlay = None
         logger.debug("LabelerView initialization complete")
 
     def build(self):
@@ -60,14 +60,19 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
 
         logger.debug("Content containers and placeholder built")
 
-        # Global project-loading spinner (centered overlay)
-        self._global_loading = (
-            ui.spinner(size="xl")
-            .props("color=primary")
+        # Global project-loading overlay (blur + centered text/spinner)
+        self._project_loading_overlay = (
+            ui.column()
             .classes(
-                "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none hidden"
+                "fixed inset-0 bg-black/30 backdrop-blur-sm z-40 items-center justify-center gap-3 hidden"
             )
+            .mark("project-loading-overlay")
         )
+        with self._project_loading_overlay:
+            ui.spinner(size="xl", color="primary")
+            self._project_loading_label = ui.label("Loading project...").classes(
+                "text-white text-lg font-semibold"
+            )
 
         # Set up data bindings
         if self.viewmodel.app_state_viewmodel:
@@ -76,11 +81,23 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
                 target_name="show_placeholder",
             )
 
-            self._global_loading.bind_visibility_from(
+            self._project_loading_overlay.bind_visibility_from(
                 target_object=self.viewmodel.app_state_viewmodel,
                 target_name="is_project_loading",
                 value=True,
             )
+
+            # Update loading label with selected project key/path
+            try:
+                self._project_loading_label.bind_text_from(
+                    target_object=self.viewmodel.app_state_viewmodel,
+                    target_name="selected_project_key",
+                    transform=lambda key: (
+                        f"Loading project: {key}" if key else "Loading project..."
+                    ),
+                )
+            except Exception:
+                logger.debug("Failed to bind project loading label", exc_info=True)
 
         logger.debug("Data bindings configured")
         self.mark_as_built()
@@ -102,6 +119,21 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         logger.debug(
             f"Show project view: {show_project_view}, ProjectView exists: {self.project_view is not None}"
         )
+
+        # If the loaded project's root changed, drop the existing ProjectView so it rebuilds cleanly
+        if (
+            self.project_view
+            and hasattr(self.project_view, "project_root_snapshot")
+            and self.project_view.project_root_snapshot
+            != getattr(self.viewmodel.project_state_viewmodel, "project_root", None)
+        ):
+            try:
+                if getattr(self.project_view, "_root", None):
+                    self.project_view._root.delete()
+            except Exception:
+                logger.debug("Failed to delete old ProjectView root", exc_info=True)
+            self.project_view = None
+            logger.debug("Project root changed; rebuilding ProjectView")
 
         if show_project_view and not self.project_view and self._content_container:
             # Create project view if needed

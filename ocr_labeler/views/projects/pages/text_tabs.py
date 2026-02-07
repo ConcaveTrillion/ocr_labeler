@@ -156,7 +156,7 @@ class TextTabs:
                     logger.debug("Building ground truth panel")
                     with ui.column().classes("full-width full-height"):
                         self.gt_text = ui.codemirror("", language="plaintext").classes(
-                            "full-width full-height"
+                            "full-width full-height monospace"
                         )
                         # Bind to model instead of page_state
                         self.gt_text.bind_value(self.model, "gt_text")
@@ -166,7 +166,7 @@ class TextTabs:
                     logger.debug("Building OCR panel")
                     with ui.column().classes("full-width full-height"):
                         self.ocr_text = ui.codemirror("", language="plaintext").classes(
-                            "full-width full-height"
+                            "full-width full-height monospace"
                         )
                         # Bind to model instead of page_state
                         self.ocr_text.bind_value(self.model, "ocr_text")

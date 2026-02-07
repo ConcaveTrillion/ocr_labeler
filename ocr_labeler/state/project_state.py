@@ -564,6 +564,29 @@ class ProjectState:
         logger.debug("expand_and_refine_all_bboxes: completed, result=%s", result)
         return result
 
+    def refresh_page_images(self) -> bool:
+        """Refresh all generated images for the current page.
+
+        Returns:
+            bool: True if refresh was successful, False otherwise.
+        """
+        logger.debug("refresh_page_images: called")
+        page_state = self.get_page_state(self.current_page_index)
+        page = page_state.get_page(self.current_page_index)
+
+        if page is None:
+            logger.error("No current page available to refresh images")
+            return False
+
+        result = self.page_ops.refresh_page_images(page=page)
+
+        if result:
+            # Notify UI of changes
+            page_state.notify()
+
+        logger.debug("refresh_page_images: completed, result=%s", result)
+        return result
+
     @property
     def current_page_source_text(self) -> str:
         """Get the source text for the current page."""

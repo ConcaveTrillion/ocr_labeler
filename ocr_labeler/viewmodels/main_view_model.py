@@ -64,32 +64,51 @@ class MainViewModel(BaseViewModel):
         """Handle app state view model property changes."""
         logger.debug(f"App state changed: {property_name} = {value}")
 
-        # Update derived properties when relevant app state changes
+        # Update project state view model pointer when selection or load status changes
         if property_name in [
             "selected_project_key",
             "is_project_loaded",
             "is_project_loading",
         ]:
-            self._update_derived_properties()
+            if self.app_state_viewmodel:
+                current_project_state = (
+                    self.app_state_viewmodel._app_state.project_state
+                )
+                if current_project_state != self.project_state_viewmodel._project_state:
+                    logger.debug(
+                        "Project selection changed; repointing ProjectStateViewModel"
+                    )
+                    # Detach listener from old project state if present
+                    try:
+                        old_state = self.project_state_viewmodel._project_state
+                        if (
+                            old_state
+                            and hasattr(old_state, "on_change")
+                            and self.project_state_viewmodel._on_project_state_change
+                            in old_state.on_change
+                        ):
+                            old_state.on_change.remove(
+                                self.project_state_viewmodel._on_project_state_change
+                            )
+                    except Exception:
+                        logger.debug(
+                            "Failed detaching old project state listener", exc_info=True
+                        )
 
-        # Update project state view model when current project changes
-        if property_name == "is_project_loaded" and value and self.app_state_viewmodel:
-            # When a project is loaded, update the project state view model to point to the current project state
-            current_project_state = self.app_state_viewmodel._app_state.project_state
-            if current_project_state != self.project_state_viewmodel._project_state:
-                logger.debug(
-                    "Updating project state view model to point to loaded project"
-                )
-                # Update the underlying project state reference
-                self.project_state_viewmodel._project_state = current_project_state
-                # Re-register the change listener
-                current_project_state.on_change.append(
-                    self.project_state_viewmodel._on_project_state_change
-                )
-                # Update the view model
-                self.project_state_viewmodel.update()
-                # Update derived properties again now that project state view model is updated
-                self._update_derived_properties()
+                    # Repoint and attach listener to new project state
+                    self.project_state_viewmodel._project_state = current_project_state
+                    if (
+                        self.project_state_viewmodel._on_project_state_change
+                        not in current_project_state.on_change
+                    ):
+                        current_project_state.on_change.append(
+                            self.project_state_viewmodel._on_project_state_change
+                        )
+                    # Refresh view model to reflect new project
+                    self.project_state_viewmodel.update()
+
+            # Update derived properties after any selection/loading change
+            self._update_derived_properties()
 
     def _on_project_state_changed(self, property_name: str, value):
         """Handle project state view model property changes."""

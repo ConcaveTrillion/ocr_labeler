@@ -301,27 +301,27 @@ class WordMatchView:
         """Create OCR text cell for a word."""
         with ui.row():
             if word_match.ocr_text.strip():
-                ocr_element = ui.label(word_match.ocr_text)
+                ocr_element = ui.label(word_match.ocr_text).classes("monospace")
                 tooltip_content = self._create_word_tooltip(word_match)
                 if tooltip_content:
                     ocr_element.tooltip(tooltip_content)
             else:
                 # Show different placeholders based on match status
                 if word_match.match_status == MatchStatus.UNMATCHED_GT:
-                    ui.label("[missing]").classes("text-blue-600")
+                    ui.label("[missing]").classes("text-blue-600 monospace")
                 else:
-                    ui.label("[empty]")
+                    ui.label("[empty]").classes("monospace")
 
     def _create_gt_cell(self, word_match):
         """Create Ground Truth text cell for a word."""
         with ui.row():
             if word_match.ground_truth_text.strip():
-                gt_element = ui.label(word_match.ground_truth_text)
+                gt_element = ui.label(word_match.ground_truth_text).classes("monospace")
                 tooltip_content = self._create_word_tooltip(word_match)
                 if tooltip_content:
                     gt_element.tooltip(tooltip_content)
             else:
-                ui.label("[no GT]")
+                ui.label("[no GT]").classes("monospace")
 
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""

@@ -137,6 +137,14 @@ class AppStateViewModel(BaseViewModel):
                 logger.warning("No project selected to load")
                 return False
 
+            # Ensure underlying AppState reflects the currently selected key from the UI
+            try:
+                self._app_state.selected_project_key = self.selected_project_key
+            except Exception:
+                logger.debug(
+                    "Failed to sync selected_project_key to AppState", exc_info=True
+                )
+
             await self._app_state.load_selected_project()
             return True
         except Exception as e:

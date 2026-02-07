@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -34,6 +35,7 @@ class ProjectView(
         self.page_controls: PageControls | None = None
         self.content: ContentArea | None = None
         self.callbacks: NavigationCallbacks | None = None
+        self.project_root_snapshot: str | None = None
         # Track whether a refresh request arrived before build completed
         self._pending_refresh: bool = False
         logger.debug("ProjectView initialized successfully")
@@ -63,6 +65,7 @@ class ProjectView(
                 load_page=self._load_page_async,
                 refine_bboxes=self._refine_bboxes_async,
                 expand_refine_bboxes=self._expand_refine_bboxes_async,
+                reload_ocr=self._reload_ocr_async,
             )
             logger.debug("Navigation callbacks initialized")
 
@@ -80,16 +83,36 @@ class ProjectView(
                 on_expand_refine_bboxes=self.callbacks.expand_refine_bboxes
                 if self.callbacks
                 else None,
+                on_reload_ocr=self.callbacks.reload_ocr if self.callbacks else None,
             )
             self.page_controls.build()
             logger.debug("Page controls built")
 
-            # Content area (images and text)
-            self.content = ContentArea(
-                page_state_viewmodel=self.page_state_viewmodel, callbacks=self.callbacks
-            )
+            self.content = ContentArea(self.page_state_viewmodel, self.callbacks)
             self.content.build()
             logger.debug("Content area built")
+
+            # Snapshot the project root at build time so we can detect project switches
+            self.project_root_snapshot = getattr(self.viewmodel, "project_root", None)
+
+            # Busy overlay for page-level actions
+            self._busy_overlay = (
+                ui.column()
+                .classes(
+                    "fixed inset-0 bg-black/20 z-[100] items-center justify-center hidden"
+                )
+                .style("backdrop-filter: blur(2px)")
+            )
+            with self._busy_overlay:
+                ui.spinner(size="xl", color="primary")
+                self._busy_label = ui.label("Working...").classes(
+                    "text-white text-lg font-bold"
+                )
+
+            # Bind busy overlay visibility to viewmodel.is_busy
+            self._busy_overlay.bind_visibility_from(self.viewmodel, "is_busy")
+            # Bind busy label text to viewmodel.busy_message
+            self._busy_label.bind_text_from(self.viewmodel, "busy_message")
 
         logger.debug("ProjectView UI build completed")
         self.mark_as_built()
@@ -110,7 +133,12 @@ class ProjectView(
             logger.warning("Cannot refresh ProjectView before it is built")
             return
 
-        loading = self.viewmodel.is_project_loading
+        loading = (
+            self.viewmodel.is_project_loading
+            or self.viewmodel.is_navigating
+            or getattr(self.viewmodel, "is_busy", False)
+        )
+        busy = getattr(self.viewmodel, "is_busy", False)
         logger.debug("Refreshing ProjectView - loading: %s", loading)
 
         # Always compute current index & image name immediately for navigation feedback.
@@ -139,7 +167,11 @@ class ProjectView(
         if self.content and self.content.root:
             # Toggle splitter vs spinners
             if self.content.splitter and self.content.page_spinner:
-                if loading:  # page-level
+                if busy:
+                    # Keep content visible under overlay; just hide inline spinner
+                    self.content.page_spinner.classes(add="hidden")
+                    logger.debug("Busy overlay active; leaving content visible")
+                elif loading:  # page-level
                     self.content.splitter.classes(add="hidden")
                     self.content.page_spinner.classes(remove="hidden")
                     logger.debug("Showing page spinner, hiding content splitter")
@@ -173,15 +205,22 @@ class ProjectView(
     def _prep_image_spinners(self):
         """Hide images during navigation transitions."""
         logger.debug("Preparing image spinners for navigation transition")
+        busy = getattr(self.viewmodel, "is_busy", False)
         # Immediately hide the main content splitter and show the page-level
         # spinner so the user sees immediate feedback that navigation started.
         try:
             if self.content and self.content.splitter and self.content.page_spinner:
-                # Hide the content area
-                self.content.splitter.classes(add="hidden")
-                # Show the page-level spinner
-                self.content.page_spinner.classes(remove="hidden")
-                logger.debug("Hid content splitter and showed page spinner")
+                # Leave content visible; only toggle inline spinner as needed
+                if busy:
+                    self.content.page_spinner.classes(add="hidden")
+                    logger.debug(
+                        "Busy overlay active; keeping inline page spinner hidden"
+                    )
+                else:
+                    # Show the page-level spinner and hide content area
+                    self.content.splitter.classes(add="hidden")
+                    self.content.page_spinner.classes(remove="hidden")
+                    logger.debug("Hid content splitter and showed page spinner")
         except Exception:
             logger.debug("Failed to toggle splitter/spinner immediately", exc_info=True)
 
@@ -235,35 +274,77 @@ class ProjectView(
         # Use viewmodel command
         self.viewmodel.command_navigate_to_page(n - 1)  # Convert to 0-based index
 
+    @contextlib.asynccontextmanager
+    async def _action_context(self, message: str, show_spinner: bool = False):
+        """Context manager to show a notification and overlay during an action.
+
+        Args:
+            message: The message to show in the notification and overlay.
+            show_spinner: Whether to show a full-page spinner overlay.
+        """
+        print(
+            f"DEBUG: _action_context called with message={message}, show_spinner={show_spinner}"
+        )
+        # Record old spinner state
+        old_spinner = getattr(self, "_show_busy_spinner", False)
+        if show_spinner:
+            self._show_busy_spinner = True
+
+        ui.notify(message, type="info")
+        self.viewmodel.set_action_busy(True, message)
+        # Yield control to allow NiceGUI to update the UI
+        await asyncio.sleep(0.1)
+        try:
+            yield
+        finally:
+            self.viewmodel.set_action_busy(False)
+            if show_spinner:
+                self._show_busy_spinner = old_spinner
+            # Ensure UI returns to visible state after action completes
+            try:
+                self.refresh()
+            except Exception:
+                logger.debug("Refresh after action context failed", exc_info=True)
+
     async def _prev_async(self):  # pragma: no cover - UI side effects
         """Navigate to previous page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
             ui.notify("Navigation blocked: project is loading", type="warning")
             return
-        # Notify user that navigation attempt started and show diagnostic state
-        vm = self.viewmodel
-        try:
-            idx = getattr(vm, "current_page_index", -1)
-            total = getattr(vm, "page_total", 0)
-            can_prev = getattr(vm, "can_navigate_prev", False)
-            controls_disabled = getattr(vm, "is_controls_disabled", False)
-            ui.notify(
-                f"Attempting prev — idx={idx}, total={total}, can_prev={can_prev}, disabled={controls_disabled}",
-                type="info",
-            )
-        except Exception:
-            ui.notify("Attempting prev", type="info")
 
-        logger.debug("Navigating to previous page")
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        success = self.viewmodel.command_navigate_prev()
-        if not success:
-            ui.notify("Navigation prevented by viewmodel (prev)", type="warning")
-            logger.debug("Previous page navigation prevented by viewmodel")
-        else:
-            logger.debug("Previous page navigation completed")
+        async with self._action_context(
+            "Navigating to previous page...", show_spinner=True
+        ):
+            logger.debug("Navigating to previous page")
+            self._prep_image_spinners()
+            await asyncio.sleep(0.1)
+            success = self.viewmodel.command_navigate_prev()
+            if not success:
+                # Provide clearer reason to the user where possible
+                reason = "unknown"
+                try:
+                    vm = self.viewmodel
+                    if getattr(vm, "page_total", 0) <= 1:
+                        reason = "only one page available"
+                    elif getattr(vm, "is_first_page", False) or not getattr(
+                        vm, "can_navigate_prev", False
+                    ):
+                        reason = "at first page"
+                    elif getattr(vm, "is_controls_disabled", False):
+                        reason = "controls disabled (loading/override)"
+                except Exception:
+                    reason = "inspection-failed"
+                ui.notify(
+                    f"Navigation prevented by viewmodel (prev): {reason}",
+                    type="warning",
+                )
+                logger.debug(
+                    "Previous page navigation prevented by viewmodel: %s", reason
+                )
+            else:
+                ui.notify("Navigation started to previous page", type="positive")
+                logger.debug("Previous page navigation completed")
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
@@ -271,64 +352,37 @@ class ProjectView(
             logger.debug("Navigation blocked - currently loading")
             ui.notify("Navigation blocked: project is loading", type="warning")
             return
-        # Ensure viewmodel is up-to-date with underlying state before attempting
-        vm = self.viewmodel
-        try:
-            # Try to refresh computed properties from the current project state
-            try:
-                vm.update()
-            except Exception:
-                # Non-fatal; continue to diagnostics
-                logger.debug("vm.update() raised during debug refresh", exc_info=True)
 
-            idx = getattr(vm, "current_page_index", -1)
-            total = getattr(vm, "page_total", 0)
-            can_next = getattr(vm, "can_navigate_next", False)
-            controls_disabled = getattr(vm, "is_controls_disabled", False)
-            is_navigating = getattr(vm, "is_navigating", False)
-            is_busy = getattr(vm, "is_busy", False)
-
-            # Inspect underlying project pages cache where available
-            next_page_cached = None
-            try:
-                ps = getattr(vm, "_project_state", None)
-                if ps and hasattr(ps, "project") and ps.project and ps.project.pages:
-                    tgt = idx + 1
-                    if 0 <= tgt < len(ps.project.pages):
-                        next_page_cached = ps.project.pages[tgt]
-            except Exception:
-                next_page_cached = None
-
-            ui.notify(
-                f"Attempting next — idx={idx}, total={total}, can_next={can_next}, disabled={controls_disabled}, navigating={is_navigating}, busy={is_busy}, next_cached={'yes' if next_page_cached is not None else 'no'}",
-                type="info",
-            )
-        except Exception:
-            ui.notify("Attempting next (diagnostics unavailable)", type="info")
-
-        logger.debug("Navigating to next page")
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        success = self.viewmodel.command_navigate_next()
-        if not success:
-            # Provide clearer reason to the user where possible
-            reason = "unknown"
-            try:
-                if getattr(vm, "page_total", 0) <= 1:
-                    reason = "only one page available"
-                elif getattr(vm, "is_controls_disabled", False):
-                    reason = "controls disabled"
-                elif not getattr(vm, "can_navigate_next", False):
-                    reason = "cannot navigate next (viewmodel)"
-            except Exception:
-                reason = "inspection-failed"
-            ui.notify(
-                f"Navigation prevented by viewmodel (next): {reason}", type="warning"
-            )
-            logger.debug("Next page navigation prevented by viewmodel: %s", reason)
-        else:
-            ui.notify("Navigation started to next page", type="positive")
-            logger.debug("Next page navigation completed")
+        async with self._action_context(
+            "Navigating to next page...", show_spinner=True
+        ):
+            logger.debug("Navigating to next page")
+            self._prep_image_spinners()
+            await asyncio.sleep(0.1)
+            success = self.viewmodel.command_navigate_next()
+            if not success:
+                # Provide clearer reason to the user where possible
+                reason = "unknown"
+                try:
+                    vm = self.viewmodel
+                    if getattr(vm, "page_total", 0) <= 1:
+                        reason = "only one page available"
+                    elif getattr(vm, "is_last_page", False) or not getattr(
+                        vm, "can_navigate_next", False
+                    ):
+                        reason = "at last page"
+                    elif getattr(vm, "is_controls_disabled", False):
+                        reason = "controls disabled (loading/override)"
+                except Exception:
+                    reason = "inspection-failed"
+                ui.notify(
+                    f"Navigation prevented by viewmodel (next): {reason}",
+                    type="warning",
+                )
+                logger.debug("Next page navigation prevented by viewmodel: %s", reason)
+            else:
+                ui.notify("Navigation started to next page", type="positive")
+                logger.debug("Next page navigation completed")
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
@@ -336,31 +390,54 @@ class ProjectView(
             logger.debug("Navigation blocked - currently loading")
             ui.notify("Navigation blocked: project is loading", type="warning")
             return
-        # Notify user that navigation attempt started and show diagnostic state
-        vm = self.viewmodel
-        try:
-            idx = getattr(vm, "current_page_index", -1)
-            total = getattr(vm, "page_total", 0)
-            can_nav = getattr(vm, "can_navigate", False)
-            controls_disabled = getattr(vm, "is_controls_disabled", False)
-            ui.notify(
-                f"Attempting goto {value} — idx={idx}, total={total}, can_navigate={can_nav}, disabled={controls_disabled}",
-                type="info",
-            )
-        except Exception:
-            ui.notify(f"Attempting goto {value}", type="info")
 
-        logger.debug("Navigating to page: %s", value)
-        self._prep_image_spinners()
-        await asyncio.sleep(0)
-        success = self.viewmodel.command_navigate_to_page(int(value) - 1)
-        if not success:
-            ui.notify("Navigation prevented by viewmodel (goto)", type="warning")
-            logger.debug(
-                "Goto page navigation prevented by viewmodel for value: %s", value
-            )
-        else:
-            logger.debug("Goto page navigation completed for value: %s", value)
+        try:
+            target_page = int(value)
+        except (ValueError, TypeError):
+            target_page = None
+
+        display_value = target_page if target_page is not None else (value or "?")
+
+        async with self._action_context(
+            f"Navigating to page {display_value}...", show_spinner=True
+        ):
+            logger.debug("Navigating to page: %s", value)
+            self._prep_image_spinners()
+            await asyncio.sleep(0.1)
+            if target_page is None:
+                success = False
+            else:
+                page_idx = target_page - 1
+                success = self.viewmodel.command_navigate_to_page(page_idx)
+
+            if not success:
+                # Provide clearer reason to the user where possible
+                reason = "unknown"
+                try:
+                    vm = self.viewmodel
+                    if not (0 <= (int(value) - 1) < getattr(vm, "page_total", 0)):
+                        reason = "page index out of range"
+                    elif getattr(vm, "is_controls_disabled", False):
+                        reason = "controls disabled (loading/override)"
+                except Exception:
+                    reason = "inspection-failed"
+
+                ui.notify(
+                    f"Navigation prevented by viewmodel (goto): {reason}",
+                    type="warning",
+                )
+                logger.debug(
+                    "Goto page navigation prevented by viewmodel for value: %s, reason: %s",
+                    value,
+                    reason,
+                )
+            else:
+                ui.notify(
+                    f"Navigation started to page {display_value}", type="positive"
+                )
+                logger.debug(
+                    "Goto page navigation completed for value: %s", display_value
+                )
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
@@ -368,23 +445,23 @@ class ProjectView(
             logger.debug("Save blocked - currently loading")
             return
 
-        logger.debug("Starting async save for current page")
-        try:
-            # Run save in background thread to avoid blocking UI
-            success = await asyncio.to_thread(
-                self.viewmodel.command_save_page,
-            )
+        async with self._action_context("Saving page...", show_spinner=True):
+            logger.debug("Starting async save for current page")
+            await asyncio.sleep(0.1)
+            try:
+                # Run save
+                success = self.viewmodel.command_save_page()
 
-            if success:
-                logger.info("Page saved successfully")
-                ui.notify("Page saved successfully", type="positive")
-            else:
-                logger.warning("Failed to save page")
-                ui.notify("Failed to save page", type="negative")
+                if success:
+                    logger.info("Page saved successfully")
+                    ui.notify("Page saved successfully", type="positive")
+                else:
+                    logger.warning("Failed to save page")
+                    ui.notify("Failed to save page", type="negative")
 
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Save failed: %s", exc)
-            ui.notify(f"Save failed: {exc}", type="negative")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Save failed: %s", exc)
+                ui.notify(f"Save failed: {exc}", type="negative")
 
     async def _load_page_async(self):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
@@ -392,26 +469,26 @@ class ProjectView(
             logger.debug("Load blocked - currently loading")
             return
 
-        logger.debug("Starting async load for current page")
-        try:
-            # Run load in background thread to avoid blocking UI
-            success = await asyncio.to_thread(
-                self.viewmodel.command_load_page,
-            )
+        async with self._action_context("Loading page...", show_spinner=True):
+            logger.debug("Starting async load for current page")
+            await asyncio.sleep(0.1)
+            try:
+                # Run load
+                success = self.viewmodel.command_load_page()
 
-            if success:
-                logger.info("Page loaded successfully")
-                ui.notify("Page loaded successfully", type="positive")
-                # Trigger UI refresh to show loaded page
-                self.refresh()
-                logger.debug("UI refresh triggered after successful load")
-            else:
-                logger.warning("No saved page found for current page")
-                ui.notify("No saved page found for current page", type="warning")
+                if success:
+                    logger.info("Page loaded successfully")
+                    ui.notify("Page loaded successfully", type="positive")
+                    # Trigger UI refresh to show loaded page
+                    self.refresh()
+                    logger.debug("UI refresh triggered after successful load")
+                else:
+                    logger.warning("No saved page found for current page")
+                    ui.notify("No saved page found for current page", type="warning")
 
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Load failed: %s", exc)
-            ui.notify(f"Load failed: {exc}", type="negative")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Load failed: %s", exc)
+                ui.notify(f"Load failed: {exc}", type="negative")
 
     async def _refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Refine all bounding boxes in the current page asynchronously."""
@@ -419,26 +496,30 @@ class ProjectView(
             logger.debug("Refine bboxes blocked - currently loading")
             return
 
-        logger.debug("Starting async bbox refinement for current page")
-        try:
-            # Run refinement in background thread to avoid blocking UI
-            success = await asyncio.to_thread(
-                self.viewmodel.command_refine_bboxes,
-            )
+        async with self._action_context(
+            "Refining bounding boxes...", show_spinner=True
+        ):
+            logger.debug("Starting async bbox refinement for current page")
+            await asyncio.sleep(0.1)
+            try:
+                # Run refinement
+                success = self.viewmodel.command_refine_bboxes()
 
-            if success:
-                logger.info("Bboxes refined successfully")
-                ui.notify("Bounding boxes refined successfully", type="positive")
-                # Trigger UI refresh to show updated overlays
-                self.refresh()
-                logger.debug("UI refresh triggered after successful bbox refinement")
-            else:
-                logger.warning("Failed to refine bboxes")
-                ui.notify("Failed to refine bounding boxes", type="negative")
+                if success:
+                    logger.info("Bboxes refined successfully")
+                    ui.notify("Bounding boxes refined successfully", type="positive")
+                    # Trigger UI refresh to show updated overlays
+                    self.refresh()
+                    logger.debug(
+                        "UI refresh triggered after successful bbox refinement"
+                    )
+                else:
+                    logger.warning("Failed to refine bboxes")
+                    ui.notify("Failed to refine bounding boxes", type="negative")
 
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Bbox refinement failed: %s", exc)
-            ui.notify(f"Bbox refinement failed: {exc}", type="negative")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Bbox refinement failed: %s", exc)
+                ui.notify(f"Bbox refinement failed: {exc}", type="negative")
 
     async def _expand_refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Expand and refine all bounding boxes in the current page asynchronously."""
@@ -446,30 +527,63 @@ class ProjectView(
             logger.debug("Expand & refine bboxes blocked - currently loading")
             return
 
-        logger.debug("Starting async bbox expand & refine for current page")
-        try:
-            # Run expansion and refinement in background thread to avoid blocking UI
-            success = await asyncio.to_thread(
-                self.viewmodel.command_expand_refine_bboxes,
-            )
+        async with self._action_context(
+            "Expanding and refining bounding boxes...", show_spinner=True
+        ):
+            logger.debug("Starting async bbox expand & refine for current page")
+            await asyncio.sleep(0.1)
+            try:
+                # Run expansion and refinement
+                success = self.viewmodel.command_expand_refine_bboxes()
 
-            if success:
-                logger.info("Bboxes expanded and refined successfully")
-                ui.notify(
-                    "Bounding boxes expanded and refined successfully", type="positive"
-                )
-                # Trigger UI refresh to show updated overlays
-                self.refresh()
-                logger.debug(
-                    "UI refresh triggered after successful bbox expand & refine"
-                )
-            else:
-                logger.warning("Failed to expand and refine bboxes")
-                ui.notify("Failed to expand and refine bounding boxes", type="negative")
+                if success:
+                    logger.info("Bboxes expanded and refined successfully")
+                    ui.notify(
+                        "Bounding boxes expanded and refined successfully",
+                        type="positive",
+                    )
+                    # Trigger UI refresh to show updated overlays
+                    self.refresh()
+                    logger.debug(
+                        "UI refresh triggered after successful bbox expand & refine"
+                    )
+                else:
+                    logger.warning("Failed to expand and refine bboxes")
+                    ui.notify(
+                        "Failed to expand and refine bounding boxes", type="negative"
+                    )
 
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Bbox expand & refine failed: %s", exc)
-            ui.notify(f"Bbox expand & refine failed: {exc}", type="negative")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Bbox expand & refine failed: %s", exc)
+                ui.notify(f"Bbox expand & refine failed: {exc}", type="negative")
+
+    async def _reload_ocr_async(self):  # pragma: no cover - UI side effects
+        """Reload the current page with OCR processing asynchronously."""
+        if self.viewmodel.is_project_loading:
+            logger.debug("Reload OCR blocked - currently loading")
+            return
+
+        async with self._action_context(
+            "Reloading page with OCR...", show_spinner=True
+        ):
+            logger.debug("Starting async OCR reload for current page")
+            await asyncio.sleep(0.1)
+            try:
+                # Run OCR
+                success = self.viewmodel.command_reload_page_with_ocr()
+
+                if success:
+                    logger.info("OCR reloaded successfully")
+                    ui.notify("Page reloaded with OCR", type="positive")
+                    # Trigger UI refresh
+                    self.refresh()
+                else:
+                    logger.warning("Failed to reload OCR")
+                    ui.notify("Failed to reload OCR", type="negative")
+
+            except Exception as exc:  # noqa: BLE001
+                logger.error("OCR reload failed: %s", exc)
+                ui.notify(f"OCR reload failed: {exc}", type="negative")
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""

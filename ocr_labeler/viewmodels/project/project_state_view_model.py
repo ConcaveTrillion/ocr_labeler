@@ -28,11 +28,14 @@ class ProjectStateViewModel(BaseViewModel):
     project_root: str = ""
     project_root_resolved: str = ""
     is_busy: bool = False
+    busy_message: str = ""
+    is_action_busy: bool = False
     can_navigate: bool = False
     can_navigate_override: bool = False
     can_navigate_prev: bool = False
     can_navigate_next: bool = False
     is_controls_disabled: bool = False
+    current_page_source_text: str = ""
     # Convenience computed properties for direct UI binding
     prev_disabled: bool = False
     next_disabled: bool = False
@@ -75,6 +78,8 @@ class ProjectStateViewModel(BaseViewModel):
         object.__setattr__(self, "can_navigate_next", False)
         object.__setattr__(self, "is_controls_disabled", False)
         object.__setattr__(self, "can_navigate_override", False)
+        object.__setattr__(self, "is_action_busy", False)
+        object.__setattr__(self, "busy_message", "")
 
         # Don't call update() in __init__ for bindable dataclasses - let state change listeners handle it
 
@@ -89,6 +94,19 @@ class ProjectStateViewModel(BaseViewModel):
             )
             self._update_navigation_properties()
 
+    def set_action_busy(self, is_busy: bool, message: str = ""):
+        """Set or clear a manual busy state for long-running actions.
+
+        Args:
+            is_busy: Whether the action is busy.
+            message: Optional message to display during the busy state.
+        """
+        logger.debug(f"Setting action busy to {is_busy} with message: {message}")
+        self.is_action_busy = is_busy
+        self.busy_message = message if is_busy else ""
+        self.update()
+        self._update_navigation_properties()
+
     def update(self):
         """Sync model from ProjectState via state change listener."""
         logger.debug("Updating ProjectStateViewModel from ProjectState")
@@ -100,6 +118,7 @@ class ProjectStateViewModel(BaseViewModel):
             self.is_busy = (
                 self._project_state.is_project_loading
                 or self._project_state.is_navigating
+                or self.is_action_busy
             )
             self.project_root = str(self._project_state.project_root)
             # Resolve project root path if possible for display
@@ -112,6 +131,7 @@ class ProjectStateViewModel(BaseViewModel):
                 if self._project_state.project_root
                 else ""
             )
+            self.current_page_source_text = self._project_state.current_page_source_text
 
             self._update_navigation_properties()
 
@@ -137,9 +157,7 @@ class ProjectStateViewModel(BaseViewModel):
 
     def _update_navigation_properties(self):
         """Update navigation-related computed properties."""
-        self.can_navigate = (
-            self.page_total > 0 and not self.is_busy and not self.can_navigate_override
-        )
+        self.can_navigate = self.page_total > 0 and not self.can_navigate_override
         self.can_navigate_prev = self.current_page_index > 0 and self.can_navigate
         self.can_navigate_next = (
             self.current_page_index < self.page_total - 1 and self.can_navigate
@@ -149,9 +167,7 @@ class ProjectStateViewModel(BaseViewModel):
         app_loading = (
             self._app_state_model.is_project_loading if self._app_state_model else False
         )
-        self.is_controls_disabled = (
-            self.is_busy or app_loading or self.can_navigate_override
-        )
+        self.is_controls_disabled = app_loading or self.can_navigate_override
 
         # Derived disabled flags for direct UI binding convenience. These
         # combine the global "controls disabled" flag with per-direction
@@ -370,4 +386,20 @@ class ProjectStateViewModel(BaseViewModel):
             return self._project_state.expand_and_refine_all_bboxes()
         except Exception as e:
             logger.exception(f"Error expanding and refining bboxes: {e}")
+            return False
+
+    def command_reload_page_with_ocr(self) -> bool:
+        """Command to reload the current page with OCR processing.
+
+        Returns:
+            True if reload was successful, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for OCR reload")
+                return False
+            self._project_state.reload_current_page_with_ocr()
+            return True
+        except Exception as e:
+            logger.exception(f"Error reloading page with OCR: {e}")
             return False

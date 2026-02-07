@@ -562,6 +562,29 @@ class PageOperations:
 
         return page
 
+    def refresh_page_images(self, page: Page) -> bool:
+        """Refresh all generated images (overlays) for a page.
+
+        Calls page.refresh_page_images() if available.
+
+        Args:
+            page: Page object to refresh images for.
+
+        Returns:
+            bool: True if refresh was successful, False otherwise.
+        """
+        try:
+            if hasattr(page, "refresh_page_images"):
+                page.refresh_page_images()
+                logger.info("Successfully refreshed page images using native method")
+                return True
+            else:
+                logger.warning("Page object has no native refresh_page_images method")
+                return False
+        except Exception as e:
+            logger.exception(f"Failed to refresh page images: {e}")
+            return False
+
     def find_ground_truth_text(
         self, name: str, ground_truth_map: dict[str, str]
     ) -> str | None:

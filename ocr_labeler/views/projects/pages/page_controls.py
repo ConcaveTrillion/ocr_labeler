@@ -22,6 +22,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
         on_load_page=None,
         on_refine_bboxes=None,
         on_expand_refine_bboxes=None,
+        on_reload_ocr=None,
     ):
         logger.debug("Initializing PageControls")
         self.viewmodel = viewmodel
@@ -32,6 +33,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self._on_load_page = on_load_page
         self._on_refine_bboxes = on_refine_bboxes
         self._on_expand_refine_bboxes = on_expand_refine_bboxes
+        self._on_reload_ocr = on_reload_ocr
         # UI refs
         self.row = None
         self.page_index_box = (
@@ -206,30 +208,46 @@ class PageControls:  # pragma: no cover - UI wrapper file
         # Update page source
         if self.page_source_label:
             try:
-                # For now, access through the underlying state
-                # TODO: Add page source to viewmodel
-                if hasattr(self.viewmodel, "_project_state"):
-                    self.page_source_label.text = (
-                        self.viewmodel._project_state.current_page_source_text
-                    )
-                else:
-                    self.page_source_label.text = "UNKNOWN"
+                # Use the viewmodel property
+                self.page_source_label.text = getattr(
+                    self.viewmodel, "current_page_source_text", "UNKNOWN"
+                )
             except Exception:  # pragma: no cover - defensive
                 pass
 
-    def _reload_with_ocr(self):
+    async def _reload_with_ocr(self):
         """Reload the current page with OCR processing."""
         logger.debug("Reloading page with OCR")
-        try:
-            # For now, access through the underlying state
-            # TODO: Add reload command to viewmodel
-            if hasattr(self.viewmodel, "_project_state"):
-                self.viewmodel._project_state.reload_current_page_with_ocr()
-                logger.debug("Page reloaded with OCR successfully")
-                ui.notify("Page reloaded with OCR", type="positive")
+        # If we have a dedicated callback, use it (it handles async/notifications)
+        if self._on_reload_ocr:
+            # NiceGUI can handle both sync and async callbacks in on_click
+            # but since PROJECT_VIEW._reload_ocr_async is async, we should
+            # just pass it or call it.
+            import asyncio
+
+            if asyncio.iscoroutinefunction(self._on_reload_ocr):
+                await self._on_reload_ocr()
             else:
-                logger.error("Cannot reload OCR - no access to project state")
-                ui.notify("Cannot reload OCR - state not available", type="negative")
+                self._on_reload_ocr()
+            return
+
+        # Fallback to direct viewmodel call
+        try:
+            if hasattr(self.viewmodel, "command_reload_page_with_ocr"):
+                import asyncio
+
+                success = await asyncio.to_thread(
+                    self.viewmodel.command_reload_page_with_ocr
+                )
+                if success:
+                    logger.debug("Page reloaded with OCR successfully")
+                    ui.notify("Page reloaded with OCR", type="positive")
+                else:
+                    logger.warning("Page reload with OCR failed")
+                    ui.notify("Failed to reload with OCR", type="negative")
+            else:
+                logger.error("Cannot reload OCR - viewmodel command not available")
+                ui.notify("Cannot reload OCR - command not available", type="negative")
         except Exception as e:
             logger.error(f"Failed to reload with OCR: {e}")
             ui.notify(f"Failed to reload with OCR: {e}", type="negative")

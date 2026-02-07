@@ -65,16 +65,16 @@ The NiceGUI implementation currently has these limitations:
 #### Bounding Box Operations
 9. **Refine All Bboxes** ✅: Implement refine_all_bboxes for native Page using page.refine_bounding_boxes(padding_px=2) and refresh overlays.
 
-10. **Expand and Refine**: Implement expand_and_refine_all_bboxes by iterating words → crop_bottom + expand_to_content then page.refine_bounding_boxes.
+10. **Expand and Refine** ✅: Implement expand_and_refine_all_bboxes by iterating words → crop_bottom + expand_to_content then page.refine_bounding_boxes.
 
-11. **Refresh Page Images**: Implement refresh_page_images using page.refresh_page_images() and clear image cache.
+11. **Refresh Page Images** ✅: Implement refresh_page_images using page.refresh_page_images() and clear image cache.
 
 12. **Refresh Line Images**: Implement refresh_all_line_images for per-line thumbnails regeneration.
 
 #### Line Filtering & Styling
 20. **Mismatch Filtering**: Apply mismatch filtering for native line Blocks (compute exact/validated similarly to notebook implementation).
 
-25. **Font Injection**: Inject custom monospace font (if path provided) into NiceGUI using global `<style>` tag.
+25. **Font Injection** ✅: Inject custom monospace font (if path provided) into NiceGUI using global `<style>` tag.
 
 ### Phase 3: Word-Level Editing Core
 **Priority: High** | **Tasks: 13-19, 23, 30, 32-33**

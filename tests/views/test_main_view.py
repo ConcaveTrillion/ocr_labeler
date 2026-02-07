@@ -28,7 +28,7 @@ class TestMainView:
         assert self.main_view.header_bar is None
         assert self.main_view.project_view is None
         assert self.main_view._no_project_placeholder is None
-        assert self.main_view._global_loading is None
+        assert self.main_view._project_loading_overlay is None
 
     @patch("ocr_labeler.views.main_view.ui")
     def test_project_view_has_load_page(self, mock_ui):

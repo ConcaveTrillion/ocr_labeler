@@ -1,6 +1,7 @@
 import logging
 
 from nicegui import binding, ui
+from pd_book_tools.ocr.page import Page
 
 from ....state import PageState
 from .word_match import WordMatchView
@@ -56,6 +57,20 @@ class TextTabsModel:
         """Listener for PageState changes; update model properties."""
         logger.debug("PageState change detected, updating model")
         self.update()
+        # Notify TextTabs that state changed so it can update word matches
+        logger.debug(
+            f"Checking for callback: hasattr={hasattr(self, '_on_state_change_callback')}, "
+            f"is_set={getattr(self, '_on_state_change_callback', None) is not None}"
+        )
+        if (
+            hasattr(self, "_on_state_change_callback")
+            and self._on_state_change_callback
+        ):
+            logger.debug("Calling TextTabs state change callback")
+            self._on_state_change_callback()
+        else:
+            # Only log as debug in case this is a test scenario with mocks
+            logger.debug("TextTabs callback not set or not callable")
 
 
 class TextTabs:
@@ -76,10 +91,25 @@ class TextTabs:
         # Instantiate the model as the intermediary
         self.model = TextTabsModel(page_state)
 
+        # Register callback so model can notify us of state changes
+        # Do this BEFORE any updates so callbacks work from the start
+        self.model._on_state_change_callback = self._on_page_state_changed
+
         # Set the page index on the page_state so it knows which page to cache
         if page_state:
             page_state._current_page_index = page_index
             logger.debug(f"Set current page index to {page_index}")
+
+        # Also listen to ProjectState changes for navigation events
+        # PageState has a reference to ProjectState, so we can register there too
+        if (
+            page_state
+            and hasattr(page_state, "_project_state")
+            and page_state._project_state
+        ):
+            logger.debug("Registering ProjectState change listener")
+            page_state._project_state.on_change.append(self._on_project_state_changed)
+            logger.debug("Registered ProjectState change listener")
 
         # Create callback for GT→OCR copy functionality
         copy_callback = None
@@ -144,4 +174,64 @@ class TextTabs:
             self._tabs = text_tabs
         self.container = col
         logger.info("TextTabs UI build completed")
+
+        # Perform initial word match update if page is already available
+        if self.page_state and hasattr(self.page_state, "current_page"):
+            page = self.page_state.current_page
+            if page:
+                logger.debug("Performing initial word match update with current page")
+                self.update_word_matches(page)
+            else:
+                logger.debug("No current page available at build time")
+
         return col
+
+    def _on_page_state_changed(self):
+        """Called when page state changes; update word matches automatically."""
+        logger.debug("TextTabs received page state change notification")
+        if self.page_state and hasattr(self.page_state, "current_page"):
+            page = self.page_state.current_page
+            logger.debug(f"Current page available: {page is not None}")
+            self.update_word_matches(page)
+        else:
+            logger.debug("No page state or current_page available")
+            self.update_word_matches(None)
+
+    def _on_project_state_changed(self):
+        """Called when project state changes (e.g., navigation); update word matches."""
+        logger.debug("TextTabs received project state change notification")
+        # Get the current page from the ProjectState
+        if (
+            self.page_state
+            and hasattr(self.page_state, "_project_state")
+            and self.page_state._project_state
+        ):
+            project_state = self.page_state._project_state
+            page = project_state.current_page()
+            logger.debug(f"Current page from ProjectState: {page is not None}")
+            # Update the PageState's current_page reference so both are in sync
+            if page is not None:
+                self.page_state.current_page = page
+            self.update_word_matches(page)
+        else:
+            logger.debug("No ProjectState reference available")
+            self.update_word_matches(None)
+
+    # ----- Word match coordination -------------------------------------------------
+
+    def update_word_matches(self, page: Page | None):
+        """Refresh the word match panel with the provided page data."""
+        if not getattr(self, "word_match_view", None):
+            logger.debug("Word match view not initialized; skipping update")
+            return
+
+        if page is None:
+            logger.debug("No page available for word matches; clearing view")
+            self.word_match_view.clear()
+            return
+
+        logger.debug(
+            "Updating word matches for page: %s",
+            getattr(page, "name", getattr(page, "index", "unknown")),
+        )
+        self.word_match_view.update_from_page(page)

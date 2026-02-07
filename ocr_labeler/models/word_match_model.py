@@ -33,6 +33,37 @@ class WordMatch:
         None  # Reference to the original word object for image access
     )
 
+    def __eq__(self, other: object) -> bool:
+        """Custom equality that handles word_object using identity check.
+
+        The word_object might have numpy arrays or other complex types,
+        so we use identity (is) instead of equality (==).
+        """
+        if not isinstance(other, WordMatch):
+            return NotImplemented
+
+        return (
+            self.ocr_text == other.ocr_text
+            and self.ground_truth_text == other.ground_truth_text
+            and self.match_status == other.match_status
+            and self.fuzz_score == other.fuzz_score
+            and self.word_index == other.word_index
+            and self.word_object is other.word_object  # Identity check
+        )
+
+    def __hash__(self) -> int:
+        """Custom hash that excludes word_object (may be unhashable)."""
+        return hash(
+            (
+                self.ocr_text,
+                self.ground_truth_text,
+                self.match_status,
+                self.fuzz_score,
+                self.word_index,
+                # word_object excluded - may contain unhashable types
+            )
+        )
+
     @property
     def css_class(self) -> str:
         """Return CSS class for styling based on match status."""

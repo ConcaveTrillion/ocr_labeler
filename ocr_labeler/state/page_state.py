@@ -51,6 +51,21 @@ class PageState:
         for listener in self.on_change:
             listener()
 
+    def _on_project_state_change(self):
+        """Handle project state changes to sync page index."""
+        if self._project_state:
+            # Sync the current page index from project state
+            new_index = self._project_state.current_page_index
+            if new_index != self._current_page_index:
+                logger.debug(
+                    f"PageState: Syncing page index from ProjectState: {self._current_page_index} -> {new_index}"
+                )
+                self._current_page_index = new_index
+                # Force update of text cache for the new page
+                self._update_text_cache(force=True)
+                # Notify our own listeners
+                self.notify()
+
     def notify_on_completion(func):
         """Decorator to call self.notify() after method completion."""
 
@@ -70,6 +85,9 @@ class PageState:
         self._project = project
         self._project_root = project_root
         self._project_state = project_state
+        # Register listener for project state changes to sync page index
+        if self._project_state:
+            self._project_state.on_change.append(self._on_project_state_change)
 
     def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
         """Get page at the specified index, loading it if necessary."""
@@ -81,6 +99,11 @@ class PageState:
 
         # Delegate to ProjectState for page loading
         page = self._project_state.ensure_page(index, force_ocr=force_ocr)
+
+        # Cache the page reference so downstream consumers (e.g., word match view,
+        # GT→OCR copy helpers) can access the most recent page without triggering
+        # another ensure/load cycle.
+        self.current_page = page
 
         # Update page_sources dictionary based on the page's source
         if page is not None and hasattr(page, "page_source"):
@@ -148,12 +171,23 @@ class PageState:
             logger.error("No page available at index %s to save", page_index)
             return False
 
-        return self.page_ops.save_page(
+        success = self.page_ops.save_page(
             page=page,
             project_root=self._project_root,
             save_directory=save_directory,
             project_id=project_id,
+            source_lib=self._project.source_lib
+            if self._project
+            else "doctr-pgdp-labeled",
         )
+
+        if success:
+            # Update page source to indicate it's now on the filesystem
+            if hasattr(page, "page_source"):
+                page.page_source = "filesystem"  # type: ignore[attr-defined]
+            self.page_sources[page_index] = "filesystem"
+
+        return success
 
     @notify_on_completion
     def load_page_from_file(

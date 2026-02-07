@@ -107,6 +107,7 @@ class PageOperations:
         project_root: Path,
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
+        source_lib: str = "doctr-pgdp-labeled",
     ) -> bool:
         """Save a single page object to a file with both image copy and JSON metadata.
 
@@ -119,6 +120,7 @@ class PageOperations:
             project_root: Root directory of the project for relative path calculation.
             save_directory: Directory to save files (default: "local-data/labeled-ocr")
             project_id: Project identifier. If None, derives from project_root name.
+            source_lib: Source library identifier (default: "doctr-pgdp-labeled").
 
         Returns:
             bool: True if save was successful, False otherwise.
@@ -180,7 +182,7 @@ class PageOperations:
                 relative_path = Path(image_path).name
 
             json_data = {
-                "source_lib": "doctr-pgdp-labeled",
+                "source_lib": source_lib,
                 "source_path": relative_path,
                 "pages": [page.to_dict()],
             }
@@ -247,43 +249,6 @@ class PageOperations:
             file_prefix = f"{project_id}_{page_number:03d}"
             json_filename = f"{file_prefix}.json"
             json_path = save_dir / json_filename
-
-            # If the expected file doesn't exist, try to find any matching file
-            if not json_path.exists():
-                logger.debug(
-                    f"Expected file {json_path} not found, searching for alternatives"
-                )
-                # Try broader patterns to find any file for this page number
-                patterns = [
-                    f"_{page_number:03d}.json",  # _001.json
-                    f"*{page_number:03d}.json",  # *001.json (any prefix)
-                    f"*_{page_number:03d}.json",  # *_001.json
-                ]
-
-                matching_files = []
-                for pattern in patterns:
-                    files = list(save_dir.glob(pattern))
-                    if files:
-                        matching_files.extend(files)
-                        logger.debug(f"Pattern '{pattern}' found {len(files)} files")
-
-                if matching_files:
-                    # Use the first match
-                    json_path = matching_files[0]
-                    json_filename = json_path.name
-                    # Extract project_id from the filename
-                    file_prefix = json_filename.replace(".json", "")
-                    logger.debug(f"Found alternative file: {json_path}")
-                else:
-                    logger.info(
-                        f"No saved page files found for page {page_number} in {save_dir}"
-                    )
-                    # Log what files do exist for debugging
-                    all_json_files = list(save_dir.glob("*.json"))
-                    logger.info(
-                        f"Available JSON files: {[f.name for f in all_json_files]}"
-                    )
-                    return None
 
             if not json_path.exists():
                 logger.info(f"Saved page not found: {json_path}")

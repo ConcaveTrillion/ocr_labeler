@@ -177,3 +177,57 @@ def test_load_current_page_generates_project_id_from_root(tmp_path):
 
         assert result is True
         assert state.project.pages[0] is mock_page
+
+
+def test_save_current_page_updates_source_label(tmp_path):
+    """Test that saving the current page updates its source label to LABELED."""
+    from pd_book_tools.ocr.page import Page
+
+    from ocr_labeler.models.project import Project
+
+    # 1. Setup project state with one page
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    # Create a dummy image
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    # Initialize project with one page
+    state.project = Project(pages=[None], image_paths=[img_path])
+    state.current_page_index = 0
+
+    # Define mock page with a proper to_dict
+    mock_page = Mock(spec=Page)
+    mock_page.index = 0
+    mock_page.image_path = img_path
+    # We use a real attribute here since it's checked by TextOperations.get_page_source_text
+    mock_page.page_source = "ocr"
+    mock_page.to_dict.return_value = {"type": "page", "items": []}
+
+    # Mock PageOperations globally at its source
+    with (
+        patch(
+            "ocr_labeler.operations.ocr.page_operations.PageOperations.save_page",
+            return_value=True,
+        ),
+        patch(
+            "ocr_labeler.operations.ocr.page_operations.PageOperations.load_page",
+            return_value=None,
+        ),
+        patch.object(state.page_ops, "page_parser", return_value=mock_page),
+    ):
+        # 2. Verify initial status is RAW OCR (via get_page to initialize PageState)
+        state.get_page(0)
+        assert state.current_page_source_text == "RAW OCR"
+
+        # 3. Perform save
+        save_dir = tmp_path / "labeled"
+        success = state.save_current_page(save_directory=str(save_dir))
+
+        # 4. Verify save was successful and label changed
+        assert success is True
+        assert state.current_page_source_text == "LABELED"
+        assert mock_page.page_source == "filesystem"

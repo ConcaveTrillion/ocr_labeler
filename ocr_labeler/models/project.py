@@ -28,7 +28,7 @@ class Project:
 
     # Project metadata
     version: str = "1.0"
-    source_lib: str = "ocr-labeler"
+    source_lib: str = "doctr-pgdp-labeled"
     project_id: str = ""
     source_path: str = ""
     total_pages: int = 0
@@ -61,7 +61,7 @@ class Project:
         # Create instance with metadata fields
         project = cls(
             version=data.get("version", "1.0"),
-            source_lib=data.get("source_lib", "ocr-labeler"),
+            source_lib=data.get("source_lib", "doctr-pgdp-labeled"),
             project_id=data.get("project_id", ""),
             source_path=data.get("source_path", ""),
             total_pages=data.get("total_pages", 0),

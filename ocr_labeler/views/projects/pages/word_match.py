@@ -30,6 +30,20 @@ class WordMatchView:
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         logger.debug("WordMatchView initialization complete")
 
+    @staticmethod
+    def _safe_notify(message: str, type_: str = "info"):
+        """Safely call ui.notify, catching context errors during navigation."""
+        try:
+            ui.notify(message, type=type_)
+        except RuntimeError as e:
+            # Parent element deleted during navigation - this is expected
+            if "parent element" in str(e) and "deleted" in str(e):
+                logger.debug(
+                    f"Skipping notification during navigation cleanup: {message}"
+                )
+            else:
+                raise
+
     def build(self):
         """Build the UI components."""
         logger.debug("Building WordMatchView UI components")
@@ -61,10 +75,20 @@ class WordMatchView:
 
     def update_from_page(self, page: Page) -> None:
         """Update the view with matches from a page."""
-        logger.debug(
-            "Updating WordMatchView from page with %d blocks",
-            len(page.blocks) if page.blocks else 0,
-        )
+        try:
+            # Defensive logging for test compatibility
+            block_count = (
+                len(page.blocks)
+                if (page and hasattr(page, "blocks") and page.blocks)
+                else 0
+            )
+            logger.debug(
+                "Updating WordMatchView from page with %d blocks",
+                block_count,
+            )
+        except (TypeError, AttributeError):
+            logger.debug("Updating WordMatchView from page (block count unavailable)")
+
         try:
             # Update the view model with the new page
             self.view_model.update_from_page(page)
@@ -507,25 +531,25 @@ class WordMatchView:
                 success = self.copy_gt_to_ocr_callback(line_index)
                 if success:
                     logger.debug("GT→OCR copy successful for line %d", line_index)
-                    ui.notify(
+                    self._safe_notify(
                         f"Copied ground truth to OCR text for line {line_index + 1}",
-                        type="positive",
+                        type_="positive",
                     )
                 else:
                     logger.debug(
                         "GT→OCR copy failed - no ground truth text found for line %d",
                         line_index,
                     )
-                    ui.notify(
+                    self._safe_notify(
                         f"No ground truth text found to copy in line {line_index + 1}",
-                        type="warning",
+                        type_="warning",
                     )
             except Exception as e:
                 logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
-                ui.notify(f"Error copying GT→OCR: {e}", type="negative")
+                self._safe_notify(f"Error copying GT→OCR: {e}", type_="negative")
         else:
             logger.debug("No copy_gt_to_ocr_callback available")
-            ui.notify("Copy function not available", type="warning")
+            self._safe_notify("Copy function not available", type_="warning")
 
     def clear(self):
         """Clear the display."""

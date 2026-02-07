@@ -126,6 +126,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         # Refresh project view if it exists and not loading
         if (
             self.project_view
+            and self.project_view.is_built
             and self.viewmodel.app_state_viewmodel
             and not self.viewmodel.app_state_viewmodel.is_project_loading
         ):

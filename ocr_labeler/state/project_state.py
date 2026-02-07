@@ -452,7 +452,14 @@ class ProjectState:
                     project_root=self.project_root,
                     save_directory=save_directory,
                     project_id=project_id,
+                    source_lib=self.project.source_lib,
                 )
+                if result:
+                    # Update page source to indicate it's now on the filesystem
+                    if hasattr(page, "page_source"):
+                        page.page_source = "filesystem"  # type: ignore[attr-defined]
+                    page_state.page_sources[self.current_page_index] = "filesystem"
+                    page_state.notify()
         logger.debug("save_current_page: completed, result=%s", result)
         return result
 

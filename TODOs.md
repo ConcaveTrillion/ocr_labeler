@@ -43,21 +43,21 @@ The NiceGUI implementation currently has these limitations:
 **Priority: Critical** | **Tasks: 1-4, 7-8, 35**
 
 #### Data Persistence
-1. **OCR Document Save**: Serialize current native Page/PageVM into JSON + copy image (mirror IpynbLabeler.export_ocr_document). Add project/page ID strategy derived from directory name or configurable source.
+1. **OCR Document Save** ✅: Serialize current native Page/PageVM into JSON + copy image (mirror IpynbLabeler.export_ocr_document). Add project/page ID strategy derived from directory name or configurable source.
 
-2. **OCR Document Load**: Implement import functionality for current page index; populate PageVM or native Page fields (import_ocr_document).
+2. **OCR Document Load** ✅: Implement import functionality for current page index; populate PageVM or native Page fields (import_ocr_document).
 
-3. **Export Prefix Logic**: Add project_id + page index naming with configurable project_id in AppState.
+3. **Export Prefix Logic** ✅: Add project_id + page index naming with configurable project_id in AppState.
 
-4. **GT Modifications Persistence**: Persist validated line + word-level ground truth modifications back into JSON on save.
+4. **GT Modifications Persistence** ✅: Persist validated line + word-level ground truth modifications back into JSON on save.
 
 #### OCR & Page Management
-7. **Reset OCR Logic**: Add reset_ocr functionality to re-run docTR OCR for current image and discard manual edits for that page.
+7. **Reset OCR Logic** ✅: Add reset_ocr functionality to re-run docTR OCR for current image and discard manual edits for that page.
 
 8. **Force Refresh Support**: Support force_refresh flag in run_doctr_ocr_on_images for per-page refresh capabilities.
 
 #### Error Handling
-35. **User Notifications**: Add user notifications (toast/snackbar) for save/load success/failure states.
+35. **User Notifications** ✅: Add user notifications (toast/snackbar) for save/load success/failure states.
 
 ### Phase 2: Basic Operations & Filtering
 **Priority: High** | **Tasks: 9-12, 20, 25**

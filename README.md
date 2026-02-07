@@ -11,10 +11,11 @@ Current Capabilities
 - Display multiple overlay variants (original, paragraphs, lines, words, mismatches – where available from the underlying OCR lib).
 - Show read‑only OCR text and (optional) ground truth text side by side.
 - Auto‑populate ground truth text from an optional `pages.json` file mapping image filename -> ground truth string.
+- Save current page edits to JSON and image files for persistence.
 
 Planned / Not Yet Implemented (see `TODOs.md` for full roadmap)
 --------------------------------------------------------------
-- Editing & saving OCR / word‑level adjustments
+- Editing & saving OCR / word‑level adjustments (basic save implemented)
 - Bounding box refinement & bulk operations
 - Training / validation export
 - Word split / merge / crop tools
@@ -112,6 +113,7 @@ Then open: http://127.0.0.1:8080/ (or your chosen host/port)
 2. Navigation: Use Prev / Next or type a page number (press Enter or defocus field).
 3. Tabs (left): Switch between overlay variants; a single central spinner shows while a page is loading.
 4. Tabs (right): View Ground Truth vs OCR text. Ground truth is blank if not found in `pages.json`.
+5. Saving: Click "Save Page" to persist current page edits to JSON and image files in `local-data/labeled-ocr/`.
 
 Custom Fonts (Optional)
 -----------------------
@@ -178,7 +180,6 @@ make pre-commit-check  # Run pre-commit hooks on all files
 
 Future Enhancements (Short List)
 --------------------------------
-- Save / load edited OCR JSON
 - Word / line granular editing and validation
 - Bounding box refinement & regeneration
 - Training / validation dataset export

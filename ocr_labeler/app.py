@@ -42,6 +42,9 @@ class NiceGuiLabeler:
         # Create view model and view
         self.viewmodel = MainViewModel(self.state)
         self.view = LabelerView(self.viewmodel)
+
+        # Prepare font CSS (but don't inject yet - needs to happen in page context)
+        self.font_css = self._prepare_font_css()
         logger.debug("NiceGuiLabeler initialization complete")
 
     def create_routes(self):
@@ -49,6 +52,10 @@ class NiceGuiLabeler:
 
         @ui.page("/")
         def index():  # noqa: D401
+            # Inject font CSS in page context
+            if self.font_css:
+                ui.add_head_html(f"<style>{self.font_css}</style>")
+                logger.debug("Font CSS injected into page")
             self.view.build()
 
         logger.debug("Routes creation complete")
@@ -60,7 +67,6 @@ class NiceGuiLabeler:
             port,
             uvicorn_kwargs,
         )
-        self._inject_font()
         self.create_routes()
 
         # Forward extra kwargs (e.g., uvicorn_logging_level) to NiceGUI/uvicorn if supported
@@ -76,12 +82,15 @@ class NiceGuiLabeler:
             )
             ui.run(host=host, port=port, reload=False)
 
-    def _inject_font(self):  # pragma: no cover (UI side effect)
-        """Inject monospace font.
+    def _prepare_font_css(self) -> str:  # pragma: no cover (UI side effect)
+        """Prepare monospace font CSS.
 
         Priority:
         1. AppState.monospace_font_path (if provided)
         2. Packaged DPSansMono.ttf font at fonts/DPSansMono.ttf
+
+        Returns:
+            CSS string to inject, or empty string if no font available
         """
         logger.debug("Attempting to inject monospace font")
         try:
@@ -97,14 +106,19 @@ class NiceGuiLabeler:
 
             if not font_path.exists():
                 logger.warning("No monospace font found at %s", font_path)
-                return
+                return ""
 
             logger.debug("Font file found, reading and encoding")
             with open(font_path, "rb") as f:
                 font_data = base64.b64encode(f.read()).decode("utf-8")
             logger.debug("Font encoded successfully, size: %d bytes", len(font_data))
 
-            font_family = self.state.monospace_font_name or "CustomMonospace"
+            # Use DPSansMono as the font name unless explicitly overridden
+            font_family = self.state.monospace_font_name
+            if font_family == "monospace":
+                # Default was used, switch to DPSansMono
+                font_family = "DPSansMono"
+
             css = f"""
             @font-face {{
                 font-family: '{font_family}';
@@ -113,11 +127,25 @@ class NiceGuiLabeler:
                 font-style: normal;
                 font-display: swap;
             }}
-            body, .monospace, textarea, .CodeMirror, .CodeMirror-line {{
+            /* Apply to elements with .monospace class */
+            .monospace {{
+                font-family: '{font_family}', monospace !important;
+            }}
+            /* Apply to CodeMirror editor components */
+            .CodeMirror,
+            .CodeMirror-line,
+            .CodeMirror pre,
+            .cm-content {{
+                font-family: '{font_family}', monospace !important;
+            }}
+            /* Apply to NiceGUI textarea and labels with monospace class */
+            textarea.monospace,
+            label.monospace {{
                 font-family: '{font_family}', monospace !important;
             }}
             """
-            ui.add_head_html(f"<style>{css}</style>")
-            logger.debug("Font CSS injected into UI head")
+            logger.debug("Font CSS prepared with font-family: %s", font_family)
+            return css
         except Exception:  # noqa: BLE001
-            logger.warning("Font static serve/injection failed", exc_info=True)
+            logger.warning("Font CSS preparation failed", exc_info=True)
+            return ""

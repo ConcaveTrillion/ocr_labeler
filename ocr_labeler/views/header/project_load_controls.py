@@ -43,17 +43,15 @@ class ProjectLoadControls:
                 "LOAD", on_click=self._load_selected_project
             )
 
-            # Loading spinner - shows during project loading
-            self.loading_spinner = (
-                ui.spinner(type="gears").props("small").mark("spinner")
-            )
+            # Loading spinner container - spinner shows during project loading
+            self.loading_spinner_container = ui.element("div")
+            if self.app_state_model.is_project_loading:
+                with self.loading_spinner_container:
+                    ui.spinner(type="gears").props("small").mark("spinner")
 
-            # Bind spinner visibility to project loading state
-            binding.bind_from(
-                self.loading_spinner,
-                "visible",
-                self.app_state_model,
-                "is_project_loading",
+            # Listen for app state changes to update spinner
+            self.app_state_model.add_property_changed_listener(
+                self._update_loading_spinner
             )
 
             ui.space()
@@ -113,3 +111,11 @@ class ProjectLoadControls:
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Load failed: {exc}", type="negative")
             logger.error(f"Failed to load project '{key}': {exc}")
+
+    def _update_loading_spinner(self, property_name: str, value):
+        """Update the loading spinner based on current loading state."""
+        if property_name == "is_project_loading":
+            self.loading_spinner_container.clear()
+            if value:  # value is the new is_project_loading value
+                with self.loading_spinner_container:
+                    ui.spinner(type="gears").props("small").mark("spinner")

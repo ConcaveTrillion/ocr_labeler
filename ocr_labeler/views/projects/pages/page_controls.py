@@ -20,6 +20,8 @@ class PageControls:  # pragma: no cover - UI wrapper file
         on_goto,
         on_save_page=None,
         on_load_page=None,
+        on_refine_bboxes=None,
+        on_expand_refine_bboxes=None,
     ):
         logger.debug("Initializing PageControls")
         self.viewmodel = viewmodel
@@ -28,6 +30,8 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self._on_goto = on_goto
         self._on_save_page = on_save_page
         self._on_load_page = on_load_page
+        self._on_refine_bboxes = on_refine_bboxes
+        self._on_expand_refine_bboxes = on_expand_refine_bboxes
         # UI refs
         self.row = None
         self.page_index_box = (
@@ -40,6 +44,8 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self.save_button = None
         self.load_button = None
         self.reload_ocr_button = None
+        self.refine_bboxes_button = None
+        self.expand_refine_bboxes_button = None
         self.page_source_label = None
 
     def build(self) -> ui.element:
@@ -121,6 +127,20 @@ class PageControls:  # pragma: no cover - UI wrapper file
                             self.viewmodel,
                             "is_controls_disabled",
                         )
+                    if self.refine_bboxes_button:
+                        binding.bind_from(
+                            self.refine_bboxes_button,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
+                    if self.expand_refine_bboxes_button:
+                        binding.bind_from(
+                            self.expand_refine_bboxes_button,
+                            "disabled",
+                            self.viewmodel,
+                            "is_controls_disabled",
+                        )
                 except Exception:
                     # Defensive - if binding fails, ignore and leave controls enabled
                     pass
@@ -154,6 +174,17 @@ class PageControls:  # pragma: no cover - UI wrapper file
                     self.load_button = ui.button(
                         "Load Page", on_click=self._on_load_page
                     ).classes("bg-blue-600 hover:bg-blue-700 text-white")
+
+                if self._on_refine_bboxes:
+                    ui.separator().props("vertical")
+                    self.refine_bboxes_button = ui.button(
+                        "Refine Bboxes", on_click=self._on_refine_bboxes
+                    ).classes("bg-purple-600 hover:bg-purple-700 text-white")
+
+                if self._on_expand_refine_bboxes:
+                    self.expand_refine_bboxes_button = ui.button(
+                        "Expand & Refine", on_click=self._on_expand_refine_bboxes
+                    ).classes("bg-indigo-600 hover:bg-indigo-700 text-white")
 
         return container
 

@@ -63,7 +63,7 @@ The NiceGUI implementation currently has these limitations:
 **Priority: High** | **Tasks: 9-12, 20, 25**
 
 #### Bounding Box Operations
-9. **Refine All Bboxes**: Implement refine_all_bboxes for native Page using page.refine_bounding_boxes(padding_px=2) and refresh overlays.
+9. **Refine All Bboxes** ✅: Implement refine_all_bboxes for native Page using page.refine_bounding_boxes(padding_px=2) and refresh overlays.
 
 10. **Expand and Refine**: Implement expand_and_refine_all_bboxes by iterating words → crop_bottom + expand_to_content then page.refine_bounding_boxes.
 

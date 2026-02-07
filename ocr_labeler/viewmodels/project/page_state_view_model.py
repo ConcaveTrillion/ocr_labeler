@@ -233,8 +233,13 @@ class PageStateViewModel(BaseViewModel):
             ),
         ]
 
-        # Refresh page images if available
-        if hasattr(current_page, "refresh_page_images"):
+        # Refresh page images only if needed (avoid flicker from redundant refreshes)
+        needs_refresh = False
+        for _, attr_name in image_mappings:
+            if getattr(current_page, attr_name, None) is None:
+                needs_refresh = True
+                break
+        if needs_refresh and hasattr(current_page, "refresh_page_images"):
             try:
                 logger.debug("_update_image_sources: Refreshing page images")
                 current_page.refresh_page_images()
@@ -251,12 +256,19 @@ class PageStateViewModel(BaseViewModel):
             )
             new_value = self._encode_image(image_attr)
 
-            # For bindable dataclass properties, just set the value directly
-            # NiceGUI will handle the binding automatically
-            setattr(self, prop_name, new_value)
-            logger.debug(
-                f"_update_image_sources: Set {prop_name}: {'success' if new_value else 'cleared'} (length: {len(new_value) if new_value else 0})"
-            )
+            # Only update if the source actually changed to reduce flicker
+            current_value = getattr(self, prop_name, "")
+            if new_value != current_value:
+                # For bindable dataclass properties, just set the value directly
+                # NiceGUI will handle the binding automatically
+                setattr(self, prop_name, new_value)
+                logger.debug(
+                    f"_update_image_sources: Set {prop_name}: {'success' if new_value else 'cleared'} (length: {len(new_value) if new_value else 0})"
+                )
+            else:
+                logger.debug(
+                    f"_update_image_sources: {prop_name} unchanged; skipping update"
+                )
 
     def _encode_image(self, np_img) -> str:
         """Encode a numpy image to a base64 data URL."""

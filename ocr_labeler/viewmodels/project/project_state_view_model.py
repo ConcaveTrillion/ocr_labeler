@@ -311,3 +311,63 @@ class ProjectStateViewModel(BaseViewModel):
             "is_busy": self.is_busy,
             "is_controls_disabled": self.is_controls_disabled,
         }
+
+    def command_save_page(self) -> bool:
+        """Command to save the current page.
+
+        Returns:
+            True if save was successful, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for save")
+                return False
+            return self._project_state.save_current_page()
+        except Exception as e:
+            logger.exception(f"Error saving current page: {e}")
+            return False
+
+    def command_load_page(self) -> bool:
+        """Command to load the current page from saved files.
+
+        Returns:
+            True if load was successful, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for load")
+                return False
+            return self._project_state.load_current_page()
+        except Exception as e:
+            logger.exception(f"Error loading current page: {e}")
+            return False
+
+    def command_refine_bboxes(self) -> bool:
+        """Command to refine all bounding boxes in the current page.
+
+        Returns:
+            True if refinement was successful, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for bbox refinement")
+                return False
+            return self._project_state.refine_all_bboxes()
+        except Exception as e:
+            logger.exception(f"Error refining bboxes: {e}")
+            return False
+
+    def command_expand_refine_bboxes(self) -> bool:
+        """Command to expand and refine all bounding boxes in the current page.
+
+        Returns:
+            True if expansion and refinement was successful, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for bbox expand & refine")
+                return False
+            return self._project_state.expand_and_refine_all_bboxes()
+        except Exception as e:
+            logger.exception(f"Error expanding and refining bboxes: {e}")
+            return False

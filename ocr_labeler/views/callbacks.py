@@ -12,3 +12,5 @@ class NavigationCallbacks:
 
     save_page: Optional[Callable[[], Awaitable[None]]] = None
     load_page: Optional[Callable[[], Awaitable[None]]] = None
+    refine_bboxes: Optional[Callable[[], Awaitable[None]]] = None
+    expand_refine_bboxes: Optional[Callable[[], Awaitable[None]]] = None

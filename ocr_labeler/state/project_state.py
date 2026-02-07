@@ -259,6 +259,14 @@ class ProjectState:
                         logger.debug(
                             "ensure_page: loaded from saved for index=%s", index
                         )
+                        # Attach convenience attrs expected elsewhere
+                        img_path = Path(self.project.image_paths[index])
+                        if not hasattr(loaded_page, "image_path"):
+                            loaded_page.image_path = str(img_path)  # type: ignore[attr-defined]
+                        if not hasattr(loaded_page, "name"):
+                            loaded_page.name = img_path.name  # type: ignore[attr-defined]
+                        if not hasattr(loaded_page, "index"):
+                            loaded_page.index = index  # type: ignore[attr-defined]
                         if not hasattr(loaded_page, "page_source"):
                             loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
                         else:
@@ -289,7 +297,7 @@ class ProjectState:
                     )
                     # Attach convenience attrs expected elsewhere
                     if not hasattr(page_obj, "image_path"):
-                        page_obj.image_path = img_path  # type: ignore[attr-defined]
+                        page_obj.image_path = str(img_path)  # type: ignore[attr-defined]
                     if not hasattr(page_obj, "name"):
                         page_obj.name = img_path.name  # type: ignore[attr-defined]
                     if not hasattr(page_obj, "index"):
@@ -495,6 +503,66 @@ class ProjectState:
             self._invalidate_text_cache()
         logger.debug("load_current_page: completed, success=%s", success)
         return success
+
+    def refine_all_bboxes(self, padding_px: int = 2) -> bool:
+        """Refine all bounding boxes in the current page.
+
+        Args:
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if refinement was successful, False otherwise.
+        """
+        logger.debug("refine_all_bboxes: called with padding_px=%s", padding_px)
+        page_state = self.get_page_state(self.current_page_index)
+        page = page_state.get_page(self.current_page_index)
+
+        if page is None:
+            logger.error("No current page available to refine bboxes")
+            return False
+
+        result = self.page_ops.refine_all_bboxes(page=page, padding_px=padding_px)
+
+        if result:
+            # Invalidate cache since page content changed
+            self._invalidate_text_cache()
+            # Notify UI of changes
+            page_state.notify()
+
+        logger.debug("refine_all_bboxes: completed, result=%s", result)
+        return result
+
+    def expand_and_refine_all_bboxes(self, padding_px: int = 2) -> bool:
+        """Expand and refine all bounding boxes in the current page.
+
+        Args:
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if operation was successful, False otherwise.
+        """
+        logger.debug(
+            "expand_and_refine_all_bboxes: called with padding_px=%s", padding_px
+        )
+        page_state = self.get_page_state(self.current_page_index)
+        page = page_state.get_page(self.current_page_index)
+
+        if page is None:
+            logger.error("No current page available to expand and refine bboxes")
+            return False
+
+        result = self.page_ops.expand_and_refine_all_bboxes(
+            page=page, padding_px=padding_px
+        )
+
+        if result:
+            # Invalidate cache since page content changed
+            self._invalidate_text_cache()
+            # Notify UI of changes
+            page_state.notify()
+
+        logger.debug("expand_and_refine_all_bboxes: completed, result=%s", result)
+        return result
 
     @property
     def current_page_source_text(self) -> str:

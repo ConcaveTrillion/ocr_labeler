@@ -326,3 +326,121 @@ class TestPageOperations:
         """Test finding ground truth text with no match."""
         # This test is now in test_ground_truth.py for ProjectState
         pass
+
+    def test_refine_all_bboxes_success(self, operations):
+        """Test successful bbox refinement."""
+        # Create a mock page
+        mock_page = MagicMock(spec=Page)
+        mock_page.refine_bounding_boxes = MagicMock()
+        mock_page.refresh_page_images = MagicMock()
+
+        # Call refine_all_bboxes
+        result = operations.refine_all_bboxes(mock_page, padding_px=2)
+
+        # Verify the method was called correctly
+        assert result is True
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+        mock_page.refresh_page_images.assert_called_once()
+
+    def test_refine_all_bboxes_no_refresh_method(self, operations):
+        """Test bbox refinement when page has no refresh_page_images method."""
+        # Create a mock page without refresh_page_images
+        mock_page = MagicMock(spec=Page)
+        mock_page.refine_bounding_boxes = MagicMock()
+        # Don't add refresh_page_images method
+
+        # Call refine_all_bboxes
+        result = operations.refine_all_bboxes(mock_page, padding_px=3)
+
+        # Verify the method was called correctly
+        assert result is True
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=3)
+        # refresh_page_images should not be called since it doesn't exist
+
+    def test_refine_all_bboxes_refine_fails(self, operations):
+        """Test bbox refinement when refine_bounding_boxes raises an exception."""
+        # Create a mock page that raises an exception
+        mock_page = MagicMock(spec=Page)
+        mock_page.refine_bounding_boxes = MagicMock(
+            side_effect=Exception("Refine failed")
+        )
+
+        # Call refine_all_bboxes
+        result = operations.refine_all_bboxes(mock_page)
+
+        # Verify the result is False
+        assert result is False
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+
+    def test_expand_and_refine_all_bboxes_success(self, operations):
+        """Test successful bbox expansion and refinement."""
+        # Create a mock page with mock blocks and words
+        mock_word = MagicMock()
+        mock_word.crop_bottom = MagicMock()
+        mock_word.expand_to_content = MagicMock()
+
+        mock_block = MagicMock()
+        mock_block.words = [mock_word]
+
+        mock_page = MagicMock(spec=Page)
+        mock_page.blocks = [mock_block]
+        mock_page.refine_bounding_boxes = MagicMock()
+        mock_page.refresh_page_images = MagicMock()
+
+        # Call expand_and_refine_all_bboxes
+        result = operations.expand_and_refine_all_bboxes(mock_page, padding_px=2)
+
+        # Verify the methods were called correctly
+        assert result is True
+        mock_word.crop_bottom.assert_called_once()
+        mock_word.expand_to_content.assert_called_once()
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+        mock_page.refresh_page_images.assert_called_once()
+
+    def test_expand_and_refine_all_bboxes_no_methods(self, operations):
+        """Test bbox expansion and refinement when words have no crop/expand methods."""
+        # Create a mock page with words that don't have the methods
+        mock_word = MagicMock()
+        # Don't add crop_bottom or expand_to_content methods
+
+        mock_block = MagicMock()
+        mock_block.words = [mock_word]
+
+        mock_page = MagicMock(spec=Page)
+        mock_page.blocks = [mock_block]
+        mock_page.refine_bounding_boxes = MagicMock()
+        mock_page.refresh_page_images = MagicMock()
+
+        # Call expand_and_refine_all_bboxes
+        result = operations.expand_and_refine_all_bboxes(mock_page, padding_px=3)
+
+        # Verify the method was called correctly
+        assert result is True
+        # crop_bottom and expand_to_content should not be called since they don't exist
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=3)
+        mock_page.refresh_page_images.assert_called_once()
+
+    def test_expand_and_refine_all_bboxes_refine_fails(self, operations):
+        """Test bbox expansion and refinement when refine_bounding_boxes raises an exception."""
+        # Create a mock page that raises an exception
+        mock_word = MagicMock()
+        mock_word.crop_bottom = MagicMock()
+        mock_word.expand_to_content = MagicMock()
+
+        mock_block = MagicMock()
+        mock_block.words = [mock_word]
+
+        mock_page = MagicMock(spec=Page)
+        mock_page.blocks = [mock_block]
+        mock_page.refine_bounding_boxes = MagicMock(
+            side_effect=Exception("Refine failed")
+        )
+
+        # Call expand_and_refine_all_bboxes
+        result = operations.expand_and_refine_all_bboxes(mock_page)
+
+        # Verify the result is False
+        assert result is False
+        mock_word.crop_bottom.assert_called_once()
+        mock_word.expand_to_content.assert_called_once()
+        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)

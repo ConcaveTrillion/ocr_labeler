@@ -330,6 +330,104 @@ class PageOperations:
             logger.exception(f"Failed to load page {page_number}: {e}")
             return None
 
+    def refine_all_bboxes(self, page: Page, padding_px: int = 2) -> bool:
+        """Refine all bounding boxes in a page with specified padding.
+
+        Calls page.refine_bounding_boxes(padding_px) and refreshes page images.
+
+        Args:
+            page: Page object to refine bboxes for.
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if refinement was successful, False otherwise.
+        """
+        try:
+            logger.debug(f"Refining bboxes for page with padding_px={padding_px}")
+            page.refine_bounding_boxes(padding_px=padding_px)
+
+            # Refresh page images after bbox changes
+            if hasattr(page, "refresh_page_images"):
+                page.refresh_page_images()
+                logger.debug("Refreshed page images after bbox refinement")
+
+            logger.info("Successfully refined bboxes for page")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to refine bboxes for page: {e}")
+            return False
+
+    def expand_and_refine_all_bboxes(self, page: Page, padding_px: int = 2) -> bool:
+        """Expand and refine all bounding boxes in a page.
+
+        Iterates through all words in the page, calling crop_bottom() and expand_to_content()
+        on each word, then calls page.refine_bounding_boxes(padding_px) and refreshes page images.
+
+        Args:
+            page: Page object to expand and refine bboxes for.
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if operation was successful, False otherwise.
+        """
+        try:
+            logger.debug(
+                f"Expanding and refining bboxes for page with padding_px={padding_px}"
+            )
+
+            # Iterate through all words and apply crop_bottom + expand_to_content
+            word_blocks = None
+            if hasattr(page, "blocks"):
+                word_blocks = page.blocks
+            elif hasattr(page, "lines"):
+                word_blocks = page.lines
+
+            if word_blocks is None:
+                logger.warning(
+                    "Page has no blocks/lines; skipping expand/refine word pass"
+                )
+                return False
+
+            page_image = None
+            if hasattr(page, "cv2_numpy_page_image"):
+                page_image = page.cv2_numpy_page_image
+
+            for block in word_blocks:
+                words = getattr(block, "words", None)
+                if not words:
+                    continue
+                for word in words:
+                    if hasattr(word, "crop_bottom"):
+                        try:
+                            word.crop_bottom()  # type: ignore[attr-defined]
+                        except TypeError:
+                            if page_image is not None:
+                                word.crop_bottom(page_image)  # type: ignore[attr-defined]
+                            else:
+                                raise
+                    if hasattr(word, "expand_to_content"):
+                        try:
+                            word.expand_to_content()  # type: ignore[attr-defined]
+                        except TypeError:
+                            if page_image is not None:
+                                word.expand_to_content(page_image)  # type: ignore[attr-defined]
+                            else:
+                                raise
+
+            # Then refine bboxes
+            page.refine_bounding_boxes(padding_px=padding_px)
+
+            # Refresh page images after bbox changes
+            if hasattr(page, "refresh_page_images"):
+                page.refresh_page_images()
+                logger.debug("Refreshed page images after expand and refine")
+
+            logger.info("Successfully expanded and refined bboxes for page")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to expand and refine bboxes for page: {e}")
+            return False
+
     async def can_load_page(
         self,
         page_number: int,

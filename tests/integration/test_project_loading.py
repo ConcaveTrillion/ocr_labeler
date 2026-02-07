@@ -42,6 +42,16 @@ def mock_ocr_processing(monkeypatch):
         mock_page.cv2_numpy_page_image_word_with_bboxes = ImgLike((100, 100, 3))
         mock_page.cv2_numpy_page_image_matched_word_with_colors = ImgLike((100, 100, 3))
 
+        # Provide minimal block/word structure for bbox operations
+        mock_word = Mock()
+        mock_word.crop_bottom = Mock()
+        mock_word.expand_to_content = Mock()
+        mock_block = Mock()
+        mock_block.words = [mock_word]
+        mock_page.blocks = [mock_block]
+        mock_page.refine_bounding_boxes = Mock()
+        mock_page.refresh_page_images = Mock()
+
         mock_document.pages = [mock_page]  # Mock page
         mock_ocr.return_value = mock_document
 
@@ -236,11 +246,11 @@ class TestNiceGuiIntegration:
         # Verify the spinner is still visible (loading still in progress)
         await user.should_see("spinner")
 
-        # Wait for loading to complete - spinner should disappear
-        await user.should_not_see(marker="spinner")
-
-        # Verify loaded notification appears
+        # Wait for loading to complete - confirm loaded notification first
         await user.should_see("Loaded projectID629292e7559a8")
+
+        # Then verify the spinner disappears
+        await user.should_not_see(marker="spinner")
 
         # Verify that the project loaded successfully - navigation controls should be present
         await user.should_see("Prev")
@@ -279,12 +289,42 @@ class TestNiceGuiIntegration:
         # Verify that loading has started (spinner should be visible)
         await user.should_see(marker="spinner")
 
-        # Wait for loading to complete
-        await user.should_not_see(marker="spinner")
-
-        # Verify loaded notification appears only once
+        # Wait for loading to complete - confirm loaded notification first
         await user.should_see("Loaded projectID629292e7559a8")
+
+        # Then verify the spinner disappears
+        await user.should_not_see(marker="spinner")
 
         # Verify that the project loaded successfully - navigation controls should be present
         await user.should_see("Prev")
         await user.should_see("Next")
+
+    async def test_expand_refine_bboxes_button_triggers_operation(
+        self, mock_ocr_processing, user: User, test_projects_root: Path
+    ):
+        """Test that clicking Expand & Refine triggers bbox operation and UI notification."""
+        # Create the app instance with test projects
+        labeler = NiceGuiLabeler(
+            project_root=test_projects_root, projects_root=test_projects_root
+        )
+        labeler.create_routes()
+
+        # Open the main page
+        await user.open("/")
+
+        # Load a project first
+        await user.should_see("No Project Loaded")
+        user.find("LOAD").click()
+        await user.should_see("Reload OCR")
+        await user.should_see("Prev")
+        await user.should_see("Next")
+
+        # Load OCR for the current page to ensure a page is available
+        user.find("Reload OCR").click()
+        await user.should_see("Page reloaded with OCR")
+
+        # Click Expand & Refine
+        user.find("Expand & Refine").click()
+
+        # Verify success notification appears
+        await user.should_see("Bounding boxes expanded and refined successfully")

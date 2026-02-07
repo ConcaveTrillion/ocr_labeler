@@ -61,6 +61,8 @@ class ProjectView(
             self.callbacks = NavigationCallbacks(
                 save_page=self._save_page_async,
                 load_page=self._load_page_async,
+                refine_bboxes=self._refine_bboxes_async,
+                expand_refine_bboxes=self._expand_refine_bboxes_async,
             )
             logger.debug("Navigation callbacks initialized")
 
@@ -72,6 +74,12 @@ class ProjectView(
                 on_goto=self._goto_async,
                 on_save_page=self.callbacks.save_page if self.callbacks else None,
                 on_load_page=self.callbacks.load_page if self.callbacks else None,
+                on_refine_bboxes=self.callbacks.refine_bboxes
+                if self.callbacks
+                else None,
+                on_expand_refine_bboxes=self.callbacks.expand_refine_bboxes
+                if self.callbacks
+                else None,
             )
             self.page_controls.build()
             logger.debug("Page controls built")
@@ -360,40 +368,23 @@ class ProjectView(
             logger.debug("Save blocked - currently loading")
             return
 
-        # Note: Save functionality needs to be implemented in the viewmodel
-        # For now, we'll access the underlying state
-        if hasattr(self.viewmodel, "_project_state"):
-            page = self.viewmodel._project_state.current_page()
-            if not page:
-                logger.warning("No current page to save")
-                ui.notify("No current page to save", type="warning")
-                return
-
-            logger.debug(
-                "Starting async save for page: %s", page.name if page else "unknown"
+        logger.debug("Starting async save for current page")
+        try:
+            # Run save in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.viewmodel.command_save_page,
             )
-            try:
-                # Run save in background thread to avoid blocking UI
-                success = await asyncio.to_thread(
-                    self.viewmodel._project_state.save_current_page,
-                )
 
-                if success:
-                    logger.info(
-                        "Page saved successfully: %s", page.name if page else "unknown"
-                    )
-                    ui.notify("Page saved successfully", type="positive")
-                else:
-                    logger.warning(
-                        "Failed to save page: %s", page.name if page else "unknown"
-                    )
-                    ui.notify("Failed to save page", type="negative")
+            if success:
+                logger.info("Page saved successfully")
+                ui.notify("Page saved successfully", type="positive")
+            else:
+                logger.warning("Failed to save page")
+                ui.notify("Failed to save page", type="negative")
 
-            except Exception as exc:  # noqa: BLE001
-                logger.error(
-                    "Save failed for page %s: %s", page.name if page else "unknown", exc
-                )
-                ui.notify(f"Save failed: {exc}", type="negative")
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Save failed: %s", exc)
+            ui.notify(f"Save failed: {exc}", type="negative")
 
     async def _load_page_async(self):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
@@ -403,27 +394,82 @@ class ProjectView(
 
         logger.debug("Starting async load for current page")
         try:
-            # Note: Load functionality needs to be implemented in the viewmodel
-            # For now, we'll access the underlying state
-            if hasattr(self.viewmodel, "_project_state"):
-                # Run load in background thread to avoid blocking UI
-                success = await asyncio.to_thread(
-                    self.viewmodel._project_state.load_current_page,
-                )
+            # Run load in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.viewmodel.command_load_page,
+            )
 
-                if success:
-                    logger.info("Page loaded successfully")
-                    ui.notify("Page loaded successfully", type="positive")
-                    # Trigger UI refresh to show loaded page
-                    self.refresh()
-                    logger.debug("UI refresh triggered after successful load")
-                else:
-                    logger.warning("No saved page found for current page")
-                    ui.notify("No saved page found for current page", type="warning")
+            if success:
+                logger.info("Page loaded successfully")
+                ui.notify("Page loaded successfully", type="positive")
+                # Trigger UI refresh to show loaded page
+                self.refresh()
+                logger.debug("UI refresh triggered after successful load")
+            else:
+                logger.warning("No saved page found for current page")
+                ui.notify("No saved page found for current page", type="warning")
 
         except Exception as exc:  # noqa: BLE001
             logger.error("Load failed: %s", exc)
             ui.notify(f"Load failed: {exc}", type="negative")
+
+    async def _refine_bboxes_async(self):  # pragma: no cover - UI side effects
+        """Refine all bounding boxes in the current page asynchronously."""
+        if self.viewmodel.is_project_loading:
+            logger.debug("Refine bboxes blocked - currently loading")
+            return
+
+        logger.debug("Starting async bbox refinement for current page")
+        try:
+            # Run refinement in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.viewmodel.command_refine_bboxes,
+            )
+
+            if success:
+                logger.info("Bboxes refined successfully")
+                ui.notify("Bounding boxes refined successfully", type="positive")
+                # Trigger UI refresh to show updated overlays
+                self.refresh()
+                logger.debug("UI refresh triggered after successful bbox refinement")
+            else:
+                logger.warning("Failed to refine bboxes")
+                ui.notify("Failed to refine bounding boxes", type="negative")
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Bbox refinement failed: %s", exc)
+            ui.notify(f"Bbox refinement failed: {exc}", type="negative")
+
+    async def _expand_refine_bboxes_async(self):  # pragma: no cover - UI side effects
+        """Expand and refine all bounding boxes in the current page asynchronously."""
+        if self.viewmodel.is_project_loading:
+            logger.debug("Expand & refine bboxes blocked - currently loading")
+            return
+
+        logger.debug("Starting async bbox expand & refine for current page")
+        try:
+            # Run expansion and refinement in background thread to avoid blocking UI
+            success = await asyncio.to_thread(
+                self.viewmodel.command_expand_refine_bboxes,
+            )
+
+            if success:
+                logger.info("Bboxes expanded and refined successfully")
+                ui.notify(
+                    "Bounding boxes expanded and refined successfully", type="positive"
+                )
+                # Trigger UI refresh to show updated overlays
+                self.refresh()
+                logger.debug(
+                    "UI refresh triggered after successful bbox expand & refine"
+                )
+            else:
+                logger.warning("Failed to expand and refine bboxes")
+                ui.notify("Failed to expand and refine bounding boxes", type="negative")
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Bbox expand & refine failed: %s", exc)
+            ui.notify(f"Bbox expand & refine failed: {exc}", type="negative")
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""

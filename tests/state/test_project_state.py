@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from ocr_labeler.state.project_state import ProjectState
 
@@ -231,3 +231,146 @@ def test_save_current_page_updates_source_label(tmp_path):
         assert success is True
         assert state.current_page_source_text == "LABELED"
         assert mock_page.page_source == "filesystem"
+
+
+def test_refine_all_bboxes_success(tmp_path):
+    """Test refine_all_bboxes with a valid page."""
+    from unittest.mock import patch
+
+    from ocr_labeler.models.project import Project
+
+    # Setup project state with one page
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    # Create a dummy image
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    # Initialize project with one page
+    state.project = Project(pages=[None], image_paths=[img_path])
+    state.current_page_index = 0
+
+    # Mock the page and operations
+    mock_page = MagicMock()
+    mock_page.name = "test_page"
+
+    with (
+        patch.object(state, "get_page_state") as mock_get_page_state,
+        patch.object(
+            state.page_ops, "refine_all_bboxes", return_value=True
+        ) as mock_refine,
+    ):
+        mock_page_state = MagicMock()
+        mock_page_state.get_page.return_value = mock_page
+        mock_get_page_state.return_value = mock_page_state
+
+        # Call refine_all_bboxes
+        result = state.refine_all_bboxes(padding_px=3)
+
+        # Verify
+        assert result is True
+        mock_refine.assert_called_once_with(page=mock_page, padding_px=3)
+        mock_page_state.notify.assert_called_once()
+
+
+def test_refine_all_bboxes_no_page(tmp_path):
+    """Test refine_all_bboxes when no page is available."""
+    from ocr_labeler.models.project import Project
+
+    # Setup project state with one page
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    # Create a dummy image
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    # Initialize project with one page
+    state.project = Project(pages=[None], image_paths=[img_path])
+    state.current_page_index = 0
+
+    with patch.object(state, "get_page_state") as mock_get_page_state:
+        mock_page_state = MagicMock()
+        mock_page_state.get_page.return_value = None  # No page available
+        mock_get_page_state.return_value = mock_page_state
+
+        # Call refine_all_bboxes
+        result = state.refine_all_bboxes()
+
+        # Verify
+        assert result is False
+
+
+def test_expand_and_refine_all_bboxes_success(tmp_path):
+    """Test expand_and_refine_all_bboxes success."""
+    from ocr_labeler.models.project import Project
+
+    # Setup project state with one page
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    # Create a dummy image
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    # Initialize project with one page
+    mock_page = MagicMock()
+    state.project = Project(pages=[mock_page], image_paths=[str(img_path)])
+    state.current_page_index = 0
+
+    with (
+        patch.object(state, "get_page_state") as mock_get_page_state,
+        patch.object(
+            state.page_ops, "expand_and_refine_all_bboxes"
+        ) as mock_expand_refine,
+    ):
+        mock_page_state = MagicMock()
+        mock_page_state.get_page.return_value = mock_page
+        mock_get_page_state.return_value = mock_page_state
+
+        mock_expand_refine.return_value = True
+
+        # Call expand_and_refine_all_bboxes
+        result = state.expand_and_refine_all_bboxes(padding_px=3)
+
+        # Verify
+        assert result is True
+        mock_expand_refine.assert_called_once_with(page=mock_page, padding_px=3)
+        mock_page_state.notify.assert_called_once()
+
+
+def test_expand_and_refine_all_bboxes_no_page(tmp_path):
+    """Test expand_and_refine_all_bboxes when no page is available."""
+    from ocr_labeler.models.project import Project
+
+    # Setup project state with one page
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    # Create a dummy image
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    # Initialize project with one page
+    state.project = Project(pages=[None], image_paths=[img_path])
+    state.current_page_index = 0
+
+    with patch.object(state, "get_page_state") as mock_get_page_state:
+        mock_page_state = MagicMock()
+        mock_page_state.get_page.return_value = None  # No page available
+        mock_get_page_state.return_value = mock_page_state
+
+        # Call expand_and_refine_all_bboxes
+        result = state.expand_and_refine_all_bboxes()
+
+        # Verify
+        assert result is False

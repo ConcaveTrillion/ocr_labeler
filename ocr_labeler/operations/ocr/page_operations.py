@@ -53,9 +53,26 @@ class PageOperations:
         Args:
             docTR_predictor: Optional predictor for OCR processing
         """
-        self.page_parser = self.build_initial_page_parser(docTR_predictor)
+        # Store the predictor at instance level to avoid recreating it per-page
+        self._docTR_predictor = docTR_predictor
+        self._predictor_initialized = False
+        self.page_parser = self.build_initial_page_parser()
 
-    def build_initial_page_parser(self, docTR_predictor=None):
+    def _get_or_create_predictor(self):
+        """Get or create the DocTR predictor instance.
+
+        Lazy initialization to avoid loading models until actually needed.
+        Ensures each PageOperations instance has its own predictor for thread safety.
+        """
+        if not self._predictor_initialized:
+            if self._docTR_predictor is None:
+                from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
+
+                self._docTR_predictor = get_default_doctr_predictor()
+            self._predictor_initialized = True
+        return self._docTR_predictor
+
+    def build_initial_page_parser(self):
         """Return an initial page parser that performs OCR via DocTR when invoked.
 
         This creates a parser for the initial OCR processing of pages from images.
@@ -65,13 +82,6 @@ class PageOperations:
         different OCR engines or caching strategies).
         """
 
-        def _get_predictor():
-            if docTR_predictor is None:
-                from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
-
-                predictor = get_default_doctr_predictor()
-            return predictor
-
         def _parse_page(
             path: Path,
             index: int,
@@ -80,7 +90,7 @@ class PageOperations:
         ) -> Page:
             from pd_book_tools.ocr.document import Document
 
-            predictor = _get_predictor()
+            predictor = self._get_or_create_predictor()
             doc = Document.from_image_ocr_via_doctr(
                 path,
                 source_identifier=path.name,

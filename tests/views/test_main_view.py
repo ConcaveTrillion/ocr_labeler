@@ -55,7 +55,7 @@ async def test_main_view_placeholder_display(user: User):
     # Create the app instance and set up routes
     from pathlib import Path
 
-    labeler = app.NiceGuiLabeler(project_root=Path("."))
+    labeler = app.NiceGuiLabeler(project_root=Path("."), enable_session_logging=False)
     labeler.create_routes()
 
     # Open the page and check that it loads without errors

@@ -158,9 +158,9 @@ class TextTabs:
                         self.gt_text = ui.codemirror("", language="plaintext").classes(
                             "full-width full-height monospace"
                         )
-                        # Bind to model instead of page_state
-                        self.gt_text.bind_value(self.model, "gt_text")
-                        logger.debug("Bound GT text editor to model")
+                        # Don't use bind_value for large text - it's slow
+                        # We'll update directly in _update_text_editors()
+                        logger.debug("Created GT text editor (manual updates)")
                 # OCR panel
                 with ui.tab_panel("OCR").classes("full-width full-height column"):
                     logger.debug("Building OCR panel")
@@ -168,12 +168,15 @@ class TextTabs:
                         self.ocr_text = ui.codemirror("", language="plaintext").classes(
                             "full-width full-height monospace"
                         )
-                        # Bind to model instead of page_state
-                        self.ocr_text.bind_value(self.model, "ocr_text")
-                        logger.debug("Bound OCR text editor to model")
+                        # Don't use bind_value for large text - it's slow
+                        # We'll update directly in _update_text_editors()
+                        logger.debug("Created OCR text editor (manual updates)")
             self._tabs = text_tabs
         self.container = col
         logger.info("TextTabs UI build completed")
+
+        # Update text editors with initial values from model
+        self._update_text_editors()
 
         # Perform initial word match update if page is already available
         if self.page_state and hasattr(self.page_state, "current_page"):
@@ -186,9 +189,18 @@ class TextTabs:
 
         return col
 
+    def _update_text_editors(self):
+        """Update text editor values directly (avoids slow binding propagation)."""
+        if hasattr(self, "gt_text") and self.gt_text:
+            self.gt_text.value = self.model.gt_text
+        if hasattr(self, "ocr_text") and self.ocr_text:
+            self.ocr_text.value = self.model.ocr_text
+
     def _on_page_state_changed(self):
         """Called when page state changes; update word matches automatically."""
         logger.debug("TextTabs received page state change notification")
+        # Update text editors directly instead of relying on bindings
+        self._update_text_editors()
         if self.page_state and hasattr(self.page_state, "current_page"):
             page = self.page_state.current_page
             logger.debug(f"Current page available: {page is not None}")

@@ -146,13 +146,17 @@ class TestNiceGuiIntegration:
         """Test that the app initializes correctly with test projects available."""
         # Initialize the app with test projects root
         labeler = NiceGuiLabeler(
-            project_root=test_projects_root, projects_root=test_projects_root
+            project_root=test_projects_root,
+            projects_root=test_projects_root,
+            enable_session_logging=False,
         )
 
-        # Verify the app state is set up
-        assert labeler.state is not None
-        assert labeler.viewmodel is not None
-        assert labeler.view is not None
+        # Verify the app configuration is set up correctly
+        # Note: state, viewmodel, and view are now created per-session (per-tab)
+        # inside the @ui.page handler, not in __init__
+        assert labeler.project_root == test_projects_root
+        assert labeler.projects_root == test_projects_root
+        assert labeler.font_css is not None  # Font CSS is prepared once
 
     async def test_project_discovery_ui(self, user: User, test_projects_root: Path):
         """Test that test projects are discovered and displayed in the UI."""
@@ -187,7 +191,9 @@ class TestNiceGuiIntegration:
         """Test that project selection UI elements are present."""
         # Create the app instance
         labeler = NiceGuiLabeler(
-            project_root=test_projects_root, projects_root=test_projects_root
+            project_root=test_projects_root,
+            projects_root=test_projects_root,
+            enable_session_logging=False,
         )
         labeler.create_routes()
 
@@ -203,7 +209,9 @@ class TestNiceGuiIntegration:
         """Test that clicking the LOAD button initiates project loading without errors."""
         # Create the app instance with test projects
         labeler = NiceGuiLabeler(
-            project_root=test_projects_root, projects_root=test_projects_root
+            project_root=test_projects_root,
+            projects_root=test_projects_root,
+            enable_session_logging=False,
         )
         labeler.create_routes()
 

@@ -17,6 +17,7 @@ htmlcov**
 
 # Logs
 *.log
+logs/
 
 # VS Code personal workspace files
 *.code-workspace

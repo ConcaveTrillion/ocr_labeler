@@ -78,15 +78,22 @@ class PageOperations:
         This creates a parser for the initial OCR processing of pages from images.
         This is distinct from loading/saving work done on already processed pages.
 
+        The returned parser supports force refresh semantics - when called, it
+        always runs OCR on the image regardless of any cached state. Higher-level
+        code controls whether to use saved results or force fresh OCR processing.
+
         Separated for easier testing & potential alternative implementations (e.g.,
         different OCR engines or caching strategies).
+
+        Returns:
+            Callable that takes (path, index, ground_truth_string) and returns
+            a Page object with OCR results.
         """
 
         def _parse_page(
             path: Path,
             index: int,
             ground_truth_string: str,
-            rerun_ocr_and_match: bool = False,
         ) -> Page:
             from pd_book_tools.ocr.document import Document
 
@@ -594,6 +601,55 @@ class PageOperations:
         except Exception as e:
             logger.exception(f"Failed to refresh page images: {e}")
             return False
+
+    def reset_ocr(
+        self,
+        image_path: Path,
+        index: int = 0,
+        ground_truth_text: str = "",
+    ) -> Optional[Page]:
+        """Reset OCR processing for a page by re-running DocTR OCR.
+
+        This method forces a fresh OCR run on the image, discarding any cached or
+        saved results. It's useful when you want to reprocess an image with the
+        current OCR engine settings.
+
+        Args:
+            image_path: Path to the image file to process.
+            index: Page index (default: 0).
+            ground_truth_text: Optional ground truth text to add (default: "").
+
+        Returns:
+            Page object with fresh OCR results, or None if processing failed.
+
+        Example:
+            operations = PageOperations()
+            page = operations.reset_ocr(
+                image_path=Path("page_001.png"),
+                index=0,
+                ground_truth_text="Sample GT text"
+            )
+        """
+        try:
+            logger.info(f"Resetting OCR for page: {image_path}")
+
+            # Use the page parser to perform fresh OCR
+            page = self.page_parser(
+                path=image_path,
+                index=index,
+                ground_truth_string=ground_truth_text,
+            )
+
+            if page is None:
+                logger.error(f"Failed to reset OCR for {image_path}")
+                return None
+
+            logger.info(f"Successfully reset OCR for {image_path}")
+            return page
+
+        except Exception as e:
+            logger.exception(f"Error resetting OCR for {image_path}: {e}")
+            return None
 
     def find_ground_truth_text(
         self, name: str, ground_truth_map: dict[str, str]

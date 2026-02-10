@@ -444,3 +444,71 @@ class TestPageOperations:
         mock_word.crop_bottom.assert_called_once()
         mock_word.expand_to_content.assert_called_once()
         mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+
+    @patch("pd_book_tools.ocr.doctr_support.get_default_doctr_predictor")
+    @patch("pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr")
+    @patch("cv2.imread")
+    def test_reset_ocr_success(
+        self, mock_cv2_imread, mock_from_image_ocr, mock_get_predictor, temp_dir
+    ):
+        """Test successful OCR reset."""
+        # Setup mocks
+        mock_predictor = MagicMock()
+        mock_get_predictor.return_value = mock_predictor
+
+        mock_page = MagicMock(spec=Page)
+        mock_page.name = "test_page"
+        mock_page.text = "Fresh OCR text"
+        mock_doc = MagicMock()
+        mock_doc.pages = [mock_page]
+        mock_from_image_ocr.return_value = mock_doc
+
+        mock_cv2_imread.return_value = MagicMock()  # Mock image array
+
+        operations = PageOperations()
+
+        # Create test image
+        image_path = temp_dir / "test.png"
+        image_path.touch()
+
+        # Reset OCR
+        result_page = operations.reset_ocr(
+            image_path=image_path, index=0, ground_truth_text="Test GT"
+        )
+
+        # Verify results
+        assert result_page == mock_page
+        mock_from_image_ocr.assert_called_once()
+        mock_cv2_imread.assert_called_once_with(str(image_path))
+
+    def test_reset_ocr_failure(self, operations, temp_dir):
+        """Test OCR reset when parser fails."""
+        # Create test image
+        image_path = temp_dir / "test.png"
+        image_path.touch()
+
+        # Mock the page_parser to return None
+        operations.page_parser = MagicMock(return_value=None)
+
+        # Reset OCR should return None on failure
+        result_page = operations.reset_ocr(image_path=image_path)
+
+        assert result_page is None
+        operations.page_parser.assert_called_once()
+
+    @patch("pd_book_tools.ocr.doctr_support.get_default_doctr_predictor")
+    def test_reset_ocr_exception_handling(
+        self, mock_get_predictor, operations, temp_dir
+    ):
+        """Test OCR reset exception handling."""
+        # Setup mock to raise exception
+        mock_get_predictor.side_effect = Exception("OCR processing failed")
+
+        # Create test image
+        image_path = temp_dir / "test.png"
+        image_path.touch()
+
+        # Reset OCR should handle exception and return None
+        result_page = operations.reset_ocr(image_path=image_path)
+
+        assert result_page is None

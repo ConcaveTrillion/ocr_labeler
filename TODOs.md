@@ -54,7 +54,7 @@ The NiceGUI implementation currently has these limitations:
 #### OCR & Page Management
 7. **Reset OCR Logic** ✅: Add reset_ocr functionality to re-run docTR OCR for current image and discard manual edits for that page.
 
-8. **Force Refresh Support**: Support force_refresh flag in run_doctr_ocr_on_images for per-page refresh capabilities.
+8. **Force Refresh Support** ✅: Support force_refresh flag in run_doctr_ocr_on_images for per-page refresh capabilities.
 
 #### Error Handling
 35. **User Notifications** ✅: Add user notifications (toast/snackbar) for save/load success/failure states.

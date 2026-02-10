@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from nicegui import ui
 from pd_book_tools.ocr.page import Page
 
+from ....models.line_match_model import LineMatch
 from ....models.word_match_model import MatchStatus
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
 
@@ -439,6 +441,51 @@ class WordMatchView:
 
         except Exception as e:
             logger.debug(f"Error creating word image: {e}")
+            return None
+
+    def _get_line_image(self, line_match: "LineMatch") -> Optional[str]:
+        """Get cropped line image as base64 data URL.
+
+        Args:
+            line_match: The LineMatch object containing the line to crop.
+
+        Returns:
+            Base64 data URL string for the cropped line image, or None if unavailable.
+        """
+        logger.debug(f"Getting line image for line {line_match.line_index}")
+        try:
+            # Get cropped image from line match
+            try:
+                cropped_img = line_match.get_cropped_image()
+                if cropped_img is None:
+                    logger.debug("Cropped line image is None")
+                    return None
+                logger.debug(
+                    "Successfully cropped line image, shape: %s",
+                    cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
+                )
+            except Exception as e:
+                logger.debug(f"Error cropping line image: {e}")
+                return None
+
+            # Convert to base64 data URL for display in browser
+            import base64
+
+            import cv2
+
+            # Encode image as PNG
+            _, buffer = cv2.imencode(".png", cropped_img)
+            img_base64 = base64.b64encode(buffer).decode("utf-8")
+            data_url = f"data:image/png;base64,{img_base64}"
+            logger.debug(
+                "Successfully encoded line image as base64 data URL (length: %d)",
+                len(data_url),
+            )
+
+            return data_url
+
+        except Exception as e:
+            logger.debug(f"Error creating line image: {e}")
             return None
 
     def _get_status_icon(self, status: str) -> str:

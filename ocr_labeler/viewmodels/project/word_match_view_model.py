@@ -122,6 +122,7 @@ class WordMatchViewModel(BaseViewModel):
                 ground_truth_line_text=line.ground_truth_text,
                 word_matches=word_matches,
                 page_image=page_image,
+                line_object=line,  # Pass line object for bbox access
             )
 
         except Exception as e:
@@ -497,6 +498,7 @@ class WordMatchViewModel(BaseViewModel):
                         ground_truth_line_text=line_match.ground_truth_line_text,
                         word_matches=filtered_words,
                         page_image=line_match.page_image,
+                        line_object=line_match.line_object,  # Preserve line object
                     )
                     filtered_lines.append(filtered_line)
 

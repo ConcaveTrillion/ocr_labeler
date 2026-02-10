@@ -60,7 +60,7 @@ The NiceGUI implementation currently has these limitations:
 35. **User Notifications** ✅: Add user notifications (toast/snackbar) for save/load success/failure states.
 
 ### Phase 2: Basic Operations & Filtering
-**Priority: High** | **Tasks: 9-12, 20, 25**
+**Priority: High** | **Tasks: 9-12, 20, 25** | **Status: ✅ Complete**
 
 #### Bounding Box Operations
 9. **Refine All Bboxes** ✅: Implement refine_all_bboxes for native Page using page.refine_bounding_boxes(padding_px=2) and refresh overlays.
@@ -69,10 +69,10 @@ The NiceGUI implementation currently has these limitations:
 
 11. **Refresh Page Images** ✅: Implement refresh_page_images using page.refresh_page_images() and clear image cache.
 
-12. **Refresh Line Images**: Implement refresh_all_line_images for per-line thumbnails regeneration.
+12. **Refresh Line Images** ✅: Implement refresh_all_line_images for per-line thumbnails regeneration.
 
 #### Line Filtering & Styling
-20. **Mismatch Filtering**: Apply mismatch filtering for native line Blocks (compute exact/validated similarly to notebook implementation).
+20. **Mismatch Filtering** ✅: Apply mismatch filtering for native line Blocks (compute exact/validated similarly to notebook implementation).
 
 25. **Font Injection** ✅: Inject custom monospace font (if path provided) into NiceGUI using global `<style>` tag.
 
@@ -205,10 +205,10 @@ None currently in the pipeline
 
 ## Quick Reference: Task Summary by Phase
 
-### Phase 1 (Critical): Tasks 1-4, 7-8, 35
+### Phase 1 (Critical): Tasks 1-4, 7-8, 35 ✅ Complete
 Foundation: Save/load, OCR reset, notifications
 
-### Phase 2 (High): Tasks 9-12, 20, 25
+### Phase 2 (High): Tasks 9-12, 20, 25 ✅ Complete
 Basic ops: Bbox operations, filtering, fonts
 
 ### Phase 3 (High): Tasks 13-19, 23, 30, 32-33

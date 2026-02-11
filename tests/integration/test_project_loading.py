@@ -20,9 +20,25 @@ def mock_ocr_processing(monkeypatch):
     Returns the mock_ocr patch object that can be used to configure
     the mock document behavior.
     """
-    with patch(
-        "pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr"
-    ) as mock_ocr:
+    # Mock the predictor loader to avoid model initialization
+    mock_predictor = Mock()
+
+    # Mock cv2.imread to avoid actual image loading
+    mock_imread = Mock(return_value=Mock(shape=(100, 100, 3)))
+
+    with (
+        patch(
+            "pd_book_tools.ocr.doctr_support.get_default_doctr_predictor",
+            return_value=mock_predictor,
+        ),
+        patch(
+            "pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr"
+        ) as mock_ocr,
+        patch(
+            "cv2.imread",
+            mock_imread,
+        ),
+    ):
         # Mock the OCR processing to return a mock document
         mock_document = Mock()
         mock_page = Mock()
@@ -207,33 +223,52 @@ class TestNiceGuiIntegration:
         self, mock_ocr_processing, user: User, test_projects_root: Path
     ):
         """Test that clicking the LOAD button initiates project loading without errors."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info("TEST STEP 1: Creating NiceGuiLabeler app instance")
         # Create the app instance with test projects
         labeler = NiceGuiLabeler(
             project_root=test_projects_root,
             projects_root=test_projects_root,
             enable_session_logging=False,
         )
+        logger.info("TEST STEP 2: Creating routes")
         labeler.create_routes()
 
+        logger.info("TEST STEP 3: Opening main page")
         # Open the main page
         await user.open("/")
+        logger.info("TEST STEP 3 COMPLETE: Page opened")
 
+        logger.info("TEST STEP 4: Checking for 'No Project Loaded'")
         # Initially should show "No Project Loaded"
         await user.should_see("No Project Loaded")
+        logger.info("TEST STEP 4 COMPLETE: Found 'No Project Loaded'")
 
+        logger.info("TEST STEP 5: Clicking LOAD button")
         # Click the LOAD button to load the first project (should be pre-selected)
         # This should not crash the application
         user.find("LOAD").click()
+        logger.info("TEST STEP 5 COMPLETE: LOAD button clicked")
 
+        logger.info("TEST STEP 6: Waiting for loading notification")
         # Verify loading notification appears
         await user.should_see("Loading projectID629292e7559a8")
+        logger.info("TEST STEP 6 COMPLETE: Loading notification appeared")
 
+        logger.info("TEST STEP 7: Checking for loading overlay")
         # Verify that loading has started (overlay should be visible, indicating button is disabled)
         await user.should_see(marker="project-loading-overlay")
+        logger.info("TEST STEP 7 COMPLETE: Loading overlay visible")
 
+        logger.info("TEST STEP 8: Verifying LOAD button still present")
         # Verify that the LOAD button is still present (indicating no crash)
         await user.should_see("LOAD")
+        logger.info("TEST STEP 8 COMPLETE: LOAD button still present")
 
+        logger.info("TEST STEP 9: Verifying project dropdown")
         # Verify that the project dropdown is still present
         select_elements = user.find("Project")
         # Find the select element (should be the one with options)
@@ -245,23 +280,39 @@ class TestNiceGuiIntegration:
         assert select_element is not None, "Could not find select element with options"
         expected_projects = ["projectID629292e7559a8", "projectID66c62fca99a93"]
         assert select_element.options == expected_projects
+        logger.info("TEST STEP 9 COMPLETE: Project dropdown verified")
 
+        logger.info("TEST STEP 10: Clicking LOAD again (should be ignored)")
         # Try clicking again - this should not trigger another load operation
         # Since loading is in progress, the click should be ignored
         user.find("LOAD").click()
+        logger.info("TEST STEP 10 COMPLETE: Second LOAD click attempted")
 
+        logger.info("TEST STEP 11: Verifying overlay still visible")
         # Verify the overlay is still visible (loading still in progress)
         await user.should_see(marker="project-loading-overlay")
+        logger.info("TEST STEP 11 COMPLETE: Overlay still visible")
 
+        logger.info(
+            "TEST STEP 12: Waiting for 'Loaded' notification - THIS IS WHERE IT MIGHT HANG"
+        )
         # Wait for loading to complete - confirm loaded notification first
         await user.should_see("Loaded projectID629292e7559a8")
+        logger.info("TEST STEP 12 COMPLETE: Loaded notification appeared")
 
+        logger.info("TEST STEP 13: Waiting for overlay to disappear")
         # Then verify the overlay disappears
         await user.should_not_see(marker="project-loading-overlay")
+        logger.info("TEST STEP 13 COMPLETE: Overlay disappeared")
 
+        logger.info("TEST STEP 14: Verifying Prev button")
         # Verify that the project loaded successfully - navigation controls should be present
         await user.should_see("Prev")
+        logger.info("TEST STEP 14 COMPLETE: Prev button found")
+
+        logger.info("TEST STEP 15: Verifying Next button")
         await user.should_see("Next")
+        logger.info("TEST STEP 15 COMPLETE: Next button found - TEST PASSED")
 
     async def test_load_button_prevents_multiple_clicks(
         self, mock_ocr_processing, user: User, test_projects_root: Path

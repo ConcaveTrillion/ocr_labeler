@@ -147,6 +147,25 @@ class PageControls:  # pragma: no cover - UI wrapper file
                     # Defensive - if binding fails, ignore and leave controls enabled
                     pass
 
+            # Loading status row - shows what's happening during navigation
+            with ui.row().classes("items-center gap-2"):
+                self.loading_status_label = ui.label("").classes(
+                    "text-sm text-gray-600 italic"
+                )
+                # Bind to viewmodel's loading_status property
+                try:
+                    from nicegui import binding
+
+                    binding.bind_from(
+                        self.loading_status_label,
+                        "text",
+                        self.viewmodel,
+                        "loading_status",
+                    )
+                except Exception:
+                    # Defensive - if binding fails, status just won't update
+                    pass
+
             # Second row: Page info
             with ui.row().classes("items-center gap-2"):
                 # Non-clickable button-style box for current page (PNG filename)
@@ -159,10 +178,23 @@ class PageControls:  # pragma: no cover - UI wrapper file
                 # Page source indicator
                 ui.separator().props("vertical")
                 self.page_source_label = (
-                    ui.button("UNKNOWN", on_click=lambda: None).classes(
+                    ui.button("", on_click=lambda: None).classes(
                         "pointer-events-none"
                     )  # visually identical to button, no interaction
                 )
+                # Bind the text to viewmodel's current_page_source_text
+                try:
+                    from nicegui import binding
+
+                    binding.bind_from(
+                        self.page_source_label,
+                        "text",
+                        self.viewmodel,
+                        "current_page_source_text",
+                    )
+                except Exception:
+                    # Defensive - if binding fails, set static text
+                    self.page_source_label.text = "UNKNOWN"
 
                 # Save and Load buttons
                 if self._on_save_page:
@@ -205,15 +237,8 @@ class PageControls:  # pragma: no cover - UI wrapper file
         if self.page_total:
             self.page_total.text = f"/ {total}" if total else "/ 0"
 
-        # Update page source
-        if self.page_source_label:
-            try:
-                # Use the viewmodel property
-                self.page_source_label.text = getattr(
-                    self.viewmodel, "current_page_source_text", "UNKNOWN"
-                )
-            except Exception:  # pragma: no cover - defensive
-                pass
+        # Note: page_source_label is now bound to viewmodel.current_page_source_text
+        # and updates automatically - no manual update needed
 
     async def _reload_with_ocr(self):
         """Reload the current page with OCR processing."""

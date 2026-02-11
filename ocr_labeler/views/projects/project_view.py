@@ -314,7 +314,8 @@ class ProjectView(
             return
 
         async with self._action_context(
-            "Navigating to previous page...", show_spinner=True
+            "Navigating to previous page (OCR may run in background)...",
+            show_spinner=True,
         ):
             logger.debug("Navigating to previous page")
             self._prep_image_spinners()
@@ -343,8 +344,10 @@ class ProjectView(
                     "Previous page navigation prevented by viewmodel: %s", reason
                 )
             else:
-                ui.notify("Navigation started to previous page", type="positive")
-                logger.debug("Previous page navigation completed")
+                logger.debug("Previous page navigation initiated successfully")
+                # Show success notification when navigation completes
+                # (note: actual page load happens asynchronously in background)
+                ui.notify("Navigated to previous page", type="positive")
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
@@ -354,7 +357,7 @@ class ProjectView(
             return
 
         async with self._action_context(
-            "Navigating to next page...", show_spinner=True
+            "Navigating to next page (OCR may run in background)...", show_spinner=True
         ):
             logger.debug("Navigating to next page")
             self._prep_image_spinners()
@@ -381,8 +384,10 @@ class ProjectView(
                 )
                 logger.debug("Next page navigation prevented by viewmodel: %s", reason)
             else:
-                ui.notify("Navigation started to next page", type="positive")
-                logger.debug("Next page navigation completed")
+                logger.debug("Next page navigation initiated successfully")
+                # Show success notification when navigation completes
+                # (note: actual page load happens asynchronously in background)
+                ui.notify("Navigated to next page", type="positive")
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
@@ -399,7 +404,8 @@ class ProjectView(
         display_value = target_page if target_page is not None else (value or "?")
 
         async with self._action_context(
-            f"Navigating to page {display_value}...", show_spinner=True
+            f"Navigating to page {display_value} (OCR may run in background)...",
+            show_spinner=True,
         ):
             logger.debug("Navigating to page: %s", value)
             self._prep_image_spinners()
@@ -432,12 +438,13 @@ class ProjectView(
                     reason,
                 )
             else:
-                ui.notify(
-                    f"Navigation started to page {display_value}", type="positive"
-                )
                 logger.debug(
-                    "Goto page navigation completed for value: %s", display_value
+                    "Goto page navigation initiated successfully for value: %s",
+                    display_value,
                 )
+                # Show success notification when navigation completes
+                # (note: actual page load happens asynchronously in background)
+                ui.notify(f"Navigated to page {display_value}", type="positive")
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""

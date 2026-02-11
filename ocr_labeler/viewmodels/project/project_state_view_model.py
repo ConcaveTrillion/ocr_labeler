@@ -25,6 +25,7 @@ class ProjectStateViewModel(BaseViewModel):
     page_total: int = 0
     current_page_index: int = 0
     is_project_loading: bool = False
+    loading_status: str = ""  # Detailed status message for current loading operation
     project_root: str = ""
     project_root_resolved: str = ""
     is_busy: bool = False
@@ -115,6 +116,7 @@ class ProjectStateViewModel(BaseViewModel):
             self.current_page_index = self._project_state.current_page_index
             self.is_navigating = self._project_state.is_navigating
             self.is_project_loading = self._project_state.is_project_loading
+            self.loading_status = self._project_state.loading_status
             self.is_busy = (
                 self._project_state.is_project_loading
                 or self._project_state.is_navigating
@@ -140,6 +142,7 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.debug(f"Current page index: {self.current_page_index}")
                 logger.debug(f"Is navigating: {self.is_navigating}")
                 logger.debug(f"Is project loading: {self.is_project_loading}")
+                logger.debug(f"Loading status: {self.loading_status}")
                 logger.debug(f"Is busy: {self.is_busy}")
                 logger.debug(f"Project root: {self.project_root}")
                 logger.debug(f"Project root resolved: {self.project_root_resolved}")

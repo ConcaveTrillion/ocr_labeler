@@ -114,7 +114,7 @@ class WordMatchViewModel(BaseViewModel):
 
             page_image = getattr(page, "cv2_numpy_page_image", None) if page else None
             if page_image is None:
-                logger.error(f"No page image available for line {line_idx}")
+                logger.debug(f"No page image available for line {line_idx}")
 
             return LineMatch(
                 line_index=line_idx,

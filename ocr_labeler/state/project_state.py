@@ -38,6 +38,7 @@ class ProjectState:
     project_root: Path = Path("../data/source-pgdp-data/output")
     is_project_loading: bool = False
     is_navigating: bool = False
+    loading_status: str = ""  # Detailed status message for current loading operation
     on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
     page_states: dict[int, PageState] = field(
         default_factory=dict
@@ -248,6 +249,9 @@ class ProjectState:
 
             # Try to load from saved files first (unless forcing OCR)
             if not force_ocr and self.project_root is not None:
+                logger.info("ensure_page: checking for saved page at index=%s", index)
+                self.loading_status = "Checking for saved page..."
+                # Don't notify here - it triggers recursion via viewmodel updates
                 try:
                     loaded_page = self.page_ops.load_page(
                         page_number=index + 1,  # Convert to 1-based
@@ -256,9 +260,11 @@ class ProjectState:
                         project_id=None,  # Will be derived from project_root.name
                     )
                     if loaded_page is not None:
-                        logger.debug(
+                        logger.info(
                             "ensure_page: loaded from saved for index=%s", index
                         )
+                        self.loading_status = "Loading page from disk..."
+                        # Don't notify here - it triggers recursion via viewmodel updates
                         # Attach convenience attrs expected elsewhere
                         img_path = Path(self.project.image_paths[index])
                         if not hasattr(loaded_page, "image_path"):
@@ -272,6 +278,8 @@ class ProjectState:
                         else:
                             loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
                         self.project.pages[index] = loaded_page
+                        # Notify after page is cached so UI can update (safe here, not in property getter)
+                        self.notify()
                         return self.project.pages[index]
                 except Exception as e:
                     logger.debug(
@@ -282,6 +290,12 @@ class ProjectState:
 
             # Fall back to OCR processing
             if self.page_ops.page_parser:
+                logger.info(
+                    "ensure_page: running OCR on page at index=%s (in separate thread)",
+                    index,
+                )
+                self.loading_status = "Running OCR on page (in background thread)..."
+                # Don't notify here - it triggers recursion via viewmodel updates
                 try:
                     gt_text = (
                         self.find_ground_truth_text(
@@ -307,6 +321,8 @@ class ProjectState:
                     else:
                         page_obj.page_source = "ocr"  # type: ignore[attr-defined]
                     self.project.pages[index] = page_obj
+                    # Notify after page is cached so UI can update
+                    self.notify()
                 except Exception:  # pragma: no cover - defensive
                     logger.exception(
                         "ensure_page: loader failed for index=%s path=%s; using fallback page",
@@ -318,6 +334,8 @@ class ProjectState:
                     self.project.pages[index] = self.create_fallback_page(
                         index, img_path
                     )
+                    # Notify after fallback page is cached
+                    self.notify()
             else:
                 # No loader provided: keep legacy minimal placeholder behavior
                 logger.debug(
@@ -358,11 +376,22 @@ class ProjectState:
         async def _background_load():
             try:
                 # Pre-load the page at the new index
+                # NOTE: asyncio.to_thread runs in a separate thread pool to prevent
+                # blocking the asyncio event loop and websocket connection
+                logger.info(
+                    "_background_load: loading page %s in background thread",
+                    self.current_page_index,
+                )
                 await asyncio.to_thread(self.get_page, self.current_page_index)
                 # Update text cache now that page is loaded
                 self._update_text_cache(force=True)
+                logger.info(
+                    "_background_load: page %s loaded successfully",
+                    self.current_page_index,
+                )
             finally:
                 self.is_navigating = False
+                self.loading_status = ""
                 self.notify()
 
         def _schedule_async_load():
@@ -589,11 +618,36 @@ class ProjectState:
 
     @property
     def current_page_source_text(self) -> str:
-        """Get the source text for the current page."""
+        """Get the source text for the current page.
+
+        Returns appropriate status text based on loading state and page availability.
+        """
         logger.debug("current_page_source_text: called")
-        page = self.current_page()
-        result = TextOperations.get_page_source_text(page, self.is_project_loading)
-        logger.debug("current_page_source_text: returning text")
+
+        # If currently loading, show loading status
+        if self.is_project_loading or self.is_navigating:
+            logger.debug("current_page_source_text: currently loading")
+            return "LOADING..."
+
+        # Check if page is already loaded in cache
+        if (
+            not self.project.pages
+            or self.current_page_index < 0
+            or self.current_page_index >= len(self.project.pages)
+        ):
+            logger.debug("current_page_source_text: no pages or invalid index")
+            return "(NO PAGE)"
+
+        # Get the page directly from cache to avoid triggering loads
+        page = self.project.pages[self.current_page_index]
+
+        # If page is not yet loaded in cache, return appropriate status
+        if page is None:
+            logger.debug("current_page_source_text: page not yet in cache")
+            return "(NO PAGE)"
+
+        result = TextOperations.get_page_source_text(page, False)
+        logger.debug("current_page_source_text: returning text: %s", result)
         return result
 
     @property

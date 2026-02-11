@@ -2,82 +2,36 @@
 
 ## Overview
 
-This document outlines the development roadmap for the OCR Labeler application, organized into phases for incremental delivery. The application is a NiceGUI-based web interface for processing public domain book scans with OCR capabilities and ground truth comparison features.
+Development roadmap for the OCR Labeler application. The application is a NiceGUI-based web interface for processing public domain book scans with OCR capabilities and ground truth comparison features.
 
-## High-Level Feature Areas
+## Completed Features
 
-The complete feature set includes:
-- Full multi-page navigation with page indexing and bounds checking
-- OCR processing with optional predictor injection, reset capabilities, and per-page JSON import/export
-- Training/validation export for converting pages to training set files
-- Rich page image overlay generation (paragraphs, lines, words, mismatches)
-- Bulk operations for bbox expansion, refinement, and image regeneration
-- Line filtering (all/mismatches/unvalidated) with visual state indicators
-- Per-line rich editor with cropped images and OCR vs GT comparison
-- Word-level editing table with thumbnails, inline editing, and bbox operations
-- Consistent project naming and font styling
+✅ **Phase 1**: Foundational data persistence, OCR save/load, export naming, reset OCR, user notifications
+✅ **Phase 2**: Bounding box operations (refine, expand, refresh), line filtering, font injection
 
-## Current Implementation Gaps
-
-The NiceGUI implementation currently has these limitations:
-- Basic project/page loading (single page only) with placeholder OCR dialogs
-- No training/validation export integration
-- No persistence for Save/Reload OCR operations (buttons are placeholders)
-- No bbox operations (expand/refine/reset/crop) implemented
-- No word-level editing UI (only whole-line GT text fields)
-- No line image thumbnails or state-based border colors
-- No split/merge/bbox editing capabilities
-- No unmatched ground truth word handling
-- No page overlay regeneration after edits
-- Limited navigation refinements needed
-- No per-page save naming with export prefix scheme
-- No font injection implementation
-- Incomplete filtering for native OCR lines
-- Non-persistent validation state tracking
-
----
 
 ## Development Phases
 
-### Phase 1: Foundational Data & Persistence
-**Priority: Critical** | **Tasks: 1-4, 7-8, 35**
+### Phase 3: Word & Line-Level Editing Core
+**Priority: High** | **Status: In Progress**
 
-#### Data Persistence
-1. **OCR Document Save** ✅: Serialize current native Page/PageVM into JSON + copy image (mirror IpynbLabeler.export_ocr_document). Add project/page ID strategy derived from directory name or configurable source.
+### Block grouping operations
+using the nice gui ui component that lets you click in an image, i want to be able to pick top left / bottom right and then have the lines within form a paragraph block
 
-2. **OCR Document Load** ✅: Implement import functionality for current page index; populate PageVM or native Page fields (import_ocr_document).
+#### Line-Level Operations
+**Merge Lines Button**: Create checkbox-based multi-line selection UI with "Merge Lines" button. When checkboxes are displayed next to each line, user can select multiple lines and click "Accept" to merge them into a single line. Should handle:
+    - Checkbox UI state (show/hide)
+    - Line selection tracking
+    - Line merging logic (concatenate text, merge bboxes)
+    - Ground truth preservation/merging
+    - Post-merge refresh and state update
 
-3. **Export Prefix Logic** ✅: Add project_id + page index naming with configurable project_id in AppState.
-
-4. **GT Modifications Persistence** ✅: Persist validated line + word-level ground truth modifications back into JSON on save.
-
-#### OCR & Page Management
-7. **Reset OCR Logic** ✅: Add reset_ocr functionality to re-run docTR OCR for current image and discard manual edits for that page.
-
-8. **Force Refresh Support** ✅: Support force_refresh flag in run_doctr_ocr_on_images for per-page refresh capabilities.
-
-#### Error Handling
-35. **User Notifications** ✅: Add user notifications (toast/snackbar) for save/load success/failure states.
-
-### Phase 2: Basic Operations & Filtering
-**Priority: High** | **Tasks: 9-12, 20, 25** | **Status: ✅ Complete**
-
-#### Bounding Box Operations
-9. **Refine All Bboxes** ✅: Implement refine_all_bboxes for native Page using page.refine_bounding_boxes(padding_px=2) and refresh overlays.
-
-10. **Expand and Refine** ✅: Implement expand_and_refine_all_bboxes by iterating words → crop_bottom + expand_to_content then page.refine_bounding_boxes.
-
-11. **Refresh Page Images** ✅: Implement refresh_page_images using page.refresh_page_images() and clear image cache.
-
-12. **Refresh Line Images** ✅: Implement refresh_all_line_images for per-line thumbnails regeneration.
-
-#### Line Filtering & Styling
-20. **Mismatch Filtering** ✅: Apply mismatch filtering for native line Blocks (compute exact/validated similarly to notebook implementation).
-
-25. **Font Injection** ✅: Inject custom monospace font (if path provided) into NiceGUI using global `<style>` tag.
-
-### Phase 3: Word-Level Editing Core
-**Priority: High** | **Tasks: 13-19, 23, 30, 32-33**
+**Delete Line**: Add ability to delete a selected line from the page. Should handle:
+    - Line deletion from page structure
+    - Ground truth cleanup
+    - Page bbox recalculation
+    - Image overlay regeneration
+    - Undo capability consideration
 
 #### Word Editing Infrastructure
 13. **Word VM Abstraction**: Introduce WordVM abstraction or adapt native Page usage in document mode to expose word operations.
@@ -107,13 +61,14 @@ The NiceGUI implementation currently has these limitations:
 
 33. **State Restoration**: Reapply validated flags on load (mapping native Block objects by text+index or stable ID hash).
 
+
 ### Phase 4: Enhanced UI & Matching
-**Priority: Medium** | **Tasks: 21-22, 24, 26, 34, 40-41**
+**Priority: Medium**
 
-#### Visual Enhancements
-24. **Unmatched GT Handling**: Handle unmatched ground truth words with insertion placeholders and editing/merging behavior. Still need to implement edit/merge tooling.
+#### Visual Enhancements & Ground Truth
+24. **Unmatched GT Handling**: Handle unmatched ground truth words with insertion placeholders and editing/merging behavior. Implement edit/merge tooling.
 
-26. **Consistent Styling**: Add consistent monospace class for OCR/GT text. This is not yet done.
+26. **Consistent Styling**: Add consistent monospace class for OCR/GT text across all UI components.
 
 #### Image Overlays
 40. **GT Text Overlays**: Add words-with-GT-text overlay generation (cv2_numpy_page_image_word_with_bboxes_and_gt_text) with fallback support.
@@ -121,10 +76,7 @@ The NiceGUI implementation currently has these limitations:
 41. **Mismatch Overlays**: Generate mismatches overlay highlighting mismatched words similarly to notebook implementation.
 
 ### Phase 5: Navigation & Multi-Page Support
-**Priority: Medium** | **Tasks: 27-29, 37-39**
-
-#### Navigation Enhancements
-None currently in the pipeline
+**Priority: Medium**
 
 #### Multi-Page Support
 37. **Multiple Page Loading**: Support loading multiple pages (not just first) with pagination integration (remove intentional limitation).
@@ -134,14 +86,14 @@ None currently in the pipeline
 39. **PGDP Loader**: Add PGDP loader to incorporate ground truth (pages.json) and run OCR to match lines.
 
 ### Phase 6: Performance & Polish
-**Priority: Low** | **Tasks: 31, 36**
+**Priority: Low**
 
 31. **Debounced Updates**: Optional debouncing of frequent GT edits before recompute overlays.
 
 36. **Graceful Fallbacks**: Graceful fallback if pd_book_tools or cv2 not installed (disable relevant buttons).
 
 ### Phase 7: Testing & Documentation
-**Priority: Medium** | **Tasks: 42-48**
+**Priority: Medium**
 
 #### Testing
 42. **Save/Load Tests**: Add unit tests for save/load round trip of simple page with GT edits.
@@ -160,7 +112,7 @@ None currently in the pipeline
 48. **Troubleshooting**: Add troubleshooting section (missing overlays, predictor failure, font not loading).
 
 ### Phase 8: Training & Validation Export
-**Priority: Medium** | **Tasks: 5-6**
+**Priority: Medium**
 
 5. **Export Operations**: Implement export_training and export_validation operations using native Page.convert_to_training_set equivalent; fallback to placeholder if pd_book_tools missing.
 
@@ -171,7 +123,7 @@ None currently in the pipeline
 ## Distribution & Deployment (Future)
 
 ### Phase 9: Distribution Strategy
-**Priority: Future** | **Tasks: 49-56**
+**Priority: Future**
 
 49. **GPU Support Strategy**: Implement GPU detection and runtime backend selection with CPU fallback and Docker GPU variant.
 
@@ -193,7 +145,7 @@ None currently in the pipeline
 
 ## Implementation Notes
 
-**Current Priority**: Phase 1 (Persistence & Basic Ops) should be implemented first to establish the foundation for all subsequent features.
+**Current Priority**: Phase 3 (Word & Line-Level Editing) is the active development focus.
 
 **Dependencies**: Most tasks depend on proper integration with the `pd-book-tools` library for OCR functionality and the NiceGUI framework for UI components.
 
@@ -205,29 +157,26 @@ None currently in the pipeline
 
 ## Quick Reference: Task Summary by Phase
 
-### Phase 1 (Critical): Tasks 1-4, 7-8, 35 ✅ Complete
-Foundation: Save/load, OCR reset, notifications
+### ✅ Phase 1-2 (Complete)
+Foundation: Save/load, OCR reset, bbox operations, filtering, fonts
 
-### Phase 2 (High): Tasks 9-12, 20, 25 ✅ Complete
-Basic ops: Bbox operations, filtering, fonts
+### Phase 3 (High Priority - In Progress)
+Core editing: Word-level UI, line merge operations, ground truth, state persistence
 
-### Phase 3 (High): Tasks 13-19, 23, 30, 32-33
-Core editing: Word-level UI, ground truth, state persistence
-
-### Phase 4 (Medium): Tasks 21-22, 24, 26, 34, 40-41
+### Phase 4 (Medium Priority)
 Enhanced UI: Visual styling, overlays, matching improvements
 
-### Phase 5 (Medium): Tasks 27-29, 37-39
+### Phase 5 (Medium Priority)
 Navigation: Multi-page support, enhanced navigation
 
-### Phase 6 (Low): Tasks 31, 36
+### Phase 6 (Low Priority)
 Performance: Optimizations and graceful fallbacks
 
-### Phase 7 (Medium): Tasks 42-48
+### Phase 7 (Medium Priority)
 Quality: Testing suite and documentation
 
-### Phase 8 (Medium): Tasks 5-6
+### Phase 8 (Medium Priority)
 Export: Training and validation data export
 
-### Phase 9 (Future): Tasks 49-56
+### Phase 9 (Future)
 Distribution: Deployment and packaging solutions

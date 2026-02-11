@@ -68,7 +68,7 @@ class ProjectLoadControls:
             for control in controls:
                 binding.bind_from(
                     control,
-                    "disabled",
+                    "disable",
                     self.project_state_model,
                     "is_controls_disabled",
                 )

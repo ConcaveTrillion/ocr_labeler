@@ -91,10 +91,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             try:
                 self._project_loading_label.bind_text_from(
                     target_object=self.viewmodel.app_state_viewmodel,
-                    target_name="selected_project_key",
-                    transform=lambda key: (
-                        f"Loading project: {key}" if key else "Loading project..."
-                    ),
+                    target_name="loading_message",
                 )
             except Exception:
                 logger.debug("Failed to bind project loading label", exc_info=True)

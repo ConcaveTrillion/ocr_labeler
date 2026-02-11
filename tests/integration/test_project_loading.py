@@ -8,7 +8,6 @@ from unittest.mock import Mock, patch
 import pytest
 from nicegui.testing import User
 
-from ocr_labeler import app
 from ocr_labeler.app import NiceGuiLabeler
 from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
 
@@ -149,7 +148,7 @@ class TestProjectStructure:
         assert len(gt_map["001.png"]) > 0  # Should not be empty
 
 
-@pytest.mark.module_under_test(app)
+@pytest.mark.nicegui_main_file(None)
 class TestNiceGuiIntegration:
     """Integration tests using NiceGUI's testing framework."""
 
@@ -174,6 +173,7 @@ class TestNiceGuiIntegration:
         assert labeler.projects_root == test_projects_root
         assert labeler.font_css is not None  # Font CSS is prepared once
 
+    @pytest.mark.nicegui_main_file(None)
     async def test_project_discovery_ui(self, user: User, test_projects_root: Path):
         """Test that test projects are discovered and displayed in the UI."""
         # Create the app instance with test projects
@@ -201,6 +201,7 @@ class TestNiceGuiIntegration:
         expected_projects = ["projectID629292e7559a8", "projectID66c62fca99a93"]
         assert select_element.options == expected_projects
 
+    @pytest.mark.nicegui_main_file(None)
     async def test_project_selection_ui_elements(
         self, user: User, test_projects_root: Path
     ):
@@ -219,6 +220,7 @@ class TestNiceGuiIntegration:
         # Should see project loading controls - the button shows "LOAD"
         await user.should_see("LOAD")
 
+    @pytest.mark.nicegui_main_file(None)
     async def test_project_loading_via_button(
         self, mock_ocr_processing, user: User, test_projects_root: Path
     ):
@@ -314,6 +316,7 @@ class TestNiceGuiIntegration:
         await user.should_see("Next")
         logger.info("TEST STEP 15 COMPLETE: Next button found - TEST PASSED")
 
+    @pytest.mark.nicegui_main_file(None)
     async def test_load_button_prevents_multiple_clicks(
         self, mock_ocr_processing, user: User, test_projects_root: Path
     ):

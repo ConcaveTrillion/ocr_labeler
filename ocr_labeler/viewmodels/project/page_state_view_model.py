@@ -37,6 +37,17 @@ class PageStateViewModel(BaseViewModel):
         logger.debug("Initializing PageStateViewModel")
         super().__init__()
 
+        # Ensure all bindable attributes exist before any NiceGUI binding occurs
+        # so that early refreshes during view construction do not trip strict
+        # binding checks. These defaults are overwritten as soon as real data
+        # flows in from the bound PageState.
+        self._initialize_bindable_defaults()
+
+        # Always define these to avoid attribute errors when a page_state is
+        # not yet available during early UI construction.
+        self._project_state: ProjectState | None = None
+        self._page_state: PageState | None = None
+
         # Accept None here and defer binding until a valid state is provided.
         # This prevents initialization-time errors when UI constructs viewmodels
         # before the ProjectState has been created/populated.
@@ -44,15 +55,11 @@ class PageStateViewModel(BaseViewModel):
             logger.debug(
                 "PageStateViewModel initialized without page_state; deferring binding until available"
             )
-            self._project_state = None
-            self._page_state = None
             return
 
         # Support being passed either a PageState (per-page) or a ProjectState
         # If passed ProjectState, bind to its current_page_state and listen for
         # project-level changes so we can rebind to the newly active PageState.
-        self._project_state: ProjectState | None = None
-
         if isinstance(page_state, ProjectState):
             # Bind to project-level state: get the current page's PageState
             self._project_state = page_state
@@ -78,6 +85,19 @@ class PageStateViewModel(BaseViewModel):
         # Update image sources immediately in case page is already loaded
         logger.debug("Performing initial image source update")
         self._update_image_sources()
+
+    def _initialize_bindable_defaults(self, keep_metadata: bool = False):
+        """Initialize all properties that NiceGUI bindings expect to exist."""
+
+        self.original_image_source = ""
+        self.paragraphs_image_source = ""
+        self.lines_image_source = ""
+        self.words_image_source = ""
+        self.mismatches_image_source = ""
+
+        if not keep_metadata:
+            self.page_index = -1
+            self.page_source = ""
 
     def _bind_to_page_state(self, page_state: PageState | None):
         """Bind the viewmodel to a PageState instance, managing listeners."""
@@ -463,22 +483,7 @@ class PageStateViewModel(BaseViewModel):
             keep_metadata: When True, preserve page_index/page_source values so
                 navigation UI stays consistent while images are hidden.
         """
-        image_props = [
-            "original_image_source",
-            "paragraphs_image_source",
-            "lines_image_source",
-            "words_image_source",
-            "mismatches_image_source",
-        ]
-
-        for prop_name in image_props:
-            # For bindable dataclass properties, just set the value directly
-            setattr(self, prop_name, "")
-
-        # Clear exposed metadata as well
-        if not keep_metadata:
-            self.page_index = -1
-            self.page_source = ""
+        self._initialize_bindable_defaults(keep_metadata=keep_metadata)
 
     # Command methods for UI actions
 

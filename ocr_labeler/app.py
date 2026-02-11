@@ -186,18 +186,17 @@ class NiceGuiLabeler:
                 logger.info(f"Tab session initialized successfully: {session_id}")
 
                 # Set up cleanup on disconnect (if available - not in testing)
+                def on_disconnect():
+                    logger.info(f"Tab session disconnecting: {session_id}")
+                    self._cleanup_session_logging(session_handler, session_id)
+
                 try:
-
-                    def on_disconnect():
-                        logger.info(f"Tab session disconnecting: {session_id}")
-                        self._cleanup_session_logging(session_handler, session_id)
-
-                    ui.on_disconnect(on_disconnect)
+                    # NiceGUI supports ui.on('disconnect', ...) on current versions.
+                    ui.on("disconnect", on_disconnect)
                 except Exception:
-                    # In testing environment, on_disconnect might not be available
-                    # Cleanup will happen when process ends
-                    logger.debug(
-                        "ui.on_disconnect not available (likely testing environment)"
+                    logger.warning(
+                        "ui.on('disconnect') registration failed; cleanup will rely on process exit",
+                        exc_info=True,
                     )
 
             except Exception as e:

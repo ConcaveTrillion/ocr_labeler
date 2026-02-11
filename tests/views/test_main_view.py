@@ -49,7 +49,7 @@ class TestMainView:
         assert hasattr(project_view, "_load_page_async")
 
 
-@pytest.mark.module_under_test(app)
+@pytest.mark.nicegui_main_file(None)
 async def test_main_view_placeholder_display(user: User):
     """Test that the main view displays the no project placeholder correctly."""
     # Create the app instance and set up routes

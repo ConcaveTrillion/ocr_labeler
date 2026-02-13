@@ -240,8 +240,7 @@ class TestPageOperations:
 
         assert loaded_page is None
 
-    @pytest.mark.asyncio
-    async def test_can_load_page_success(self, operations, temp_dir):
+    def test_can_load_page_success(self, operations, temp_dir):
         """Test checking if page can be loaded successfully."""
         # Create the necessary files
         project_root = temp_dir / "project"
@@ -260,7 +259,7 @@ class TestPageOperations:
         with open(json_file, "w") as f:
             json.dump(json_data, f)
 
-        load_info = await operations.can_load_page(
+        load_info = operations.can_load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(temp_dir / "output"),
@@ -270,13 +269,12 @@ class TestPageOperations:
         assert load_info.json_filename == "project_001.json"
         assert load_info.file_prefix == "project_001"
 
-    @pytest.mark.asyncio
-    async def test_can_load_page_not_found(self, operations, temp_dir):
+    def test_can_load_page_not_found(self, operations, temp_dir):
         """Test checking if non-existent page can be loaded."""
         project_root = temp_dir / "project"
         project_root.mkdir()
 
-        load_info = await operations.can_load_page(
+        load_info = operations.can_load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(temp_dir / "output"),

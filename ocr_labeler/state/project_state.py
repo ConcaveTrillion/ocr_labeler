@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from nicegui import background_tasks, run
 from pd_book_tools.ocr.page import Page
 
 from ..models.project import Project
@@ -90,9 +90,10 @@ class ProjectState:
         operations = ProjectOperations()
 
         # Validate directory and scan for images using operations
+        # Operations are sync, so wrap with run.io_bound for async context
         directory = Path(directory)
-        images = await operations.scan_project_directory(
-            directory
+        images = await run.io_bound(
+            operations.scan_project_directory, directory
         )  # This will raise FileNotFoundError if needed
 
         self.is_project_loading = True
@@ -104,8 +105,9 @@ class ProjectState:
             # Load ground truth mapping using project state's method
             ground_truth_map = await self.load_ground_truth_map(directory)
             # Use ProjectOperations to create the project with the ground truth map
-            self.project = await operations.create_project(
-                directory, images, ground_truth_map
+            # Operations are sync, so wrap with run.io_bound
+            self.project = await run.io_bound(
+                operations.create_project, directory, images, ground_truth_map
             )
             # Reset navigation to first page
             self.current_page_index = 0 if images else -1
@@ -369,44 +371,85 @@ class ProjectState:
 
     def _navigate(self):
         """Internal navigation helper with loading state."""
-        logger.debug("_navigate: called")
+        import threading
+
+        logger.info(
+            "[_navigate] Entry - Thread: %s, Current page index: %s, Total pages: %s",
+            threading.current_thread().name,
+            self.current_page_index,
+            self.project.page_count(),
+        )
         self.is_navigating = True
         self.notify()
+        logger.info("[_navigate] Set is_navigating=True and notified")
 
         async def _background_load():
+            import threading
+
+            logger.info(
+                "[_background_load] Entry - Thread: %s, Loading page index: %s",
+                threading.current_thread().name,
+                self.current_page_index,
+            )
             try:
                 # Pre-load the page at the new index
-                # NOTE: asyncio.to_thread runs in a separate thread pool to prevent
+                # NOTE: run.io_bound runs in a separate thread pool to prevent
                 # blocking the asyncio event loop and websocket connection
                 logger.info(
-                    "_background_load: loading page %s in background thread",
+                    "[_background_load] Calling run.io_bound for page %s",
                     self.current_page_index,
                 )
-                await asyncio.to_thread(self.get_page, self.current_page_index)
+                await run.io_bound(self.get_page, self.current_page_index)
+                logger.info(
+                    "[_background_load] run.io_bound completed for page %s",
+                    self.current_page_index,
+                )
                 # Update text cache now that page is loaded
                 self._update_text_cache(force=True)
                 logger.info(
-                    "_background_load: page %s loaded successfully",
+                    "[_background_load] Page %s loaded successfully, cache updated",
                     self.current_page_index,
                 )
+            except Exception as e:
+                logger.error(
+                    "[_background_load] ERROR loading page %s: %s",
+                    self.current_page_index,
+                    e,
+                    exc_info=True,
+                )
+                raise
             finally:
+                logger.info("[_background_load] Cleanup - Setting is_navigating=False")
                 self.is_navigating = False
                 self.loading_status = ""
                 self.notify()
+                logger.info(
+                    "[_background_load] Exit - Thread: %s",
+                    threading.current_thread().name,
+                )
 
         def _schedule_async_load():
-            """Schedule background load if an event loop is running.
+            """Schedule background load using NiceGUI's background task API.
 
-            Option A with extra handling for test mocks: if create_task returns a non-Task
-            (e.g., a test stub that just records the call and returns None), close the
-            coroutine to avoid an un-awaited coroutine warning while still leaving the
-            loading flag True (as real async completion would later clear it).
+            Uses background_tasks.create() for proper async task management
+            without interfering with NiceGUI's event loop.
             """
+            import threading
+
+            logger.info(
+                "[_schedule_async_load] Entry - Thread: %s",
+                threading.current_thread().name,
+            )
             try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:  # no running loop at all
-                logger.info(
-                    "No running event loop; falling back to synchronous page load"
+                # Use NiceGUI's background task API
+                logger.info("[_schedule_async_load] Creating background task")
+                background_tasks.create(_background_load())
+                logger.info("[_schedule_async_load] Background task created")
+                return
+            except Exception as e:
+                logger.warning(
+                    "[_schedule_async_load] Failed to create background task (%s); falling back to synchronous page load",
+                    e,
                 )
                 # Fallback synchronous load
                 try:
@@ -415,36 +458,10 @@ class ProjectState:
                     self.is_project_loading = False
                     self.is_navigating = False
                     self.notify()
-                return
 
-            logger.info("_schedule_async_load: got running loop %s", loop)
-            coro = _background_load()
-            try:
-                task = loop.create_task(coro)
-                # If a test replaced create_task with a stub that returns None or non-Task, close coro
-                if not isinstance(
-                    task, asyncio.Task
-                ):  # pragma: no cover - exercised in tests via mock
-                    try:
-                        coro.close()
-                    except Exception:  # pragma: no cover - defensive
-                        pass
-                return
-            except Exception:  # scheduling failed (closed loop, etc.)
-                try:
-                    coro.close()  # prevent 'never awaited' warning
-                except Exception:  # pragma: no cover - defensive
-                    pass
-                # Fallback synchronous load
-                try:
-                    self.get_page(self.current_page_index)
-                finally:
-                    self.is_project_loading = False
-                    self.is_navigating = False
-                    self.notify()
-
+        logger.info("[_navigate] Calling _schedule_async_load()")
         _schedule_async_load()
-        logger.debug("_navigate: completed")
+        logger.info("[_navigate] Exit - is_navigating=%s", self.is_navigating)
 
     def save_current_page(
         self,
@@ -747,16 +764,14 @@ class ProjectState:
         dict[str, str]
             Normalized ground truth mapping, empty dict if file not found or invalid
         """
-        import asyncio
-
         pages_json = directory / "pages.json"
-        exists = await asyncio.to_thread(pages_json.exists)
+        exists = await run.io_bound(pages_json.exists)
         if not exists:
             logger.info("No pages.json found in %s", directory)
             return {}
         try:
-            raw_text = await asyncio.to_thread(pages_json.read_text, encoding="utf-8")
-            data = await asyncio.to_thread(json.loads, raw_text)
+            raw_text = await run.io_bound(pages_json.read_text, encoding="utf-8")
+            data = await run.io_bound(json.loads, raw_text)
             if isinstance(data, dict):
                 norm = self._normalize_ground_truth_entries(data)
                 logger.info(

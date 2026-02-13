@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
-import asyncio
+import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from nicegui import binding
+from nicegui import background_tasks, binding, run
 
 from ...state import PageState
 from ...state.project_state import ProjectState
 from ..shared.base_viewmodel import BaseViewModel
 
 logger = logging.getLogger(__name__)
+
+# Shared thread pool for image encoding to prevent thread pool exhaustion
+# Limit to 4 concurrent encoding operations to prevent overwhelming the system
+_image_encoding_executor = ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="img_encode"
+)
 
 
 @binding.bindable_dataclass
@@ -33,6 +40,15 @@ class PageStateViewModel(BaseViewModel):
     # Page state reference
     _page_state: Optional[PageState] = None
 
+    # Flag to prevent concurrent updates
+    _update_in_progress: bool = False
+
+    # Cache for encoded images to avoid re-encoding unchanged images
+    _encoded_image_cache: dict[str, str] = None
+
+    # Callback for direct image updates (bypasses binding to avoid websocket issues)
+    _image_update_callback: Optional[callable] = None
+
     def __init__(self, page_state: PageState | None):
         logger.debug("Initializing PageStateViewModel")
         super().__init__()
@@ -47,6 +63,9 @@ class PageStateViewModel(BaseViewModel):
         # not yet available during early UI construction.
         self._project_state: ProjectState | None = None
         self._page_state: PageState | None = None
+        self._update_in_progress: bool = False
+        self._encoded_image_cache: dict[str, str] = {}
+        self._image_update_callback: Optional[callable] = None
 
         # Accept None here and defer binding until a valid state is provided.
         # This prevents initialization-time errors when UI constructs viewmodels
@@ -158,68 +177,118 @@ class PageStateViewModel(BaseViewModel):
         self._schedule_image_update()
 
     def _schedule_image_update(self):
-        """Schedule an async image update to avoid blocking the event loop."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop (e.g., tests) – fall back to synchronous update
-            logger.debug(
-                "_schedule_image_update: no running loop; using blocking update"
-            )
-            self._update_image_sources_blocking()
+        """Schedule an async image update using NiceGUI's background task API.
+
+        Uses NiceGUI's background_tasks.create() to properly handle async operations
+        without interfering with the event loop.
+        """
+        # Skip if an update is already in progress to prevent cascading updates
+        if self._update_in_progress:
+            logger.debug("_schedule_image_update: update already in progress, skipping")
             return
 
-        try:
-            loop.create_task(self._update_image_sources_async())
-        except Exception:
-            logger.debug(
-                "_schedule_image_update: failed to schedule async update; falling back",
-                exc_info=True,
-            )
-            self._update_image_sources_blocking()
-
-    async def _update_image_sources_async(self):
-        """Async image update that offloads heavy work to threads."""
-        logger.debug("_update_image_sources_async: starting image source update")
-        current_page = self._get_current_page_or_clear()
-        if current_page is None:
-            return
-
-        # Avoid blocking the loop during navigation until the target page is loaded
+        # Skip during navigation to prevent blocking the event loop while
+        # OCR/page loading is in progress (prevents "connection lost" errors)
         if self._is_navigation_in_progress_and_unloaded():
             logger.debug(
-                "_update_image_sources_async: navigation in progress; skipping update"
+                "_schedule_image_update: navigation in progress; deferring update"
             )
             return
 
-        # Refresh page images in a background thread when needed
-        image_mappings = self._image_mappings()
-        needs_refresh = any(
-            getattr(current_page, attr_name, None) is None
-            for _, attr_name in image_mappings
-        )
-        if needs_refresh and hasattr(current_page, "refresh_page_images"):
-            try:
-                await asyncio.to_thread(current_page.refresh_page_images)
-            except Exception as e:
-                logger.warning(
-                    "_update_image_sources_async: failed to refresh page images: %s",
-                    e,
+        try:
+            # Use NiceGUI's background task API
+            background_tasks.create(self._update_image_sources_async())
+        except AssertionError:
+            # No event loop running (e.g., in test context) - use blocking fallback
+            # This is safe because there's no websocket connection to timeout
+            logger.debug(
+                "_schedule_image_update: no event loop; using blocking fallback"
+            )
+            self._update_image_sources_blocking()
+        except Exception:
+            # Other errors during async scheduling - skip to avoid blocking
+            logger.warning(
+                "_schedule_image_update: failed to schedule async update; skipping",
+                exc_info=True,
+            )
+
+    async def _update_image_sources_async(self):
+        """Async image update using NiceGUI's IO-bound task API.
+
+        Uses run.io_bound() for proper thread pool management without
+        interfering with NiceGUI's event loop.
+        """
+        import threading
+
+        self._update_in_progress = True
+        try:
+            logger.debug("_update_image_sources_async: starting image source update")
+            current_page = self._get_current_page_or_clear()
+            if current_page is None:
+                return
+
+            # Avoid blocking the loop during navigation until the target page is loaded
+            if self._is_navigation_in_progress_and_unloaded():
+                logger.debug(
+                    "_update_image_sources_async: navigation in progress; skipping update"
                 )
+                return
 
-        # Encode images off the event loop
-        encoded_results = []
-        for prop_name, attr_name in image_mappings:
-            np_img = getattr(current_page, attr_name, None)
-            encoded = await asyncio.to_thread(self._encode_image, np_img)
-            encoded_results.append((prop_name, encoded))
+            # Refresh page images using NiceGUI's io_bound for IO operations
+            image_mappings = self._image_mappings()
+            needs_refresh = any(
+                getattr(current_page, attr_name, None) is None
+                for _, attr_name in image_mappings
+            )
+            if needs_refresh and hasattr(current_page, "refresh_page_images"):
+                try:
+                    await run.io_bound(current_page.refresh_page_images)
+                except Exception as e:
+                    logger.warning(
+                        "_update_image_sources_async: failed to refresh page images: %s",
+                        e,
+                    )
 
-        self._apply_encoded_results(encoded_results, current_page)
-        logger.debug("_update_image_sources_async: completed")
+            # Encode images using NiceGUI's io_bound API
+            # Use caching to avoid re-encoding unchanged images
+            encoded_results = []
+            for prop_name, attr_name in image_mappings:
+                np_img = getattr(current_page, attr_name, None)
+                encoded = await run.io_bound(
+                    self._encode_image_cached,
+                    np_img,
+                    attr_name,
+                )
+                encoded_results.append((prop_name, encoded))
+
+            self._apply_encoded_results(encoded_results, current_page)
+            logger.debug("_update_image_sources_async: completed")
+            logger.info(
+                "[_update_image_sources_async] Completed - Thread: %s",
+                threading.current_thread().name,
+            )
+        except Exception as e:
+            logger.error(
+                "[_update_image_sources_async] UNEXPECTED ERROR: %s", e, exc_info=True
+            )
+            raise
+        finally:
+            self._update_in_progress = False
 
     def _update_image_sources_blocking(self):
-        """Fallback synchronous image update (used when no event loop is running)."""
-        logger.debug("_update_image_sources_blocking: starting image source update")
+        """Synchronous image update - WARNING: blocks event loop!
+
+        This method should ONLY be used in test contexts or when no event loop
+        is running. Using this while NiceGUI's event loop is active will cause
+        websocket "connection lost" errors.
+
+        For production use, always prefer _update_image_sources_async() via
+        _schedule_image_update().
+        """
+        logger.warning(
+            "_update_image_sources_blocking: BLOCKING image update called - "
+            "this may cause connection loss in production!"
+        )
         current_page = self._get_current_page_or_clear()
         if current_page is None:
             return
@@ -371,6 +440,9 @@ class PageStateViewModel(BaseViewModel):
         except Exception:
             self.page_source = ""
 
+        logger.debug(
+            f"_get_current_page_or_clear: Page metadata - index: {self.page_index}, source: {self.page_source}"
+        )
         return current_page
 
     def _is_navigation_in_progress_and_unloaded(self) -> bool:
@@ -403,18 +475,125 @@ class PageStateViewModel(BaseViewModel):
             ),
         ]
 
+    def set_image_update_callback(self, callback: callable):
+        """Register a callback for direct image updates (bypasses data binding)."""
+        self._image_update_callback = callback
+        logger.debug("Image update callback registered")
+
     def _apply_encoded_results(self, results, current_page):
+        import threading
+
+        logger.info(
+            "[_apply_encoded_results] Entry - Thread: %s, Applying %d image updates",
+            threading.current_thread().name,
+            len(results),
+        )
+
+        # Store properties for state tracking
         for prop_name, new_value in results:
             current_value = getattr(self, prop_name, "")
             if new_value != current_value:
-                setattr(self, prop_name, new_value)
+                # Update property silently (for state storage only)
+                object.__setattr__(self, prop_name, new_value)
                 logger.debug(
-                    f"_apply_encoded_results: Set {prop_name}: {'success' if new_value else 'cleared'} (length: {len(new_value) if new_value else 0})"
+                    f"_apply_encoded_results: Stored {prop_name} (length: {len(new_value) if new_value else 0})"
                 )
-            else:
-                logger.debug(
-                    f"_apply_encoded_results: {prop_name} unchanged; skipping update"
+
+        # Use callback for UI update instead of triggering data binding
+        if self._image_update_callback:
+            logger.info(
+                "[_apply_encoded_results] Calling image update callback with %d images",
+                len(results),
+            )
+            try:
+                # Pass all images at once to avoid multiple websocket updates
+                image_dict = {prop_name: value for prop_name, value in results}
+                self._image_update_callback(image_dict)
+                logger.info("[_apply_encoded_results] Callback completed successfully")
+            except Exception as e:
+                logger.error(
+                    "[_apply_encoded_results] ERROR in callback: %s",
+                    e,
+                    exc_info=True,
                 )
+        else:
+            # Fallback to data binding if no callback registered
+            logger.warning(
+                "[_apply_encoded_results] No callback registered, using data binding (may cause issues)"
+            )
+            for prop_name, new_value in results:
+                current_value = getattr(self, prop_name, "")
+                if new_value != current_value:
+                    try:
+                        setattr(self, prop_name, new_value)
+                    except Exception as e:
+                        logger.error(
+                            "[_apply_encoded_results] ERROR setting %s: %s",
+                            prop_name,
+                            e,
+                            exc_info=True,
+                        )
+                        raise
+
+        logger.info(
+            "[_apply_encoded_results] Exit - All %d updates applied", len(results)
+        )
+
+    def _compute_image_hash(self, np_img) -> str:
+        """Compute a hash of the image for caching purposes."""
+        if np_img is None:
+            return "none"
+        try:
+            # Use image shape and a sample of pixels for fast hashing
+            # This avoids hashing the entire image which would be slow
+            h, w = np_img.shape[:2]
+            # Sample 100 evenly distributed pixels
+            sample_indices = [
+                (i * h // 10, j * w // 10) for i in range(10) for j in range(10)
+            ]
+            sample_data = bytes(
+                [
+                    np_img[i, j, 0] if len(np_img.shape) == 3 else np_img[i, j]
+                    for i, j in sample_indices
+                    if i < h and j < w
+                ]
+            )
+            shape_data = (
+                f"{h}x{w}x{np_img.shape[2] if len(np_img.shape) == 3 else 1}".encode()
+            )
+            return hashlib.md5(shape_data + sample_data).hexdigest()
+        except Exception:
+            # If hashing fails, use a timestamp-based fallback
+            import time
+
+            return f"fallback_{time.time()}"
+
+    def _encode_image_cached(self, np_img, cache_key: str) -> str:
+        """Encode image with caching to avoid re-encoding unchanged images."""
+        if np_img is None:
+            return ""
+
+        # Compute hash of the image
+        img_hash = self._compute_image_hash(np_img)
+        full_cache_key = f"{cache_key}_{img_hash}"
+
+        # Check cache first
+        if full_cache_key in self._encoded_image_cache:
+            logger.debug(f"Using cached encoding for {cache_key}")
+            return self._encoded_image_cache[full_cache_key]
+
+        # Encode the image
+        encoded = self._encode_image_sync(np_img)
+
+        # Cache the result (limit cache size to prevent memory issues)
+        if len(self._encoded_image_cache) > 50:
+            # Remove oldest entries (simple FIFO)
+            keys_to_remove = list(self._encoded_image_cache.keys())[:10]
+            for key in keys_to_remove:
+                del self._encoded_image_cache[key]
+
+        self._encoded_image_cache[full_cache_key] = encoded
+        return encoded
 
     def _encode_image_sync(self, np_img) -> str:
         """Encode a numpy image to a base64 data URL (synchronous)."""
@@ -484,6 +663,9 @@ class PageStateViewModel(BaseViewModel):
                 navigation UI stays consistent while images are hidden.
         """
         self._initialize_bindable_defaults(keep_metadata=keep_metadata)
+        # Clear the cache when clearing image sources
+        if hasattr(self, "_encoded_image_cache"):
+            self._encoded_image_cache.clear()
 
     # Command methods for UI actions
 

@@ -174,15 +174,14 @@ class TestNavigationOperations:
         result = NavigationOperations.validate_page_index(page_index, max_index)
         assert result is expected
 
-    @pytest.mark.asyncio
-    async def test_schedule_async_navigation(self, caplog):
-        """Test asynchronous navigation scheduling."""
+    def test_schedule_navigation(self, caplog):
+        """Test navigation scheduling."""
         nav_action = MagicMock()
         background_load = MagicMock()
         is_navigating_callback = MagicMock()
 
         with caplog.at_level(logging.DEBUG):
-            await NavigationOperations.schedule_async_navigation(
+            NavigationOperations.schedule_navigation(
                 nav_action, background_load, is_navigating_callback
             )
 
@@ -197,19 +196,18 @@ class TestNavigationOperations:
         # Verify background load was called
         background_load.assert_called_once()
 
-        assert "schedule_async_navigation: called" in caplog.text
-        assert "schedule_async_navigation: completed" in caplog.text
+        assert "schedule_navigation: called" in caplog.text
+        assert "schedule_navigation: completed" in caplog.text
 
-    @pytest.mark.asyncio
-    async def test_schedule_async_navigation_with_exception(self, caplog):
-        """Test asynchronous navigation with background load exception."""
+    def test_schedule_navigation_with_exception(self, caplog):
+        """Test navigation with background load exception."""
         nav_action = MagicMock()
         background_load = MagicMock(side_effect=Exception("Load failed"))
         is_navigating_callback = MagicMock()
 
         # The method does not catch exceptions from background_load
         with pytest.raises(Exception, match="Load failed"):
-            await NavigationOperations.schedule_async_navigation(
+            NavigationOperations.schedule_navigation(
                 nav_action, background_load, is_navigating_callback
             )
 

@@ -1,6 +1,5 @@
 """Navigation operations for managing page navigation within projects."""
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -159,28 +158,31 @@ class NavigationOperations:
         return 0 <= page_index <= max_index
 
     @staticmethod
-    async def schedule_async_navigation(
+    def schedule_navigation(
         nav_action: Callable[[], None],
         background_load: Callable[[], None],
         is_navigating_callback: Callable[[bool], None],
     ) -> None:
-        """Schedule asynchronous navigation with background loading.
+        """Schedule navigation with background loading.
+
+        Note: This is a synchronous operation. The caller is responsible for
+        running this in an async context if needed (e.g., via run.io_bound).
 
         Args:
             nav_action: Action to perform for navigation
             background_load: Background loading action
             is_navigating_callback: Callback to set navigation state
         """
-        logger.debug("schedule_async_navigation: called")
+        logger.debug("schedule_navigation: called")
 
         # Quick index change first
         nav_action()
         is_navigating_callback(True)
 
         try:
-            # Pre-load the page at the new index
-            await asyncio.to_thread(background_load)
+            # Run background load
+            background_load()
         finally:
             is_navigating_callback(False)
 
-        logger.debug("schedule_async_navigation: completed")
+        logger.debug("schedule_navigation: completed")

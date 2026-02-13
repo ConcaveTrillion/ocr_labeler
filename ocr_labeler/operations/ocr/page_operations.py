@@ -7,7 +7,6 @@ are separated from state management to maintain clear architectural boundaries.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import shutil
@@ -445,7 +444,7 @@ class PageOperations:
             logger.exception(f"Failed to expand and refine bboxes for page: {e}")
             return False
 
-    async def can_load_page(
+    def can_load_page(
         self,
         page_number: int,
         project_root: Path,
@@ -473,7 +472,7 @@ class PageOperations:
         Example:
             # Check if page can be loaded with default settings
             operations = PageOperations()
-            load_info = await operations.can_load_page(
+            load_info = operations.can_load_page(
                 page_number=1,
                 project_root=Path("/path/to/project")
             )
@@ -497,17 +496,13 @@ class PageOperations:
             json_path = save_dir / json_filename
 
             # Check if save directory and JSON file exist
-            save_dir_exists = await asyncio.to_thread(save_dir.exists)
-            json_path_exists = await asyncio.to_thread(json_path.exists)
-            can_load = save_dir_exists and json_path_exists
+            can_load = save_dir.exists() and json_path.exists()
 
             if can_load:
                 # Additional validation: check if file is readable and has basic structure
                 try:
-                    raw_text = await asyncio.to_thread(
-                        json_path.read_text, encoding="utf-8"
-                    )
-                    json_data = await asyncio.to_thread(json.loads, raw_text)
+                    raw_text = json_path.read_text(encoding="utf-8")
+                    json_data = json.loads(raw_text)
 
                     # Basic structure validation
                     if not isinstance(json_data, dict) or "pages" not in json_data:

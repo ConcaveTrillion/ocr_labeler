@@ -221,7 +221,17 @@ class NiceGuiLabeler:
         uvicorn_kwargs.setdefault("log_config", None)
         logger.debug("Configured uvicorn_kwargs: %s", uvicorn_kwargs)
         try:
-            ui.run(host=host, port=port, reload=False, **uvicorn_kwargs)
+            # Increase reconnect_timeout to give more headroom for long-running
+            # operations like OCR. Default is 3.0s which can cause "connection lost"
+            # during async image processing. 30s is more tolerant while still
+            # detecting actual disconnections.
+            ui.run(
+                host=host,
+                port=port,
+                reload=False,
+                reconnect_timeout=30.0,
+                **uvicorn_kwargs,
+            )
         except TypeError:
             # Older NiceGUI versions may not accept forwarded kwargs
             logger.warning(

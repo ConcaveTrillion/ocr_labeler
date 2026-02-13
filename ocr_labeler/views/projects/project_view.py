@@ -105,14 +105,9 @@ class ProjectView(
             )
             with self._busy_overlay:
                 ui.spinner(size="xl", color="primary")
-                self._busy_label = ui.label("Working...").classes(
-                    "text-white text-lg font-bold"
-                )
 
             # Bind busy overlay visibility to viewmodel.is_busy
             self._busy_overlay.bind_visibility_from(self.viewmodel, "is_busy")
-            # Bind busy label text to viewmodel.busy_message
-            self._busy_label.bind_text_from(self.viewmodel, "busy_message")
 
         logger.debug("ProjectView UI build completed")
         self.mark_as_built()
@@ -282,8 +277,8 @@ class ProjectView(
             message: The message to show in the notification and overlay.
             show_spinner: Whether to show a full-page spinner overlay.
         """
-        print(
-            f"DEBUG: _action_context called with message={message}, show_spinner={show_spinner}"
+        logger.debug(
+            f"_action_context called with message={message}, show_spinner={show_spinner}"
         )
         # Record old spinner state
         old_spinner = getattr(self, "_show_busy_spinner", False)
@@ -291,15 +286,19 @@ class ProjectView(
             self._show_busy_spinner = True
 
         ui.notify(message, type="info")
+        logger.info(f"[BLUR] Activating busy overlay for action: {message}")
         self.viewmodel.set_action_busy(True, message)
         # Yield control to allow NiceGUI to update the UI
         await asyncio.sleep(0.1)
+        logger.debug("[BLUR] Busy overlay should now be visible")
         try:
             yield
         finally:
+            logger.info(f"[BLUR] Deactivating busy overlay after action: {message}")
             self.viewmodel.set_action_busy(False)
             if show_spinner:
                 self._show_busy_spinner = old_spinner
+            logger.debug("[BLUR] Busy overlay should now be hidden")
             # Ensure UI returns to visible state after action completes
             try:
                 self.refresh()
@@ -351,18 +350,30 @@ class ProjectView(
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
+        import threading
+
+        logger.info(
+            "[NAV-NEXT] Entry - Thread: %s, Current page: %s",
+            threading.current_thread().name,
+            self.viewmodel.current_page_index,
+        )
         if self.viewmodel.is_project_loading:
-            logger.debug("Navigation blocked - currently loading")
+            logger.warning("[NAV-NEXT] Navigation blocked - project loading")
             ui.notify("Navigation blocked: project is loading", type="warning")
             return
 
         async with self._action_context(
             "Navigating to next page (OCR may run in background)...", show_spinner=True
         ):
-            logger.debug("Navigating to next page")
+            logger.info(
+                "[NAV-NEXT] Starting navigation from page %s",
+                self.viewmodel.current_page_index,
+            )
             self._prep_image_spinners()
             await asyncio.sleep(0.1)
+            logger.info("[NAV-NEXT] Calling command_navigate_next()")
             success = self.viewmodel.command_navigate_next()
+            logger.info("[NAV-NEXT] command_navigate_next() returned: %s", success)
             if not success:
                 # Provide clearer reason to the user where possible
                 reason = "unknown"
@@ -384,10 +395,14 @@ class ProjectView(
                 )
                 logger.debug("Next page navigation prevented by viewmodel: %s", reason)
             else:
-                logger.debug("Next page navigation initiated successfully")
+                logger.info(
+                    "[NAV-NEXT] Navigation initiated successfully - now at page index %s",
+                    self.viewmodel.current_page_index,
+                )
                 # Show success notification when navigation completes
                 # (note: actual page load happens asynchronously in background)
                 ui.notify("Navigated to next page", type="positive")
+        logger.info("[NAV-NEXT] Exit - Thread: %s", threading.current_thread().name)
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""

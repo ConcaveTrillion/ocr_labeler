@@ -35,7 +35,7 @@ class ProjectOperations:
     to avoid tight coupling with state management classes.
     """
 
-    async def scan_project_directory(self, directory: Path) -> List[Path]:
+    def scan_project_directory(self, directory: Path) -> List[Path]:
         """Scan a directory for image files and return sorted paths.
 
         Args:
@@ -48,37 +48,29 @@ class ProjectOperations:
             FileNotFoundError: If directory does not exist.
             ValueError: If directory is not a directory.
         """
-        import asyncio
-
         directory = Path(directory)
 
         # Check if directory exists and is a directory
-        exists = await asyncio.to_thread(directory.exists)
-        if not exists:
+        if not directory.exists():
             raise FileNotFoundError(f"Directory does not exist: {directory}")
 
-        is_dir = await asyncio.to_thread(directory.is_dir)
-        if not is_dir:
+        if not directory.is_dir():
             raise ValueError(f"Path is not a directory: {directory}")
 
         # Find all image files with supported extensions
         image_extensions = {".png", ".jpg", ".jpeg"}
 
-        # Get directory contents asynchronously
-        items = await asyncio.to_thread(list, directory.iterdir())
-
-        images = []
-        for p in items:
-            is_file = await asyncio.to_thread(p.is_file)
-            if is_file:
-                suffix = await asyncio.to_thread(lambda: p.suffix.lower())
-                if suffix in image_extensions:
-                    images.append(p)
+        # Get directory contents
+        images = [
+            p
+            for p in directory.iterdir()
+            if p.is_file() and p.suffix.lower() in image_extensions
+        ]
 
         # Return sorted by name for consistent ordering
         return sorted(images)
 
-    async def validate_project_directory(self, directory: Path) -> bool:
+    def validate_project_directory(self, directory: Path) -> bool:
         """Validate that a directory can be used as a project directory.
 
         Args:
@@ -87,23 +79,19 @@ class ProjectOperations:
         Returns:
             bool: True if directory is valid for project loading.
         """
-        import asyncio
-
         try:
             directory = Path(directory)
-            exists = await asyncio.to_thread(directory.exists)
-            is_dir = await asyncio.to_thread(directory.is_dir)
-            if not exists or not is_dir:
+            if not directory.exists() or not directory.is_dir():
                 return False
 
             # Check if directory has at least one image file
-            images = await self.scan_project_directory(directory)
+            images = self.scan_project_directory(directory)
             return len(images) > 0
 
         except Exception:
             return False
 
-    async def create_project(
+    def create_project(
         self,
         directory: Path,
         images: List[Path],
@@ -112,9 +100,11 @@ class ProjectOperations:
         """Create a Project object from directory and image paths.
 
         This method handles all the project creation logic including:
-        - Loading ground truth mapping (if not provided)
         - Building page loader
         - Creating Project object with proper initialization
+
+        Note: ground_truth_map should be provided by caller. If not provided,
+        an empty mapping will be used.
 
         Args:
             directory: Project root directory.
@@ -124,21 +114,9 @@ class ProjectOperations:
         Returns:
             Project: Initialized Project object.
         """
-        # Import here to avoid circular imports and allow for test monkeypatching
-        # Use provided ground truth mapping or load if not provided
         if ground_truth_map is None:
-            try:
-                from ..ocr.page_operations import PageOperations
-            except ImportError as e:
-                logger.error(f"Failed to import required modules: {e}")
-                raise
-
-            # Load ground truth mapping if available
-            page_ops = PageOperations()
-            ground_truth_map = await page_ops.load_ground_truth_map(directory)
-            logger.info(
-                f"Loaded ground truth mapping with {len(ground_truth_map)} entries"
-            )
+            ground_truth_map = {}
+            logger.info("No ground truth mapping provided, using empty mapping")
         else:
             logger.info(
                 f"Using provided ground truth mapping with {len(ground_truth_map)} entries"

@@ -69,8 +69,12 @@ class PageControls:  # pragma: no cover - UI wrapper file
                         "keydown.enter",
                         lambda e: self._on_goto(self.page_input.value),
                     )
-                    .on("blur", lambda e: self._on_goto(self.page_input.value))
+                    .props("autocomplete=off")
                 )
+                # Add event handler to prevent form submission
+                # self.page_input._props["onsubmit"] = (
+                #    "event.preventDefault(); return false;"
+                # )
                 self.page_total = ui.label("")
 
                 # Add Reload with OCR button
@@ -259,9 +263,9 @@ class PageControls:  # pragma: no cover - UI wrapper file
         # Fallback to direct viewmodel call
         try:
             if hasattr(self.viewmodel, "command_reload_page_with_ocr"):
-                import asyncio
+                from nicegui import run
 
-                success = await asyncio.to_thread(
+                success = await run.io_bound(
                     self.viewmodel.command_reload_page_with_ocr
                 )
                 if success:

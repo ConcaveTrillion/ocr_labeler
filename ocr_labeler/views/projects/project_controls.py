@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 
-from nicegui import binding, ui
+from nicegui import binding, run, ui
 
 from ...state import ProjectState
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
@@ -124,14 +123,14 @@ class ProjectControls:  # pragma: no cover - UI wrapper file
     async def _prev_page(self):
         logger.debug("Prev button clicked")
         with self.navigation_context():
-            await asyncio.to_thread(
+            await run.io_bound(
                 self.project_state.prev_page
             )  # Assuming prev_page is async
 
     async def _next_page(self):
         logger.debug("Next button clicked")
         with self.navigation_context():
-            await asyncio.to_thread(
+            await run.io_bound(
                 self.project_state.next_page
             )  # Assuming next_page is async
 

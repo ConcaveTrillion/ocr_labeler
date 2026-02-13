@@ -22,6 +22,14 @@ Always use context7 for finding library details when I need code generation, set
 library/API documentation. This means you should automatically use the Context7 MCP
 tools to resolve library id and get library docs without me having to explicitly ask.
 
+**For NiceGUI specifically**:
+- Use the comprehensive NiceGUI patterns documented in the "NiceGUI Framework Patterns & Best Practices" section below for common tasks
+- Use Context7 to fetch detailed NiceGUI API docs when:
+  - Working with components not covered in this guide
+  - Needing detailed API signatures or parameter options
+  - Looking for new features or updated APIs
+  - Investigating advanced use cases
+
 ### Task Execution Priority
   - Check for existing tasks in `.vscode/tasks.json` first (use `run_task` tool)
   - ALWAYS prefer VS Code tasks over terminal commands when available
@@ -135,6 +143,298 @@ This ensures proper formatting, linting, testing, and build validation before pr
 - **Word Matching**: OCR vs GT alignment using fuzzy string matching with configurable thresholds
 
 
+## NiceGUI Framework Patterns & Best Practices
+
+This project uses NiceGUI `>=2.22.2` for the web UI. Understanding these patterns is critical for maintaining consistency and avoiding common pitfalls.
+
+### Core Concepts
+
+- **Component-Based Architecture**: UI is built from composable components (views) that inherit from `BaseView[TViewModel]`
+- **Reactive Binding System**: ViewModels expose bindable properties that automatically update the UI when changed
+- **Event Loop Integration**: NiceGUI manages an asyncio event loop per session; use NiceGUI-provided async APIs, not raw asyncio
+- **Per-Session State Isolation**: Each browser tab gets its own state instances via the `@ui.page("/")` decorator
+
+### Essential Components Reference
+
+#### Layout Components
+```python
+ui.column()          # Vertical layout container
+ui.row()             # Horizontal layout container
+ui.splitter()        # Resizable split pane (value=50 is 50% split)
+ui.scroll_area()     # Scrollable content area
+```
+
+Common usage:
+```python
+with ui.column().classes("w-full h-full flex flex-col") as container:
+    # Nested components here
+    pass
+```
+
+#### Data Display Components
+```python
+ui.tabs()            # Tab headers (use with ui.tab and ui.tab_panels)
+ui.tab()             # Individual tab header
+ui.tab_panels()      # Tab content container
+ui.image()           # Image display (supports data URLs, paths)
+ui.label()           # Text display
+ui.button()          # Action button with on_click handler
+ui.codemirror()      # Code/text editor with syntax highlighting
+ui.card()            # Material card container
+ui.icon()            # Material Design icons
+```
+
+#### Input Components
+```python
+ui.number()          # Numeric input
+ui.select()          # Dropdown selection
+ui.input()           # Text input
+```
+
+#### Feedback Components
+```python
+ui.spinner()         # Loading spinner (size="sm|md|lg|xl", color="primary|...")
+ui.notify()          # Toast notification (type="positive|negative|warning|info")
+```
+
+Example:
+```python
+ui.notify("Operation successful", type="positive")
+with ui.column().classes("items-center"):
+    ui.spinner(size="xl", color="primary")
+```
+
+#### Styling
+```python
+.classes("...")      # Add Tailwind CSS classes
+.props("...")        # Add Quasar/HTML props (e.g., "dense no-caps")
+.mark("...")         # Add marker for JavaScript integration
+```
+
+### Reactive Binding Patterns (Critical)
+
+**ViewModels MUST use `@binding.bindable_dataclass` decorator:**
+```python
+from nicegui import binding
+from dataclasses import dataclass, field
+
+@binding.bindable_dataclass
+class PageStateViewModel(BaseViewModel):
+    current_page: int = 0
+    is_loading: bool = False
+    status_message: str = ""
+```
+
+#### One-Way Binding (ViewModel → UI)
+Use when UI should reflect ViewModel state but not update it:
+```python
+binding.bind_from(
+    target_object=self.prev_button,  # UI element
+    target_name="disabled",           # UI property
+    source_object=self.viewmodel,     # ViewModel
+    source_name="prev_disabled"       # ViewModel property
+)
+
+# Shorthand for visibility:
+self.spinner.bind_visibility_from(
+    target_object=self.viewmodel,
+    target_name="is_loading"
+)
+
+# Shorthand for text:
+self.label.bind_text_from(
+    target_object=self.viewmodel,
+    target_name="status_message"
+)
+```
+
+#### Two-Way Binding
+Use for form inputs that should update ViewModel state:
+```python
+binding.bind(
+    target_object=self.select,
+    target_name="value",
+    source_object=self.app_state_model,
+    source_name="selected_project_key"
+)
+```
+
+#### When NOT to Use Binding
+**Image sources require callback-based updates**, not binding. Binding to `ui.image().source` can cause UI glitches:
+```python
+# WRONG - don't bind image sources:
+# binding.bind_from(self.image, "source", self.viewmodel, "image_url")
+
+# CORRECT - use callbacks:
+def update_image(self):
+    image_url = self.viewmodel.get_image_url()
+    self.image.set_source(image_url)
+
+self.viewmodel.add_property_changed_listener(
+    lambda prop, val: self.update_image() if prop == "current_page" else None
+)
+```
+
+### Async/Threading Best Practices (Critical)
+
+**ALWAYS use NiceGUI's async APIs**, not raw asyncio. Direct asyncio usage can cause websocket disconnections and UI freezes.
+
+#### `run.io_bound()` - For Blocking I/O
+Use for any blocking operation (file I/O, OCR processing, image encoding):
+```python
+from nicegui import run
+
+# File operations
+page_data = await run.io_bound(self.project_state.get_page, page_index)
+
+# Image processing
+encoded = await run.io_bound(self._encode_image_to_data_url, image_data)
+
+# OCR operations
+await run.io_bound(current_page.refresh_page_images)
+```
+
+#### `background_tasks.create()` - For Non-Blocking Async Tasks
+Use for fire-and-forget async operations:
+```python
+from nicegui import background_tasks
+
+# Background page loading
+background_tasks.create(self._background_load())
+
+# Async UI updates
+background_tasks.create(self._update_image_sources_async())
+```
+
+#### Async Callbacks
+NiceGUI automatically handles async callbacks - just use `async def`:
+```python
+async def _reload_with_ocr(self):
+    ui.notify("Rerunning OCR...", type="info")
+    success = await run.io_bound(self._perform_ocr)
+    ui.notify("OCR complete!" if success else "OCR failed",
+              type="positive" if success else "negative")
+
+ui.button("Reload OCR", on_click=self._reload_with_ocr)
+```
+
+#### Context Managers for Async Operations
+Manage UI state across async operations:
+```python
+@contextlib.asynccontextmanager
+async def _action_context(self, message: str):
+    self._overlay.set_visibility(True)
+    self._status_label.set_text(message)
+    try:
+        yield
+    finally:
+        self._overlay.set_visibility(False)
+
+# Usage:
+async def save_page(self):
+    async with self._action_context("Saving page..."):
+        await run.io_bound(self.project_state.save_page)
+```
+
+#### What NOT to Do
+**Never use these raw asyncio APIs** - they bypass NiceGUI's websocket management:
+```python
+# WRONG:
+asyncio.create_task(some_coro())        # Use background_tasks.create() instead
+loop.run_in_executor(None, blocking)    # Use run.io_bound() instead
+asyncio.to_thread(blocking)             # Use run.io_bound() instead
+```
+
+See `/home/linuxuser/ocr/ocr_labeler/NICEGUI_ASYNC_REFACTOR.md` for detailed migration examples.
+
+### Project-Specific Architectural Patterns
+
+#### ViewModel/View Separation
+```python
+# Views inherit from BaseView[TViewModel]
+class PageControls(BaseView[PageStateViewModel]):
+    def __init__(self, viewmodel: PageStateViewModel):
+        super().__init__(viewmodel)
+        # UI elements created in build()
+
+    def build(self) -> ui.column:
+        with ui.column() as self._root:
+            # Build UI here
+            pass
+        return self._root
+```
+
+#### Property Change Notification
+For custom refresh logic beyond data binding:
+```python
+# In ViewModel:
+def notify_property_changed(self, property_name: str, value: Any):
+    for callback in self._property_changed_callbacks:
+        callback(property_name, value)
+
+# In View:
+self.viewmodel.add_property_changed_listener(self._on_viewmodel_changed)
+
+def _on_viewmodel_changed(self, prop: str, value: Any):
+    if prop == "current_page":
+        self._refresh_content()
+```
+
+#### Per-Session Isolation
+Each browser tab gets isolated state via the page decorator:
+```python
+# In app.py
+@ui.page("/")
+def index():
+    # Fresh instances per session
+    state = AppState()
+    viewmodel = MainViewModel(state)
+    view = LabelerView(viewmodel)
+    view.build()
+
+    # Cleanup on tab close
+    def on_disconnect():
+        # Clean up session resources
+        pass
+    ui.on("disconnect", on_disconnect)
+```
+
+#### Component Composition
+Parent views build child view components:
+```python
+class ProjectView(BaseView[ProjectStateViewModel]):
+    def build(self) -> ui.column:
+        with ui.column() as self._root:
+            # Create child views
+            self.page_controls = PageControls(self.viewmodel.page_viewmodel)
+            self.page_controls.build()
+
+            self.content = ContentArea(self.viewmodel)
+            self.content.build()
+        return self._root
+```
+
+### Common Gotchas & Solutions
+
+| Issue | Solution |
+|-------|----------|
+| UI freezes during operations | Wrap blocking code in `run.io_bound()` |
+| Websocket disconnects during background tasks | Use `background_tasks.create()` instead of `asyncio.create_task()` |
+| Image not updating when bound | Use callback pattern, not binding for image sources |
+| Component not showing up | Make sure to call `.build()` after creating the component instance |
+| Nested components broken | Use context manager: `with ui.column(): ...` |
+| State changes across tabs | Each tab has separate state - this is intentional per-session isolation |
+| Memory leaks on disconnect | Implement `on_disconnect` cleanup for session resources |
+
+### Documentation Resources
+
+- **NiceGUI Version**: `>=2.22.2` (project requirement)
+- **Official Docs**: https://nicegui.io
+- **API Reference**: https://nicegui.io/documentation (fetch via Context7 for detailed lookups)
+- **Project Async Migration**: `/home/linuxuser/ocr/ocr_labeler/NICEGUI_ASYNC_REFACTOR.md`
+
+
+
 - **UI Components**: Use NiceGUI reactive patterns; avoid direct DOM manipulation
 - **State Updates**: Always call `state.notify()` after state changes to trigger UI refresh
 - **Async Operations**: Use proper async/await for OCR and navigation to prevent blocking
@@ -154,7 +454,7 @@ This ensures proper formatting, linting, testing, and build validation before pr
 
 ## Integration Notes
 - **pd-book-tools Dependency**: Core OCR functionality via relative path import; ensure both repos are siblings.
-- **NiceGUI Version**: `>=2.22.2` for current feature set
+- **NiceGUI**: `>=2.22.2` for current feature set. See comprehensive patterns in "NiceGUI Framework Patterns & Best Practices" section.
 - **Python Version**: `>=3.13` (configured in pyproject.toml)
 - **Optional Dependencies**: `opencv-python` improves performance but not required
 

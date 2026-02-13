@@ -83,7 +83,7 @@ def _patch_project_vm(monkeypatch):
 
     # Create a mock ProjectOperations class
     class MockProjectOperations:
-        async def create_project(self, project_dir, image_paths, ground_truth_map=None):
+        def create_project(self, project_dir, image_paths, ground_truth_map=None):
             return DummyProject(
                 pages=[None]
                 * len(image_paths),  # Create pages list to match image_paths
@@ -93,7 +93,7 @@ def _patch_project_vm(monkeypatch):
                 ground_truth_map=ground_truth_map or {},
             )
 
-        async def scan_project_directory(self, project_dir):
+        def scan_project_directory(self, project_dir):
             # Return the image files from the directory
             from pathlib import Path
 
@@ -394,7 +394,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
 
 
 def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
-    """Test _navigate in async path (with event loop): sets flags, calls nav_callable, schedules async task, does not load synchronously."""
+    """Test _navigate in async path (with background_tasks): sets flags, calls nav_callable, schedules async task, does not load synchronously."""
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
@@ -437,25 +437,25 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
 
     state.on_change.append(capture_notification)
 
-    # Mock event loop
-    mock_loop = type("MockLoop", (), {"create_task": lambda self, coro: None})()
-    monkeypatch.setattr("asyncio.get_running_loop", lambda: mock_loop)
-
-    # Track if create_task was called
+    # Mock NiceGUI's background_tasks.create to track if it was called
     task_created = False
 
-    def mock_create_task(coro):
+    def mock_background_create(coro):
         nonlocal task_created
         task_created = True
-        # Don't call original to avoid unawaited coroutine warning
+        # Close the coroutine to prevent "never awaited" warning
+        try:
+            coro.close()
+        except Exception:
+            pass
 
-    mock_loop.create_task = mock_create_task
+    monkeypatch.setattr("nicegui.background_tasks.create", mock_background_create)
 
     # Call _navigate directly on project_state
     state.project_state._navigate()
 
     # Assertions
-    assert task_created  # Async task was scheduled
+    assert task_created  # Async task was scheduled via background_tasks.create
     assert (
         len(notifications) == 1
     )  # Only start notification; end happens in async task (not in this sync test)

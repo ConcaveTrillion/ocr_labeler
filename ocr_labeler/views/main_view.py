@@ -30,6 +30,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         self._content_container = None
         self._no_project_placeholder = None
         self._project_loading_overlay = None
+        self._notification_timer = None
         logger.debug("LabelerView initialization complete")
 
     def build(self):
@@ -64,37 +65,27 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         self._project_loading_overlay = (
             ui.column()
             .classes(
-                "fixed inset-0 bg-black/30 backdrop-blur-sm z-40 items-center justify-center gap-3 hidden"
+                "fixed inset-0 bg-black/30 backdrop-blur-sm z-40 items-center justify-center gap-3"
             )
             .mark("project-loading-overlay")
         )
         with self._project_loading_overlay:
             ui.spinner(size="xl", color="primary")
-            self._project_loading_label = ui.label("Loading project...").classes(
-                "text-white text-lg font-semibold"
-            )
+
+        self._notification_timer = ui.timer(0.05, self._flush_queued_notifications)
 
         # Set up data bindings
         if self.viewmodel.app_state_viewmodel:
             self._no_project_placeholder.bind_visibility_from(
-                target_object=self.viewmodel,
-                target_name="show_placeholder",
+                self.viewmodel,
+                "show_placeholder",
             )
 
             self._project_loading_overlay.bind_visibility_from(
-                target_object=self.viewmodel.app_state_viewmodel,
-                target_name="is_project_loading",
+                self.viewmodel.app_state_viewmodel,
+                "is_project_loading",
                 value=True,
             )
-
-            # Update loading label with selected project key/path
-            try:
-                self._project_loading_label.bind_text_from(
-                    target_object=self.viewmodel.app_state_viewmodel,
-                    target_name="loading_message",
-                )
-            except Exception:
-                logger.debug("Failed to bind project loading label", exc_info=True)
 
         logger.debug("Data bindings configured")
         self.mark_as_built()
@@ -141,8 +132,8 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
                 # Bind project view visibility to show_project_view
                 if hasattr(self.project_view, "_root") and self.project_view._root:
                     self.project_view._root.bind_visibility_from(
-                        target_object=self.viewmodel,
-                        target_name="show_project_view",
+                        self.viewmodel,
+                        "show_project_view",
                     )
             logger.debug("ProjectView created and built during refresh")
         elif self.project_view and not show_project_view:
@@ -163,6 +154,31 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             self.project_view.refresh()
 
         logger.debug("LabelerView refresh complete")
+
+    def _flush_queued_notifications(self):
+        """Flush one queued notification per tick on the UI thread."""
+        app_vm = getattr(self.viewmodel, "app_state_viewmodel", None)
+        if app_vm is None:
+            return
+
+        app_state = getattr(app_vm, "_app_state", None)
+        if app_state is None:
+            return
+
+        try:
+            notification = app_state.pop_notification()
+        except Exception:
+            logger.debug("Failed to pop queued notification", exc_info=True)
+            return
+
+        if notification is None:
+            return
+
+        message, kind = notification
+        notify_type = (
+            kind if kind in {"positive", "negative", "warning", "info"} else "info"
+        )
+        ui.notify(message, type=notify_type)
 
     def _on_viewmodel_property_changed(self, property_name: str, value):
         """Handle view model property changes."""

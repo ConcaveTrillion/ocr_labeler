@@ -4,10 +4,19 @@ import base64
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Callable
+from urllib.parse import urlparse
 
-from nicegui import ui
+from nicegui import background_tasks, run, ui
 
+from .operations.persistence.project_discovery_operations import (
+    ProjectDiscoveryOperations,
+)
+from .routing import (
+    resolve_project_path,
+    resolve_project_route_from_path,
+    sync_url_to_state,
+)
 from .state.app_state import AppState
 from .viewmodels.main_view_model import MainViewModel
 from .views.main_view import LabelerView
@@ -26,25 +35,28 @@ class NiceGuiLabeler:
 
     def __init__(
         self,
-        project_root: Path,
-        projects_root: Path | None = None,
+        project_root: Path | str,
+        projects_root: Path | str | None = None,
         monospace_font_name: str = "monospace",
-        monospace_font_path: Optional[Path] = None,
+        monospace_font_path: Path | str | None = None,
         enable_session_logging: bool = True,
     ) -> None:
+        # Store configuration parameters as Path objects
+        self.project_root = Path(project_root) if project_root else None
+        self.projects_root = Path(projects_root) if projects_root else None
+        self.monospace_font_name = monospace_font_name
+        self.monospace_font_path = (
+            Path(monospace_font_path) if monospace_font_path else None
+        )
+        self.enable_session_logging = enable_session_logging
+
         logger.debug(
             "Initializing NiceGuiLabeler with project_root=%s, projects_root=%s, monospace_font_name=%s, monospace_font_path=%s",
-            project_root,
-            projects_root,
-            monospace_font_name,
-            monospace_font_path,
+            self.project_root,
+            self.projects_root,
+            self.monospace_font_name,
+            self.monospace_font_path,
         )
-        # Store configuration parameters to use when creating per-session instances
-        self.project_root = project_root
-        self.projects_root = projects_root
-        self.monospace_font_name = monospace_font_name
-        self.monospace_font_path = monospace_font_path
-        self.enable_session_logging = enable_session_logging
 
         # Prepare font CSS once (shared across all sessions)
         self.font_css = self._prepare_font_css()
@@ -82,7 +94,7 @@ class NiceGuiLabeler:
 
         # Create file handler for this session
         file_handler = logging.FileHandler(log_filename, mode="w", encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(logging.NOTSET)
 
         # Create detailed formatter for file logs
         formatter = logging.Formatter(
@@ -95,21 +107,13 @@ class NiceGuiLabeler:
         root_logger = logging.getLogger()
         root_logger.addHandler(file_handler)
 
-        # Set root logger to DEBUG so it doesn't filter messages before handlers see them
-        if root_logger.level > logging.DEBUG:
-            root_logger.setLevel(logging.DEBUG)
-
         # Also add to all existing loggers since CLI may have disabled propagation
-        # This ensures session logs capture everything even when propagate=False
-        # AND set them to DEBUG level so they don't filter before handlers see messages
+        # This ensures session logs capture records from loggers with propagate=False.
+        # Do not modify logger levels here; verbosity is controlled by CLI logging config.
         for logger_name in list(logging.root.manager.loggerDict):
             existing_logger = logging.getLogger(logger_name)
             if not existing_logger.propagate:  # Only add if propagation is disabled
                 existing_logger.addHandler(file_handler)
-                # Set ocr_labeler loggers to DEBUG for session logging
-                # Other libraries stay at their CLI-configured level
-                if logger_name.startswith("ocr_labeler"):
-                    existing_logger.setLevel(logging.DEBUG)
 
         logger.info(f"Session logging initialized: {log_filename}")
         logger.info(f"Session ID: {session_id}")
@@ -142,70 +146,383 @@ class NiceGuiLabeler:
 
         file_handler.close()
 
+    def _create_session(
+        self,
+        *,
+        page_title: str,
+        log_label: str,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        auto_load_cli_project: bool = False,
+    ):
+        """Create an isolated per-session app instance with logging, UI, and cleanup.
+
+        This is the common core for all route handlers. Each browser tab gets
+        its own AppState, MainViewModel, and LabelerView to prevent state
+        conflicts when multiple tabs are open.
+
+        Args:
+            page_title: Title for the browser tab.
+            log_label: Label for session log messages (e.g. "ROOT", "PROJECT").
+            project_id: Optional project to load from URL path parameter.
+            page_id: Optional page index to navigate to from URL path parameter.
+            auto_load_cli_project: If True and self.project_root is set, auto-load it.
+        """
+        # Set up per-session logging
+        session_handler, session_id = self._setup_session_logging()
+        logger.info("=" * 80)
+        logger.info(f"NEW {log_label} TAB SESSION STARTED - ID: {session_id}")
+        logger.info("=" * 80)
+
+        ui.page_title(page_title)
+
+        try:
+            logger.debug(f"Creating {log_label.lower()} session instance")
+
+            # Create fresh state for this session/tab
+            state = AppState(
+                base_projects_root=self.projects_root,
+                monospace_font_name=self.monospace_font_name,
+                monospace_font_path=self.monospace_font_path,
+            )
+
+            # For URL-based project/page routes, set loading state immediately
+            # so the initial render shows the loading overlay instead of the
+            # "No Project Loaded" placeholder while background init starts.
+            if project_id:
+                state.is_project_loading = True
+                state.notify()
+
+            # Create view model and view for this session
+            viewmodel = MainViewModel(state)
+            view = LabelerView(viewmodel)
+
+            # Inject font CSS in page context
+            if self.font_css:
+                ui.add_head_html(f"<style>{self.font_css}</style>")
+                logger.debug("Font CSS injected into page")
+
+            # Build the UI for this session
+            view.build()
+
+            # Determine what to load
+            if project_id:
+                # Start URL initialization on the first UI timer tick so the
+                # page context/client is active and progress notifications can
+                # render during loading (especially on reconnect).
+                url_init_started = False
+
+                def _enqueue_notify(message: str, type_: str = "info") -> None:
+                    """Queue URL-init notifications for UI-thread timer delivery."""
+                    try:
+                        state.queue_notification(message, type_)
+                    except Exception:
+                        logger.debug("Falling back to direct notify", exc_info=True)
+                        self._notify_safe(message, type_)
+
+                def start_url_initialization() -> None:
+                    nonlocal url_init_started
+                    if url_init_started:
+                        return
+                    url_init_started = True
+
+                    _enqueue_notify(
+                        f"Opening {project_id} (page {page_id or '1'})...", "info"
+                    )
+                    background_tasks.create(
+                        self._initialize_from_url(
+                            state,
+                            project_id,
+                            page_id or "1",
+                            session_id,
+                            notify_fn=_enqueue_notify,
+                        )
+                    )
+
+                ui.timer(0.05, start_url_initialization)
+            elif auto_load_cli_project and self.project_root:
+                # Auto-load CLI project if valid
+                if ProjectDiscoveryOperations.validate_project_directory(
+                    self.project_root
+                ):
+                    logger.info(f"Auto-loading CLI project: {self.project_root}")
+                    background_tasks.create(state.load_project(self.project_root))
+
+            logger.info(
+                f"{log_label} tab session initialized successfully: {session_id}"
+            )
+
+            # Set up cleanup on disconnect
+            def on_disconnect():
+                logger.info(f"{log_label} tab session disconnecting: {session_id}")
+                self._cleanup_session_logging(session_handler, session_id)
+
+            try:
+                ui.on("disconnect", on_disconnect)
+            except Exception:
+                logger.warning(
+                    "ui.on('disconnect') registration failed; cleanup will rely on process exit",
+                    exc_info=True,
+                )
+
+        except Exception as e:
+            logger.exception(
+                f"Error during {log_label.lower()} tab session initialization: {e}"
+            )
+            self._cleanup_session_logging(session_handler, session_id)
+            raise
+
     def create_routes(self):
         logger.debug("Creating UI routes")
 
         @ui.page("/")
-        def index():  # noqa: D401
-            """Create per-session instances for tab isolation.
+        def root_index():  # noqa: D401
+            """Root index page - shows project selection or auto-loads CLI project."""
+            request_path = self._get_request_path()
+            project_id, page_id = resolve_project_route_from_path(request_path)
+            self._create_session(
+                page_title="OCR Labeler",
+                log_label="ROOT",
+                project_id=project_id,
+                page_id=page_id,
+                auto_load_cli_project=project_id is None,
+            )
 
-            Each browser tab gets its own AppState, MainViewModel, and LabelerView
-            to prevent state conflicts when multiple tabs are open.
-            """
-            # Set up per-session logging
-            session_handler, session_id = self._setup_session_logging()
-            logger.info("=" * 80)
-            logger.info(f"NEW TAB SESSION STARTED - ID: {session_id}")
-            logger.info("=" * 80)
+        @ui.page("/project/{project_id}")
+        def project_index(project_id: str):  # noqa: D401
+            """Project-specific page - loads the given project at page 0."""
+            self._create_session(
+                page_title=f"OCR Labeler - {project_id}",
+                log_label="PROJECT",
+                project_id=project_id,
+            )
 
-            try:
-                logger.debug("Creating new session instance for tab")
-
-                # Create fresh state for this session/tab
-                state = AppState(
-                    base_projects_root=self.projects_root,
-                    monospace_font_name=self.monospace_font_name,
-                    monospace_font_path=self.monospace_font_path,
-                )
-                # Note: project_root is not set here. It will be set when a project
-                # is actually loaded via AppState.load_project(), which creates a
-                # proper ProjectState instance in the projects dict.
-
-                # Create view model and view for this session
-                viewmodel = MainViewModel(state)
-                view = LabelerView(viewmodel)
-
-                # Inject font CSS in page context
-                if self.font_css:
-                    ui.add_head_html(f"<style>{self.font_css}</style>")
-                    logger.debug("Font CSS injected into page")
-
-                # Build the UI for this session
-                view.build()
-
-                logger.info(f"Tab session initialized successfully: {session_id}")
-
-                # Set up cleanup on disconnect (if available - not in testing)
-                def on_disconnect():
-                    logger.info(f"Tab session disconnecting: {session_id}")
-                    self._cleanup_session_logging(session_handler, session_id)
-
-                try:
-                    # NiceGUI supports ui.on('disconnect', ...) on current versions.
-                    ui.on("disconnect", on_disconnect)
-                except Exception:
-                    logger.warning(
-                        "ui.on('disconnect') registration failed; cleanup will rely on process exit",
-                        exc_info=True,
-                    )
-
-            except Exception as e:
-                logger.exception(f"Error during tab session initialization: {e}")
-                # Still clean up logging on error
-                self._cleanup_session_logging(session_handler, session_id)
-                raise
+        @ui.page("/project/{project_id}/page/{page_id}")
+        def project_page_index(project_id: str, page_id: str):  # noqa: D401
+            """Project + page page - loads the given project at the specified page."""
+            self._create_session(
+                page_title=f"OCR Labeler - {project_id} (Page {page_id})",
+                log_label="PROJECT PAGE",
+                project_id=project_id,
+                page_id=page_id,
+            )
 
         logger.debug("Routes creation complete")
+
+    def _get_request_path(self) -> str | None:
+        """Safely retrieve the current request path from NiceGUI context."""
+        try:
+            client = getattr(ui.context, "client", None)
+            request = getattr(client, "request", None)
+
+            # Primary path from current request URL
+            url = getattr(request, "url", None)
+            path = getattr(url, "path", None)
+            if isinstance(path, str) and path not in {"", "/"}:
+                return path
+
+            # Fallback for proxied environments
+            headers = getattr(request, "headers", None)
+            if headers is not None:
+                for header_name in ("x-original-uri", "x-forwarded-uri"):
+                    forwarded_path = headers.get(header_name)
+                    if isinstance(forwarded_path, str) and forwarded_path.startswith(
+                        "/"
+                    ):
+                        return forwarded_path
+
+                # NiceGUI reconnect can hit '/' while Referer still has '/project/...'
+                referer = headers.get("referer") or headers.get("referrer")
+                if isinstance(referer, str) and referer:
+                    referer_path = urlparse(referer).path
+                    if referer_path:
+                        return referer_path
+
+            # Last resort: use root path if present
+            if isinstance(path, str):
+                return path
+        except Exception:
+            logger.debug(
+                "Failed to read request path from NiceGUI context", exc_info=True
+            )
+        return None
+
+    def _notify_safe(self, message: str, type: str = "info") -> None:
+        """Best-effort notification that does not fail URL initialization.
+
+        URL initialization runs in a background task where NiceGUI's slot
+        context may be unavailable. In that case, notifying should be skipped
+        rather than crashing the load flow.
+        """
+        try:
+            ui.notify(message, type=type)
+        except RuntimeError:
+            logger.debug("Skipping ui.notify without active NiceGUI slot context")
+        except Exception:
+            logger.debug("Failed to send ui.notify", exc_info=True)
+
+    async def _initialize_from_url(
+        self,
+        state: AppState,
+        project_id: str,
+        page_id: str,
+        session_id: str,
+        notify_fn: Callable[[str, str], None] | None = None,
+    ):
+        """Initialize the application state from URL parameters.
+
+        Resolves a project_id to a filesystem directory path by trying:
+        1. Absolute path or relative to CWD
+        2. Under base_projects_root (standard discovery location)
+        3. Fallback common locations
+
+        Then loads the project and navigates to page_id (1-based page number
+        from the URL, converted to 0-based index internally).
+        After loading, updates the browser URL to reflect the current state.
+        """
+        state.is_project_loading = True
+        state.notify()
+        notify = notify_fn or self._notify_safe
+
+        try:
+            logger.info(
+                f"Initializing from URL: project_id={project_id}, page_id={page_id}"
+            )
+            notify(f"Loading {project_id}", "info")
+
+            # Find the project directory
+            project_path = await run.io_bound(
+                resolve_project_path,
+                project_id,
+                state.base_projects_root,
+                state.available_projects,
+            )
+
+            if not project_path:
+                logger.warning(
+                    "Project '%s' not found",
+                    project_id,
+                )
+                notify(f"Project not found: {project_id}", "warning")
+                return
+
+            requested_page_index: int | None = None
+            requested_page_number: int | None = None
+            page_id_parse_error = False
+
+            try:
+                requested_page_number = int(page_id)
+                requested_page_index = requested_page_number - 1
+                if requested_page_index < 0:
+                    page_id_parse_error = True
+                    requested_page_index = None
+            except ValueError:
+                page_id_parse_error = True
+
+            logger.info(
+                "URL init page selection: page_id=%s, requested_page_number=%s, requested_page_index=%s, parse_error=%s",
+                page_id,
+                requested_page_number,
+                requested_page_index,
+                page_id_parse_error,
+            )
+            notify("Resolving project data...", "info")
+
+            # Load the project at the requested page (if valid) to avoid
+            # eagerly OCR-loading page 0 before deep-link navigation applies.
+            try:
+                await state.load_project(
+                    project_path,
+                    initial_page_index=requested_page_index,
+                    manage_loading_state=False,
+                )
+            except TypeError:
+                # Backward-compatible fallback for test doubles and older
+                # signatures that don't accept manage_loading_state.
+                await state.load_project(
+                    project_path,
+                    initial_page_index=requested_page_index,
+                )
+            notify("Project loaded, preparing page...", "info")
+
+            # Preload the selected page in a worker thread before the
+            # loading overlay is cleared. This avoids a synchronous first
+            # page load on the UI thread, which can delay queued notifications
+            # until after OCR completes.
+            if (
+                state.current_project_key
+                and state.current_project_key in state.projects
+            ):
+                project_state = state.projects[state.current_project_key]
+                current_page_index = getattr(project_state, "current_page_index", -1)
+                if (
+                    project_state.project
+                    and project_state.project.pages
+                    and 0 <= current_page_index < len(project_state.project.pages)
+                ):
+                    await run.io_bound(
+                        project_state.get_page,
+                        current_page_index,
+                    )
+
+            # Set the page if specified and valid
+            # page_id is 1-based in the URL; convert to 0-based index
+            if page_id_parse_error:
+                logger.warning(
+                    "Invalid page id '%s' for project '%s'",
+                    page_id,
+                    project_id,
+                )
+                notify(f"Page not found: {page_id}", "warning")
+            elif (
+                state.current_project_key
+                and state.current_project_key in state.projects
+                and requested_page_index is not None
+                and requested_page_number is not None
+            ):
+                project_state = state.projects[state.current_project_key]
+                # Ensure project state has some pages before attempting navigation
+                if project_state.project and project_state.project.pages:
+                    if 0 <= requested_page_index < len(project_state.project.pages):
+                        if (
+                            getattr(project_state, "current_page_index", None)
+                            != requested_page_index
+                        ):
+                            notify(
+                                f"Navigating to page {requested_page_number}...",
+                                "info",
+                            )
+                            project_state.goto_page_index(requested_page_index)
+                        logger.info(
+                            "Set page to index %s (page %s)",
+                            requested_page_index,
+                            requested_page_number,
+                        )
+                    else:
+                        logger.warning(
+                            "Page '%s' not found in project '%s'",
+                            page_id,
+                            project_id,
+                        )
+                        notify(f"Page not found: {page_id}", "warning")
+                else:
+                    logger.warning(
+                        "Project '%s' loaded but contains no pages", project_id
+                    )
+                    notify(f"Page not found: {page_id}", "warning")
+
+            # Update browser URL to reflect the resolved state
+            sync_url_to_state(state)
+
+            logger.info(f"URL initialization complete for session {session_id}")
+            notify(f"Loaded {project_id}", "positive")
+
+        except Exception as e:
+            logger.exception(f"Error initializing from URL: {e}")
+            notify(f"Error loading project: {e}", "negative")
+        finally:
+            state.is_project_loading = False
+            state.notify()
 
     def run(self, host: str = "127.0.0.1", port: int = 8080, **uvicorn_kwargs):
         logger.debug(

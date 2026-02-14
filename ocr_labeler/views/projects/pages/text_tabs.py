@@ -126,7 +126,20 @@ class TextTabs:
             copy_callback = copy_gt_callback
             logger.debug("Created GT to OCR copy callback")
 
-        self.word_match_view = WordMatchView(copy_gt_to_ocr_callback=copy_callback)
+        notify_callback = None
+        if (
+            page_state
+            and hasattr(page_state, "_project_state")
+            and page_state._project_state
+        ):
+
+            def notify_callback(message: str, type_: str = "info") -> None:
+                page_state._project_state.queue_notification(message, type_)
+
+        self.word_match_view = WordMatchView(
+            copy_gt_to_ocr_callback=copy_callback,
+            notify_callback=notify_callback,
+        )
         self.container = None
         self._tabs = None
 

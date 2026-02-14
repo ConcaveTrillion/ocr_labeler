@@ -121,6 +121,8 @@ class MainViewModel(BaseViewModel):
     def _update_derived_properties(self):
         """Update properties derived from child view models."""
         if self.app_state_viewmodel and self.project_state_viewmodel:
+            is_project_loading = bool(self.app_state_viewmodel.is_project_loading)
+
             # Check if we have a project loaded
             new_has_project = (
                 bool(self.app_state_viewmodel.selected_project_key)
@@ -130,7 +132,7 @@ class MainViewModel(BaseViewModel):
 
             # Update view visibility
             new_show_project_view = new_has_project
-            new_show_placeholder = not new_has_project
+            new_show_placeholder = (not new_has_project) and (not is_project_loading)
 
             # Track old values safely (avoid accessing bindable properties during init)
             try:

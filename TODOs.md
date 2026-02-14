@@ -12,6 +12,10 @@ Development roadmap for the OCR Labeler application. The application is a NiceGU
 
 ## Development Phases
 
+** Rotate Page Left/Right Buttons **
+Transform OCR bboxes as well as part of rotation
+Should this be part of the Page Class itself?
+
 ### Phase 3: Word & Line-Level Editing Core
 **Priority: High** | **Status: In Progress**
 
@@ -45,6 +49,7 @@ using the nice gui ui component that lets you click in an image, i want to be ab
 15. **Word Actions**: Implement word delete, merge_left, merge_right actions modifying native line object.
 
 16. **Word Split UI**: Implement word split UI with pixel slider + char index; call underlying split_word and recompute matches.
+Make it so you can just "click" in the image (nicegui has a image overlay tool which should enable this)
 
 17. **Edit Bbox UI**: Implement edit bbox UI with margin adjustments, refine, crop top/bottom/all, save functionality.
 

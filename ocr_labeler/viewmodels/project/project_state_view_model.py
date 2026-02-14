@@ -112,8 +112,17 @@ class ProjectStateViewModel(BaseViewModel):
         """Sync model from ProjectState via state change listener."""
         logger.debug("Updating ProjectStateViewModel from ProjectState")
         if self._project_state:
-            self.page_total = self._project_state.project.page_count()
-            self.current_page_index = self._project_state.current_page_index
+            project = getattr(self._project_state, "project", None)
+            if project is None:
+                logger.warning(
+                    "ProjectStateViewModel.update called with no active project; "
+                    "using empty navigation state"
+                )
+                self.page_total = 0
+                self.current_page_index = -1
+            else:
+                self.page_total = project.page_count()
+                self.current_page_index = self._project_state.current_page_index
             self.is_navigating = self._project_state.is_navigating
             self.is_project_loading = self._project_state.is_project_loading
             self.loading_status = self._project_state.loading_status

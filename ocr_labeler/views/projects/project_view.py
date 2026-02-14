@@ -7,6 +7,7 @@ from typing import Any
 
 from nicegui import ui
 
+from ...routing import sync_url_from_project_state
 from ...viewmodels.project.page_state_view_model import PageStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..callbacks import NavigationCallbacks
@@ -141,13 +142,14 @@ class ProjectView(
         current_index = self.viewmodel.current_page_index
         image_name = ""
         # Note: We need to access the underlying project through the viewmodel
-        if hasattr(self.viewmodel, "_project_state") and hasattr(
-            self.viewmodel._project_state, "project"
-        ):
-            project = self.viewmodel._project_state.project
+        project_state = getattr(self.viewmodel, "_project_state", None)
+        project = getattr(project_state, "project", None)
+        if project is not None and hasattr(project, "image_paths"):
             if 0 <= current_index < len(project.image_paths):
                 image_name = project.image_paths[current_index].name
-        page = None if loading else self.viewmodel._project_state.current_page()
+        page = None
+        if not loading and project_state is not None and project is not None:
+            page = project_state.current_page()
         total = self.viewmodel.page_total
 
         logger.debug(
@@ -269,6 +271,19 @@ class ProjectView(
         # Use viewmodel command
         self.viewmodel.command_navigate_to_page(n - 1)  # Convert to 0-based index
 
+    def _notify(self, message: str, type_: str = "info"):
+        """Route notifications through per-session queue with UI fallback."""
+        try:
+            app_state_model = getattr(self.viewmodel, "_app_state_model", None)
+            app_state = getattr(app_state_model, "_app_state", None)
+            if app_state is not None:
+                app_state.queue_notification(message, type_)
+                return
+        except Exception:
+            logger.debug("Failed to enqueue session notification", exc_info=True)
+
+        ui.notify(message, type=type_)
+
     @contextlib.asynccontextmanager
     async def _action_context(self, message: str, show_spinner: bool = False):
         """Context manager to show a notification and overlay during an action.
@@ -285,7 +300,7 @@ class ProjectView(
         if show_spinner:
             self._show_busy_spinner = True
 
-        ui.notify(message, type="info")
+        self._notify(message, "info")
         logger.info(f"[BLUR] Activating busy overlay for action: {message}")
         self.viewmodel.set_action_busy(True, message)
         # Yield control to allow NiceGUI to update the UI
@@ -309,7 +324,7 @@ class ProjectView(
         """Navigate to previous page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
-            ui.notify("Navigation blocked: project is loading", type="warning")
+            self._notify("Navigation blocked: project is loading", "warning")
             return
 
         async with self._action_context(
@@ -335,9 +350,9 @@ class ProjectView(
                         reason = "controls disabled (loading/override)"
                 except Exception:
                     reason = "inspection-failed"
-                ui.notify(
+                self._notify(
                     f"Navigation prevented by viewmodel (prev): {reason}",
-                    type="warning",
+                    "warning",
                 )
                 logger.debug(
                     "Previous page navigation prevented by viewmodel: %s", reason
@@ -346,7 +361,7 @@ class ProjectView(
                 logger.debug("Previous page navigation initiated successfully")
                 # Show success notification when navigation completes
                 # (note: actual page load happens asynchronously in background)
-                ui.notify("Navigated to previous page", type="positive")
+                self._notify("Navigated to previous page", "positive")
 
     async def _next_async(self):  # pragma: no cover - UI side effects
         """Navigate to next page."""
@@ -359,7 +374,7 @@ class ProjectView(
         )
         if self.viewmodel.is_project_loading:
             logger.warning("[NAV-NEXT] Navigation blocked - project loading")
-            ui.notify("Navigation blocked: project is loading", type="warning")
+            self._notify("Navigation blocked: project is loading", "warning")
             return
 
         async with self._action_context(
@@ -389,9 +404,9 @@ class ProjectView(
                         reason = "controls disabled (loading/override)"
                 except Exception:
                     reason = "inspection-failed"
-                ui.notify(
+                self._notify(
                     f"Navigation prevented by viewmodel (next): {reason}",
-                    type="warning",
+                    "warning",
                 )
                 logger.debug("Next page navigation prevented by viewmodel: %s", reason)
             else:
@@ -401,14 +416,14 @@ class ProjectView(
                 )
                 # Show success notification when navigation completes
                 # (note: actual page load happens asynchronously in background)
-                ui.notify("Navigated to next page", type="positive")
+                self._notify("Navigated to next page", "positive")
         logger.info("[NAV-NEXT] Exit - Thread: %s", threading.current_thread().name)
 
     async def _goto_async(self, value):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
-            ui.notify("Navigation blocked: project is loading", type="warning")
+            self._notify("Navigation blocked: project is loading", "warning")
             return
 
         try:
@@ -443,9 +458,9 @@ class ProjectView(
                 except Exception:
                     reason = "inspection-failed"
 
-                ui.notify(
+                self._notify(
                     f"Navigation prevented by viewmodel (goto): {reason}",
-                    type="warning",
+                    "warning",
                 )
                 logger.debug(
                     "Goto page navigation prevented by viewmodel for value: %s, reason: %s",
@@ -459,7 +474,7 @@ class ProjectView(
                 )
                 # Show success notification when navigation completes
                 # (note: actual page load happens asynchronously in background)
-                ui.notify(f"Navigated to page {display_value}", type="positive")
+                self._notify(f"Navigated to page {display_value}", "positive")
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
@@ -476,14 +491,14 @@ class ProjectView(
 
                 if success:
                     logger.info("Page saved successfully")
-                    ui.notify("Page saved successfully", type="positive")
+                    self._notify("Page saved successfully", "positive")
                 else:
                     logger.warning("Failed to save page")
-                    ui.notify("Failed to save page", type="negative")
+                    self._notify("Failed to save page", "negative")
 
             except Exception as exc:  # noqa: BLE001
                 logger.error("Save failed: %s", exc)
-                ui.notify(f"Save failed: {exc}", type="negative")
+                self._notify(f"Save failed: {exc}", "negative")
 
     async def _load_page_async(self):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
@@ -500,17 +515,17 @@ class ProjectView(
 
                 if success:
                     logger.info("Page loaded successfully")
-                    ui.notify("Page loaded successfully", type="positive")
+                    self._notify("Page loaded successfully", "positive")
                     # Trigger UI refresh to show loaded page
                     self.refresh()
                     logger.debug("UI refresh triggered after successful load")
                 else:
                     logger.warning("No saved page found for current page")
-                    ui.notify("No saved page found for current page", type="warning")
+                    self._notify("No saved page found for current page", "warning")
 
             except Exception as exc:  # noqa: BLE001
                 logger.error("Load failed: %s", exc)
-                ui.notify(f"Load failed: {exc}", type="negative")
+                self._notify(f"Load failed: {exc}", "negative")
 
     async def _refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Refine all bounding boxes in the current page asynchronously."""
@@ -529,7 +544,7 @@ class ProjectView(
 
                 if success:
                     logger.info("Bboxes refined successfully")
-                    ui.notify("Bounding boxes refined successfully", type="positive")
+                    self._notify("Bounding boxes refined successfully", "positive")
                     # Trigger UI refresh to show updated overlays
                     self.refresh()
                     logger.debug(
@@ -537,11 +552,11 @@ class ProjectView(
                     )
                 else:
                     logger.warning("Failed to refine bboxes")
-                    ui.notify("Failed to refine bounding boxes", type="negative")
+                    self._notify("Failed to refine bounding boxes", "negative")
 
             except Exception as exc:  # noqa: BLE001
                 logger.error("Bbox refinement failed: %s", exc)
-                ui.notify(f"Bbox refinement failed: {exc}", type="negative")
+                self._notify(f"Bbox refinement failed: {exc}", "negative")
 
     async def _expand_refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Expand and refine all bounding boxes in the current page asynchronously."""
@@ -560,9 +575,9 @@ class ProjectView(
 
                 if success:
                     logger.info("Bboxes expanded and refined successfully")
-                    ui.notify(
+                    self._notify(
                         "Bounding boxes expanded and refined successfully",
-                        type="positive",
+                        "positive",
                     )
                     # Trigger UI refresh to show updated overlays
                     self.refresh()
@@ -571,13 +586,13 @@ class ProjectView(
                     )
                 else:
                     logger.warning("Failed to expand and refine bboxes")
-                    ui.notify(
-                        "Failed to expand and refine bounding boxes", type="negative"
+                    self._notify(
+                        "Failed to expand and refine bounding boxes", "negative"
                     )
 
             except Exception as exc:  # noqa: BLE001
                 logger.error("Bbox expand & refine failed: %s", exc)
-                ui.notify(f"Bbox expand & refine failed: {exc}", type="negative")
+                self._notify(f"Bbox expand & refine failed: {exc}", "negative")
 
     async def _reload_ocr_async(self):  # pragma: no cover - UI side effects
         """Reload the current page with OCR processing asynchronously."""
@@ -596,16 +611,35 @@ class ProjectView(
 
                 if success:
                     logger.info("OCR reloaded successfully")
-                    ui.notify("Page reloaded with OCR", type="positive")
+                    self._notify("Page reloaded with OCR", "positive")
                     # Trigger UI refresh
                     self.refresh()
                 else:
                     logger.warning("Failed to reload OCR")
-                    ui.notify("Failed to reload OCR", type="negative")
+                    self._notify("Failed to reload OCR", "negative")
 
             except Exception as exc:  # noqa: BLE001
                 logger.error("OCR reload failed: %s", exc)
-                ui.notify(f"OCR reload failed: {exc}", type="negative")
+                self._notify(f"OCR reload failed: {exc}", "negative")
+
+    def _sync_browser_url(self):
+        """Update the browser URL to reflect the current project/page state.
+
+        Uses ui.navigate.history.replace() so users can copy/share deep links
+        without adding extra browser history entries on each page navigation.
+        """
+        try:
+            if not hasattr(self.viewmodel, "_project_state"):
+                return
+            project_state = self.viewmodel._project_state
+            if not project_state or not project_state.project_root:
+                return
+
+            sync_url_from_project_state(
+                project_state.project_root, project_state.current_page_index
+            )
+        except Exception:
+            logger.debug("Failed to sync browser URL", exc_info=True)
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""
@@ -622,5 +656,8 @@ class ProjectView(
 
         try:
             self.refresh()
+            # Sync browser URL when page navigation completes
+            if property_name in ["current_page_index", "project_state"]:
+                self._sync_browser_url()
         except Exception:
             logger.exception("Error refreshing ProjectView on property change")

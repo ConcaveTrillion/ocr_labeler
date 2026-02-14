@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import logging
+import threading
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
+
+from nicegui import run
 
 from ..operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
@@ -44,6 +48,26 @@ class AppState:
         default_factory=list
     )  # sorted keys for select options
     _selected_project_key: str | None = None  # currently selected project key
+    _notification_queue: deque[tuple[str, str]] = field(
+        default_factory=deque, init=False, repr=False
+    )
+    _notification_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
+
+    def queue_notification(self, message: str, kind: str = "info") -> None:
+        """Queue a user notification for this browser-tab session."""
+        if not message:
+            return
+        with self._notification_lock:
+            self._notification_queue.append((message, kind))
+
+    def pop_notification(self) -> tuple[str, str] | None:
+        """Pop one queued notification for paced UI delivery."""
+        with self._notification_lock:
+            if not self._notification_queue:
+                return None
+            return self._notification_queue.popleft()
 
     @property
     def selected_project_key(self) -> str | None:
@@ -88,7 +112,12 @@ class AppState:
             listener()
 
     # --------------- Project Loading ---------------
-    async def load_project(self, directory: Path):
+    async def load_project(
+        self,
+        directory: Path,
+        initial_page_index: int | None = None,
+        manage_loading_state: bool = True,
+    ):
         """Load a project by delegating to project state.
 
         Manages application-level loading state and project selection synchronization.
@@ -96,14 +125,15 @@ class AppState:
         logger.debug(f"Loading project from directory: {directory}")
 
         directory = Path(directory)
-        if not directory.exists():
+        if not await run.io_bound(directory.exists):
             raise FileNotFoundError(directory)
 
         project_key = directory.resolve().name
 
         # Indicate a project-level loading phase so the UI can hide content & show spinner
-        self.is_project_loading = True
-        self.notify()
+        if manage_loading_state:
+            self.is_project_loading = True
+            self.notify()
 
         try:
             # Keep selection in sync (used by bindings)
@@ -112,16 +142,23 @@ class AppState:
 
             # Get or create project state
             if project_key not in self.projects:
-                self.projects[project_key] = ProjectState()
+                self.projects[project_key] = ProjectState(
+                    notification_sink=self.queue_notification
+                )
                 # Set up notifications for the new project state
                 self.projects[project_key].on_change.append(self.notify)
+            else:
+                self.projects[project_key].notification_sink = self.queue_notification
 
             # Delegate actual project loading to project state
-            await self.projects[project_key].load_project(directory)
+            await self.projects[project_key].load_project(
+                directory, initial_page_index=initial_page_index
+            )
         finally:
             # Clear project-level loading state (page-level loading continues via navigation spinner logic)
-            self.is_project_loading = False
-            self.notify()
+            if manage_loading_state:
+                self.is_project_loading = False
+                self.notify()
 
     @property
     def is_loading(self) -> bool:
@@ -160,7 +197,9 @@ class AppState:
             return self.projects[self.current_project_key]
         # Return a default empty project state if no current project
         if not hasattr(self, "_default_project_state"):
-            self._default_project_state = ProjectState()
+            self._default_project_state = ProjectState(
+                notification_sink=self.queue_notification
+            )
             self._default_project_state.on_change.append(self.notify)
         return self._default_project_state
 

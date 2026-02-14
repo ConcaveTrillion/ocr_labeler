@@ -327,6 +327,25 @@
                 "clear": false
             },
             "detail": "Clean up cache and temporary files (keeps venv and UV cache)"
+        },
+        {
+            "label": "Make: Clean Logs",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean-logs"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Remove all session logs from logs/"
         }
     ]
 }

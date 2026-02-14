@@ -4,6 +4,7 @@ import logging
 
 from nicegui import binding, ui
 
+from ...routing import build_project_url
 from ...viewmodels.app.app_state_view_model import AppStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 
@@ -25,6 +26,18 @@ class ProjectLoadControls:
     ):
         self.app_state_model = app_state_model
         self.project_state_model = project_state_model
+
+    def _notify(self, message: str, type_: str = "info"):
+        """Route notifications through per-session queue with UI fallback."""
+        try:
+            app_state = getattr(self.app_state_model, "_app_state", None)
+            if app_state is not None:
+                app_state.queue_notification(message, type_)
+                return
+        except Exception:
+            logger.debug("Failed to enqueue session notification", exc_info=True)
+
+        ui.notify(message, type=type_)
 
     def build(self) -> ui.element:
         with ui.row().classes("w-full items-center gap-2") as row:
@@ -85,7 +98,7 @@ class ProjectLoadControls:
         """Load the selected project using the ViewModel."""
         key = self.app_state_model.selected_project_key
         if not key:
-            ui.notify("No project selected", type="warning")
+            self._notify("No project selected", "warning")
             return
 
         # Prevent multiple clicks during loading
@@ -94,9 +107,18 @@ class ProjectLoadControls:
             return
 
         try:
-            ui.notify(f"Loading {key}", type="info")
+            self._notify(f"Loading {key}", "info")
             await self.app_state_model.command_load_selected_project()
-            ui.notify(f"Loaded {key}", type="positive")
+            self._notify(f"Loaded {key}", "positive")
+            # Update browser URL to reflect the loaded project
+            try:
+                url = build_project_url(key)
+                ui.navigate.history.replace(url)
+                logger.debug(f"Browser URL updated to: {url}")
+            except Exception:
+                logger.debug(
+                    "Failed to update browser URL after project load", exc_info=True
+                )
         except Exception as exc:  # noqa: BLE001
-            ui.notify(f"Load failed: {exc}", type="negative")
+            self._notify(f"Load failed: {exc}", "negative")
             logger.error(f"Failed to load project '{key}': {exc}")

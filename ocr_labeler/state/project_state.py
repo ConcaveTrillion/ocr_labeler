@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -46,6 +48,7 @@ class ProjectState:
     page_ops: PageOperations = field(
         default_factory=PageOperations
     )  # For backward compatibility
+    notification_sink: Callable[[str, str], None] | None = None
 
     # Cached text values to avoid expensive recomputation during binding propagation
     _cached_ocr_text: str = field(default="", init=False)
@@ -53,6 +56,46 @@ class ProjectState:
     _cached_page_index: int = field(
         default=-1, init=False
     )  # Track which page the cache is for
+    _notification_queue: deque[tuple[str, str]] = field(
+        default_factory=deque, init=False, repr=False
+    )
+    _notification_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
+
+    def queue_notification(self, message: str, kind: str = "info"):
+        """Queue a user-facing notification from any thread.
+
+        Notifications are drained by the UI thread and displayed via ui.notify.
+        """
+        if not message:
+            return
+        if self.notification_sink is not None:
+            try:
+                self.notification_sink(message, kind)
+                return
+            except Exception:
+                logger.debug(
+                    "notification_sink failed; using local queue", exc_info=True
+                )
+        with self._notification_lock:
+            self._notification_queue.append((message, kind))
+
+    def drain_notifications(self) -> list[tuple[str, str]]:
+        """Drain queued notifications for UI-thread display."""
+        with self._notification_lock:
+            if not self._notification_queue:
+                return []
+            items = list(self._notification_queue)
+            self._notification_queue.clear()
+            return items
+
+    def pop_notification(self) -> tuple[str, str] | None:
+        """Pop a single queued notification for incremental UI display."""
+        with self._notification_lock:
+            if not self._notification_queue:
+                return None
+            return self._notification_queue.popleft()
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -80,7 +123,9 @@ class ProjectState:
         logger.debug("current_page_state: returning page_state")
         return result
 
-    async def load_project(self, directory: Path):
+    async def load_project(
+        self, directory: Path, initial_page_index: int | None = None
+    ):
         """Load images; lazily OCR each page via DocTR on first access.
 
         Reads pages.json (if present) mapping image filename -> ground truth text.
@@ -109,8 +154,23 @@ class ProjectState:
             self.project = await run.io_bound(
                 operations.create_project, directory, images, ground_truth_map
             )
-            # Reset navigation to first page
-            self.current_page_index = 0 if images else -1
+            # Reset navigation to the requested initial page (if valid)
+            if images:
+                if initial_page_index is not None and 0 <= initial_page_index < len(
+                    images
+                ):
+                    self.current_page_index = initial_page_index
+                else:
+                    self.current_page_index = 0
+            else:
+                self.current_page_index = -1
+
+            logger.info(
+                "load_project init page selection: initial_page_index=%s, current_page_index=%s, total_pages=%s",
+                initial_page_index,
+                self.current_page_index,
+                len(images),
+            )
 
             # Clear page states for the new project
             self.page_states.clear()
@@ -253,6 +313,7 @@ class ProjectState:
             if not force_ocr and self.project_root is not None:
                 logger.info("ensure_page: checking for saved page at index=%s", index)
                 self.loading_status = "Checking for saved page..."
+                self.queue_notification(self.loading_status, "info")
                 # Don't notify here - it triggers recursion via viewmodel updates
                 try:
                     loaded_page = self.page_ops.load_page(
@@ -266,6 +327,7 @@ class ProjectState:
                             "ensure_page: loaded from saved for index=%s", index
                         )
                         self.loading_status = "Loading page from disk..."
+                        self.queue_notification(self.loading_status, "info")
                         # Don't notify here - it triggers recursion via viewmodel updates
                         # Attach convenience attrs expected elsewhere
                         img_path = Path(self.project.image_paths[index])
@@ -297,6 +359,7 @@ class ProjectState:
                     index,
                 )
                 self.loading_status = "Running OCR on page (in background thread)..."
+                self.queue_notification(self.loading_status, "info")
                 # Don't notify here - it triggers recursion via viewmodel updates
                 try:
                     gt_text = (
@@ -330,6 +393,9 @@ class ProjectState:
                         "ensure_page: loader failed for index=%s path=%s; using fallback page",
                         index,
                         img_path,
+                    )
+                    self.queue_notification(
+                        "OCR failed for page; using fallback image.", "negative"
                     )
 
                     # Fallback: still display original image even if OCR failed

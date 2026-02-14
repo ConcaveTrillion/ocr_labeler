@@ -52,47 +52,37 @@ def parse_args(argv: list[str] | None = None):
         "-v",
         action="count",
         default=0,
-        help="Increase logging verbosity (-v: console DEBUG, -vv: +third‑party DEBUG)",
-    )
-    p.add_argument(
-        "--log-file",
-        type=Path,
-        default=Path("ocr_labeler.log"),
-        help="Path to log file (will be created/overwritten). Set to '-' to disable file logging.",
+        help="Increase logging verbosity (-v: DEBUG app logs, -vv: DEBUG + pd-book-tools, -vvv: DEBUG all dependencies; default: INFO)",
     )
     return p.parse_args(argv)
 
 
-def get_logging_configuration(verbose, log_file: Path | None = None) -> dict:
+def get_logging_configuration(verbose: int) -> dict:
     """Return logging DictConfig.
 
-    Console: WARNING and above only.
-    File: ALL
+    Verbosity mapping:
+    - default: INFO
+    - -v: DEBUG (app logs)
+    - -vv: DEBUG (app + pd-book-tools)
+    - -vvv: DEBUG (app + all dependent libraries)
     """
-    handler_names: list[str] = ["console"]
-    if log_file is not None:
-        handler_names.append("file")
+    # Keep global logging silent; per-session handlers in app.py write runtime
+    # records into session log files.
+    handler_names: list[str] = ["null"]
 
-    # Discover existing loggers and directly set log levels, then later we can attach handlers.
-    loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
-    for lg in loggers:
-        # Noise reduction for known chatty loggers
-        if "engineio" in lg.name or "socketio" in lg.name or "urllib3" in lg.name:
-            lg.setLevel(logging.WARNING)
-            lg.propagate = False
-            # print(f"Discovered noisy logger: {lg.name} level={lg.level} propagate={lg.propagate}")
-            continue
-        if verbose >= 2:
-            lg.setLevel(logging.DEBUG)
-            lg.propagate = False
-        elif verbose == 1:
-            lg.setLevel(logging.INFO)
-            lg.propagate = False
-        elif verbose == 0:
-            lg.setLevel(logging.WARNING)
-            lg.propagate = False
-        # print(f"Discovered logger: {lg.name} level={lg.level} propagate={lg.propagate}")
-    loggers_dict = {lg.name: lg for lg in loggers}
+    if verbose >= 1:
+        app_level = "DEBUG"
+    else:
+        app_level = "INFO"
+
+    # Important dependency gets debug at -vv and above.
+    important_dependency_level = "DEBUG" if verbose >= 2 else "WARNING"
+
+    # All dependent libraries become verbose at -vvv.
+    dependency_level = "DEBUG" if verbose >= 3 else "WARNING"
+
+    # Keep root strict until -vvv to avoid noisy third-party logs
+    root_level = "DEBUG" if verbose >= 3 else "WARNING"
 
     log_formatters = {
         "default": {
@@ -102,50 +92,58 @@ def get_logging_configuration(verbose, log_file: Path | None = None) -> dict:
     }
 
     log_handlers = {
-        "console": {
-            "class": "logging.StreamHandler",
-            "level": "WARNING",
-            "formatter": "default",
-            "stream": "ext://sys.stdout",
-        }
+        "null": {
+            "class": "logging.NullHandler",
+        },
     }
-    if log_file is not None:
-        log_handlers["file"] = {
-            "class": "logging.FileHandler",
-            "level": "NOTSET",  # capture everything to file now
-            "formatter": "default",
-            "filename": str(log_file),
-            "mode": "w",
-            "encoding": "utf-8",
-        }
 
     log_loggers = {
-        name: {"handlers": handler_names, "propagate": False}
-        for name in loggers_dict.keys()
+        "ocr_labeler": {
+            "level": app_level,
+            "handlers": handler_names,
+            "propagate": False,
+        },
+        "pd_book_tools": {
+            "level": important_dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "nicegui": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "uvicorn": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "uvicorn.error": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "uvicorn.access": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "engineio": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "socketio": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
+        "urllib3": {
+            "level": dependency_level,
+            "handlers": [],
+            "propagate": True,
+        },
     }
-
-    # Ensure uvicorn/nicegui loggers propagate; avoid attaching handlers directly so
-    # if uvicorn later adjusts its own handlers we still capture records via root.
-    for special in ["uvicorn", "uvicorn.error", "uvicorn.access", "nicegui"]:
-        if verbose >= 2:
-            special_level = "DEBUG"
-        elif verbose == 1:
-            special_level = "INFO"
-        else:
-            special_level = "WARNING"
-        log_loggers.setdefault(
-            special, {"level": special_level, "handlers": [], "propagate": True}
-        )
-        # Force propagate True & empty handlers
-        log_loggers[special]["handlers"] = []
-        log_loggers[special]["propagate"] = True
-
-    if verbose >= 2:
-        root_level = "DEBUG"
-    elif verbose == 1:
-        root_level = "INFO"
-    else:
-        root_level = "WARNING"
 
     return {
         "version": 1,
@@ -161,12 +159,8 @@ def main(argv: list[str] | None = None):  # pragma: no cover (thin wrapper)
     args = parse_args(argv)
     logger.info("Parsed args: %s", args)
 
-    # Configure logging immediately so early INFO logs go to file
-    log_file = args.log_file if str(args.log_file) != "-" else None
-    log_cfg = get_logging_configuration(
-        args.verbose,
-        log_file,
-    )
+    # Configure base logging immediately; session files are attached per-tab in app.py
+    log_cfg = get_logging_configuration(args.verbose)
 
     logging.config.dictConfig(log_cfg)
 
@@ -186,11 +180,9 @@ def main(argv: list[str] | None = None):  # pragma: no cover (thin wrapper)
         monospace_font_path=args.font_path,
     )
 
-    # Tell uvicorn/nicegui to emit DEBUG when -vvv is used.
+    # Keep uvicorn/nicegui quiet unless -vvv enables dependency debug logs.
     if args.verbose >= 3:
         uvicorn_logging_level = "debug"
-    elif args.verbose >= 1:
-        uvicorn_logging_level = "info"
     else:
         uvicorn_logging_level = "warning"
     logger.info(

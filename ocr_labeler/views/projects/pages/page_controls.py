@@ -50,6 +50,19 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self.expand_refine_bboxes_button = None
         self.page_source_label = None
 
+    def _notify(self, message: str, type_: str = "info"):
+        """Route notifications through per-session queue with UI fallback."""
+        try:
+            app_state_model = getattr(self.viewmodel, "_app_state_model", None)
+            app_state = getattr(app_state_model, "_app_state", None)
+            if app_state is not None:
+                app_state.queue_notification(message, type_)
+                return
+        except Exception:
+            logger.debug("Failed to enqueue session notification", exc_info=True)
+
+        ui.notify(message, type=type_)
+
     def build(self) -> ui.element:
         logger.debug("Building PageControls UI")
         with ui.column().classes("gap-2") as container:
@@ -149,25 +162,6 @@ class PageControls:  # pragma: no cover - UI wrapper file
                         )
                 except Exception:
                     # Defensive - if binding fails, ignore and leave controls enabled
-                    pass
-
-            # Loading status row - shows what's happening during navigation
-            with ui.row().classes("items-center gap-2"):
-                self.loading_status_label = ui.label("").classes(
-                    "text-sm text-gray-600 italic"
-                )
-                # Bind to viewmodel's loading_status property
-                try:
-                    from nicegui import binding
-
-                    binding.bind_from(
-                        self.loading_status_label,
-                        "text",
-                        self.viewmodel,
-                        "loading_status",
-                    )
-                except Exception:
-                    # Defensive - if binding fails, status just won't update
                     pass
 
             # Second row: Page info
@@ -270,13 +264,13 @@ class PageControls:  # pragma: no cover - UI wrapper file
                 )
                 if success:
                     logger.debug("Page reloaded with OCR successfully")
-                    ui.notify("Page reloaded with OCR", type="positive")
+                    self._notify("Page reloaded with OCR", "positive")
                 else:
                     logger.warning("Page reload with OCR failed")
-                    ui.notify("Failed to reload with OCR", type="negative")
+                    self._notify("Failed to reload with OCR", "negative")
             else:
                 logger.error("Cannot reload OCR - viewmodel command not available")
-                ui.notify("Cannot reload OCR - command not available", type="negative")
+                self._notify("Cannot reload OCR - command not available", "negative")
         except Exception as e:
             logger.error(f"Failed to reload with OCR: {e}")
-            ui.notify(f"Failed to reload with OCR: {e}", type="negative")
+            self._notify(f"Failed to reload with OCR: {e}", "negative")

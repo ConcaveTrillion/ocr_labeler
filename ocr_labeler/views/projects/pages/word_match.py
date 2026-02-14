@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class WordMatchView:
     """View component for displaying word-level OCR vs Ground Truth matching with color coding."""
 
-    def __init__(self, copy_gt_to_ocr_callback=None):
+    def __init__(self, copy_gt_to_ocr_callback=None, notify_callback=None):
         logger.debug(
             "Initializing WordMatchView with copy_gt_to_ocr_callback=%s",
             copy_gt_to_ocr_callback is not None,
@@ -30,11 +30,20 @@ class WordMatchView:
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
+        self.notify_callback = notify_callback
         logger.debug("WordMatchView initialization complete")
 
-    @staticmethod
-    def _safe_notify(message: str, type_: str = "info"):
+    def _safe_notify(self, message: str, type_: str = "info"):
         """Safely call ui.notify, catching context errors during navigation."""
+        if self.notify_callback is not None:
+            try:
+                self.notify_callback(message, type_)
+                return
+            except Exception:
+                logger.debug(
+                    "Notify callback failed; falling back to ui.notify", exc_info=True
+                )
+
         try:
             ui.notify(message, type=type_)
         except RuntimeError as e:

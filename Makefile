@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full test lint format pre-commit-check build clean help
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test lint format pre-commit-check build clean clean-logs help
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -35,6 +35,13 @@ reset-full: ## Nuclear option: clear everything and redownload
 	@echo "⬇️ Dependencies should download fresh now."
 	@$(MAKE) --no-print-directory install
 	@echo "💥 Full reset complete! Everything is fresh!"
+
+upgrade-deps: ## Upgrade dependencies and sync local environment
+	@echo "⬆️ Upgrading dependency lockfile..."
+	uv lock --upgrade
+	@echo "📦 Syncing upgraded dependencies..."
+	uv sync --group all-dev
+	@echo "✅ Dependencies upgraded and environment synced!"
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
@@ -96,3 +103,8 @@ clean: ## Clean up cache and temporary files (keeps venv and UV cache)
 	rm -rf dist/ 2>/dev/null || true
 	rm -rf build/ 2>/dev/null || true
 	@echo "✅ Cache cleanup complete!"
+
+clean-logs: ## Remove all session logs from logs/
+	@echo "🧹 Cleaning session logs..."
+	find logs -type f -name "*.log" -delete 2>/dev/null || true
+	@echo "✅ Log cleanup complete!"

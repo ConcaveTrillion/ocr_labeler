@@ -206,6 +206,18 @@ class NiceGuiLabeler:
 
         ui.page_title(page_title)
 
+        # Keep toast notifications visible above loading overlays so users can
+        # see progress messages during long OCR operations.
+        ui.add_head_html(
+            """
+            <style>
+            .q-notifications {
+                z-index: 100000 !important;
+            }
+            </style>
+            """
+        )
+
         # Ensure reconnect timeout is defined on the page itself. In test
         # contexts where ui.run() is not called, app-level reconnect timeout
         # may be unavailable; page-level value avoids outbox teardown errors.
@@ -266,10 +278,6 @@ class NiceGuiLabeler:
                     if url_init_started:
                         return
                     url_init_started = True
-
-                    _enqueue_notify(
-                        f"Opening {project_id} (page {page_id or '1'})...", "info"
-                    )
                     background_tasks.create(
                         self._initialize_from_url(
                             state,
@@ -459,15 +467,12 @@ class NiceGuiLabeler:
         from the URL, converted to 0-based index internally).
         After loading, updates the browser URL to reflect the current state.
         """
-        state.is_project_loading = True
-        state.notify()
         notify = notify_fn or self._notify_safe
 
         try:
             logger.info(
                 f"Initializing from URL: project_id={project_id}, page_id={page_id}"
             )
-            notify(f"Loading {project_id}", "info")
 
             # Find the project directory
             project_path = await run.io_bound(
@@ -505,44 +510,38 @@ class NiceGuiLabeler:
                 requested_page_index,
                 page_id_parse_error,
             )
-            notify("Resolving project data...", "info")
 
-            # Load the project at the requested page (if valid) to avoid
-            # eagerly OCR-loading page 0 before deep-link navigation applies.
-            try:
-                await state.load_project(
-                    project_path,
-                    initial_page_index=requested_page_index,
-                    manage_loading_state=False,
-                )
-            except TypeError:
-                # Backward-compatible fallback for test doubles and older
-                # signatures that don't accept manage_loading_state.
-                await state.load_project(
-                    project_path,
-                    initial_page_index=requested_page_index,
-                )
-            notify("Project loaded, preparing page...", "info")
-
-            # Preload the selected page in a worker thread before the
-            # loading overlay is cleared. This avoids a synchronous first
-            # page load on the UI thread, which can delay queued notifications
-            # until after OCR completes.
+            project_key = project_path.resolve().name
+            already_loaded = False
             if (
-                state.current_project_key
-                and state.current_project_key in state.projects
+                state.current_project_key == project_key
+                and project_key in state.projects
             ):
-                project_state = state.projects[state.current_project_key]
-                current_page_index = getattr(project_state, "current_page_index", -1)
-                if (
-                    project_state.project
-                    and project_state.project.pages
-                    and 0 <= current_page_index < len(project_state.project.pages)
-                ):
-                    await run.io_bound(
-                        project_state.get_page,
-                        current_page_index,
-                    )
+                existing_project_state = state.projects[project_key]
+                existing_project_root = getattr(
+                    existing_project_state, "project_root", None
+                )
+                if existing_project_root is not None:
+                    try:
+                        already_loaded = (
+                            Path(existing_project_root).resolve()
+                            == project_path.resolve()
+                        )
+                    except Exception:
+                        already_loaded = False
+
+            if already_loaded:
+                logger.info(
+                    "URL init: project '%s' already loaded, skipping reload",
+                    project_key,
+                )
+            else:
+                # Use the shared AppState project loading path so URL and in-app
+                # project loading follow the same lifecycle and notifications.
+                await state.load_project(
+                    project_path,
+                    initial_page_index=requested_page_index,
+                )
 
             # Set the page if specified and valid
             # page_id is 1-based in the URL; convert to 0-based index
@@ -562,28 +561,35 @@ class NiceGuiLabeler:
                 project_state = state.projects[state.current_project_key]
                 # Ensure project state has some pages before attempting navigation
                 if project_state.project and project_state.project.pages:
-                    if 0 <= requested_page_index < len(project_state.project.pages):
-                        if (
-                            getattr(project_state, "current_page_index", None)
-                            != requested_page_index
-                        ):
-                            notify(
-                                f"Navigating to page {requested_page_number}...",
-                                "info",
-                            )
-                            project_state.goto_page_index(requested_page_index)
-                        logger.info(
-                            "Set page to index %s (page %s)",
-                            requested_page_index,
-                            requested_page_number,
-                        )
-                    else:
+                    if not (
+                        0 <= requested_page_index < len(project_state.project.pages)
+                    ):
                         logger.warning(
                             "Page '%s' not found in project '%s'",
                             page_id,
                             project_id,
                         )
                         notify(f"Page not found: {page_id}", "warning")
+                    elif hasattr(project_state, "goto_page_index"):
+                        current_index = getattr(
+                            project_state, "current_page_index", None
+                        )
+                        page_already_loaded = False
+                        try:
+                            page_already_loaded = (
+                                project_state.project.pages[requested_page_index]
+                                is not None
+                            )
+                        except Exception:
+                            page_already_loaded = False
+
+                        # Route URL-driven page selection through async navigation
+                        # only when needed (different index or missing page object).
+                        if (
+                            current_index != requested_page_index
+                            or not page_already_loaded
+                        ):
+                            project_state.goto_page_index(requested_page_index)
                 else:
                     logger.warning(
                         "Project '%s' loaded but contains no pages", project_id
@@ -594,14 +600,10 @@ class NiceGuiLabeler:
             sync_url_to_state(state)
 
             logger.info(f"URL initialization complete for session {session_id}")
-            notify(f"Loaded {project_id}", "positive")
 
         except Exception as e:
             logger.exception(f"Error initializing from URL: {e}")
             notify(f"Error loading project: {e}", "negative")
-        finally:
-            state.is_project_loading = False
-            state.notify()
 
     def run(self, host: str = "127.0.0.1", port: int = 8080, **uvicorn_kwargs):
         logger.debug(

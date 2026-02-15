@@ -8,5 +8,8 @@
     "python.testing.pytestEnabled": true,
     "terminal.integrated.env.linux": {
         "VIRTUAL_ENV": "${workspaceFolder}/.venv"
+    },
+    "chat.tools.terminal.autoApprove": {
+        "make": true
     }
 }

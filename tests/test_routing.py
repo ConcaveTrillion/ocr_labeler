@@ -145,6 +145,25 @@ class TestResolveProjectPath:
         assert result is not None
         assert result.resolve() == other_dir.resolve()
 
+    def test_resolve_base_projects_root_preferred_over_cwd(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """base_projects_root should be preferred over CWD when both contain the same project id."""
+        cwd_root = tmp_path / "cwd_root"
+        cwd_root.mkdir()
+        (cwd_root / "my_proj").mkdir()
+
+        base_root = tmp_path / "base_root"
+        base_root.mkdir()
+        base_project_dir = base_root / "my_proj"
+        base_project_dir.mkdir()
+
+        monkeypatch.chdir(cwd_root)
+
+        result = resolve_project_path("my_proj", base_projects_root=base_root)
+        assert result is not None
+        assert result.resolve() == base_project_dir.resolve()
+
 
 class TestSyncUrlToState:
     """Tests for sync_url_to_state."""

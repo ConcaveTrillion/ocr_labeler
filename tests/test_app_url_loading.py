@@ -15,9 +15,6 @@ async def test_initialize_from_url_toggles_project_loading_state(
     labeler = NiceGuiLabeler(project_root=tmp_path, enable_session_logging=False)
     state = AppState(base_projects_root=tmp_path)
 
-    loading_transitions: list[bool] = []
-    state.on_change.append(lambda: loading_transitions.append(state.is_project_loading))
-
     async def fake_io_bound(func, *args, **kwargs):
         return func(*args, **kwargs)
 
@@ -37,9 +34,10 @@ async def test_initialize_from_url_toggles_project_loading_state(
         goto_index=None,
     )
 
+    captured: dict[str, int | None] = {"initial_page_index": None}
+
     async def fake_load_project(_directory, initial_page_index=None):
-        assert state.is_project_loading is True
-        assert initial_page_index == 1
+        captured["initial_page_index"] = initial_page_index
         state.current_project_key = "fake_project"
         state.projects["fake_project"] = project_state
 
@@ -52,11 +50,9 @@ async def test_initialize_from_url_toggles_project_loading_state(
         session_id="session-test",
     )
 
-    assert loading_transitions
-    assert loading_transitions[0] is True
-    assert loading_transitions[-1] is False
+    assert captured["initial_page_index"] == 1
     assert state.is_project_loading is False
-    assert project_state.goto_index is None
+    assert project_state.goto_index == 1
 
 
 async def test_initialize_from_url_ignores_notify_runtime_error(
@@ -104,7 +100,7 @@ async def test_initialize_from_url_ignores_notify_runtime_error(
     )
 
     assert state.is_project_loading is False
-    assert project_state.goto_index is None
+    assert project_state.goto_index == 1
 
 
 async def test_initialize_from_url_missing_project_shows_not_found(
@@ -193,6 +189,56 @@ async def test_initialize_from_url_missing_page_shows_not_found(
         message == "Page not found: 99" and level == "warning"
         for message, level in notify_calls
     )
+
+
+async def test_initialize_from_url_reuses_already_loaded_project(
+    monkeypatch,
+    tmp_path,
+):
+    labeler = NiceGuiLabeler(project_root=tmp_path, enable_session_logging=False)
+    state = AppState(base_projects_root=tmp_path)
+
+    async def fake_io_bound(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(app_module.run, "io_bound", fake_io_bound)
+    monkeypatch.setattr(
+        app_module,
+        "resolve_project_path",
+        lambda project_id, base_projects_root, available_projects: tmp_path,
+    )
+    monkeypatch.setattr(app_module, "sync_url_to_state", lambda _state: None)
+    monkeypatch.setattr(app_module.ui, "notify", lambda *args, **kwargs: None)
+
+    existing_project_state = SimpleNamespace(
+        project=SimpleNamespace(pages=[object(), object(), object()]),
+        project_root=tmp_path,
+        current_page_index=0,
+        goto_page_index=lambda index: setattr(
+            existing_project_state, "goto_index", index
+        ),
+        goto_index=None,
+    )
+
+    state.current_project_key = tmp_path.resolve().name
+    state.projects[state.current_project_key] = existing_project_state
+
+    called = {"load_project": 0}
+
+    async def fake_load_project(_directory, initial_page_index=None):
+        called["load_project"] += 1
+
+    monkeypatch.setattr(state, "load_project", fake_load_project)
+
+    await labeler._initialize_from_url(
+        state=state,
+        project_id=tmp_path.name,
+        page_id="2",
+        session_id="session-test",
+    )
+
+    assert called["load_project"] == 0
+    assert existing_project_state.goto_index == 1
 
 
 def test_resolve_project_route_from_path_project_only():

@@ -364,45 +364,25 @@ class PageStateViewModel(BaseViewModel):
         navigating = getattr(self._project_state, "is_navigating", False)
 
         # If PageState does not expose a current_page instance, but we are bound to
-        # a ProjectState, try to get the page via the ProjectState helper. This
-        # covers cases where PageState manages per-page caches but the ProjectState
-        # is the authoritative source for loading the page object. Skip this if
-        # navigation is still in progress to avoid blocking the UI thread.
+        # a ProjectState, inspect the in-memory project pages cache directly.
+        # Do not call ProjectState.current_page() here because it can trigger
+        # synchronous page/OCR loading and block UI updates (including queued
+        # notifications) during route-driven initialization.
         if (not current_page) and getattr(self, "_project_state", None) is not None:
             if not navigating:
                 try:
-                    logger.debug(
-                        "_get_current_page_or_clear: attempting to get current page from ProjectState"
-                    )
-                    current_page = self._project_state.current_page()
-                    logger.debug(
-                        f"_get_current_page_or_clear: got page from ProjectState: {current_page}"
-                    )
+                    proj = getattr(self._project_state, "project", None)
+                    idx = getattr(self._project_state, "current_page_index", None)
+                    if proj is not None and hasattr(proj, "pages") and idx is not None:
+                        try:
+                            current_page = proj.pages[idx]
+                            logger.debug(
+                                f"_get_current_page_or_clear: got page from project.pages[{idx}]: {current_page}"
+                            )
+                        except Exception:
+                            current_page = None
                 except Exception:
-                    logger.debug(
-                        "_get_current_page_or_clear: failed to get page from ProjectState"
-                    )
-                # If ProjectState.current_page() didn't return a page (tests may stub
-                # pages directly into the project's pages list), try a direct index
-                # lookup into the project's pages list.
-                if current_page is None:
-                    try:
-                        proj = getattr(self._project_state, "project", None)
-                        idx = getattr(self._project_state, "current_page_index", None)
-                        if (
-                            proj is not None
-                            and hasattr(proj, "pages")
-                            and idx is not None
-                        ):
-                            try:
-                                current_page = proj.pages[idx]
-                                logger.debug(
-                                    f"_get_current_page_or_clear: got page from project.pages[{idx}]: {current_page}"
-                                )
-                            except Exception:
-                                current_page = None
-                    except Exception:
-                        current_page = None
+                    current_page = None
             else:
                 logger.debug(
                     "_get_current_page_or_clear: navigation in progress; deferring page lookup"

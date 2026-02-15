@@ -132,6 +132,7 @@ class AppState:
 
         # Indicate a project-level loading phase so the UI can hide content & show spinner
         if manage_loading_state:
+            self.queue_notification(f"Loading {project_key}", "info")
             self.is_project_loading = True
             self.notify()
 
@@ -154,6 +155,9 @@ class AppState:
             await self.projects[project_key].load_project(
                 directory, initial_page_index=initial_page_index
             )
+
+            if manage_loading_state:
+                self.queue_notification(f"Loaded {project_key}", "positive")
         finally:
             # Clear project-level loading state (page-level loading continues via navigation spinner logic)
             if manage_loading_state:

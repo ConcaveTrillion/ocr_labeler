@@ -225,14 +225,28 @@ class TextTabs:
     def _on_project_state_changed(self):
         """Called when project state changes (e.g., navigation); update word matches."""
         logger.debug("TextTabs received project state change notification")
-        # Get the current page from the ProjectState
+        # Read current page from in-memory cache only; do not call
+        # ProjectState.current_page() here because it may trigger synchronous
+        # OCR/page loading and block UI updates/notifications.
         if (
             self.page_state
             and hasattr(self.page_state, "_project_state")
             and self.page_state._project_state
         ):
             project_state = self.page_state._project_state
-            page = project_state.current_page()
+            page = None
+            try:
+                project = getattr(project_state, "project", None)
+                index = getattr(project_state, "current_page_index", None)
+                if (
+                    project is not None
+                    and hasattr(project, "pages")
+                    and index is not None
+                    and 0 <= index < len(project.pages)
+                ):
+                    page = project.pages[index]
+            except Exception:
+                page = None
             logger.debug(f"Current page from ProjectState: {page is not None}")
             # Update the PageState's current_page reference so both are in sync
             if page is not None:

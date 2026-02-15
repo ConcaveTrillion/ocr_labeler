@@ -129,8 +129,8 @@ def resolve_project_path(
     Tries multiple strategies in order:
     1. Lookup in available_projects dict (already discovered projects)
     2. Absolute path
-    3. Relative to CWD
-    4. Under base_projects_root
+    3. Under base_projects_root
+    4. Relative to CWD
     5. Under default discovery root (~/ocr/data/source-pgdp-data/output)
     6. Fallback common locations
 
@@ -156,16 +156,16 @@ def resolve_project_path(
     if p.is_absolute() and p.exists() and p.is_dir():
         return p
 
-    # 3. Try relative to CWD
-    potential = Path.cwd() / project_id
-    if potential.exists() and potential.is_dir():
-        return potential
-
-    # 4. Try under base_projects_root
+    # 3. Try under base_projects_root
     if base_projects_root:
         potential = base_projects_root / project_id
         if potential.exists() and potential.is_dir():
             return potential
+
+    # 4. Try relative to CWD
+    potential = Path.cwd() / project_id
+    if potential.exists() and potential.is_dir():
+        return potential
 
     # 5. Try default discovery root (same as ProjectDiscoveryOperations)
     try:

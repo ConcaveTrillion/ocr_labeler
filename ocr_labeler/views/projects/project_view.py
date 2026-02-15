@@ -149,7 +149,8 @@ class ProjectView(
                 image_name = project.image_paths[current_index].name
         page = None
         if not loading and project_state is not None and project is not None:
-            page = project_state.current_page()
+            if 0 <= current_index < len(project.pages):
+                page = project.pages[current_index]
 
             # Keep text tabs synchronized with the freshly ensured current page.
             # This is especially important right after initial LOAD where no

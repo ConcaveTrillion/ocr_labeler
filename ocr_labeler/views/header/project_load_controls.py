@@ -104,9 +104,7 @@ class ProjectLoadControls:
             return
 
         try:
-            self._notify(f"Loading {key}", "info")
             await self.app_state_model.command_load_selected_project()
-            self._notify(f"Loaded {key}", "positive")
             # Update browser URL to reflect the loaded project
             try:
                 url = build_project_url(key)

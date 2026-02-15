@@ -108,6 +108,13 @@ class WordMatchView:
             self._update_lines_display()
             logger.debug("WordMatchView update complete")
 
+        except RuntimeError as e:
+            if "client this element belongs to has been deleted" in str(e).lower():
+                logger.debug(
+                    "Skipping word match update after client disconnect: %s", e
+                )
+                return
+            logger.exception(f"Error updating word match view: {e}")
         except Exception as e:
             logger.exception(f"Error updating word match view: {e}")
 

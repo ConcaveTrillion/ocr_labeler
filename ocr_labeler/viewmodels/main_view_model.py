@@ -64,6 +64,11 @@ class MainViewModel(BaseViewModel):
         """Handle app state view model property changes."""
         logger.debug(f"App state changed: {property_name} = {value}")
 
+        if property_name == "is_project_loading":
+            # Surface loading-state transitions to the top-level view so it can
+            # refresh content when project loading finishes.
+            self.notify_property_changed("is_project_loading", value)
+
         # Update project state view model pointer when selection or load status changes
         if property_name in [
             "selected_project_key",

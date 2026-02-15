@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio  # noqa: F401 - used in monkeypatch
 from pathlib import Path
 
 import pytest

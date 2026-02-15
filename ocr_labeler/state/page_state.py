@@ -65,6 +65,29 @@ class PageState:
                 self._update_text_cache(force=True)
                 # Notify our own listeners
                 self.notify()
+                return
+
+            # If index didn't change, we may still need to refresh cached text when
+            # async loading completes for this page. Without this, caches can remain
+            # stuck at "Loading..." after Next/Back/Goto navigation.
+            if not self._project:
+                return
+
+            has_loading_placeholder = (
+                self._cached_ocr_text == "Loading..."
+                or self._cached_gt_text == "Loading..."
+            )
+            page_is_loaded = (
+                0 <= self._current_page_index < len(self._project.pages)
+                and self._project.pages[self._current_page_index] is not None
+            )
+
+            if has_loading_placeholder and page_is_loaded:
+                logger.debug(
+                    "PageState: Refreshing text cache for index %s after async load completion",
+                    self._current_page_index,
+                )
+                self._update_text_cache(force=True)
 
     def notify_on_completion(func):
         """Decorator to call self.notify() after method completion."""
@@ -424,6 +447,10 @@ class PageState:
     @property
     def current_ocr_text(self) -> str:
         """Get the OCR text for the current page (cached for performance)."""
+        # Recover from stale loading placeholders when the page is already loaded
+        # (e.g., initial project render before any navigation event).
+        if self._has_loading_placeholder() and self._is_current_page_loaded():
+            self._update_text_cache(force=True)
         self._update_text_cache()
         return self._cached_ocr_text
 
@@ -435,6 +462,10 @@ class PageState:
     @property
     def current_gt_text(self) -> str:
         """Get the ground truth text for the current page (cached for performance)."""
+        # Recover from stale loading placeholders when the page is already loaded
+        # (e.g., initial project render before any navigation event).
+        if self._has_loading_placeholder() and self._is_current_page_loaded():
+            self._update_text_cache(force=True)
         self._update_text_cache()
         return self._cached_gt_text
 
@@ -453,6 +484,21 @@ class PageState:
         self._cached_page_index = -1
         self._cached_ocr_text = ""
         self._cached_gt_text = ""
+
+    def _has_loading_placeholder(self) -> bool:
+        """Check whether cached texts are currently in loading-placeholder state."""
+        return (
+            self._cached_ocr_text == "Loading..."
+            or self._cached_gt_text == "Loading..."
+        )
+
+    def _is_current_page_loaded(self) -> bool:
+        """Return True if current page index points to a materialized page in project cache."""
+        if not self._project:
+            return False
+        if not (0 <= self._current_page_index < len(self._project.pages)):
+            return False
+        return self._project.pages[self._current_page_index] is not None
 
     def _update_text_cache(self, force: bool = False):
         """Update cached text values for the current page."""

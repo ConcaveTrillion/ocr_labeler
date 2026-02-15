@@ -156,7 +156,11 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         logger.debug("LabelerView refresh complete")
 
     def _flush_queued_notifications(self):
-        """Flush one queued notification per tick on the UI thread."""
+        """Flush queued notifications on the UI thread.
+
+        Drain a small batch per tick to avoid long backlogs where important
+        notifications (for example "Loaded <project>") arrive too late.
+        """
         app_vm = getattr(self.viewmodel, "app_state_viewmodel", None)
         if app_vm is None:
             return
@@ -166,19 +170,21 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             return
 
         try:
-            notification = app_state.pop_notification()
+            for _ in range(10):
+                notification = app_state.pop_notification()
+                if notification is None:
+                    return
+
+                message, kind = notification
+                notify_type = (
+                    kind
+                    if kind in {"positive", "negative", "warning", "info"}
+                    else "info"
+                )
+                ui.notify(message, type=notify_type)
         except Exception:
             logger.debug("Failed to pop queued notification", exc_info=True)
             return
-
-        if notification is None:
-            return
-
-        message, kind = notification
-        notify_type = (
-            kind if kind in {"positive", "negative", "warning", "info"} else "info"
-        )
-        ui.notify(message, type=notify_type)
 
     def _on_viewmodel_property_changed(self, property_name: str, value):
         """Handle view model property changes."""
@@ -187,5 +193,10 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         )
 
         # Refresh when relevant properties change
-        if property_name in ["show_project_view", "show_placeholder", "has_project"]:
+        if property_name in [
+            "show_project_view",
+            "show_placeholder",
+            "has_project",
+            "is_project_loading",
+        ]:
             self.refresh()

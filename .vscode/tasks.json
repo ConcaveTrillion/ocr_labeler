@@ -135,6 +135,44 @@
             "detail": "Run tests via Makefile"
         },
         {
+            "label": "Make: Test Single",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-single", "TEST=${input:pytestNodeId}"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run a single pytest node id via Makefile"
+        },
+        {
+            "label": "Make: Test Pattern (-k)",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-k", "K=${input:pytestKExpr}"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "detail": "Run tests by pytest -k expression via Makefile"
+        },
+        {
             "label": "Make: Test Verbose",
             "type": "shell",
             "command": "make",
@@ -346,6 +384,20 @@
                 "clear": false
             },
             "detail": "Remove all session logs from logs/"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pytestNodeId",
+            "type": "promptString",
+            "description": "Pytest node id (e.g. tests/integration/test_url_routing.py::TestProjectRouting::test_project_route_nonexistent_shows_warning)",
+            "default": "tests/integration/test_url_routing.py::TestProjectRouting::test_project_route_nonexistent_shows_warning"
+        },
+        {
+            "id": "pytestKExpr",
+            "type": "promptString",
+            "description": "Pytest -k expression (e.g. test_project_route_nonexistent_shows_warning)",
+            "default": "test_project_route_nonexistent_shows_warning"
         }
     ]
 }

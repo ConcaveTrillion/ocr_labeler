@@ -72,9 +72,6 @@ class ProjectLoadControls:
             binding.bind(
                 self.select, "value", self.app_state_model, "selected_project_key"
             )
-            binding.bind_from(
-                self.select, "tooltip", self.app_state_model, "selected_project_path"
-            )
 
             # Bind controls disabled state to combined busy/loading state
             controls = [self.select, self.load_project_button]

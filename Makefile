@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test lint format pre-commit-check build clean clean-logs help
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs help
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -50,6 +50,24 @@ test: ## Run tests
 test-verbose: ## Run tests with verbose output
 	@echo "🧪 Running tests (verbose mode)..."
 	uv run pytest -v
+
+test-single: ## Run one pytest node id (usage: make test-single TEST='tests/...::test_name')
+	@if [ -z "$(TEST)" ]; then \
+		echo "❌ Missing TEST parameter."; \
+		echo "   Example: make test-single TEST='tests/integration/test_url_routing.py::TestProjectRouting::test_project_route_nonexistent_shows_warning'"; \
+		exit 1; \
+	fi
+	@echo "🧪 Running single test: $(TEST)"
+	uv run pytest "$(TEST)"
+
+test-k: ## Run tests by pytest -k expression (usage: make test-k K='pattern')
+	@if [ -z "$(K)" ]; then \
+		echo "❌ Missing K parameter."; \
+		echo "   Example: make test-k K='test_project_route_nonexistent_shows_warning'"; \
+		exit 1; \
+	fi
+	@echo "🧪 Running tests with -k: $(K)"
+	uv run pytest -k "$(K)"
 
 coverage: ## Run tests with coverage report
 	@echo "🧪 Running tests with coverage..."

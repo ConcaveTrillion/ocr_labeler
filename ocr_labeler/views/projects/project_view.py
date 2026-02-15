@@ -150,6 +150,23 @@ class ProjectView(
         page = None
         if not loading and project_state is not None and project is not None:
             page = project_state.current_page()
+
+            # Keep text tabs synchronized with the freshly ensured current page.
+            # This is especially important right after initial LOAD where no
+            # navigation event has occurred yet to drive text-tab callbacks.
+            try:
+                if self.content and getattr(self.content, "text_tabs", None):
+                    text_tabs = self.content.text_tabs
+                    if text_tabs.page_state is not None:
+                        text_tabs.page_state.current_page = page
+                    text_tabs.model.update()
+                    text_tabs._update_text_editors()
+                    text_tabs.update_word_matches(page)
+            except Exception:
+                logger.debug(
+                    "Failed to synchronize text tabs from project state during refresh",
+                    exc_info=True,
+                )
         total = self.viewmodel.page_total
 
         logger.debug(
@@ -223,7 +240,7 @@ class ProjectView(
 
         # Also hide individual images (if any) to free up rendering work
         if self.content and hasattr(self.content, "image_tabs"):
-            for name, img in self.content.image_tabs.images.items():  # noqa: F841
+            for name, img in self.content.image_tabs.images.items():
                 if img:
                     try:
                         img.set_visibility(False)
@@ -248,7 +265,7 @@ class ProjectView(
         """Show images after navigation completes."""
         logger.debug("Showing images after navigation")
         if self.content and hasattr(self.content, "image_tabs"):
-            for name, img in self.content.image_tabs.images.items():  # noqa: F841
+            for name, img in self.content.image_tabs.images.items():
                 if img:
                     img.set_visibility(True)
                     logger.debug("Shown image: %s", name)

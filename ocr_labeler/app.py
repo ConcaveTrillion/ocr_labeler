@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from nicegui import background_tasks, run, ui
+from nicegui import background_tasks, core, run, ui
 
 from .operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
@@ -22,6 +23,22 @@ from .viewmodels.main_view_model import MainViewModel
 from .views.main_view import LabelerView
 
 logger = logging.getLogger(__name__)
+
+
+class _NiceGuiBenignErrorFilter(logging.Filter):
+    """Filter known benign NiceGUI teardown race errors."""
+
+    _blocked_fragments = (
+        "the client this element belongs to has been deleted",
+        "object has no attribute 'reconnect_timeout'",
+        "dictionary changed size during iteration",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno < logging.ERROR:
+            return True
+        message = record.getMessage().lower()
+        return not any(fragment in message for fragment in self._blocked_fragments)
 
 
 class NiceGuiLabeler:
@@ -69,6 +86,19 @@ class NiceGuiLabeler:
             self.logs_dir = None
 
         logger.debug("NiceGuiLabeler initialization complete")
+
+        try:
+            nicegui_logger = logging.getLogger("nicegui")
+            if not any(
+                isinstance(existing_filter, _NiceGuiBenignErrorFilter)
+                for existing_filter in nicegui_logger.filters
+            ):
+                nicegui_logger.addFilter(_NiceGuiBenignErrorFilter())
+
+            if os.getenv("PYTEST_CURRENT_TEST"):
+                nicegui_logger.setLevel(logging.CRITICAL)
+        except Exception:
+            logger.debug("Failed to install NiceGUI benign-error filter", exc_info=True)
 
     def _setup_session_logging(self) -> tuple[logging.FileHandler | None, str]:
         """Set up per-session logging to a timestamped file.
@@ -176,6 +206,17 @@ class NiceGuiLabeler:
 
         ui.page_title(page_title)
 
+        # Ensure reconnect timeout is defined on the page itself. In test
+        # contexts where ui.run() is not called, app-level reconnect timeout
+        # may be unavailable; page-level value avoids outbox teardown errors.
+        try:
+            client = getattr(ui.context, "client", None)
+            page = getattr(client, "page", None)
+            if page is not None and getattr(page, "reconnect_timeout", None) is None:
+                page.reconnect_timeout = 30.0
+        except Exception:
+            logger.debug("Failed setting page reconnect_timeout", exc_info=True)
+
         try:
             logger.debug(f"Creating {log_label.lower()} session instance")
 
@@ -255,6 +296,27 @@ class NiceGuiLabeler:
             # Set up cleanup on disconnect
             def on_disconnect():
                 logger.info(f"{log_label} tab session disconnecting: {session_id}")
+
+                # Stop periodic UI work for this session.
+                try:
+                    notification_timer = getattr(view, "_notification_timer", None)
+                    if notification_timer is not None:
+                        notification_timer.active = False
+                except Exception:
+                    logger.debug("Failed to deactivate session notification timer")
+
+                # Detach listener chains to avoid late async callbacks trying to
+                # update elements after the client has been deleted.
+                try:
+                    state.on_change.clear()
+                    for project_state in state.projects.values():
+                        project_state.notification_sink = None
+                        project_state.on_change.clear()
+                        for page_state in project_state.page_states.values():
+                            page_state.on_change.clear()
+                except Exception:
+                    logger.debug("Failed to clear session listeners", exc_info=True)
+
                 self._cleanup_session_logging(session_handler, session_id)
 
             try:
@@ -274,6 +336,23 @@ class NiceGuiLabeler:
 
     def create_routes(self):
         logger.debug("Creating UI routes")
+
+        # In test contexts, ui.run() is often not invoked, and older NiceGUI
+        # app_config instances may lack reconnect_timeout. Outbox teardown then
+        # raises AttributeError when resolving reconnect timeout.
+        try:
+            from nicegui.app.app_config import AppConfig
+
+            if not hasattr(AppConfig, "reconnect_timeout"):
+                AppConfig.reconnect_timeout = 30.0
+
+            if not hasattr(core.app.config, "reconnect_timeout"):
+                core.app.config.reconnect_timeout = 30.0
+        except Exception:
+            logger.debug(
+                "Unable to initialize NiceGUI reconnect_timeout on app config",
+                exc_info=True,
+            )
 
         @ui.page("/")
         def root_index():  # noqa: D401

@@ -124,8 +124,8 @@ This ensures proper formatting, linting, testing, and build validation before pr
 
 ## Current Implementation Status & Roadmap
 - **Completed**: Basic navigation, OCR overlay display, ground truth comparison, lazy page loading, word-level matching UI with color coding (`WordMatchView`, `WordMatchViewModel`)
-- **In Progress**: Word editing capabilities, bbox operations, save/load persistence (see TODOs.md Phase 1-2)
-- **Next Phase**: Training/validation export, multi-page support, advanced word editing UI (see TODOs.md for detailed 46-task roadmap)
+- **In Progress**: Word editing capabilities, bbox operations, save/load persistence (see `docs/planning/roadmap/phase-3-editing-core.md`)
+- **Next Phase**: Training/validation export, multi-page support, advanced word editing UI (see `docs/planning/README.md`)
 - **Architecture Status**: Fully modular component architecture complete with clean imports using the new modular structure
 
 ## Key Architectural Patterns
@@ -345,7 +345,7 @@ loop.run_in_executor(None, blocking)    # Use run.io_bound() instead
 asyncio.to_thread(blocking)             # Use run.io_bound() instead
 ```
 
-See `/home/linuxuser/ocr/ocr_labeler/NICEGUI_ASYNC_REFACTOR.md` for detailed migration examples.
+See `/home/linuxuser/ocr/ocr_labeler/docs/architecture/async/migration-patterns.md` for detailed migration examples.
 
 ### Project-Specific Architectural Patterns
 
@@ -431,7 +431,7 @@ class ProjectView(BaseView[ProjectStateViewModel]):
 - **NiceGUI Version**: `>=2.22.2` (project requirement)
 - **Official Docs**: https://nicegui.io
 - **API Reference**: https://nicegui.io/documentation (fetch via Context7 for detailed lookups)
-- **Project Async Migration**: `/home/linuxuser/ocr/ocr_labeler/NICEGUI_ASYNC_REFACTOR.md`
+- **Project Async Migration**: `/home/linuxuser/ocr/ocr_labeler/docs/architecture/async/overview.md`
 
 
 
@@ -466,4 +466,4 @@ class ProjectView(BaseView[ProjectStateViewModel]):
 
 
 ---
-For detailed feature roadmap and implementation tasks, see `TODOs.md`. Current focus is on word-level editing capabilities and persistence features.
+For detailed feature roadmap and implementation tasks, see `docs/planning/README.md`. Current focus is on word-level editing capabilities and persistence features.

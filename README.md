@@ -3,17 +3,23 @@ OCR Labeler (NiceGUI UI)
 
 Minimal web UI for navigating OCR page images, viewing overlays, and comparing OCR output with ground truth text. Built with [NiceGUI](https://nicegui.io/) and a lightweight state layer that lazily loads and OCRs pages via `pd-book-tools`.
 
+Documentation
+-------------
+- Architecture docs: [docs/architecture/README.md](docs/architecture/README.md)
+- Planning and roadmap docs: [docs/planning/README.md](docs/planning/README.md)
+- Current editing roadmap focus: [docs/planning/roadmap/phase-3-editing-core.md](docs/planning/roadmap/phase-3-editing-core.md)
+
 Current Capabilities
 --------------------
 - Open a project directory containing page images (`.png`, `.jpg`, `.jpeg`).
 - Auto–lazy load & OCR each page the first time you navigate to it.
 - Navigate pages (Prev / Next / direct page number input).
 - Display multiple overlay variants (original, paragraphs, lines, words, mismatches – where available from the underlying OCR lib).
-- Show read‑only OCR text and (optional) ground truth text side by side.
+- Show OCR text and (optional) ground truth text side by side.
 - Auto‑populate ground truth text from an optional `pages.json` file mapping image filename -> ground truth string.
 - Save current page edits to JSON and image files for persistence.
 
-Planned / Not Yet Implemented (see `TODOs.md` for full roadmap)
+Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
 --------------------------------------------------------------
 - Editing & saving OCR / word‑level adjustments (basic save implemented)
 - Bounding box refinement & bulk operations
@@ -27,7 +33,7 @@ Quick Start
 ### 1. Prerequisites
 - Python 3.13+ (project is configured with `requires-python = ">=3.13"`).
 - [uv](https://github.com/astral-sh/uv) recommended for fast, locked installs (a `uv.lock` is included).
-- Optional: `opencv-python` (NiceGUI image overlays will still attempt a fallback cache approach if OpenCV encoding isn't available, but having it improves in‑memory PNG encoding speed). If not already present, install it manually (see Extras below).
+- Optional: `opencv-python` for image encoding and image-dependent display helpers. In many setups it is available transitively, but install it manually if overlays/previews are missing (see section below).
 
 ### 2. Clone Repositories
 This project depends on `pd-book-tools` via a relative path (configured in `pyproject.toml`). Place both repos side‑by‑side:
@@ -95,15 +101,17 @@ Change host/port (e.g. access from another device on LAN):
 uv run ocr-labeler-ui sample_project --host 0.0.0.0 --port 9000
 ```
 
-Disable auto project load (open via UI after startup):
+Start with project chooser behavior:
 ```bash
-uv run ocr-labeler-ui sample_project --no-auto-load
+uv run ocr-labeler-ui
 ```
+Auto-load happens only when the resolved `project_dir` is a valid project directory (contains supported page images).
 
 Increase logging verbosity:
 ```bash
-uv run ocr-labeler-ui sample_project -v        # info
-uv run ocr-labeler-ui sample_project -vv       # debug
+uv run ocr-labeler-ui sample_project -v        # DEBUG app logs
+uv run ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
+uv run ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
 ```
 
 Then open: http://127.0.0.1:8080/ (or your chosen host/port)
@@ -117,16 +125,16 @@ Then open: http://127.0.0.1:8080/ (or your chosen host/port)
 
 Custom Fonts (Optional)
 -----------------------
-`NiceGuiLabeler` accepts `monospace_font_name` and `monospace_font_path`. At present the font file isn't auto‑injected into the DOM (future enhancement); supplying a path is forward‑compatible for when that feature lands.
+`NiceGuiLabeler` accepts `monospace_font_name` and `monospace_font_path`. If a font path is supplied (or the bundled `DPSansMono.ttf` is available), the app injects font CSS at startup and applies it to `.monospace`/CodeMirror elements.
 
-Example future usage (will not break now):
+Example usage:
 ```python
 NiceGuiLabeler(project_root, monospace_font_name="MyMono", monospace_font_path=Path("fonts/MyMono.ttf"))
 ```
 
 OpenCV Optional Dependency
 --------------------------
-If OpenCV (`opencv-python`) is installed, the app encodes overlay images in‑memory for faster display. Without it, a disk cache fallback is used.
+OpenCV (`opencv-python`) is used for image encoding and some image-dependent display helpers. In many setups it is available transitively via OCR dependencies, but if your environment lacks it you may see missing overlay/preview behavior.
 
 Install (optional):
 ```bash
@@ -173,8 +181,9 @@ make pre-commit-check  # Run pre-commit hooks on all files
 ```
 
 ### Development Notes
-- See `TODOs.md` for roadmap & phased feature list.
-- `AppState` in `ocr_labeler/state/app_state.py` handles navigation + lazy OCR.
+- See `docs/planning/README.md` for roadmap & phased feature list.
+- `AppState` in `ocr_labeler/state/app_state.py` handles app-level project discovery/selection and session notifications.
+- `ProjectState` in `ocr_labeler/state/project_state.py` handles page navigation, lazy OCR loading, and page persistence actions.
 - UI composition lives in modular components under `ocr_labeler/views/`.
 - Minimal wrapper `NiceGuiLabeler` is in `ocr_labeler/app.py`.
 

@@ -7,7 +7,22 @@ Documentation
 -------------
 - Architecture docs: [docs/architecture/README.md](docs/architecture/README.md)
 - Planning and roadmap docs: [docs/planning/README.md](docs/planning/README.md)
-- Current editing roadmap focus: [docs/planning/roadmap/phase-3-editing-core.md](docs/planning/roadmap/phase-3-editing-core.md)
+- Current editing roadmap focus: [docs/planning/roadmap/editing-core.md](docs/planning/roadmap/editing-core.md)
+
+AI Doc Retrieval Checklist
+--------------------------
+Use this order to keep AI prompts small and rely on canonical docs:
+
+1. Read project overview in this README.
+2. Read architecture index: [docs/architecture/README.md](docs/architecture/README.md).
+3. Read planning index: [docs/planning/README.md](docs/planning/README.md).
+4. For NiceGUI behavior, read: [docs/architecture/nicegui-patterns.md](docs/architecture/nicegui-patterns.md).
+5. For async behavior, read: [docs/architecture/async/overview.md](docs/architecture/async/overview.md) and [docs/architecture/async/migration-patterns.md](docs/architecture/async/migration-patterns.md).
+
+Rules:
+- Treat docs as source of truth; do not duplicate large guidance in agent instruction files.
+- If implementation changes behavior, update the matching doc in `docs/`.
+- Use Make targets as the default for install, lint, test, build, and run; use VS Code tasks as optional wrappers when in VS Code.
 
 Current Capabilities
 --------------------

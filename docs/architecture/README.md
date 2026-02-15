@@ -48,6 +48,10 @@ Use this map as the first checkpoint when reconciling architecture docs with imp
 - [Migration Patterns](async/migration-patterns.md)
 - [Affected Files and Notes](async/affected-files.md)
 
+## NiceGUI Usage Patterns
+
+- [Patterns and Guardrails](nicegui-patterns.md)
+
 ## Threading Notes
 
 - [Threading Architecture](threading-architecture.md)

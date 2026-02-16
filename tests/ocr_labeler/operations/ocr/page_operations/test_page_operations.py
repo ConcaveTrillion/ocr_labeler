@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -118,9 +119,60 @@ class TestPageOperations:
         with open(output_dir / "test_project_001.json", "r") as f:
             json_data = json.load(f)
 
-        assert "pages" in json_data
-        assert len(json_data["pages"]) == 1
-        assert json_data["source_lib"] == "doctr-pgdp-labeled"
+        assert json_data["schema"]["name"] == "ocr_labeler.user_page"
+        assert json_data["schema"]["version"] == "2.0"
+        assert json_data["source"]["image_path"] == "source.png"
+        assert json_data["payload"]["page"]["type"] == "page"
+
+    def test_save_page_includes_ocr_models_when_available(self, operations, temp_dir):
+        """Test save_page persists OCR model metadata when predictor details exist."""
+
+        class DummyComponent:
+            def __init__(self, arch: str, weights_path: str):
+                self.arch = arch
+                self.weights_path = weights_path
+
+        operations._docTR_predictor = SimpleNamespace(
+            det_predictor=DummyComponent("db_resnet50", "detector.ckpt"),
+            reco_predictor=DummyComponent("crnn_vgg16_bn", "recognizer.ckpt"),
+        )
+
+        page = MagicMock(spec=Page)
+        page.index = 0
+        page.image_path = temp_dir / "source.png"
+        page.to_dict.return_value = {
+            "type": "page",
+            "width": 100,
+            "height": 100,
+            "page_index": 0,
+            "items": [],
+        }
+        page._ocr_labeler_live_ocr_provenance = operations._build_live_ocr_provenance(
+            source_lib="doctr-pgdp-labeled"
+        )
+        (temp_dir / "source.png").touch()
+
+        project_root = temp_dir / "project"
+        project_root.mkdir()
+
+        success = operations.save_page(
+            page=page,
+            project_root=project_root,
+            save_directory=str(temp_dir / "output"),
+            project_id="test_project",
+        )
+
+        assert success is True
+
+        output_dir = temp_dir / "output"
+        with open(output_dir / "test_project_001.json", "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+
+        models = json_data["provenance"]["ocr"]["models"]
+        model_names = {model["name"] for model in models}
+        assert "db_resnet50" in model_names
+        assert "crnn_vgg16_bn" in model_names
+        assert "engine_version" in json_data["provenance"]["ocr"]
 
     def test_save_page_no_image_path(self, operations, temp_dir):
         """Test saving page without image path."""
@@ -239,6 +291,121 @@ class TestPageOperations:
         )
 
         assert loaded_page is None
+
+    def test_load_page_legacy_json_format(self, operations, temp_dir):
+        """Test that legacy flat JSON format remains loadable."""
+        project_root = temp_dir / "project"
+        project_root.mkdir()
+
+        output_dir = temp_dir / "output"
+        output_dir.mkdir()
+
+        legacy_json = {
+            "source_lib": "doctr-pgdp-labeled",
+            "source_path": "source.png",
+            "pages": [
+                {
+                    "type": "page",
+                    "width": 100,
+                    "height": 100,
+                    "page_index": 0,
+                    "items": [],
+                }
+            ],
+        }
+        with open(output_dir / "test_project_001.json", "w", encoding="utf-8") as f:
+            json.dump(legacy_json, f)
+
+        (output_dir / "test_project_001.png").touch()
+
+        loaded_page = operations.load_page(
+            page_number=1,
+            project_root=project_root,
+            save_directory=str(output_dir),
+            project_id="test_project",
+        )
+
+        assert loaded_page is not None
+        assert loaded_page.page_index == 0
+
+    def test_save_page_preserves_loaded_empty_models_without_rerun(
+        self,
+        operations,
+        temp_dir,
+    ):
+        """Loaded `models: []` should not be backfilled from current predictor unless OCR reruns."""
+
+        class DummyComponent:
+            def __init__(self, arch: str, weights_path: str):
+                self.arch = arch
+                self.weights_path = weights_path
+
+        operations._docTR_predictor = SimpleNamespace(
+            det_predictor=DummyComponent("db_resnet50", "detector.ckpt"),
+            reco_predictor=DummyComponent("crnn_vgg16_bn", "recognizer.ckpt"),
+        )
+
+        project_root = temp_dir / "project"
+        project_root.mkdir()
+
+        output_dir = temp_dir / "output"
+        output_dir.mkdir()
+
+        v2_json = {
+            "schema": {"name": "ocr_labeler.user_page", "version": "2.0"},
+            "provenance": {
+                "saved_at": "2026-02-15T00:00:00Z",
+                "saved_by": "Save Page",
+                "source_lane": "labeled",
+                "app": {"name": "ocr_labeler", "version": "0.1.0"},
+                "toolchain": {"python": "3.13.3", "pd_book_tools": "0.2.0"},
+                "ocr": {
+                    "engine": "doctr",
+                    "models": [],
+                },
+            },
+            "source": {
+                "project_id": "test_project",
+                "page_index": 0,
+                "page_number": 1,
+                "image_path": "source.png",
+            },
+            "payload": {
+                "page": {
+                    "type": "page",
+                    "width": 100,
+                    "height": 100,
+                    "page_index": 0,
+                    "items": [],
+                }
+            },
+        }
+        with open(output_dir / "test_project_001.json", "w", encoding="utf-8") as f:
+            json.dump(v2_json, f)
+
+        (project_root / "source.png").touch()
+        (output_dir / "test_project_001.png").touch()
+
+        loaded_page = operations.load_page(
+            page_number=1,
+            project_root=project_root,
+            save_directory=str(output_dir),
+            project_id="test_project",
+        )
+        assert loaded_page is not None
+
+        saved = operations.save_page(
+            page=loaded_page,
+            project_root=project_root,
+            save_directory=str(output_dir),
+            project_id="test_project",
+        )
+        assert saved is True
+
+        with open(output_dir / "test_project_001.json", "r", encoding="utf-8") as f:
+            saved_json = json.load(f)
+
+        assert saved_json["provenance"]["ocr"]["models"] == []
 
     def test_can_load_page_success(self, operations, temp_dir):
         """Test checking if page can be loaded successfully."""

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from nicegui.elements.button import Button
 from nicegui.testing import User
 
 from ocr_labeler.app import NiceGuiLabeler
@@ -352,10 +354,37 @@ class TestNiceGuiIntegration:
         await user.should_see("Prev")
         await user.should_see("Next")
 
-    @pytest.mark.skip(reason="Unstable: relies on NiceGUI notifications timing")
     async def test_expand_refine_bboxes_button_triggers_operation(
         self, mock_ocr_processing, user: User, test_projects_root: Path
     ):
-        """Skipped due to flakiness in CI until notification timing is stabilized."""
-        # Intentionally left empty
-        return None
+        """Clicking Expand & Refine triggers bbox operation command deterministically."""
+        with patch(
+            "ocr_labeler.viewmodels.project.project_state_view_model.ProjectStateViewModel.command_expand_refine_bboxes",
+            return_value=True,
+        ) as mock_expand_refine:
+            labeler = NiceGuiLabeler(
+                project_root=test_projects_root,
+                projects_root=test_projects_root,
+                enable_session_logging=False,
+            )
+            labeler.create_routes()
+
+            await user.open("/")
+            await user.should_see("No Project Loaded")
+
+            # Load first project to render page-level controls.
+            user.find("LOAD").click()
+            await user.should_see("Loaded projectID629292e7559a8")
+            await user.should_see("Prev")
+            await user.should_see("Next")
+            await user.should_see("Expand & Refine")
+
+            interaction = user.find("Expand & Refine", kind=Button)
+            assert interaction.elements, "Expand & Refine button not found"
+            interaction.trigger("click")
+
+            for _ in range(20):
+                if mock_expand_refine.called:
+                    break
+                await asyncio.sleep(0.05)
+            mock_expand_refine.assert_called_once()

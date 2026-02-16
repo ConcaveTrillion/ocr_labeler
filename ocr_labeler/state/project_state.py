@@ -177,6 +177,9 @@ class ProjectState:
         finally:
             self.is_project_loading = False
             self.notify()
+
+        if images and self.current_page_index >= 0:
+            self._navigate()
         logger.debug("load_project: completed, loaded %d images", len(images))
 
     def reload_ground_truth(self):
@@ -506,13 +509,20 @@ class ProjectState:
                 "[_schedule_async_load] Entry - Thread: %s",
                 threading.current_thread().name,
             )
+            pending_load = None
             try:
                 # Use NiceGUI's background task API
                 logger.info("[_schedule_async_load] Creating background task")
-                background_tasks.create(_background_load())
+                pending_load = _background_load()
+                background_tasks.create(pending_load)
                 logger.info("[_schedule_async_load] Background task created")
                 return
             except Exception as e:
+                if pending_load is not None:
+                    try:
+                        pending_load.close()
+                    except Exception:
+                        pass
                 logger.warning(
                     "[_schedule_async_load] Failed to create background task (%s); falling back to synchronous page load",
                     e,
@@ -732,6 +742,28 @@ class ProjectState:
         result = TextOperations.get_page_source_text(page, False)
         logger.debug("current_page_source_text: returning text: %s", result)
         return result
+
+    @property
+    def current_page_source_tooltip(self) -> str:
+        """Get provenance tooltip text for the current page source badge."""
+        if self.is_project_loading or self.is_navigating:
+            return ""
+
+        if (
+            not self.project.pages
+            or self.current_page_index < 0
+            or self.current_page_index >= len(self.project.pages)
+        ):
+            return ""
+
+        page = self.project.pages[self.current_page_index]
+        if page is None:
+            return ""
+
+        if TextOperations.get_page_source_text(page, False) != "LABELED":
+            return ""
+
+        return self.page_ops.get_page_provenance_summary(page)
 
     @property
     def current_ocr_text(self) -> str:

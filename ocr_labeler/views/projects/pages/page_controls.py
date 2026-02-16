@@ -49,6 +49,7 @@ class PageControls:  # pragma: no cover - UI wrapper file
         self.refine_bboxes_button = None
         self.expand_refine_bboxes_button = None
         self.page_source_label = None
+        self.page_source_tooltip = None
 
     def _notify(self, message: str, type_: str = "info"):
         """Route notifications through per-session queue with UI fallback."""
@@ -180,6 +181,8 @@ class PageControls:  # pragma: no cover - UI wrapper file
                         "pointer-events-none"
                     )  # visually identical to button, no interaction
                 )
+                with self.page_source_label:
+                    self.page_source_tooltip = ui.tooltip("")
                 # Bind the text to viewmodel's current_page_source_text
                 try:
                     from nicegui import binding
@@ -190,6 +193,13 @@ class PageControls:  # pragma: no cover - UI wrapper file
                         self.viewmodel,
                         "current_page_source_text",
                     )
+                    if self.page_source_tooltip:
+                        binding.bind_from(
+                            self.page_source_tooltip,
+                            "text",
+                            self.viewmodel,
+                            "current_page_source_tooltip",
+                        )
                 except Exception:
                     # Defensive - if binding fails, set static text
                     self.page_source_label.text = "UNKNOWN"

@@ -37,6 +37,7 @@ class ProjectStateViewModel(BaseViewModel):
     can_navigate_next: bool = False
     is_controls_disabled: bool = False
     current_page_source_text: str = ""
+    current_page_source_tooltip: str = ""
     # Convenience computed properties for direct UI binding
     prev_disabled: bool = False
     next_disabled: bool = False
@@ -143,6 +144,9 @@ class ProjectStateViewModel(BaseViewModel):
                 else ""
             )
             self.current_page_source_text = self._project_state.current_page_source_text
+            self.current_page_source_tooltip = (
+                self._project_state.current_page_source_tooltip
+            )
 
             self._update_navigation_properties()
 

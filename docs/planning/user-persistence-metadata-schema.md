@@ -201,5 +201,5 @@ Phase 3:
 - [ ] Implement dual-reader for legacy + v2 formats.
 - [ ] Update `Save Page` writer to emit v2 envelope.
 - [ ] Capture app/toolchain/OCR provenance at save-time.
-- [ ] Surface labeled provenance metadata in UI tooltip.
+- [x] Surface labeled provenance metadata in UI tooltip.
 - [ ] Add regression tests for compatibility and metadata retention.

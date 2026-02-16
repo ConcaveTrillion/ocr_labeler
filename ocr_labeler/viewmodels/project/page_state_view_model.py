@@ -195,10 +195,15 @@ class PageStateViewModel(BaseViewModel):
             )
             return
 
+        pending_update = self._update_image_sources_async()
         try:
             # Use NiceGUI's background task API
-            background_tasks.create(self._update_image_sources_async())
+            background_tasks.create(pending_update)
         except (AssertionError, RuntimeError):
+            try:
+                pending_update.close()
+            except Exception:
+                pass
             # No event loop running (e.g., in test context) - use blocking fallback
             # This is safe because there's no websocket connection to timeout
             logger.debug(
@@ -206,6 +211,10 @@ class PageStateViewModel(BaseViewModel):
             )
             self._update_image_sources_blocking()
         except Exception:
+            try:
+                pending_update.close()
+            except Exception:
+                pass
             # Other errors during async scheduling - skip to avoid blocking
             logger.warning(
                 "_schedule_image_update: failed to schedule async update; skipping",

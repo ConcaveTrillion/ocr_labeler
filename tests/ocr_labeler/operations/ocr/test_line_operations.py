@@ -99,6 +99,12 @@ class TestLineOperations:
         assert line1.words[0].ground_truth_text == "hello"
         assert line1.words[1].ground_truth_text == "world"
 
+    def test_copy_ocr_to_ground_truth_no_page(self, operations):
+        """Test copying OCR text with no page provided."""
+        result = operations.copy_ocr_to_ground_truth(None, 0)
+
+        assert result is False
+
     def test_copy_ocr_to_ground_truth_no_ocr_text(self, operations):
         """Test copying OCR text when no OCR text exists."""
         page = MagicMock(spec=Page)

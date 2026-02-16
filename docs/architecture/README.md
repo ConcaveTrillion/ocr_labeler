@@ -52,6 +52,10 @@ Use this map as the first checkpoint when reconciling architecture docs with imp
 
 - [Patterns and Guardrails](nicegui-patterns.md)
 
+## External Model Alignment
+
+- [pd-book-tools Model Alignment](pd-book-tools-model-alignment.md)
+
 ## Threading Notes
 
 - [Threading Architecture](threading-architecture.md)

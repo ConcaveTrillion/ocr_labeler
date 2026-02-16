@@ -571,25 +571,7 @@ class NiceGuiLabeler:
                         )
                         notify(f"Page not found: {page_id}", "warning")
                     elif hasattr(project_state, "goto_page_index"):
-                        current_index = getattr(
-                            project_state, "current_page_index", None
-                        )
-                        page_already_loaded = False
-                        try:
-                            page_already_loaded = (
-                                project_state.project.pages[requested_page_index]
-                                is not None
-                            )
-                        except Exception:
-                            page_already_loaded = False
-
-                        # Route URL-driven page selection through async navigation
-                        # only when needed (different index or missing page object).
-                        if (
-                            current_index != requested_page_index
-                            or not page_already_loaded
-                        ):
-                            project_state.goto_page_index(requested_page_index)
+                        project_state.goto_page_index(requested_page_index)
                 else:
                     logger.warning(
                         "Project '%s' loaded but contains no pages", project_id

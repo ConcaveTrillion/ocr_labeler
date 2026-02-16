@@ -10,10 +10,30 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import sys
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
+
+from ocr_labeler.models import (
+    UNKNOWN_METADATA_VALUE,
+    USER_PAGE_SCHEMA_VERSION,
+    ProvenanceApp,
+    ProvenanceOCR,
+    ProvenanceOCRModel,
+    ProvenanceToolchain,
+    SourceImageFingerprint,
+    UserPageEnvelope,
+    UserPagePayload,
+    UserPageProvenance,
+    UserPageSchema,
+    UserPageSource,
+    is_user_page_envelope,
+)
 
 if TYPE_CHECKING:
     pass
@@ -22,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 # Constants for ground truth operations
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
+
+PAGE_SAVED_PROVENANCE_ATTR = "_ocr_labeler_saved_provenance"
 
 
 class PageLoadInfo(NamedTuple):
@@ -55,6 +77,7 @@ class PageOperations:
         # Store the predictor at instance level to avoid recreating it per-page
         self._docTR_predictor = docTR_predictor
         self._predictor_initialized = False
+        self._saved_provenance_by_page_id: dict[int, dict[str, Any]] = {}
         self.page_parser = self.build_initial_page_parser()
 
     def _get_or_create_predictor(self):
@@ -113,6 +136,10 @@ class PageOperations:
             if img is not None:
                 page_obj.cv2_numpy_page_image = img
                 logger.debug("attached cv2 image for index %s", index)
+
+            page_obj.ocr_provenance = self._build_live_ocr_provenance(
+                source_lib="doctr-pgdp-labeled"
+            )
             return page_obj
 
         return _parse_page
@@ -197,17 +224,22 @@ class PageOperations:
                 # If image_path is not relative to project_root, use just the filename
                 relative_path = Path(image_path).name
 
-            json_data = {
-                "source_lib": source_lib,
-                "source_path": relative_path,
-                "pages": [page.to_dict()],
-            }
+            envelope = self._build_user_page_envelope(
+                page=page,
+                project_id=project_id,
+                page_number=page_number,
+                relative_path=relative_path,
+                source_lib=source_lib,
+            )
+            json_data = envelope.to_dict()
 
             # Save JSON file
             json_dest = save_dir / json_filename
             with open(json_dest, "w", encoding="utf-8") as f:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
             logger.info(f"Saved JSON metadata to: {json_dest}")
+
+            self._store_saved_provenance(page, envelope.provenance.to_dict())
 
             return True
 
@@ -279,13 +311,7 @@ class PageOperations:
                 logger.error(f"Invalid JSON structure in {json_path}")
                 return None
 
-            pages_data = json_data.get("pages", [])
-            if not pages_data or not isinstance(pages_data, list):
-                logger.error(f"No pages data found in {json_path}")
-                return None
-
-            # Load the first (and should be only) page from the list
-            page_dict = pages_data[0]
+            page_dict = self._extract_page_dict(json_data)
             if not isinstance(page_dict, dict):
                 logger.error(f"Invalid page data structure in {json_path}")
                 return None
@@ -295,7 +321,7 @@ class PageOperations:
             logger.info(f"Successfully loaded page from: {json_path}")
 
             # Restore the original image path from source_path
-            source_path = json_data.get("source_path")
+            source_path = self._extract_source_path(json_data)
             if source_path:
                 page.image_path = project_root / source_path  # type: ignore[attr-defined]
                 logger.debug(f"Restored image_path: {page.image_path}")
@@ -339,6 +365,8 @@ class PageOperations:
                     logger.warning(f"Error loading image {image_path}: {e}")
             else:
                 logger.warning(f"No image file found for prefix: {file_prefix}")
+
+            self._attach_loaded_provenance(page=page, json_data=json_data)
 
             return page
 
@@ -505,7 +533,9 @@ class PageOperations:
                     json_data = json.loads(raw_text)
 
                     # Basic structure validation
-                    if not isinstance(json_data, dict) or "pages" not in json_data:
+                    if not isinstance(json_data, dict) or not self._has_loadable_page(
+                        json_data
+                    ):
                         can_load = False
                         logger.warning(f"Invalid JSON structure in {json_path}")
                 except Exception as e:
@@ -685,4 +715,375 @@ class PageOperations:
             seen.add(c)
             if c in ground_truth_map:
                 return ground_truth_map[c]
+        return None
+
+    def _build_user_page_envelope(
+        self,
+        page: Page,
+        project_id: str,
+        page_number: int,
+        relative_path: str,
+        source_lib: str,
+    ) -> UserPageEnvelope:
+        source_fingerprint = self._build_image_fingerprint(
+            getattr(page, "image_path", None)
+        )
+
+        return UserPageEnvelope(
+            schema=UserPageSchema(version=USER_PAGE_SCHEMA_VERSION),
+            provenance=UserPageProvenance(
+                saved_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                app=ProvenanceApp(version=self._safe_package_version("ocr-labeler")),
+                toolchain=ProvenanceToolchain(
+                    python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                    pd_book_tools=self._safe_package_version("pd-book-tools"),
+                ),
+                ocr=self._resolve_ocr_provenance_for_save(
+                    page=page, source_lib=source_lib
+                ),
+            ),
+            source=UserPageSource(
+                project_id=project_id,
+                page_index=getattr(page, "index", 0),
+                page_number=page_number,
+                image_path=relative_path,
+                image_fingerprint=source_fingerprint,
+            ),
+            payload=UserPagePayload(page=page.to_dict()),
+        )
+
+    def _resolve_ocr_provenance_for_save(
+        self,
+        page: Page,
+        source_lib: str,
+    ) -> ProvenanceOCR:
+        direct_provenance = self._coerce_page_ocr_provenance(page)
+        if direct_provenance is not None:
+            return direct_provenance
+
+        live_provenance = getattr(page, "_ocr_labeler_live_ocr_provenance", None)
+        if isinstance(live_provenance, ProvenanceOCR):
+            return live_provenance
+        if isinstance(live_provenance, dict):
+            try:
+                return ProvenanceOCR.from_dict(live_provenance)
+            except Exception:
+                logger.debug("Ignoring invalid live OCR provenance dict", exc_info=True)
+        elif hasattr(live_provenance, "to_dict"):
+            try:
+                live_dict = live_provenance.to_dict()
+                if isinstance(live_dict, dict):
+                    return ProvenanceOCR.from_dict(live_dict)
+            except Exception:
+                logger.debug(
+                    "Ignoring invalid live OCR provenance object", exc_info=True
+                )
+
+        provenance = self._resolve_saved_provenance(page)
+        if isinstance(provenance, dict):
+            ocr_data = provenance.get("ocr")
+            if isinstance(ocr_data, dict):
+                try:
+                    return ProvenanceOCR.from_dict(ocr_data)
+                except Exception:
+                    logger.debug(
+                        "Ignoring invalid saved OCR provenance payload", exc_info=True
+                    )
+
+        return self._build_live_ocr_provenance(source_lib)
+
+    def get_page_provenance_summary(self, page: Page | None) -> str:
+        """Return a compact provenance summary suitable for UI tooltip display."""
+        if page is None:
+            return ""
+
+        provenance = self._resolve_saved_provenance(page)
+        if not isinstance(provenance, dict):
+            return ""
+
+        saved_at = provenance.get("saved_at")
+        app_data = (
+            provenance.get("app") if isinstance(provenance.get("app"), dict) else {}
+        )
+        app_version = app_data.get("version")
+        toolchain_data = (
+            provenance.get("toolchain")
+            if isinstance(provenance.get("toolchain"), dict)
+            else {}
+        )
+        pd_book_tools_version = toolchain_data.get("pd_book_tools")
+        ocr = provenance.get("ocr") if isinstance(provenance.get("ocr"), dict) else {}
+
+        engine = ocr.get("engine", UNKNOWN_METADATA_VALUE)
+        engine_version = ocr.get("engine_version")
+        if engine_version and engine_version != UNKNOWN_METADATA_VALUE:
+            engine_text = f"{engine} ({engine_version})"
+        else:
+            engine_text = str(engine)
+
+        models = ocr.get("models")
+        model_text = ""
+        if isinstance(models, list) and models:
+            names: list[str] = []
+            for model in models:
+                if not isinstance(model, dict):
+                    continue
+                model_name = model.get("name")
+                model_version = model.get("version")
+                if not model_name:
+                    continue
+                if model_version and model_version != UNKNOWN_METADATA_VALUE:
+                    names.append(f"{model_name} ({model_version})")
+                else:
+                    names.append(str(model_name))
+            if names:
+                model_text = ", ".join(names)
+
+        config_fingerprint = ocr.get("config_fingerprint")
+
+        lines = [
+            f"Saved: {saved_at or UNKNOWN_METADATA_VALUE}",
+            f"App: {app_version or UNKNOWN_METADATA_VALUE}",
+            f"pd-book-tools: {pd_book_tools_version or UNKNOWN_METADATA_VALUE}",
+            f"OCR: {engine_text}",
+        ]
+        if model_text:
+            lines.append(f"Models: {model_text}")
+        if config_fingerprint and config_fingerprint != UNKNOWN_METADATA_VALUE:
+            lines.append(f"Config: {config_fingerprint}")
+
+        return "\n".join(lines)
+
+    def _resolve_saved_provenance(self, page: Page) -> dict[str, Any] | None:
+        stored = getattr(page, PAGE_SAVED_PROVENANCE_ATTR, None)
+        if isinstance(stored, dict):
+            return stored
+
+        stored = self._saved_provenance_by_page_id.get(id(page))
+        if isinstance(stored, dict):
+            return stored
+
+        ocr_provenance = self._coerce_page_ocr_provenance(page)
+        if ocr_provenance is not None:
+            return {"ocr": ocr_provenance.to_dict()}
+
+        return None
+
+    def _coerce_page_ocr_provenance(self, page: Page) -> ProvenanceOCR | None:
+        raw = getattr(page, "ocr_provenance", None)
+        if raw is None:
+            return None
+        if isinstance(raw, ProvenanceOCR):
+            return raw
+        if isinstance(raw, dict):
+            try:
+                return ProvenanceOCR.from_dict(raw)
+            except Exception:
+                logger.debug("Ignoring invalid OCR provenance dict", exc_info=True)
+                return None
+        if hasattr(raw, "to_dict"):
+            try:
+                raw_dict = raw.to_dict()
+            except Exception:
+                logger.debug("Ignoring invalid OCR provenance object", exc_info=True)
+                return None
+            if isinstance(raw_dict, dict):
+                try:
+                    return ProvenanceOCR.from_dict(raw_dict)
+                except Exception:
+                    logger.debug(
+                        "Ignoring invalid OCR provenance to_dict payload",
+                        exc_info=True,
+                    )
+        return None
+
+    def _attach_loaded_provenance(self, page: Page, json_data: dict) -> None:
+        if not is_user_page_envelope(json_data):
+            return
+        provenance_data = json_data.get("provenance", {})
+        if not isinstance(provenance_data, dict):
+            return
+        self._store_saved_provenance(page, provenance_data)
+        ocr_data = provenance_data.get("ocr", {})
+        if isinstance(ocr_data, dict):
+            page.ocr_provenance = ProvenanceOCR.from_dict(ocr_data)
+
+    def _store_saved_provenance(
+        self, page: Page, provenance_data: dict[str, Any]
+    ) -> None:
+        self._saved_provenance_by_page_id[id(page)] = provenance_data
+        try:
+            setattr(page, PAGE_SAVED_PROVENANCE_ATTR, provenance_data)
+        except Exception:
+            pass
+
+    def _build_live_ocr_provenance(self, source_lib: str) -> ProvenanceOCR:
+        return ProvenanceOCR(
+            engine=self._infer_ocr_engine(source_lib),
+            engine_version=self._safe_package_version("python-doctr"),
+            models=self._extract_ocr_models(),
+            config_fingerprint=self._build_ocr_config_fingerprint(source_lib),
+        )
+
+    def _build_image_fingerprint(
+        self,
+        image_path: object,
+    ) -> Optional[SourceImageFingerprint]:
+        if not image_path:
+            return None
+        try:
+            path = Path(str(image_path))
+            stat = path.stat()
+            return SourceImageFingerprint(size=stat.st_size, mtime_ns=stat.st_mtime_ns)
+        except Exception:
+            return None
+
+    def _safe_package_version(self, package_name: str) -> str:
+        try:
+            return package_version(package_name)
+        except PackageNotFoundError:
+            return UNKNOWN_METADATA_VALUE
+        except Exception:
+            return UNKNOWN_METADATA_VALUE
+
+    def _infer_ocr_engine(self, source_lib: str) -> str:
+        lowered = source_lib.lower()
+        if "doctr" in lowered:
+            return "doctr"
+        if "tesseract" in lowered:
+            return "tesseract"
+        return UNKNOWN_METADATA_VALUE
+
+    def _has_loadable_page(self, json_data: dict) -> bool:
+        if is_user_page_envelope(json_data):
+            payload = json_data.get("payload", {})
+            return isinstance(payload, dict) and isinstance(payload.get("page"), dict)
+        pages = json_data.get("pages")
+        return isinstance(pages, list) and len(pages) > 0 and isinstance(pages[0], dict)
+
+    def _extract_ocr_models(self) -> list[ProvenanceOCRModel]:
+        predictor = self._docTR_predictor
+        if predictor is None:
+            return []
+
+        models: list[ProvenanceOCRModel] = []
+        candidate_specs = [
+            ("det_model", getattr(predictor, "det_predictor", None)),
+            ("rec_model", getattr(predictor, "reco_predictor", None)),
+            ("det_model", getattr(predictor, "detector", None)),
+            ("rec_model", getattr(predictor, "recognizer", None)),
+            ("det_model", getattr(predictor, "det_arch", None)),
+            ("rec_model", getattr(predictor, "reco_arch", None)),
+        ]
+
+        for default_name, component in candidate_specs:
+            model = self._build_provenance_model(default_name, component)
+            if model is None:
+                continue
+            if any(existing.name == model.name for existing in models):
+                continue
+            models.append(model)
+
+        return models
+
+    def _build_provenance_model(
+        self,
+        default_name: str,
+        component: object,
+    ) -> Optional[ProvenanceOCRModel]:
+        if component is None:
+            return None
+
+        if isinstance(component, str):
+            return ProvenanceOCRModel(name=component)
+
+        model_name = self._extract_component_name(component) or default_name
+        model_version = self._extract_component_attr(component, ["version"])
+        weights_id = self._extract_component_attr(
+            component,
+            [
+                "weights_id",
+                "weights",
+                "weights_path",
+                "checkpoint",
+                "checkpoint_path",
+                "model_name",
+            ],
+        )
+        return ProvenanceOCRModel(
+            name=model_name,
+            version=model_version,
+            weights_id=weights_id,
+        )
+
+    def _extract_component_name(self, component: object) -> Optional[str]:
+        direct_name = self._extract_component_attr(
+            component,
+            ["arch", "architecture", "name", "model_name"],
+        )
+        if direct_name:
+            return direct_name
+
+        nested = getattr(component, "model", None)
+        if nested is not None:
+            nested_name = self._extract_component_attr(
+                nested,
+                ["arch", "architecture", "name", "model_name"],
+            )
+            if nested_name:
+                return nested_name
+            nested_class_name = nested.__class__.__name__
+            if nested_class_name and nested_class_name != "object":
+                return nested_class_name
+
+        class_name = component.__class__.__name__
+        if class_name and class_name != "object":
+            return class_name
+        return None
+
+    def _extract_component_attr(
+        self,
+        component: object,
+        attr_names: list[str],
+    ) -> Optional[str]:
+        for attr_name in attr_names:
+            value = getattr(component, attr_name, None)
+            if isinstance(value, str) and value:
+                return value
+            if isinstance(value, (int, float)):
+                return str(value)
+        return None
+
+    def _build_ocr_config_fingerprint(self, source_lib: str) -> Optional[str]:
+        model_names = [model.name for model in self._extract_ocr_models() if model.name]
+        if not model_names and not source_lib:
+            return None
+        parts = [source_lib] + sorted(model_names)
+        return "|".join(part for part in parts if part)
+
+    def _extract_page_dict(self, json_data: dict) -> Optional[dict]:
+        if is_user_page_envelope(json_data):
+            envelope = UserPageEnvelope.from_dict(json_data)
+            return envelope.payload.page
+        pages_data = json_data.get("pages", [])
+        if not pages_data or not isinstance(pages_data, list):
+            logger.error("No pages data found in loaded JSON")
+            return None
+        page_dict = pages_data[0]
+        if not isinstance(page_dict, dict):
+            logger.error("Invalid legacy page data structure")
+            return None
+        return page_dict
+
+    def _extract_source_path(self, json_data: dict) -> Optional[str]:
+        if is_user_page_envelope(json_data):
+            source_data = json_data.get("source", {})
+            if isinstance(source_data, dict):
+                image_path = source_data.get("image_path")
+                if isinstance(image_path, str) and image_path:
+                    return image_path
+            return None
+        source_path = json_data.get("source_path")
+        if isinstance(source_path, str) and source_path:
+            return source_path
         return None

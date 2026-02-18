@@ -54,10 +54,15 @@ def parse_args(argv: list[str] | None = None):
         default=0,
         help="Increase logging verbosity (-v: DEBUG app logs, -vv: DEBUG + pd-book-tools, -vvv: DEBUG all dependencies; default: INFO)",
     )
+    p.add_argument(
+        "--page-timing",
+        action="store_true",
+        help="Enable isolated page-load timing logs on the CLI (logger: ocr_labeler.page_timing)",
+    )
     return p.parse_args(argv)
 
 
-def get_logging_configuration(verbose: int) -> dict:
+def get_logging_configuration(verbose: int, page_timing: bool = False) -> dict:
     """Return logging DictConfig.
 
     Verbosity mapping:
@@ -95,12 +100,22 @@ def get_logging_configuration(verbose: int) -> dict:
         "null": {
             "class": "logging.NullHandler",
         },
+        "page_timing_console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "default",
+        },
     }
 
     log_loggers = {
         "ocr_labeler": {
             "level": app_level,
             "handlers": handler_names,
+            "propagate": False,
+        },
+        "ocr_labeler.page_timing": {
+            "level": "INFO" if page_timing else "WARNING",
+            "handlers": ["page_timing_console"] if page_timing else [],
             "propagate": False,
         },
         "pd_book_tools": {
@@ -160,7 +175,7 @@ def main(argv: list[str] | None = None):  # pragma: no cover (thin wrapper)
     logger.info("Parsed args: %s", args)
 
     # Configure base logging immediately; session files are attached per-tab in app.py
-    log_cfg = get_logging_configuration(args.verbose)
+    log_cfg = get_logging_configuration(args.verbose, page_timing=args.page_timing)
 
     logging.config.dictConfig(log_cfg)
 

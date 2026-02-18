@@ -1,3 +1,4 @@
+import contextlib
 import logging
 
 from nicegui import binding, ui
@@ -87,6 +88,7 @@ class TextTabs:
         logger.debug(f"Page state provided: {page_state is not None}")
         self.page_state = page_state
         self.page_index = page_index
+        self._disposed = False
 
         # Instantiate the model as the intermediary
         self.model = TextTabsModel(page_state)
@@ -100,16 +102,7 @@ class TextTabs:
             page_state._current_page_index = page_index
             logger.debug(f"Set current page index to {page_index}")
 
-        # Also listen to ProjectState changes for navigation events
-        # PageState has a reference to ProjectState, so we can register there too
-        if (
-            page_state
-            and hasattr(page_state, "_project_state")
-            and page_state._project_state
-        ):
-            logger.debug("Registering ProjectState change listener")
-            page_state._project_state.on_change.append(self._on_project_state_changed)
-            logger.debug("Registered ProjectState change listener")
+        self._register_state_listeners()
 
         # Create callback for GT→OCR copy functionality
         copy_callback = None
@@ -142,6 +135,68 @@ class TextTabs:
         )
         self.container = None
         self._tabs = None
+        self._last_word_match_page_key = None
+
+    def _register_state_listeners(self) -> None:
+        """Register state listeners once per TextTabs instance."""
+        project_state = (
+            self.page_state._project_state
+            if self.page_state and hasattr(self.page_state, "_project_state")
+            else None
+        )
+        if project_state and project_state.on_change is not None:
+            if self._on_project_state_changed not in project_state.on_change:
+                logger.debug("Registering ProjectState change listener")
+                project_state.on_change.append(self._on_project_state_changed)
+
+    def _unregister_state_listeners(self) -> None:
+        """Remove listeners to prevent stale callbacks after UI teardown."""
+        if self.page_state and self.page_state.on_change is not None:
+            with contextlib.suppress(ValueError):
+                self.page_state.on_change.remove(self.model._on_page_state_change)
+
+        project_state = (
+            self.page_state._project_state
+            if self.page_state and hasattr(self.page_state, "_project_state")
+            else None
+        )
+        if project_state and project_state.on_change is not None:
+            with contextlib.suppress(ValueError):
+                project_state.on_change.remove(self._on_project_state_changed)
+
+    def _is_disposed_ui_error(self, error: RuntimeError) -> bool:
+        message = str(error).lower()
+        return "client this element belongs to has been deleted" in message or (
+            "parent element" in message and "deleted" in message
+        )
+
+    def _is_ui_alive(self) -> bool:
+        """Check whether the built container still belongs to an active UI tree."""
+        if self._disposed:
+            return False
+        if self.container is None:
+            # Not built yet, so callbacks should remain registered.
+            return True
+
+        try:
+            _ = self.container.client
+            return True
+        except RuntimeError as error:
+            if self._is_disposed_ui_error(error):
+                logger.debug("TextTabs container has been disposed")
+                return False
+            raise
+
+    def _ensure_attached(self) -> bool:
+        """Detach stale listeners when this view is no longer attached."""
+        if self._is_ui_alive():
+            return True
+
+        if not self._disposed:
+            logger.debug("Detaching stale TextTabs listeners")
+            self._unregister_state_listeners()
+            self._disposed = True
+        return False
 
     def build(self):
         logger.info("Building TextTabs UI components")
@@ -211,6 +266,8 @@ class TextTabs:
 
     def _on_page_state_changed(self):
         """Called when page state changes; update word matches automatically."""
+        if not self._ensure_attached():
+            return
         logger.debug("TextTabs received page state change notification")
         # Update text editors directly instead of relying on bindings
         self._update_text_editors()
@@ -224,6 +281,8 @@ class TextTabs:
 
     def _on_project_state_changed(self):
         """Called when project state changes (e.g., navigation); update word matches."""
+        if not self._ensure_attached():
+            return
         logger.debug("TextTabs received project state change notification")
         # Read current page from in-memory cache only; do not call
         # ProjectState.current_page() here because it may trigger synchronous
@@ -260,6 +319,8 @@ class TextTabs:
 
     def update_word_matches(self, page: Page | None):
         """Refresh the word match panel with the provided page data."""
+        if not self._ensure_attached():
+            return
         if not getattr(self, "word_match_view", None):
             logger.debug("Word match view not initialized; skipping update")
             return
@@ -267,6 +328,12 @@ class TextTabs:
         if page is None:
             logger.debug("No page available for word matches; clearing view")
             self.word_match_view.clear()
+            self._last_word_match_page_key = None
+            return
+
+        page_key = self._build_word_match_page_key(page)
+        if page_key == self._last_word_match_page_key:
+            logger.debug("Skipping word match update; page payload unchanged")
             return
 
         logger.debug(
@@ -274,3 +341,30 @@ class TextTabs:
             getattr(page, "name", getattr(page, "index", "unknown")),
         )
         self.word_match_view.update_from_page(page)
+        self._last_word_match_page_key = page_key
+
+    def _build_word_match_page_key(self, page: Page) -> tuple:
+        """Build a lightweight key representing word-match-relevant page state."""
+        blocks = getattr(page, "blocks", None)
+        if not blocks:
+            return (
+                getattr(page, "name", None),
+                getattr(page, "index", None),
+                0,
+                "",
+                "",
+            )
+
+        block_count = len(blocks)
+        first_line_text = str(getattr(blocks[0], "text", "")) if block_count > 0 else ""
+        last_line_text = (
+            str(getattr(blocks[-1], "text", "")) if block_count > 1 else first_line_text
+        )
+
+        return (
+            getattr(page, "name", None),
+            getattr(page, "index", None),
+            block_count,
+            first_line_text,
+            last_line_text,
+        )

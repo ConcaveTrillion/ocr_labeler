@@ -109,11 +109,20 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         )
 
         # If the loaded project's root changed, drop the existing ProjectView so it rebuilds cleanly
+        current_project_root = getattr(
+            self.viewmodel.project_state_viewmodel,
+            "project_root",
+            None,
+        )
+        previous_project_root = (
+            self.project_view.project_root_snapshot if self.project_view else None
+        )
+
         if (
             self.project_view
-            and hasattr(self.project_view, "project_root_snapshot")
-            and self.project_view.project_root_snapshot
-            != getattr(self.viewmodel.project_state_viewmodel, "project_root", None)
+            and previous_project_root
+            and current_project_root
+            and previous_project_root != current_project_root
         ):
             try:
                 if getattr(self.project_view, "_root", None):

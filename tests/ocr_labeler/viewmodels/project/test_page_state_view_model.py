@@ -1,8 +1,11 @@
 import logging
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from ocr_labeler.state.page_state import PageState
 from ocr_labeler.state.project_state import ProjectState
+from ocr_labeler.viewmodels.project import page_state_view_model as vm_module
 from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
 
 logger = logging.getLogger(__name__)
@@ -161,3 +164,45 @@ def test_image_sources_change_after_rebind_with_mocked_encoder(tmp_path, monkeyp
     assert second_src == "ENCODED-SECOND"
     assert second_index == 1
     assert second_page_source == "filesystem"
+
+
+def test_apply_encoded_results_skips_duplicate_callback_payload(tmp_path):
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+    callback = MagicMock()
+    vm.set_image_update_callback(callback)
+
+    payload = [("original_image_source", "data:image/png;base64,AAA")]
+
+    vm._apply_encoded_results(payload, current_page=SimpleNamespace(name="p1"))
+    vm._apply_encoded_results(payload, current_page=SimpleNamespace(name="p1"))
+
+    callback.assert_called_once_with(
+        {"original_image_source": "data:image/png;base64,AAA"}
+    )
+
+
+def test_schedule_image_update_skips_when_already_scheduled(tmp_path, monkeypatch):
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+
+    create_calls: list[object] = []
+
+    def fake_create(coro):
+        create_calls.append(coro)
+
+    monkeypatch.setattr(vm_module.background_tasks, "create", fake_create)
+
+    vm._schedule_image_update()
+    vm._schedule_image_update()
+
+    assert len(create_calls) == 1
+    create_calls[0].close()

@@ -52,7 +52,7 @@ async def test_initialize_from_url_toggles_project_loading_state(
 
     assert captured["initial_page_index"] == 1
     assert state.is_project_loading is False
-    assert project_state.goto_index == 1
+    assert project_state.goto_index is None
 
 
 async def test_initialize_from_url_ignores_notify_runtime_error(
@@ -100,7 +100,7 @@ async def test_initialize_from_url_ignores_notify_runtime_error(
     )
 
     assert state.is_project_loading is False
-    assert project_state.goto_index == 1
+    assert project_state.goto_index is None
 
 
 async def test_initialize_from_url_missing_project_shows_not_found(

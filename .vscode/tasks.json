@@ -347,6 +347,26 @@
             "isBackground": true,
             "problemMatcher": []
         },
+            {
+                "label": "Make: Run OCR Labeler (Page Timing)",
+                "type": "shell",
+                "command": "make",
+                "args": ["run-page-timing"],
+                "group": "build",
+                "options": {
+                    "cwd": "${workspaceFolder}"
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared",
+                    "showReuseMessage": true,
+                    "clear": false
+                },
+                "detail": "Run the OCR labeler UI with isolated page timing logs",
+                "isBackground": true
+            },
         {
             "label": "Make: Clean",
             "type": "shell",

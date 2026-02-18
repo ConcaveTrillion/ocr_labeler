@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs help
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs help run run-verbose run-page-timing
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -109,7 +109,11 @@ run-verbose: ## Run the OCR labeler UI with verbose logging
 	@echo "🚀 Starting OCR Labeler UI (verbose mode)..."
 	uv run ocr-labeler-ui . -vv
 
-clean: ## Clean up cache and temporary files (keeps venv and UV cache)
+run-page-timing: ## Run the OCR labeler UI with isolated page timing logs
+	@echo "🚀 Starting OCR Labeler UI (page timing mode)..."
+	uv run ocr-labeler-ui . --page-timing
+
+clean: ## Clean up cache, temporary files, and logs (keeps venv and UV cache)
 	@echo "🧹 Cleaning Python cache files..."
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
@@ -120,6 +124,7 @@ clean: ## Clean up cache and temporary files (keeps venv and UV cache)
 	@echo "🧹 Cleaning build artifacts..."
 	rm -rf dist/ 2>/dev/null || true
 	rm -rf build/ 2>/dev/null || true
+	@$(MAKE) --no-print-directory clean-logs
 	@echo "✅ Cache cleanup complete!"
 
 clean-logs: ## Remove all session logs from logs/

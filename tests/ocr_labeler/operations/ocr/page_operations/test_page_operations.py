@@ -453,6 +453,31 @@ class TestPageOperations:
         assert load_info.can_load is False
         assert load_info.json_filename == "project_001.json"
 
+    def test_can_load_page_with_project_relative_directory(self, operations, temp_dir):
+        """Relative save_directory should resolve from project_root."""
+        project_root = temp_dir / "project"
+        output_dir = project_root / "local-data" / "labeled-ocr"
+        output_dir.mkdir(parents=True)
+
+        with open(output_dir / "project_001.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "source_lib": "doctr-pgdp-labeled",
+                    "source_path": "source.png",
+                    "pages": [{"name": "test_page", "text": "Sample text"}],
+                },
+                f,
+            )
+
+        load_info = operations.can_load_page(
+            page_number=1,
+            project_root=project_root,
+            save_directory="local-data/labeled-ocr",
+        )
+
+        assert load_info.can_load is True
+        assert load_info.json_path == output_dir / "project_001.json"
+
     def test_normalize_ground_truth_entries(self, operations):
         """Test normalizing ground truth entries."""
         # This test is now in test_ground_truth.py for ProjectState

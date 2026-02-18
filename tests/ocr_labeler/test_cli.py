@@ -14,6 +14,11 @@ def test_parse_args_verbose_counts():
     assert cli.parse_args(["-vvv"]).verbose == 3
 
 
+def test_parse_args_page_timing_flag():
+    assert cli.parse_args([]).page_timing is False
+    assert cli.parse_args(["--page-timing"]).page_timing is True
+
+
 def test_parse_args_rejects_removed_log_file_flag():
     with pytest.raises(SystemExit):
         cli.parse_args(["--log-file", "app.log"])
@@ -61,6 +66,17 @@ def test_get_logging_configuration_levels(
         assert cfg["loggers"][dep_name]["level"] == expected_dep
 
 
+def test_get_logging_configuration_enables_page_timing_logger():
+    cfg = cli.get_logging_configuration(verbose=0, page_timing=True)
+
+    assert "page_timing_console" in cfg["handlers"]
+    assert cfg["loggers"]["ocr_labeler.page_timing"]["level"] == "INFO"
+    assert cfg["loggers"]["ocr_labeler.page_timing"]["handlers"] == [
+        "page_timing_console"
+    ]
+    assert cfg["loggers"]["ocr_labeler.page_timing"]["propagate"] is False
+
+
 @pytest.mark.parametrize(
     ("verbose", "expected_uvicorn_level"),
     [
@@ -95,6 +111,7 @@ def test_main_sets_uvicorn_level_from_verbosity(
             font_path=None,
             debugpy=False,
             verbose=verbose,
+            page_timing=False,
         )
 
     def fake_dict_config(cfg):

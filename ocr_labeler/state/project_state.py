@@ -6,6 +6,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Callable, List, Optional
 
 from nicegui import background_tasks, run
@@ -19,6 +20,7 @@ from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
 
 logger = logging.getLogger(__name__)
+page_timing_logger = logging.getLogger("ocr_labeler.page_timing")
 
 # Constants for ground truth operations
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
@@ -101,6 +103,51 @@ class ProjectState:
         """Notify listeners of state changes."""
         for listener in self.on_change:
             listener()
+
+    def _log_page_load_timing(
+        self,
+        *,
+        index: int,
+        force_ocr: bool,
+        source: str,
+        status: str,
+        duration_ms: float,
+    ) -> None:
+        """Emit a structured page-load timing event."""
+        page_timing_logger.info(
+            "page_load_timing: index=%s force_ocr=%s source=%s status=%s duration_ms=%.1f",
+            index,
+            force_ocr,
+            source,
+            status,
+            duration_ms,
+        )
+
+    def _log_page_load_timing_step(
+        self,
+        *,
+        index: int,
+        step: str,
+        duration_ms: float,
+        extra: str = "",
+    ) -> None:
+        """Emit a structured page-load step timing event."""
+        suffix = f" {extra}" if extra else ""
+        page_timing_logger.info(
+            "page_load_timing_step: index=%s step=%s duration_ms=%.1f%s",
+            index,
+            step,
+            duration_ms,
+            suffix,
+        )
+
+    def _log_page_navigation_timing(self, *, index: int, duration_ms: float) -> None:
+        """Emit a structured page-navigation timing event."""
+        page_timing_logger.info(
+            "page_navigation_timing: index=%s duration_ms=%.1f",
+            index,
+            duration_ms,
+        )
 
     def get_page_state(self, page_index: int) -> PageState:
         """Get or create PageState for the specified page index.
@@ -292,8 +339,21 @@ class ProjectState:
         Returns:
             Optional[Page]: The loaded page or None if index is invalid
         """
+        ensure_started = perf_counter()
+
+        def _log_page_timing(source: str, status: str) -> None:
+            duration_ms = (perf_counter() - ensure_started) * 1000
+            self._log_page_load_timing(
+                index=index,
+                force_ocr=force_ocr,
+                source=source,
+                status=status,
+                duration_ms=duration_ms,
+            )
+
         if not self.project.pages:
             logger.info("ensure_page: no pages loaded yet")
+            _log_page_timing(source="none", status="no_pages")
             return None
         if not (0 <= index < len(self.project.pages)):
             logger.warning(
@@ -301,7 +361,122 @@ class ProjectState:
                 index,
                 len(self.project.pages) - 1,
             )
+            _log_page_timing(source="none", status="index_out_of_range")
             return None
+
+        def _attach_loaded_page_metadata(
+            loaded_page: Page,
+            page_image_path: Path,
+            page_index: int,
+            source: str,
+        ) -> None:
+            if not hasattr(loaded_page, "image_path"):
+                loaded_page.image_path = str(page_image_path)  # type: ignore[attr-defined]
+            if not hasattr(loaded_page, "name"):
+                loaded_page.name = page_image_path.name  # type: ignore[attr-defined]
+            if not hasattr(loaded_page, "index"):
+                loaded_page.index = page_index  # type: ignore[attr-defined]
+            loaded_page.page_source = source  # type: ignore[attr-defined]
+
+        def _user_saved_directories() -> list[str]:
+            primary_save_dir = "local-data/labeled-ocr"
+            save_dirs = [primary_save_dir]
+
+            # Backward compatibility: older sessions may have saved labeled pages
+            # under the workspace's local-data directory instead of project_root.
+            workspace_save_dir = (Path.cwd() / primary_save_dir).resolve()
+            if self.project_root is not None:
+                primary_abs = (self.project_root / primary_save_dir).resolve()
+                if workspace_save_dir != primary_abs:
+                    save_dirs.append(str(workspace_save_dir))
+            else:
+                save_dirs.append(str(workspace_save_dir))
+
+            return save_dirs
+
+        def _try_load_user_saved_page(
+            page_index: int, img_path: Path
+        ) -> Optional[Page]:
+            if self.project_root is None:
+                return None
+
+            for save_directory in _user_saved_directories():
+                can_load_started = perf_counter()
+                user_saved_load_info = self.page_ops.can_load_page(
+                    page_number=page_index + 1,
+                    project_root=self.project_root,
+                    save_directory=save_directory,
+                    project_id=None,
+                )
+                can_load_duration_ms = (perf_counter() - can_load_started) * 1000
+                self._log_page_load_timing_step(
+                    index=page_index,
+                    step="user_saved_can_load",
+                    duration_ms=can_load_duration_ms,
+                    extra=f"save_directory={save_directory} can_load={user_saved_load_info.can_load}",
+                )
+                if not user_saved_load_info.can_load:
+                    continue
+
+                logger.info(
+                    "ensure_page: found user-saved candidate for index=%s at %s",
+                    page_index,
+                    user_saved_load_info.json_path,
+                )
+
+                load_started = perf_counter()
+                loaded_result = self.page_ops.load_page(
+                    page_number=page_index + 1,
+                    project_root=self.project_root,
+                    save_directory=save_directory,
+                    project_id=None,
+                )
+                load_duration_ms = (perf_counter() - load_started) * 1000
+                self._log_page_load_timing_step(
+                    index=page_index,
+                    step="user_saved_load",
+                    duration_ms=load_duration_ms,
+                    extra=f"save_directory={save_directory}",
+                )
+                if loaded_result is None:
+                    continue
+
+                loaded_page, _ = loaded_result
+                logger.info(
+                    "ensure_page: loaded from user-saved for index=%s (json_path=%s)",
+                    page_index,
+                    user_saved_load_info.json_path,
+                )
+                _attach_loaded_page_metadata(
+                    loaded_page=loaded_page,
+                    page_image_path=img_path,
+                    page_index=page_index,
+                    source="filesystem",
+                )
+                return loaded_page
+
+            return None
+
+        # If we already have a cached OCR page in memory, refresh from disk if a
+        # user-labeled page now exists.
+        current_page = self.project.pages[index]
+        if (
+            current_page is not None
+            and not force_ocr
+            and self.project_root is not None
+            and getattr(current_page, "page_source", None) in {"ocr", "cached_ocr"}
+        ):
+            img_path = Path(self.project.image_paths[index])
+            loaded_page = _try_load_user_saved_page(index, img_path)
+            if loaded_page is not None:
+                logger.info(
+                    "ensure_page: replacing in-memory cached page with user-saved page for index=%s",
+                    index,
+                )
+                self.project.pages[index] = loaded_page
+                self.notify()
+                _log_page_timing(source="filesystem", status="loaded")
+                return self.project.pages[index]
 
         if self.project.pages[index] is None:
             img_path = Path(
@@ -324,35 +499,24 @@ class ProjectState:
 
                 # First try user-saved pages
                 try:
-                    loaded_result = self.page_ops.load_page(
-                        page_number=index + 1,  # Convert to 1-based
-                        project_root=self.project_root,
-                        save_directory="local-data/labeled-ocr",
-                        project_id=None,  # Will be derived from project_root.name
+                    user_saved_started = perf_counter()
+                    loaded_page = _try_load_user_saved_page(index, img_path)
+                    user_saved_duration_ms = (
+                        perf_counter() - user_saved_started
+                    ) * 1000
+                    self._log_page_load_timing_step(
+                        index=index,
+                        step="user_saved_lookup",
+                        duration_ms=user_saved_duration_ms,
                     )
-                    if loaded_result is not None:
-                        loaded_page, _ = loaded_result
-                        logger.info(
-                            "ensure_page: loaded from user-saved for index=%s", index
-                        )
+                    if loaded_page is not None:
                         self.loading_status = "Loading page from disk..."
                         self.queue_notification(self.loading_status, "info")
                         # Don't notify here - it triggers recursion via viewmodel updates
-                        # Attach convenience attrs expected elsewhere
-                        img_path = Path(self.project.image_paths[index])
-                        if not hasattr(loaded_page, "image_path"):
-                            loaded_page.image_path = str(img_path)  # type: ignore[attr-defined]
-                        if not hasattr(loaded_page, "name"):
-                            loaded_page.name = img_path.name  # type: ignore[attr-defined]
-                        if not hasattr(loaded_page, "index"):
-                            loaded_page.index = index  # type: ignore[attr-defined]
-                        if not hasattr(loaded_page, "page_source"):
-                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
-                        else:
-                            loaded_page.page_source = "filesystem"  # type: ignore[attr-defined]
                         self.project.pages[index] = loaded_page
                         # Notify after page is cached so UI can update (safe here, not in property getter)
                         self.notify()
+                        _log_page_timing(source="filesystem", status="loaded")
                         return self.project.pages[index]
                 except Exception as e:
                     logger.debug(
@@ -364,36 +528,58 @@ class ProjectState:
                 # If no user-saved page, try cache
                 if loaded_page is None:
                     try:
-                        loaded_result = self.page_ops.load_page(
-                            page_number=index + 1,  # Convert to 1-based
+                        cache_can_load_started = perf_counter()
+                        cache_load_info = self.page_ops.can_load_page(
+                            page_number=index + 1,
                             project_root=self.project_root,
                             save_directory="local-data/labeled-ocr/cache",
-                            project_id=None,  # Will be derived from project_root.name
+                            project_id=None,
                         )
-                        if loaded_result is not None:
-                            loaded_page, _ = loaded_result
-                            logger.info(
-                                "ensure_page: loaded from cache for index=%s", index
+                        cache_can_load_duration_ms = (
+                            perf_counter() - cache_can_load_started
+                        ) * 1000
+                        self._log_page_load_timing_step(
+                            index=index,
+                            step="cache_can_load",
+                            duration_ms=cache_can_load_duration_ms,
+                            extra=f"can_load={cache_load_info.can_load}",
+                        )
+                        if cache_load_info.can_load:
+                            cache_load_started = perf_counter()
+                            loaded_result = self.page_ops.load_page(
+                                page_number=index + 1,  # Convert to 1-based
+                                project_root=self.project_root,
+                                save_directory="local-data/labeled-ocr/cache",
+                                project_id=None,  # Will be derived from project_root.name
                             )
-                            self.loading_status = "Loading page from cache..."
-                            self.queue_notification(self.loading_status, "info")
-                            # Don't notify here - it triggers recursion via viewmodel updates
-                            # Attach convenience attrs expected elsewhere
-                            img_path = Path(self.project.image_paths[index])
-                            if not hasattr(loaded_page, "image_path"):
-                                loaded_page.image_path = str(img_path)  # type: ignore[attr-defined]
-                            if not hasattr(loaded_page, "name"):
-                                loaded_page.name = img_path.name  # type: ignore[attr-defined]
-                            if not hasattr(loaded_page, "index"):
-                                loaded_page.index = index  # type: ignore[attr-defined]
-                            if not hasattr(loaded_page, "page_source"):
-                                loaded_page.page_source = "cached_ocr"  # type: ignore[attr-defined]
-                            else:
-                                loaded_page.page_source = "cached_ocr"  # type: ignore[attr-defined]
-                            self.project.pages[index] = loaded_page
-                            # Notify after page is cached so UI can update (safe here, not in property getter)
-                            self.notify()
-                            return self.project.pages[index]
+                            cache_load_duration_ms = (
+                                perf_counter() - cache_load_started
+                            ) * 1000
+                            self._log_page_load_timing_step(
+                                index=index,
+                                step="cache_load",
+                                duration_ms=cache_load_duration_ms,
+                            )
+                            if loaded_result is not None:
+                                loaded_page, _ = loaded_result
+                                logger.info(
+                                    "ensure_page: loaded from cache for index=%s",
+                                    index,
+                                )
+                                self.loading_status = "Loading page from cache..."
+                                self.queue_notification(self.loading_status, "info")
+                                # Don't notify here - it triggers recursion via viewmodel updates
+                                _attach_loaded_page_metadata(
+                                    loaded_page=loaded_page,
+                                    page_image_path=img_path,
+                                    page_index=index,
+                                    source="cached_ocr",
+                                )
+                                self.project.pages[index] = loaded_page
+                                # Notify after page is cached so UI can update (safe here, not in property getter)
+                                self.notify()
+                                _log_page_timing(source="cached_ocr", status="loaded")
+                                return self.project.pages[index]
                     except Exception as e:
                         logger.debug(
                             "ensure_page: failed to load cached page for index=%s: %s",
@@ -417,7 +603,14 @@ class ProjectState:
                         )
                         or ""
                     )
+                    ocr_started = perf_counter()
                     page_obj = self.page_ops.page_parser(img_path, index, gt_text)
+                    ocr_duration_ms = (perf_counter() - ocr_started) * 1000
+                    self._log_page_load_timing_step(
+                        index=index,
+                        step="ocr_parse",
+                        duration_ms=ocr_duration_ms,
+                    )
                     logger.debug(
                         "ensure_page: loader created page index=%s name=%s",
                         index,
@@ -448,12 +641,22 @@ class ProjectState:
                         page_image_path, (str, Path)
                     ):
                         try:
+                            cache_save_started = perf_counter()
                             cache_saved = self.page_ops.save_page(
                                 page=page_obj,
                                 project_root=self.project_root,
                                 save_directory="local-data/labeled-ocr/cache",
                                 project_id=None,  # Will be derived from project_root.name
                                 source_lib="doctr-pgdp-cached",
+                            )
+                            cache_save_duration_ms = (
+                                perf_counter() - cache_save_started
+                            ) * 1000
+                            self._log_page_load_timing_step(
+                                index=index,
+                                step="cache_save",
+                                duration_ms=cache_save_duration_ms,
+                                extra=f"success={cache_saved}",
                             )
                             if cache_saved:
                                 logger.debug(
@@ -481,6 +684,10 @@ class ProjectState:
 
                     # Notify after page is cached so UI can update
                     self.notify()
+                    _log_page_timing(
+                        source=getattr(page_obj, "page_source", "ocr"),
+                        status="loaded",
+                    )
                 except Exception:  # pragma: no cover - defensive
                     logger.exception(
                         "ensure_page: loader failed for index=%s path=%s; using fallback page",
@@ -497,6 +704,7 @@ class ProjectState:
                     )
                     # Notify after fallback page is cached
                     self.notify()
+                    _log_page_timing(source="fallback", status="ocr_failed")
             else:
                 # No loader provided: keep legacy minimal placeholder behavior
                 logger.debug(
@@ -504,8 +712,13 @@ class ProjectState:
                     index,
                 )
                 self.project.pages[index] = self.create_fallback_page(index, img_path)
+                _log_page_timing(source="fallback", status="no_loader")
         else:
             logger.debug("ensure_page: cache hit for index=%s", index)
+            _log_page_timing(
+                source=getattr(self.project.pages[index], "page_source", "memory"),
+                status="cache_hit",
+            )
 
         return self.project.pages[index]
 
@@ -545,6 +758,7 @@ class ProjectState:
         async def _background_load():
             import threading
 
+            background_load_started = perf_counter()
             logger.info(
                 "[_background_load] Entry - Thread: %s, Loading page index: %s",
                 threading.current_thread().name,
@@ -578,6 +792,13 @@ class ProjectState:
                 )
                 raise
             finally:
+                background_load_duration_ms = (
+                    perf_counter() - background_load_started
+                ) * 1000
+                self._log_page_navigation_timing(
+                    index=self.current_page_index,
+                    duration_ms=background_load_duration_ms,
+                )
                 logger.info("[_background_load] Cleanup - Setting is_navigating=False")
                 self.is_navigating = False
                 self.loading_status = ""

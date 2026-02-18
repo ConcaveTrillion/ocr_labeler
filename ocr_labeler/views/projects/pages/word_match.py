@@ -31,6 +31,10 @@ class WordMatchView:
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         self.notify_callback = notify_callback
+        self._last_display_signature = None
+        self._display_update_call_count = 0
+        self._display_update_render_count = 0
+        self._display_update_skip_count = 0
         logger.debug("WordMatchView initialization complete")
 
     def _safe_notify(self, message: str, type_: str = "info"):
@@ -54,6 +58,13 @@ class WordMatchView:
                 )
             else:
                 raise
+
+    def _is_disposed_ui_error(self, error: RuntimeError) -> bool:
+        """Return True when runtime error indicates expected UI teardown race."""
+        message = str(error).lower()
+        return "client this element belongs to has been deleted" in message or (
+            "parent element" in message and "deleted" in message
+        )
 
     def build(self):
         """Build the UI components."""
@@ -109,10 +120,8 @@ class WordMatchView:
             logger.debug("WordMatchView update complete")
 
         except RuntimeError as e:
-            if "client this element belongs to has been deleted" in str(e).lower():
-                logger.debug(
-                    "Skipping word match update after client disconnect: %s", e
-                )
+            if self._is_disposed_ui_error(e):
+                logger.debug("Skipping word match update during UI disposal: %s", e)
                 return
             logger.exception(f"Error updating word match view: {e}")
         except Exception as e:
@@ -146,9 +155,28 @@ class WordMatchView:
 
     def _update_lines_display(self):
         """Update the lines display with word matches."""
-        logger.info("_update_lines_display called")
+        self._display_update_call_count += 1
+        logger.info(
+            "_update_lines_display called (call=%d, rendered=%d, skipped=%d)",
+            self._display_update_call_count,
+            self._display_update_render_count,
+            self._display_update_skip_count,
+        )
         if not self.lines_container:
             logger.info("No lines_container, returning")
+            return
+
+        display_signature = self._compute_display_signature()
+        if display_signature == self._last_display_signature:
+            self._display_update_skip_count += 1
+            logger.info(
+                "Skipping lines display refresh; no visible changes detected "
+                "(call=%d, rendered=%d, skipped=%d)",
+                self._display_update_call_count,
+                self._display_update_render_count,
+                self._display_update_skip_count,
+            )
+            logger.debug("Skipping lines display refresh; no visible changes detected")
             return
 
         # Clear existing content
@@ -164,6 +192,8 @@ class WordMatchView:
                         ui.label(
                             "Load a page with OCR and ground truth to see word comparisons"
                         )
+            self._display_update_render_count += 1
+            self._last_display_signature = display_signature
             return
 
         # Filter lines based on current selection
@@ -180,6 +210,8 @@ class WordMatchView:
                             ui.label(
                                 "All lines have perfect matches. Try selecting 'All lines' to see them."
                             )
+            self._display_update_render_count += 1
+            self._last_display_signature = display_signature
             return
 
         # Display filtered line matches in cards
@@ -187,6 +219,43 @@ class WordMatchView:
         with self.lines_container:
             for line_match in lines_to_display:
                 self._create_line_card(line_match)
+
+        self._display_update_render_count += 1
+        self._last_display_signature = display_signature
+
+    def _compute_display_signature(self):
+        """Return a stable signature for visible line-match content."""
+        line_signatures = []
+        for line_match in self.view_model.line_matches:
+            word_signatures = tuple(
+                (
+                    word_match.match_status.value,
+                    word_match.ocr_text,
+                    word_match.ground_truth_text,
+                    round(word_match.fuzz_score, 6)
+                    if word_match.fuzz_score is not None
+                    else None,
+                )
+                for word_match in line_match.word_matches
+            )
+
+            line_signatures.append(
+                (
+                    line_match.line_index,
+                    line_match.overall_match_status.value,
+                    line_match.exact_match_count,
+                    line_match.fuzzy_match_count,
+                    line_match.mismatch_count,
+                    line_match.unmatched_gt_count,
+                    line_match.unmatched_ocr_count,
+                    word_signatures,
+                )
+            )
+
+        return (
+            self.show_only_mismatches,
+            tuple(line_signatures),
+        )
 
     def _create_line_card(self, line_match):
         """Create a card display for a single line match."""
@@ -623,4 +692,8 @@ class WordMatchView:
         if self.summary_label:
             self.summary_label.set_text("No matches to display")
             logger.debug("Reset summary label text")
+        self._last_display_signature = None
+        self._display_update_call_count = 0
+        self._display_update_render_count = 0
+        self._display_update_skip_count = 0
         logger.debug("WordMatchView clear complete")

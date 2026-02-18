@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -180,6 +181,199 @@ def test_load_current_page_generates_project_id_from_root(tmp_path):
 
         assert result is True
         assert state.project.pages[0] is mock_page
+
+
+def test_ensure_page_replaces_cached_page_with_disk_page(tmp_path):
+    """Ensure in-memory cached OCR page is replaced when a disk-labeled page exists."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    cached_page = MagicMock()
+    cached_page.page_source = "cached_ocr"
+
+    project = Mock()
+    project.pages = [cached_page]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    disk_page = MagicMock()
+
+    with (
+        patch.object(
+            state.page_ops, "can_load_page", return_value=Mock(can_load=True)
+        ) as mock_can_load,
+        patch.object(
+            state.page_ops, "load_page", return_value=(disk_page, None)
+        ) as mock_load,
+        patch.object(state, "notify") as mock_notify,
+    ):
+        result = state.ensure_page(0)
+
+    assert result is disk_page
+    assert state.project.pages[0] is disk_page
+    assert disk_page.page_source == "filesystem"
+    mock_can_load.assert_called_once_with(
+        page_number=1,
+        project_root=tmp_path,
+        save_directory="local-data/labeled-ocr",
+        project_id=None,
+    )
+    mock_load.assert_called_once_with(
+        page_number=1,
+        project_root=tmp_path,
+        save_directory="local-data/labeled-ocr",
+        project_id=None,
+    )
+    mock_notify.assert_called_once()
+
+
+def test_ensure_page_checks_disk_before_cache(tmp_path):
+    """Ensure user-labeled disk directory is checked before OCR cache directory."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    project = Mock()
+    project.pages = [None]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    cached_page = MagicMock()
+
+    with (
+        patch.object(
+            state.page_ops,
+            "can_load_page",
+            side_effect=[
+                Mock(can_load=False),
+                Mock(can_load=False),
+                Mock(can_load=True),
+            ],
+        ) as mock_can_load,
+        patch.object(
+            state.page_ops, "load_page", return_value=(cached_page, None)
+        ) as mock_load,
+        patch.object(state, "notify"),
+    ):
+        result = state.ensure_page(0)
+
+    assert result is cached_page
+    assert state.project.pages[0] is cached_page
+    assert mock_can_load.call_count == 3
+    assert (
+        mock_can_load.call_args_list[0].kwargs["save_directory"]
+        == "local-data/labeled-ocr"
+    )
+    assert (
+        mock_can_load.call_args_list[2].kwargs["save_directory"]
+        == "local-data/labeled-ocr/cache"
+    )
+    mock_load.assert_called_once_with(
+        page_number=1,
+        project_root=tmp_path,
+        save_directory="local-data/labeled-ocr/cache",
+        project_id=None,
+    )
+
+
+def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
+    """Ensure workspace-level labeled pages are treated as disk pages before cache."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    project = Mock()
+    project.pages = [None]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    labeled_page = MagicMock()
+
+    with (
+        patch.object(
+            state.page_ops,
+            "can_load_page",
+            side_effect=[Mock(can_load=False), Mock(can_load=True)],
+        ) as mock_can_load,
+        patch.object(
+            state.page_ops, "load_page", return_value=(labeled_page, None)
+        ) as mock_load,
+        patch.object(state, "notify"),
+    ):
+        result = state.ensure_page(0)
+
+    assert result is labeled_page
+    assert state.project.pages[0] is labeled_page
+    assert labeled_page.page_source == "filesystem"
+    assert mock_can_load.call_count == 2
+    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
+    assert (
+        mock_can_load.call_args_list[0].kwargs["save_directory"]
+        == "local-data/labeled-ocr"
+    )
+    assert (
+        mock_can_load.call_args_list[1].kwargs["save_directory"] == workspace_save_dir
+    )
+    mock_load.assert_called_once_with(
+        page_number=1,
+        project_root=tmp_path,
+        save_directory=workspace_save_dir,
+        project_id=None,
+    )
+
+
+def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
+    """Ensure cached OCR loads emit structured page load timing logs."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    project = Mock()
+    project.pages = [None]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    cached_page = MagicMock()
+
+    with (
+        caplog.at_level(logging.INFO),
+        patch.object(
+            state.page_ops,
+            "can_load_page",
+            side_effect=[
+                Mock(can_load=False),
+                Mock(can_load=False),
+                Mock(can_load=True),
+            ],
+        ),
+        patch.object(state.page_ops, "load_page", return_value=(cached_page, None)),
+        patch.object(state, "notify"),
+    ):
+        state.ensure_page(0)
+
+    timing_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if "page_load_timing:" in record.getMessage()
+    ]
+    assert timing_messages
+    assert any(
+        "source=cached_ocr" in message and "status=loaded" in message
+        for message in timing_messages
+    )
 
 
 @pytest.mark.asyncio

@@ -42,12 +42,18 @@ class PageStateViewModel(BaseViewModel):
 
     # Flag to prevent concurrent updates
     _update_in_progress: bool = False
+    _update_scheduled: bool = False
 
     # Cache for encoded images to avoid re-encoding unchanged images
     _encoded_image_cache: dict[str, str] = None
 
     # Callback for direct image updates (bypasses binding to avoid websocket issues)
     _image_update_callback: Optional[callable] = None
+    _last_image_callback_signature: tuple | None = None
+    _image_update_schedule_count: int = 0
+    _image_update_schedule_skip_count: int = 0
+    _image_update_emit_count: int = 0
+    _image_update_emit_skip_count: int = 0
 
     def __init__(self, page_state: PageState | None):
         logger.debug("Initializing PageStateViewModel")
@@ -64,8 +70,14 @@ class PageStateViewModel(BaseViewModel):
         self._project_state: ProjectState | None = None
         self._page_state: PageState | None = None
         self._update_in_progress: bool = False
+        self._update_scheduled: bool = False
         self._encoded_image_cache: dict[str, str] = {}
         self._image_update_callback: Optional[callable] = None
+        self._last_image_callback_signature: tuple | None = None
+        self._image_update_schedule_count: int = 0
+        self._image_update_schedule_skip_count: int = 0
+        self._image_update_emit_count: int = 0
+        self._image_update_emit_skip_count: int = 0
 
         # Accept None here and defer binding until a valid state is provided.
         # This prevents initialization-time errors when UI constructs viewmodels
@@ -184,7 +196,28 @@ class PageStateViewModel(BaseViewModel):
         """
         # Skip if an update is already in progress to prevent cascading updates
         if self._update_in_progress:
+            self._image_update_schedule_skip_count += 1
             logger.debug("_schedule_image_update: update already in progress, skipping")
+            logger.info(
+                "[_schedule_image_update] Skip in-progress (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+                self._image_update_schedule_count,
+                self._image_update_schedule_skip_count,
+                self._image_update_emit_count,
+                self._image_update_emit_skip_count,
+            )
+            return
+
+        # Skip if an async update has already been queued but not started yet.
+        if self._update_scheduled:
+            self._image_update_schedule_skip_count += 1
+            logger.debug("_schedule_image_update: update already scheduled, skipping")
+            logger.info(
+                "[_schedule_image_update] Skip already-scheduled (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+                self._image_update_schedule_count,
+                self._image_update_schedule_skip_count,
+                self._image_update_emit_count,
+                self._image_update_emit_skip_count,
+            )
             return
 
         # Skip during navigation to prevent blocking the event loop while
@@ -196,10 +229,20 @@ class PageStateViewModel(BaseViewModel):
             return
 
         pending_update = self._update_image_sources_async()
+        self._update_scheduled = True
+        self._image_update_schedule_count += 1
+        logger.info(
+            "[_schedule_image_update] Queued update (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+            self._image_update_schedule_count,
+            self._image_update_schedule_skip_count,
+            self._image_update_emit_count,
+            self._image_update_emit_skip_count,
+        )
         try:
             # Use NiceGUI's background task API
             background_tasks.create(pending_update)
         except (AssertionError, RuntimeError):
+            self._update_scheduled = False
             try:
                 pending_update.close()
             except Exception:
@@ -211,6 +254,7 @@ class PageStateViewModel(BaseViewModel):
             )
             self._update_image_sources_blocking()
         except Exception:
+            self._update_scheduled = False
             try:
                 pending_update.close()
             except Exception:
@@ -282,6 +326,7 @@ class PageStateViewModel(BaseViewModel):
             )
             raise
         finally:
+            self._update_scheduled = False
             self._update_in_progress = False
 
     def _update_image_sources_blocking(self):
@@ -298,38 +343,41 @@ class PageStateViewModel(BaseViewModel):
             "_update_image_sources_blocking: BLOCKING image update called - "
             "this may cause connection loss in production!"
         )
-        current_page = self._get_current_page_or_clear()
-        if current_page is None:
-            return
+        try:
+            current_page = self._get_current_page_or_clear()
+            if current_page is None:
+                return
 
-        if self._is_navigation_in_progress_and_unloaded():
-            logger.debug(
-                "_update_image_sources_blocking: navigation in progress; skipping update"
-            )
-            return
-
-        image_mappings = self._image_mappings()
-        needs_refresh = any(
-            getattr(current_page, attr_name, None) is None
-            for _, attr_name in image_mappings
-        )
-        if needs_refresh and hasattr(current_page, "refresh_page_images"):
-            try:
-                current_page.refresh_page_images()
-            except Exception as e:
-                logger.warning(
-                    "_update_image_sources_blocking: failed to refresh page images: %s",
-                    e,
+            if self._is_navigation_in_progress_and_unloaded():
+                logger.debug(
+                    "_update_image_sources_blocking: navigation in progress; skipping update"
                 )
+                return
 
-        encoded_results = []
-        for prop_name, attr_name in image_mappings:
-            np_img = getattr(current_page, attr_name, None)
-            encoded = self._encode_image(np_img)
-            encoded_results.append((prop_name, encoded))
+            image_mappings = self._image_mappings()
+            needs_refresh = any(
+                getattr(current_page, attr_name, None) is None
+                for _, attr_name in image_mappings
+            )
+            if needs_refresh and hasattr(current_page, "refresh_page_images"):
+                try:
+                    current_page.refresh_page_images()
+                except Exception as e:
+                    logger.warning(
+                        "_update_image_sources_blocking: failed to refresh page images: %s",
+                        e,
+                    )
 
-        self._apply_encoded_results(encoded_results, current_page)
-        logger.debug("_update_image_sources_blocking: completed")
+            encoded_results = []
+            for prop_name, attr_name in image_mappings:
+                np_img = getattr(current_page, attr_name, None)
+                encoded = self._encode_image(np_img)
+                encoded_results.append((prop_name, encoded))
+
+            self._apply_encoded_results(encoded_results, current_page)
+            logger.debug("_update_image_sources_blocking: completed")
+        finally:
+            self._update_scheduled = False
 
     def _update_image_sources(self):
         """Maintain backward compatibility for direct calls."""
@@ -467,6 +515,9 @@ class PageStateViewModel(BaseViewModel):
     def set_image_update_callback(self, callback: callable):
         """Register a callback for direct image updates (bypasses data binding)."""
         self._image_update_callback = callback
+        self._last_image_callback_signature = None
+        self._image_update_emit_count = 0
+        self._image_update_emit_skip_count = 0
         logger.debug("Image update callback registered")
 
     def _apply_encoded_results(self, results, current_page):
@@ -490,6 +541,19 @@ class PageStateViewModel(BaseViewModel):
 
         # Use callback for UI update instead of triggering data binding
         if self._image_update_callback:
+            callback_signature = self._build_callback_signature(results)
+            if callback_signature == self._last_image_callback_signature:
+                self._image_update_emit_skip_count += 1
+                logger.debug(
+                    "[_apply_encoded_results] Skipping callback; image payload unchanged"
+                )
+                logger.info(
+                    "[_apply_encoded_results] Callback skipped (unchanged payload, emitted=%d, emit_skips=%d)",
+                    self._image_update_emit_count,
+                    self._image_update_emit_skip_count,
+                )
+                return
+
             logger.info(
                 "[_apply_encoded_results] Calling image update callback with %d images",
                 len(results),
@@ -498,7 +562,13 @@ class PageStateViewModel(BaseViewModel):
                 # Pass all images at once to avoid multiple websocket updates
                 image_dict = {prop_name: value for prop_name, value in results}
                 self._image_update_callback(image_dict)
-                logger.info("[_apply_encoded_results] Callback completed successfully")
+                self._image_update_emit_count += 1
+                self._last_image_callback_signature = callback_signature
+                logger.info(
+                    "[_apply_encoded_results] Callback completed successfully (emitted=%d, emit_skips=%d)",
+                    self._image_update_emit_count,
+                    self._image_update_emit_skip_count,
+                )
             except Exception as e:
                 logger.error(
                     "[_apply_encoded_results] ERROR in callback: %s",
@@ -527,6 +597,10 @@ class PageStateViewModel(BaseViewModel):
         logger.info(
             "[_apply_encoded_results] Exit - All %d updates applied", len(results)
         )
+
+    def _build_callback_signature(self, results: list[tuple[str, str]]) -> tuple:
+        """Build stable signature for callback payload deduplication."""
+        return tuple(results)
 
     def _compute_image_hash(self, np_img) -> str:
         """Compute a hash of the image for caching purposes."""

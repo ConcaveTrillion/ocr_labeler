@@ -527,6 +527,8 @@ class PageOperations:
 
             # Create save directory path
             save_dir = Path(save_directory)
+            if not save_dir.is_absolute():
+                save_dir = project_root / save_dir
 
             # Create file names (matching save_page format)
             file_prefix = f"{project_id}_{page_number:03d}"
@@ -564,7 +566,10 @@ class PageOperations:
             # Return a safe default with the computed paths
             file_prefix = f"{project_id or project_root.name}_{page_number:03d}"
             json_filename = f"{file_prefix}.json"
-            json_path = Path(save_directory) / json_filename
+            save_dir = Path(save_directory)
+            if not save_dir.is_absolute():
+                save_dir = project_root / save_dir
+            json_path = save_dir / json_filename
 
             return PageLoadInfo(
                 can_load=False,

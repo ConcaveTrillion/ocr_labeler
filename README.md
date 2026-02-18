@@ -129,6 +129,13 @@ uv run ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
 uv run ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
 ```
 
+Enable isolated page timing logs in the CLI:
+```bash
+uv run ocr-labeler-ui sample_project --page-timing
+```
+This prints only page timing events (`ocr_labeler.page_timing`) such as
+`page_load_timing`, `page_load_timing_step`, and `page_navigation_timing`.
+
 Then open: http://127.0.0.1:8080/ (or your chosen host/port)
 
 ### 6. Using the Interface

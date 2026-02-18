@@ -23,8 +23,9 @@ Last validated: 2026-02-15.
 
 - `ocr_labeler/views/main_view.py`
 - `ocr_labeler/views/projects/project_view.py`
-- `ocr_labeler/views/projects/project_controls.py`
-- `ocr_labeler/views/projects/pages/page_controls.py`
+- `ocr_labeler/views/projects/project_navigation_controls.py`
+- `ocr_labeler/views/projects/pages/page_view.py`
+- `ocr_labeler/views/projects/pages/page_actions.py`
 - `ocr_labeler/views/projects/pages/content.py`
 - `ocr_labeler/views/projects/pages/image_tabs.py`
 - `ocr_labeler/views/projects/pages/text_tabs.py`

@@ -26,8 +26,8 @@ Last validated: 2026-02-15.
 	- `ocr_labeler/views/main_view.py`
 	- `ocr_labeler/views/header/header.py`
 	- `ocr_labeler/views/projects/project_view.py`
-	- `ocr_labeler/views/projects/project_controls.py`
-	- `ocr_labeler/views/projects/pages/{content,image_tabs,page_controls,text_tabs,word_match}.py`
+	- `ocr_labeler/views/projects/project_navigation_controls.py`
+	- `ocr_labeler/views/projects/pages/{page_view,page_actions,content,image_tabs,text_tabs,word_match}.py`
 	- `ocr_labeler/views/shared/{base_view,container_view}.py`
 - Operations and services:
 	- `ocr_labeler/operations/ocr/{navigation_operations,page_operations,text_operations,line_operations,ocr_service}.py`

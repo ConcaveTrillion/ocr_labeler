@@ -5,7 +5,7 @@ import logging
 from nicegui import ui
 
 from ....viewmodels.project.page_state_view_model import PageStateViewModel
-from ...callbacks import NavigationCallbacks
+from ...callbacks import PageActionCallbacks
 from .image_tabs import ImageTabs
 from .text_tabs import TextTabs
 
@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class ContentArea:
-    """Image & text tabs content area (page controls moved to separate component)."""
+    """Image & text tabs content area (actions separated into page actions)."""
 
     def __init__(
-        self, page_state_viewmodel: PageStateViewModel, callbacks: NavigationCallbacks
+        self, page_state_viewmodel: PageStateViewModel, callbacks: PageActionCallbacks
     ):
         logger.debug("Initializing ContentArea")
         self.page_state_viewmodel = page_state_viewmodel
@@ -26,8 +26,8 @@ class ContentArea:
         logger.debug("Creating TextTabs component")
         self.text_tabs = TextTabs(
             page_state=self.page_state_viewmodel._page_state,
-            on_save_page=None,  # Moved to PageControls
-            on_load_page=None,  # Moved to PageControls
+            on_save_page=None,  # Moved to PageActions
+            on_load_page=None,  # Moved to PageActions
         )
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
@@ -49,7 +49,7 @@ class ContentArea:
             # Start with a 50/50 split between image and text tabs as requested
             with (
                 ui.splitter(value=50).classes(
-                    "w-full h-[calc(100vh-220px)]"  # Adjusted height since page controls moved out
+                    "w-full h-[calc(100vh-220px)]"  # Adjusted height since controls moved out
                 ) as main_split
             ):
                 self.splitter = main_split

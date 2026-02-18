@@ -46,8 +46,9 @@ class TestMainView:
         assert self.main_view_model.show_placeholder is True
 
     @patch("ocr_labeler.views.main_view.ui")
-    def test_project_view_has_load_page(self, mock_ui):
-        """Test that ProjectView has load_page functionality."""
+    def test_project_view_delegates_load_page_to_page_view(self, mock_ui):
+        """ProjectView should delegate load-page workflow ownership to PageView."""
+        from ocr_labeler.views.projects.pages.page_view import PageView
         from ocr_labeler.views.projects.project_view import ProjectView
 
         # Mock the required UI components
@@ -60,8 +61,9 @@ class TestMainView:
         # Create a project view with the viewmodel
         project_view = ProjectView(self.main_view_model.project_state_viewmodel)
 
-        # The project view should have load_page functionality
-        assert hasattr(project_view, "_load_page_async")
+        # ProjectView should no longer own page action workflows directly.
+        assert not hasattr(project_view, "_load_page_async")
+        assert hasattr(PageView, "_load_page_async")
 
 
 @pytest.mark.nicegui_main_file(None)

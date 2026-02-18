@@ -64,4 +64,3 @@ await run.io_bound(path.read_text, encoding="utf-8")
 - Current runtime scheduling/offload patterns in app code use `background_tasks.create(...)` and `run.io_bound(...)`.
 - Current intentional `asyncio` usages are:
 	- `asyncio.sleep(...)` in `ocr_labeler/views/projects/project_view.py` for cooperative UI yielding.
-	- `asyncio.iscoroutinefunction(...)` in `ocr_labeler/views/projects/pages/page_controls.py` for callback type inspection.

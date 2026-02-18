@@ -7,8 +7,8 @@ from typing import Awaitable, Callable, Optional
 
 
 @dataclass
-class NavigationCallbacks:
-    """Structured callbacks for complex operations that require UI coordination."""
+class PageActionCallbacks:
+    """Structured async callbacks for page-level action workflows."""
 
     save_page: Optional[Callable[[], Awaitable[None]]] = None
     load_page: Optional[Callable[[], Awaitable[None]]] = None

@@ -74,6 +74,12 @@ class TestTextOperations:
                 "filesystem",
                 "LABELED",
             ),
+            (
+                False,
+                MagicMock(spec=Page, page_source="cached_ocr"),
+                "cached_ocr",
+                "CACHED OCR",
+            ),
             (False, MagicMock(spec=Page, page_source="ocr"), "ocr", "RAW OCR"),
             (False, MagicMock(spec=Page), None, "RAW OCR"),  # Default case
         ],

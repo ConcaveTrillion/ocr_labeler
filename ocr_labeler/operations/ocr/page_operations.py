@@ -151,6 +151,7 @@ class PageOperations:
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
         source_lib: str = "doctr-pgdp-labeled",
+        original_page: Optional[Page] = None,
     ) -> bool:
         """Save a single page object to a file with both image copy and JSON metadata.
 
@@ -164,6 +165,7 @@ class PageOperations:
             save_directory: Directory to save files (default: "local-data/labeled-ocr")
             project_id: Project identifier. If None, derives from project_root name.
             source_lib: Source library identifier (default: "doctr-pgdp-labeled").
+            original_page: Original Page object before modifications (optional).
 
         Returns:
             bool: True if save was successful, False otherwise.
@@ -190,7 +192,7 @@ class PageOperations:
                 project_id = project_root.name
 
             # Create save directory
-            save_dir = Path(save_directory)
+            save_dir = project_root / save_directory
             save_dir.mkdir(parents=True, exist_ok=True)
 
             # Get page number (1-based for filenames)
@@ -230,6 +232,7 @@ class PageOperations:
                 page_number=page_number,
                 relative_path=relative_path,
                 source_lib=source_lib,
+                original_page=original_page,
             )
             json_data = envelope.to_dict()
 
@@ -253,7 +256,7 @@ class PageOperations:
         project_root: Path,
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
-    ) -> Optional[Page]:
+    ) -> Optional[tuple[Page, Optional[dict[str, Any]]]]:
         """Load a previously saved page from disk with metadata and image.
 
         Looks for saved files in the save directory:
@@ -267,18 +270,19 @@ class PageOperations:
             project_id: Project identifier. If None, derives from project_root name.
 
         Returns:
-            Page: Loaded Page object if found and valid, None otherwise.
+            tuple: (Page, original_page_dict) if found and valid, None otherwise.
+                   original_page_dict is the dict of the original OCR page if saved, else None.
 
         Example:
             # Load page with default settings
             operations = PageOperations()
-            page = operations.load_page(
+            page, original_page_dict = operations.load_page(
                 page_number=1,
                 project_root=Path("/path/to/project")
             )
 
             # Load with custom directory and project ID
-            page = operations.load_page(
+            page, original_page_dict = operations.load_page(
                 page_number=5,
                 project_root=Path("/path/to/project"),
                 save_directory="my-output/labeled-data",
@@ -289,7 +293,7 @@ class PageOperations:
             if project_id is None:
                 project_id = project_root.name
 
-            save_dir = Path(save_directory)
+            save_dir = project_root / save_directory
             if not save_dir.exists():
                 logger.info(f"Save directory does not exist: {save_dir}")
                 return None
@@ -368,7 +372,13 @@ class PageOperations:
 
             self._attach_loaded_provenance(page=page, json_data=json_data)
 
-            return page
+            # Extract original page if saved
+            original_page_dict = None
+            if is_user_page_envelope(json_data):
+                envelope = UserPageEnvelope.from_dict(json_data)
+                original_page_dict = envelope.payload.original_page
+
+            return page, original_page_dict
 
         except Exception as e:
             logger.exception(f"Failed to load page {page_number}: {e}")
@@ -724,6 +734,7 @@ class PageOperations:
         page_number: int,
         relative_path: str,
         source_lib: str,
+        original_page: Optional[Page] = None,
     ) -> UserPageEnvelope:
         source_fingerprint = self._build_image_fingerprint(
             getattr(page, "image_path", None)
@@ -749,7 +760,10 @@ class PageOperations:
                 image_path=relative_path,
                 image_fingerprint=source_fingerprint,
             ),
-            payload=UserPagePayload(page=page.to_dict()),
+            payload=UserPagePayload(
+                page=page.to_dict(),
+                original_page=original_page.to_dict() if original_page else None,
+            ),
         )
 
     def _resolve_ocr_provenance_for_save(

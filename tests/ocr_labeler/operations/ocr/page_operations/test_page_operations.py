@@ -248,14 +248,15 @@ class TestPageOperations:
         )
 
         # Now load it back
-        loaded_page = operations.load_page(
+        loaded_result = operations.load_page(
             page_number=1,  # 1-based
             project_root=project_root,
             save_directory=str(temp_dir / "output"),
             project_id="test_project",
         )
 
-        assert loaded_page is not None
+        assert loaded_result is not None
+        loaded_page, _ = loaded_result
         assert loaded_page.page_index == 0  # Should be restored from dict
 
     def test_load_page_not_found(self, operations, temp_dir):
@@ -263,13 +264,13 @@ class TestPageOperations:
         project_root = temp_dir / "project"
         project_root.mkdir()
 
-        loaded_page = operations.load_page(
+        loaded_result = operations.load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(temp_dir / "output"),
         )
 
-        assert loaded_page is None
+        assert loaded_result is None
 
     def test_load_page_invalid_json(self, operations, temp_dir):
         """Test loading page with invalid JSON."""
@@ -284,13 +285,13 @@ class TestPageOperations:
         with open(json_file, "w") as f:
             f.write("invalid json content")
 
-        loaded_page = operations.load_page(
+        loaded_result = operations.load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(temp_dir / "output"),
         )
 
-        assert loaded_page is None
+        assert loaded_result is None
 
     def test_load_page_legacy_json_format(self, operations, temp_dir):
         """Test that legacy flat JSON format remains loadable."""
@@ -318,14 +319,15 @@ class TestPageOperations:
 
         (output_dir / "test_project_001.png").touch()
 
-        loaded_page = operations.load_page(
+        loaded_result = operations.load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(output_dir),
             project_id="test_project",
         )
 
-        assert loaded_page is not None
+        assert loaded_result is not None
+        loaded_page, _ = loaded_result
         assert loaded_page.page_index == 0
 
     def test_save_page_preserves_loaded_empty_models_without_rerun(
@@ -386,13 +388,14 @@ class TestPageOperations:
         (project_root / "source.png").touch()
         (output_dir / "test_project_001.png").touch()
 
-        loaded_page = operations.load_page(
+        loaded_result = operations.load_page(
             page_number=1,
             project_root=project_root,
             save_directory=str(output_dir),
             project_id="test_project",
         )
-        assert loaded_page is not None
+        assert loaded_result is not None
+        loaded_page, _ = loaded_result
 
         saved = operations.save_page(
             page=loaded_page,

@@ -590,16 +590,21 @@ class PageStateViewModel(BaseViewModel):
             logger.debug("No image to encode")
             return ""
 
+        shape = getattr(np_img, "shape", None)
+        if not isinstance(shape, tuple):
+            logger.debug("Unsupported image object for encoding; skipping")
+            return ""
+
         try:
             import base64
 
             import cv2
 
             # Ensure image is in the right format
-            if len(np_img.shape) == 2:
+            if len(shape) == 2:
                 # Grayscale image, convert to RGB
                 np_img = cv2.cvtColor(np_img, cv2.COLOR_GRAY2RGB)
-            elif np_img.shape[2] == 4:
+            elif len(shape) > 2 and shape[2] == 4:
                 # RGBA image, convert to RGB
                 np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
 

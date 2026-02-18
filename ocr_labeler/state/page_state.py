@@ -40,6 +40,7 @@ class PageState:
         default_factory=dict
     )  # Track source of each page: 'ocr' or 'filesystem'
     current_page: Optional[Page] = field(default=None, init=False)
+    original_page: Optional[Page] = field(default=None, init=False)
 
     # Cached text values for current page
     _cached_page_index: int = field(default=-1, init=False)
@@ -131,6 +132,9 @@ class PageState:
         # Update page_sources dictionary based on the page's source
         if page is not None and hasattr(page, "page_source"):
             self.page_sources[index] = page.page_source
+            # If loaded from OCR and no original stored yet, store a copy
+            if page.page_source == "ocr" and self.original_page is None:
+                self.original_page = Page.from_dict(page.to_dict())
 
         return page
 
@@ -202,6 +206,7 @@ class PageState:
             source_lib=self._project.source_lib
             if self._project
             else "doctr-pgdp-labeled",
+            original_page=self.original_page,
         )
 
         if success:
@@ -233,16 +238,18 @@ class PageState:
             logger.error("PageState.load_page: project context not set")
             return False
 
-        loaded_page = self.page_ops.load_page(
+        loaded_result = self.page_ops.load_page(
             page_number=page_index + 1,  # Convert to 1-based
             project_root=self._project_root,
             save_directory=save_directory,
             project_id=project_id,
         )
 
-        if loaded_page is None:
+        if loaded_result is None:
             logger.warning("No saved page found for index %s", page_index)
             return False
+
+        loaded_page, original_page_dict = loaded_result
 
         # Inject ground truth text if available
         if hasattr(loaded_page, "name") and self._project.ground_truth_map:
@@ -268,6 +275,9 @@ class PageState:
             self.page_sources[page_index] = (
                 "filesystem"  # Mark as loaded from filesystem
             )
+            # Set original page if available
+            if original_page_dict:
+                self.original_page = Page.from_dict(original_page_dict)
             logger.info(f"Successfully loaded page at index {page_index}")
             # Invalidate cache since page content changed
             self._invalidate_text_cache()
@@ -311,6 +321,8 @@ class PageState:
             )
             if page_source == "filesystem":
                 return "LABELED"
+            elif page_source == "cached_ocr":
+                return "CACHED OCR"
             else:
                 return "RAW OCR"
 

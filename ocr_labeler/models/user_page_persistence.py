@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 try:
     from pd_book_tools.ocr.provenance import OCRModelProvenance, OCRProvenance
@@ -267,16 +267,23 @@ class UserPageSource:
 @dataclass(frozen=True)
 class UserPagePayload:
     page: dict[str, Any]
+    original_page: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"page": self.page}
+        result = {"page": self.page}
+        if self.original_page is not None:
+            result["original_page"] = self.original_page
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "UserPagePayload":
         page_data = data.get("page")
         if not isinstance(page_data, dict):
             page_data = {}
-        return cls(page=page_data)
+        original_page_data = data.get("original_page")
+        if original_page_data is not None and not isinstance(original_page_data, dict):
+            original_page_data = None
+        return cls(page=page_data, original_page=original_page_data)
 
 
 @dataclass(frozen=True)

@@ -69,6 +69,17 @@ def mock_ocr_processing(monkeypatch):
         mock_page.refine_bounding_boxes = Mock()
         mock_page.refresh_page_images = Mock()
 
+        # Mock to_dict method to return proper structure
+        mock_page.to_dict = Mock(
+            return_value={
+                "type": "page",
+                "items": [],  # Empty blocks for simplicity
+                "width": 100,
+                "height": 100,
+                "page_index": 0,
+            }
+        )
+
         mock_document.pages = [mock_page]  # Mock page
         mock_ocr.return_value = mock_document
 

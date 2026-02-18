@@ -140,6 +140,8 @@ class ProjectState:
         images = await run.io_bound(
             operations.scan_project_directory, directory
         )  # This will raise FileNotFoundError if needed
+        if images is None:
+            images = []
 
         self.is_project_loading = True
         self.notify()
@@ -318,16 +320,20 @@ class ProjectState:
                 self.loading_status = "Checking for saved page..."
                 self.queue_notification(self.loading_status, "info")
                 # Don't notify here - it triggers recursion via viewmodel updates
+                loaded_page = None
+
+                # First try user-saved pages
                 try:
-                    loaded_page = self.page_ops.load_page(
+                    loaded_result = self.page_ops.load_page(
                         page_number=index + 1,  # Convert to 1-based
                         project_root=self.project_root,
                         save_directory="local-data/labeled-ocr",
                         project_id=None,  # Will be derived from project_root.name
                     )
-                    if loaded_page is not None:
+                    if loaded_result is not None:
+                        loaded_page, _ = loaded_result
                         logger.info(
-                            "ensure_page: loaded from saved for index=%s", index
+                            "ensure_page: loaded from user-saved for index=%s", index
                         )
                         self.loading_status = "Loading page from disk..."
                         self.queue_notification(self.loading_status, "info")
@@ -350,10 +356,50 @@ class ProjectState:
                         return self.project.pages[index]
                 except Exception as e:
                     logger.debug(
-                        "ensure_page: failed to load saved page for index=%s: %s",
+                        "ensure_page: failed to load user-saved page for index=%s: %s",
                         index,
                         e,
                     )
+
+                # If no user-saved page, try cache
+                if loaded_page is None:
+                    try:
+                        loaded_result = self.page_ops.load_page(
+                            page_number=index + 1,  # Convert to 1-based
+                            project_root=self.project_root,
+                            save_directory="local-data/labeled-ocr/cache",
+                            project_id=None,  # Will be derived from project_root.name
+                        )
+                        if loaded_result is not None:
+                            loaded_page, _ = loaded_result
+                            logger.info(
+                                "ensure_page: loaded from cache for index=%s", index
+                            )
+                            self.loading_status = "Loading page from cache..."
+                            self.queue_notification(self.loading_status, "info")
+                            # Don't notify here - it triggers recursion via viewmodel updates
+                            # Attach convenience attrs expected elsewhere
+                            img_path = Path(self.project.image_paths[index])
+                            if not hasattr(loaded_page, "image_path"):
+                                loaded_page.image_path = str(img_path)  # type: ignore[attr-defined]
+                            if not hasattr(loaded_page, "name"):
+                                loaded_page.name = img_path.name  # type: ignore[attr-defined]
+                            if not hasattr(loaded_page, "index"):
+                                loaded_page.index = index  # type: ignore[attr-defined]
+                            if not hasattr(loaded_page, "page_source"):
+                                loaded_page.page_source = "cached_ocr"  # type: ignore[attr-defined]
+                            else:
+                                loaded_page.page_source = "cached_ocr"  # type: ignore[attr-defined]
+                            self.project.pages[index] = loaded_page
+                            # Notify after page is cached so UI can update (safe here, not in property getter)
+                            self.notify()
+                            return self.project.pages[index]
+                    except Exception as e:
+                        logger.debug(
+                            "ensure_page: failed to load cached page for index=%s: %s",
+                            index,
+                            e,
+                        )
 
             # Fall back to OCR processing
             if self.page_ops.page_parser:
@@ -378,17 +424,61 @@ class ProjectState:
                         getattr(page_obj, "name", img_path.name),
                     )
                     # Attach convenience attrs expected elsewhere
-                    if not hasattr(page_obj, "image_path"):
+                    page_image_path = getattr(page_obj, "image_path", None)
+                    if not isinstance(page_image_path, (str, Path)):
                         page_obj.image_path = str(img_path)  # type: ignore[attr-defined]
-                    if not hasattr(page_obj, "name"):
+
+                    page_name = getattr(page_obj, "name", None)
+                    if not isinstance(page_name, str) or not page_name:
                         page_obj.name = img_path.name  # type: ignore[attr-defined]
-                    if not hasattr(page_obj, "index"):
+
+                    page_index = getattr(page_obj, "index", None)
+                    if not isinstance(page_index, int):
                         page_obj.index = index  # type: ignore[attr-defined]
+
                     if not hasattr(page_obj, "page_source"):
                         page_obj.page_source = "ocr"  # type: ignore[attr-defined]
                     else:
                         page_obj.page_source = "ocr"  # type: ignore[attr-defined]
                     self.project.pages[index] = page_obj
+
+                    # Auto-save OCR result to cache for performance
+                    page_image_path = getattr(page_obj, "image_path", None)
+                    if self.project_root is not None and isinstance(
+                        page_image_path, (str, Path)
+                    ):
+                        try:
+                            cache_saved = self.page_ops.save_page(
+                                page=page_obj,
+                                project_root=self.project_root,
+                                save_directory="local-data/labeled-ocr/cache",
+                                project_id=None,  # Will be derived from project_root.name
+                                source_lib="doctr-pgdp-cached",
+                            )
+                            if cache_saved:
+                                logger.debug(
+                                    "ensure_page: auto-saved OCR result to cache for index=%s",
+                                    index,
+                                )
+                                # Update page source to indicate it's cached
+                                page_obj.page_source = "cached_ocr"  # type: ignore[attr-defined]
+                            else:
+                                logger.debug(
+                                    "ensure_page: failed to auto-save OCR result to cache for index=%s",
+                                    index,
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                "ensure_page: error auto-saving to cache for index=%s: %s",
+                                index,
+                                e,
+                            )
+                    else:
+                        logger.debug(
+                            "ensure_page: skipping auto-cache save for index=%s due to invalid image_path",
+                            index,
+                        )
+
                     # Notify after page is cached so UI can update
                     self.notify()
                 except Exception:  # pragma: no cover - defensive
@@ -760,7 +850,10 @@ class ProjectState:
         if page is None:
             return ""
 
-        if TextOperations.get_page_source_text(page, False) != "LABELED":
+        if TextOperations.get_page_source_text(page, False) not in (
+            "LABELED",
+            "CACHED OCR",
+        ):
             return ""
 
         return self.page_ops.get_page_provenance_summary(page)

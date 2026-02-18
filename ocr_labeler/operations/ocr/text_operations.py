@@ -69,6 +69,8 @@ class TextOperations:
             page_source = getattr(page, "page_source", "ocr")
             if page_source == "filesystem":
                 return "LABELED"
+            elif page_source == "cached_ocr":
+                return "CACHED OCR"
             else:
                 return "RAW OCR"
 

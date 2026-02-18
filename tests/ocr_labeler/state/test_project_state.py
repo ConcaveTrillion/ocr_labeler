@@ -255,17 +255,29 @@ def test_save_current_page_updates_source_label(tmp_path):
     mock_page.image_path = img_path
     # We use a real attribute here since it's checked by TextOperations.get_page_source_text
     mock_page.page_source = "ocr"
-    mock_page.to_dict.return_value = {"type": "page", "items": []}
+    mock_page.to_dict.return_value = {
+        "type": "page",
+        "items": [],
+        "width": 100,
+        "height": 100,
+        "page_index": 0,
+    }
 
     # Mock PageOperations globally at its source
+    def mock_save_page(*args, **kwargs):
+        save_directory = kwargs.get("save_directory", args[3] if len(args) > 3 else "")
+        if "cache" in str(save_directory):
+            return False  # Prevent auto-saving to cache
+        return True  # Allow user saves
+
     with (
         patch(
             "ocr_labeler.operations.ocr.page_operations.PageOperations.save_page",
-            return_value=True,
+            side_effect=mock_save_page,
         ),
         patch(
             "ocr_labeler.operations.ocr.page_operations.PageOperations.load_page",
-            return_value=None,
+            side_effect=lambda *args, **kwargs: None,
         ),
         patch.object(state.page_ops, "page_parser", return_value=mock_page),
     ):
@@ -312,8 +324,37 @@ def test_current_page_source_tooltip_for_labeled_page(tmp_path):
     mock_summary.assert_called_once_with(page)
 
 
+def test_current_page_source_tooltip_for_cached_ocr_page(tmp_path):
+    """Cached OCR pages should expose provenance summary for UI tooltip."""
+    from ocr_labeler.models.project import Project
+
+    state = ProjectState()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    state.project_root = project_root
+
+    img_path = project_root / "page_001.png"
+    img_path.touch()
+
+    page = MagicMock()
+    page.page_source = "cached_ocr"
+    state.project = Project(pages=[page], image_paths=[img_path])
+    state.current_page_index = 0
+
+    with patch.object(
+        state.page_ops,
+        "get_page_provenance_summary",
+        return_value="Saved: 2026-02-15T12:00:00Z\nOCR: doctr (0.10.0)",
+    ) as mock_summary:
+        tooltip = state.current_page_source_tooltip
+
+    assert "Saved: 2026-02-15T12:00:00Z" in tooltip
+    assert "OCR: doctr (0.10.0)" in tooltip
+    mock_summary.assert_called_once_with(page)
+
+
 def test_current_page_source_tooltip_empty_for_raw_ocr_page(tmp_path):
-    """Non-labeled pages should not expose source provenance tooltip."""
+    """RAW OCR pages should not expose source provenance tooltip."""
     from ocr_labeler.models.project import Project
 
     state = ProjectState()

@@ -12,7 +12,7 @@ from typing import Callable, List, Optional
 from nicegui import background_tasks, run
 from pd_book_tools.ocr.page import Page
 
-from ..models.project import Project
+from ..models.project_model import Project
 from ..operations.ocr.navigation_operations import NavigationOperations
 from ..operations.ocr.page_operations import PageOperations
 from ..operations.ocr.text_operations import TextOperations

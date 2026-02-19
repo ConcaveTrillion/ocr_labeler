@@ -13,22 +13,22 @@ class TestPageView:
 
     def test_from_project_returns_none_without_project_state(self):
         """Factory returns None when project state is unavailable."""
-        project_viewmodel = SimpleNamespace(_project_state=None)
+        project_view_model = SimpleNamespace(_project_state=None)
 
-        page_view = PageView.from_project(project_viewmodel)
+        page_view = PageView.from_project(project_view_model)
 
         assert page_view is None
 
     def test_from_project_builds_page_view_with_callbacks(self):
         """Factory wires page callbacks to PageView action handlers."""
         project_state = Mock()
-        project_viewmodel = SimpleNamespace(_project_state=project_state)
+        project_view_model = SimpleNamespace(_project_state=project_state)
 
-        page_view = PageView.from_project(project_viewmodel)
+        page_view = PageView.from_project(project_view_model)
 
         assert page_view is not None
-        assert page_view.project_viewmodel is project_viewmodel
-        assert page_view.page_state_viewmodel is not None
+        assert page_view.project_view_model is project_view_model
+        assert page_view.page_state_view_model is not None
         assert page_view.page_action_callbacks.save_page == page_view._save_page_async
         assert page_view.page_action_callbacks.load_page == page_view._load_page_async
         assert (

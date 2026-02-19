@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from ...models.project import Project
+    from ...models.project_model import Project
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class ProjectOperations:
         placeholders = [None] * len(images)
 
         # Import Project here to avoid circular imports
-        from ...models.project import Project
+        from ...models.project_model import Project
 
         # Create and return Project object
         project = Project(
@@ -272,7 +272,7 @@ class ProjectOperations:
 
             # Validate metadata structure using Project model
             try:
-                from ...models.project import Project
+                from ...models.project_model import Project
 
                 # This will raise an exception if metadata is invalid
                 Project.from_dict(metadata)

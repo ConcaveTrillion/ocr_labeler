@@ -21,30 +21,30 @@ class PageView:  # pragma: no cover - UI wrapper file
     @classmethod
     def from_project(
         cls,
-        project_viewmodel: ProjectStateViewModel,
+        project_view_model: ProjectStateViewModel,
         on_request_refresh=None,
     ) -> PageView | None:
         """Create a PageView from project state."""
-        project_state = getattr(project_viewmodel, "_project_state", None)
+        project_state = getattr(project_view_model, "_project_state", None)
         if project_state is None:
             logger.error("Cannot create PageView - no project state available")
             return None
 
-        page_state_viewmodel = PageStateViewModel(project_state)
+        page_state_view_model = PageStateViewModel(project_state)
         return cls(
-            project_viewmodel,
-            page_state_viewmodel,
+            project_view_model,
+            page_state_view_model,
             on_request_refresh=on_request_refresh,
         )
 
     def __init__(
         self,
-        project_viewmodel: ProjectStateViewModel,
-        page_state_viewmodel: PageStateViewModel,
+        project_view_model: ProjectStateViewModel,
+        page_state_view_model: PageStateViewModel,
         on_request_refresh=None,
     ):
-        self.project_viewmodel = project_viewmodel
-        self.page_state_viewmodel = page_state_viewmodel
+        self.project_view_model = project_view_model
+        self.page_state_view_model = page_state_view_model
         self._on_request_refresh = on_request_refresh
 
         self.page_action_callbacks = PageActionCallbacks(
@@ -61,7 +61,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     def build(self):
         self.page_actions = PageActions(
-            self.project_viewmodel,
+            self.project_view_model,
             on_save_page=self.page_action_callbacks.save_page
             if self.page_action_callbacks
             else None,
@@ -81,7 +81,7 @@ class PageView:  # pragma: no cover - UI wrapper file
         self.page_actions.build()
 
         self.content = ContentArea(
-            self.page_state_viewmodel, self.page_action_callbacks
+            self.page_state_view_model, self.page_action_callbacks
         )
         self.root = self.content.build()
         return self.root
@@ -94,9 +94,9 @@ class PageView:  # pragma: no cover - UI wrapper file
         """Refresh page-layer content only."""
         # Always compute current index & image name immediately for navigation feedback.
         # Only fetch full page object (with OCR) when not loading to avoid blocking.
-        current_index = self.project_viewmodel.current_page_index
+        current_index = self.project_view_model.current_page_index
         image_name = ""
-        project_state = getattr(self.project_viewmodel, "_project_state", None)
+        project_state = getattr(self.project_view_model, "_project_state", None)
         project = getattr(project_state, "project", None)
         if project is not None and hasattr(project, "image_paths"):
             if 0 <= current_index < len(project.image_paths):
@@ -108,7 +108,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 page = project.pages[current_index]
             self._sync_text_tabs(page)
 
-        total = self.project_viewmodel.page_total
+        total = self.project_view_model.page_total
         logger.debug(
             "Current page state - index: %d, image_name: %s, total_pages: %d, page_loaded: %s",
             current_index,
@@ -197,7 +197,7 @@ class PageView:  # pragma: no cover - UI wrapper file
     def _notify(self, message: str, type_: str = "info"):
         """Route notifications through per-session queue with UI fallback."""
         try:
-            app_state_model = getattr(self.project_viewmodel, "_app_state_model", None)
+            app_state_model = getattr(self.project_view_model, "_app_state_model", None)
             app_state = getattr(app_state_model, "_app_state", None)
             if app_state is not None:
                 app_state.queue_notification(message, type_)
@@ -218,12 +218,12 @@ class PageView:  # pragma: no cover - UI wrapper file
             self._show_busy_spinner = True
 
         self._notify(message, "info")
-        self.project_viewmodel.set_action_busy(True, message)
+        self.project_view_model.set_action_busy(True, message)
         await asyncio.sleep(0.1)
         try:
             yield
         finally:
-            self.project_viewmodel.set_action_busy(False)
+            self.project_view_model.set_action_busy(False)
             if show_spinner:
                 self._show_busy_spinner = old_spinner
             try:
@@ -234,7 +234,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     async def _save_page_async(self):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
-        if self.project_viewmodel.is_project_loading:
+        if self.project_view_model.is_project_loading:
             logger.debug("Save blocked - currently loading")
             return
 
@@ -242,7 +242,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Starting async save for current page")
             await asyncio.sleep(0.1)
             try:
-                success = self.project_viewmodel.command_save_page()
+                success = self.project_view_model.command_save_page()
                 if success:
                     logger.info("Page saved successfully")
                     self._notify("Page saved successfully", "positive")
@@ -255,7 +255,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     async def _load_page_async(self):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
-        if self.project_viewmodel.is_project_loading:
+        if self.project_view_model.is_project_loading:
             logger.debug("Load blocked - currently loading")
             return
 
@@ -263,7 +263,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Starting async load for current page")
             await asyncio.sleep(0.1)
             try:
-                success = self.project_viewmodel.command_load_page()
+                success = self.project_view_model.command_load_page()
                 if success:
                     logger.info("Page loaded successfully")
                     self._notify("Page loaded successfully", "positive")
@@ -276,7 +276,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     async def _refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Refine all bounding boxes in the current page asynchronously."""
-        if self.project_viewmodel.is_project_loading:
+        if self.project_view_model.is_project_loading:
             logger.debug("Refine bboxes blocked - currently loading")
             return
 
@@ -286,7 +286,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Starting async bbox refinement for current page")
             await asyncio.sleep(0.1)
             try:
-                success = self.project_viewmodel.command_refine_bboxes()
+                success = self.project_view_model.command_refine_bboxes()
                 if success:
                     logger.info("Bboxes refined successfully")
                     self._notify("Bounding boxes refined successfully", "positive")
@@ -299,7 +299,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     async def _expand_refine_bboxes_async(self):  # pragma: no cover - UI side effects
         """Expand and refine all bounding boxes in the current page asynchronously."""
-        if self.project_viewmodel.is_project_loading:
+        if self.project_view_model.is_project_loading:
             logger.debug("Expand & refine bboxes blocked - currently loading")
             return
 
@@ -309,7 +309,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Starting async bbox expand & refine for current page")
             await asyncio.sleep(0.1)
             try:
-                success = self.project_viewmodel.command_expand_refine_bboxes()
+                success = self.project_view_model.command_expand_refine_bboxes()
                 if success:
                     logger.info("Bboxes expanded and refined successfully")
                     self._notify(
@@ -327,7 +327,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     async def _reload_ocr_async(self):  # pragma: no cover - UI side effects
         """Reload the current page with OCR processing asynchronously."""
-        if self.project_viewmodel.is_project_loading:
+        if self.project_view_model.is_project_loading:
             logger.debug("Reload OCR blocked - currently loading")
             return
 
@@ -337,7 +337,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Starting async OCR reload for current page")
             await asyncio.sleep(0.1)
             try:
-                success = self.project_viewmodel.command_reload_page_with_ocr()
+                success = self.project_view_model.command_reload_page_with_ocr()
                 if success:
                     logger.info("OCR reloaded successfully")
                     self._notify("Page reloaded with OCR", "positive")

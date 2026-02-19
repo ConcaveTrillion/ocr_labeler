@@ -75,14 +75,14 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         self._notification_timer = ui.timer(0.05, self._flush_queued_notifications)
 
         # Set up data bindings
-        if self.viewmodel.app_state_viewmodel:
+        if self.viewmodel.app_state_view_model:
             self._no_project_placeholder.bind_visibility_from(
                 self.viewmodel,
                 "show_placeholder",
             )
 
             self._project_loading_overlay.bind_visibility_from(
-                self.viewmodel.app_state_viewmodel,
+                self.viewmodel.app_state_view_model,
                 "is_project_loading",
                 value=True,
             )
@@ -110,7 +110,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
 
         # If the loaded project's root changed, drop the existing ProjectView so it rebuilds cleanly
         current_project_root = getattr(
-            self.viewmodel.project_state_viewmodel,
+            self.viewmodel.project_state_view_model,
             "project_root",
             None,
         )
@@ -136,7 +136,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             # Create project view if needed
             logger.debug("Creating ProjectView for loaded project")
             with self._content_container:
-                self.project_view = ProjectView(self.viewmodel.project_state_viewmodel)
+                self.project_view = ProjectView(self.viewmodel.project_state_view_model)
                 self.project_view.build()
                 # Bind project view visibility to show_project_view
                 if hasattr(self.project_view, "_root") and self.project_view._root:
@@ -156,8 +156,8 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         if (
             self.project_view
             and self.project_view.is_built
-            and self.viewmodel.app_state_viewmodel
-            and not self.viewmodel.app_state_viewmodel.is_project_loading
+            and self.viewmodel.app_state_view_model
+            and not self.viewmodel.app_state_view_model.is_project_loading
         ):
             logger.debug("Refreshing existing ProjectView")
             self.project_view.refresh()
@@ -170,7 +170,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         Drain a small batch per tick to avoid long backlogs where important
         notifications (for example "Loaded <project>") arrive too late.
         """
-        app_vm = getattr(self.viewmodel, "app_state_viewmodel", None)
+        app_vm = getattr(self.viewmodel, "app_state_view_model", None)
         if app_vm is None:
             return
 

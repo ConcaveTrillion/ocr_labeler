@@ -4,9 +4,9 @@ Architecture documentation is organized into smaller, topic-focused files.
 
 Status: maintained incrementally; validate details against current implementation.
 
-Last validated: 2026-02-15.
+Last validated: 2026-02-18.
 
-## Current Code Map (2026-02 snapshot)
+## Current Code Map (2026-02-18 snapshot)
 
 - App entry and routing:
 	- `ocr_labeler/app.py`
@@ -35,6 +35,12 @@ Last validated: 2026-02-15.
 	- `ocr_labeler/services/*`
 
 Use this map as the first checkpoint when reconciling architecture docs with implementation.
+
+## Naming Conventions
+
+- Use `*_view_model` naming for ViewModel modules, symbols, and attributes.
+- Keep `PageStateViewModel` in the ViewModel layer only: `ocr_labeler/viewmodels/project/page_state_view_model.py`.
+- Do not place ViewModel classes under `ocr_labeler/models/`.
 
 ## Multi-Tab Session Isolation
 

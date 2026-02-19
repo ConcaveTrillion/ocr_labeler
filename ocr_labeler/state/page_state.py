@@ -11,7 +11,7 @@ from pd_book_tools.ocr.page import Page  # type: ignore
 from ..operations.ocr.page_operations import PageOperations
 
 if TYPE_CHECKING:
-    from ..models.project import Project
+    from ..models.project_model import Project
     from .project_state import ProjectState
 
 logger = logging.getLogger(__name__)

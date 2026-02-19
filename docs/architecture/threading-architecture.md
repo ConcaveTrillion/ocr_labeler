@@ -2,7 +2,7 @@
 
 This document captures the current threading/offload model for OCR-related work in the UI.
 
-Status: validated against current code on 2026-02-15.
+Status: validated against current code on 2026-02-18.
 
 ## Principle
 

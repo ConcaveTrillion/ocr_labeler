@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 from pd_book_tools.ocr.page import Page
 
-from ocr_labeler.models.project import Project
+from ocr_labeler.models.project_model import Project
 
 
 class TestProject:

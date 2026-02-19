@@ -427,7 +427,7 @@ def test_save_current_page_updates_source_label(tmp_path):
     """Test that saving the current page updates its source label to LABELED."""
     from pd_book_tools.ocr.page import Page
 
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     # 1. Setup project state with one page
     state = ProjectState()
@@ -491,7 +491,7 @@ def test_save_current_page_updates_source_label(tmp_path):
 
 def test_current_page_source_tooltip_for_labeled_page(tmp_path):
     """Labeled pages should expose provenance summary for UI tooltip."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     state = ProjectState()
     project_root = tmp_path / "project"
@@ -520,7 +520,7 @@ def test_current_page_source_tooltip_for_labeled_page(tmp_path):
 
 def test_current_page_source_tooltip_for_cached_ocr_page(tmp_path):
     """Cached OCR pages should expose provenance summary for UI tooltip."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     state = ProjectState()
     project_root = tmp_path / "project"
@@ -549,7 +549,7 @@ def test_current_page_source_tooltip_for_cached_ocr_page(tmp_path):
 
 def test_current_page_source_tooltip_empty_for_raw_ocr_page(tmp_path):
     """RAW OCR pages should not expose source provenance tooltip."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     state = ProjectState()
     project_root = tmp_path / "project"
@@ -575,7 +575,7 @@ def test_refine_all_bboxes_success(tmp_path):
     """Test refine_all_bboxes with a valid page."""
     from unittest.mock import patch
 
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     # Setup project state with one page
     state = ProjectState()
@@ -616,7 +616,7 @@ def test_refine_all_bboxes_success(tmp_path):
 
 def test_refine_all_bboxes_no_page(tmp_path):
     """Test refine_all_bboxes when no page is available."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     # Setup project state with one page
     state = ProjectState()
@@ -646,7 +646,7 @@ def test_refine_all_bboxes_no_page(tmp_path):
 
 def test_expand_and_refine_all_bboxes_success(tmp_path):
     """Test expand_and_refine_all_bboxes success."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     # Setup project state with one page
     state = ProjectState()
@@ -686,7 +686,7 @@ def test_expand_and_refine_all_bboxes_success(tmp_path):
 
 def test_expand_and_refine_all_bboxes_no_page(tmp_path):
     """Test expand_and_refine_all_bboxes when no page is available."""
-    from ocr_labeler.models.project import Project
+    from ocr_labeler.models.project_model import Project
 
     # Setup project state with one page
     state = ProjectState()

@@ -16,16 +16,16 @@ class ContentArea:
     """Image & text tabs content area (actions separated into page actions)."""
 
     def __init__(
-        self, page_state_viewmodel: PageStateViewModel, callbacks: PageActionCallbacks
+        self, page_state_view_model: PageStateViewModel, callbacks: PageActionCallbacks
     ):
         logger.debug("Initializing ContentArea")
-        self.page_state_viewmodel = page_state_viewmodel
+        self.page_state_view_model = page_state_view_model
         self.callbacks = callbacks
         logger.debug("Creating ImageTabs component")
-        self.image_tabs = ImageTabs(page_state_viewmodel=self.page_state_viewmodel)
+        self.image_tabs = ImageTabs(page_state_view_model=self.page_state_view_model)
         logger.debug("Creating TextTabs component")
         self.text_tabs = TextTabs(
-            page_state=self.page_state_viewmodel._page_state,
+            page_state=self.page_state_view_model._page_state,
             on_save_page=None,  # Moved to PageActions
             on_load_page=None,  # Moved to PageActions
         )

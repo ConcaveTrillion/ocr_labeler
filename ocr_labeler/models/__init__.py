@@ -1,5 +1,5 @@
 from .line_match_model import LineMatch
-from .project import Project
+from .project_model import Project
 from .user_page_persistence import (
     UNKNOWN_METADATA_VALUE,
     USER_PAGE_SAVED_BY_SAVE_PAGE,

@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 class ImageTabs:
     """Left side image tabs showing progressively processed page imagery."""
 
-    def __init__(self, page_state_viewmodel: PageStateViewModel):
+    def __init__(self, page_state_view_model: PageStateViewModel):
         self._tab_ids = ["Original", "Paragraphs", "Lines", "Words", "Mismatches"]
         logger.debug("Initializing ImageTabs with tab IDs: %s", self._tab_ids)
         self.images: dict[str, ui.image] = {}
-        self.page_state_viewmodel = page_state_viewmodel
+        self.page_state_view_model = page_state_view_model
         # Register callback for direct image updates (bypasses data binding)
-        self.page_state_viewmodel.set_image_update_callback(self._on_images_updated)
+        self.page_state_view_model.set_image_update_callback(self._on_images_updated)
         logger.debug("ImageTabs initialization complete with callback registered")
 
     def build(self):

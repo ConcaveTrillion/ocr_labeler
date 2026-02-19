@@ -22,7 +22,7 @@ class HeaderBar(BaseView["MainViewModel"]):
         """
         super().__init__(viewmodel)
         self.project_controls = ProjectLoadControls(
-            viewmodel.app_state_viewmodel, viewmodel.project_state_viewmodel
+            viewmodel.app_state_view_model, viewmodel.project_state_view_model
         )
 
     def build(self):

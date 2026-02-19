@@ -59,7 +59,7 @@ class TestMainView:
         mock_ui.label = Mock()
 
         # Create a project view with the viewmodel
-        project_view = ProjectView(self.main_view_model.project_state_viewmodel)
+        project_view = ProjectView(self.main_view_model.project_state_view_model)
 
         # ProjectView should no longer own page action workflows directly.
         assert not hasattr(project_view, "_load_page_async")

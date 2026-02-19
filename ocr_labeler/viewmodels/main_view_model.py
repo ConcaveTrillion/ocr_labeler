@@ -18,8 +18,8 @@ class MainViewModel(BaseViewModel):
     """Main view model that orchestrates the entire application UI state."""
 
     # Child view models
-    app_state_viewmodel: Optional[AppStateViewModel] = None
-    project_state_viewmodel: Optional[ProjectStateViewModel] = None
+    app_state_view_model: Optional[AppStateViewModel] = None
+    project_state_view_model: Optional[ProjectStateViewModel] = None
 
     # UI-bound properties for main view
     has_project: bool = False
@@ -35,23 +35,23 @@ class MainViewModel(BaseViewModel):
         logger.debug("Initializing MainViewModel")
 
         # Create child view models
-        self.app_state_viewmodel = AppStateViewModel(app_state)
-        self.project_state_viewmodel = ProjectStateViewModel(
-            app_state.project_state, self.app_state_viewmodel
+        self.app_state_view_model = AppStateViewModel(app_state)
+        self.project_state_view_model = ProjectStateViewModel(
+            app_state.project_state, self.app_state_view_model
         )
 
         # Initialize base class
         super().__init__()
 
         # Update child view models to ensure they have initial state
-        self.app_state_viewmodel.update()
-        self.project_state_viewmodel.update()
+        self.app_state_view_model.update()
+        self.project_state_view_model.update()
 
         # Set up listeners for child view model changes
-        self.app_state_viewmodel.add_property_changed_listener(
+        self.app_state_view_model.add_property_changed_listener(
             self._on_app_state_changed
         )
-        self.project_state_viewmodel.add_property_changed_listener(
+        self.project_state_view_model.add_property_changed_listener(
             self._on_project_state_changed
         )
 
@@ -75,25 +75,28 @@ class MainViewModel(BaseViewModel):
             "is_project_loaded",
             "is_project_loading",
         ]:
-            if self.app_state_viewmodel:
+            if self.app_state_view_model:
                 current_project_state = (
-                    self.app_state_viewmodel._app_state.project_state
+                    self.app_state_view_model._app_state.project_state
                 )
-                if current_project_state != self.project_state_viewmodel._project_state:
+                if (
+                    current_project_state
+                    != self.project_state_view_model._project_state
+                ):
                     logger.debug(
                         "Project selection changed; repointing ProjectStateViewModel"
                     )
                     # Detach listener from old project state if present
                     try:
-                        old_state = self.project_state_viewmodel._project_state
+                        old_state = self.project_state_view_model._project_state
                         if (
                             old_state
                             and hasattr(old_state, "on_change")
-                            and self.project_state_viewmodel._on_project_state_change
+                            and self.project_state_view_model._on_project_state_change
                             in old_state.on_change
                         ):
                             old_state.on_change.remove(
-                                self.project_state_viewmodel._on_project_state_change
+                                self.project_state_view_model._on_project_state_change
                             )
                     except Exception:
                         logger.debug(
@@ -101,16 +104,16 @@ class MainViewModel(BaseViewModel):
                         )
 
                     # Repoint and attach listener to new project state
-                    self.project_state_viewmodel._project_state = current_project_state
+                    self.project_state_view_model._project_state = current_project_state
                     if (
-                        self.project_state_viewmodel._on_project_state_change
+                        self.project_state_view_model._on_project_state_change
                         not in current_project_state.on_change
                     ):
                         current_project_state.on_change.append(
-                            self.project_state_viewmodel._on_project_state_change
+                            self.project_state_view_model._on_project_state_change
                         )
                     # Refresh view model to reflect new project
-                    self.project_state_viewmodel.update()
+                    self.project_state_view_model.update()
 
             # Update derived properties after any selection/loading change
             self._update_derived_properties()
@@ -125,14 +128,14 @@ class MainViewModel(BaseViewModel):
 
     def _update_derived_properties(self):
         """Update properties derived from child view models."""
-        if self.app_state_viewmodel and self.project_state_viewmodel:
-            is_project_loading = bool(self.app_state_viewmodel.is_project_loading)
+        if self.app_state_view_model and self.project_state_view_model:
+            is_project_loading = bool(self.app_state_view_model.is_project_loading)
 
             # Check if we have a project loaded
             new_has_project = (
-                bool(self.app_state_viewmodel.selected_project_key)
-                and self.app_state_viewmodel.is_project_loaded
-                and self.project_state_viewmodel.page_total > 0
+                bool(self.app_state_view_model.selected_project_key)
+                and self.app_state_view_model.is_project_loaded
+                and self.project_state_view_model.page_total > 0
             )
 
             # Update view visibility
@@ -181,56 +184,56 @@ class MainViewModel(BaseViewModel):
 
     def command_select_project(self, key: str) -> bool:
         """Delegate project selection to app state view model."""
-        if self.app_state_viewmodel:
-            return self.app_state_viewmodel.command_select_project(key)
+        if self.app_state_view_model:
+            return self.app_state_view_model.command_select_project(key)
         return False
 
     async def command_load_selected_project(self) -> bool:
         """Delegate project loading to app state view model."""
-        if self.app_state_viewmodel:
-            return await self.app_state_viewmodel.command_load_selected_project()
+        if self.app_state_view_model:
+            return await self.app_state_view_model.command_load_selected_project()
         return False
 
     def command_navigate_to_page(self, page_index: int) -> bool:
         """Delegate page navigation to project state view model."""
-        if self.project_state_viewmodel:
-            return self.project_state_viewmodel.command_navigate_to_page(page_index)
+        if self.project_state_view_model:
+            return self.project_state_view_model.command_navigate_to_page(page_index)
         return False
 
     def command_navigate_next(self) -> bool:
         """Delegate next navigation to project state view model."""
-        if self.project_state_viewmodel:
-            return self.project_state_viewmodel.command_navigate_next()
+        if self.project_state_view_model:
+            return self.project_state_view_model.command_navigate_next()
         return False
 
     def command_navigate_prev(self) -> bool:
         """Delegate previous navigation to project state view model."""
-        if self.project_state_viewmodel:
-            return self.project_state_viewmodel.command_navigate_prev()
+        if self.project_state_view_model:
+            return self.project_state_view_model.command_navigate_prev()
         return False
 
     def command_get_project_display_name(self, key: Optional[str] = None) -> str:
         """Delegate project display name to app state view model."""
-        if self.app_state_viewmodel:
-            return self.app_state_viewmodel.command_get_project_display_name(key)
+        if self.app_state_view_model:
+            return self.app_state_view_model.command_get_project_display_name(key)
         return ""
 
     def command_is_project_available(self, key: str) -> bool:
         """Delegate project availability check to app state view model."""
-        if self.app_state_viewmodel:
-            return self.app_state_viewmodel.command_is_project_available(key)
+        if self.app_state_view_model:
+            return self.app_state_view_model.command_is_project_available(key)
         return False
 
     def command_get_page_display_info(self, page_index: Optional[int] = None) -> dict:
         """Delegate page display info to project state view model."""
-        if self.project_state_viewmodel:
-            return self.project_state_viewmodel.command_get_page_display_info(
+        if self.project_state_view_model:
+            return self.project_state_view_model.command_get_page_display_info(
                 page_index
             )
         return {}
 
     def command_get_navigation_status(self) -> dict:
         """Delegate navigation status to project state view model."""
-        if self.project_state_viewmodel:
-            return self.project_state_viewmodel.command_get_navigation_status()
+        if self.project_state_view_model:
+            return self.project_state_view_model.command_get_navigation_status()
         return {}

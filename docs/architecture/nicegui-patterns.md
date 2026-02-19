@@ -4,13 +4,18 @@ Project-specific NiceGUI patterns for consistent UI behavior.
 
 Status: active guidance.
 
-Last validated: 2026-02-15.
+Last validated: 2026-02-18.
 
 ## Core Principles
 
 - Build UI with composable views and explicit `build()` boundaries.
 - Keep state and view concerns separate (ViewModel drives UI state).
 - Preserve per-session isolation (state/viewmodel/view are created per route/session).
+
+## Naming
+
+- Use canonical `*_view_model` names in code.
+- Prefer `*_view_model` attribute names (for example, `project_state_view_model`).
 
 See also:
 - `multi-tab/overview.md`

@@ -13,9 +13,18 @@ def test_project_state_change_refreshes_loading_cache_when_page_finishes_loading
             self.on_change = []
             self._project = None
 
-        def ensure_page(self, index: int, force_ocr: bool = False):
+        def ensure_page_model(self, index: int, force_ocr: bool = False):
             _ = force_ocr
-            return self._project.pages[index]
+            page = self._project.pages[index]
+            if page is None:
+                return None
+
+            class _PageModelStub:
+                def __init__(self, raw_page):
+                    self.page = raw_page
+                    self.page_source = "ocr"
+
+            return _PageModelStub(page)
 
     class ProjectStub:
         def __init__(self):

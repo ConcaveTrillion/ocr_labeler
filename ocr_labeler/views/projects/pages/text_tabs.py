@@ -285,7 +285,7 @@ class TextTabs:
             return
         logger.debug("TextTabs received project state change notification")
         # Read current page from in-memory cache only; do not call
-        # ProjectState.current_page() here because it may trigger synchronous
+        # ProjectState.current_page_model() here because it may trigger synchronous
         # OCR/page loading and block UI updates/notifications.
         if (
             self.page_state

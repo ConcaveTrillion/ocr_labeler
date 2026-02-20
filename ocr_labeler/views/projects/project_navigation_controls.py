@@ -28,10 +28,7 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
         self.page_index_box = None
         self.dir_input = None
         self.page_input = None
-        self.page_name = None
         self.page_total = None
-        self.page_source_label = None
-        self.page_source_tooltip = None
 
     def build(self) -> ui.element:
         logger.debug("Building ProjectNavigationControls UI")
@@ -74,50 +71,14 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
                 except Exception:
                     pass
 
-            with ui.row().classes("items-center gap-2"):
-                self.page_index_box = ui.button("-", on_click=lambda: None).classes(
-                    "pointer-events-none"
-                )
-
-                ui.separator().props("vertical")
-                self.page_source_label = ui.button("", on_click=lambda: None).classes(
-                    "pointer-events-none"
-                )
-                with self.page_source_label:
-                    self.page_source_tooltip = ui.tooltip("")
-                try:
-                    from nicegui import binding
-
-                    binding.bind_from(
-                        self.page_source_label,
-                        "text",
-                        self.viewmodel,
-                        "current_page_source_text",
-                    )
-                    if self.page_source_tooltip:
-                        binding.bind_from(
-                            self.page_source_tooltip,
-                            "text",
-                            self.viewmodel,
-                            "current_page_source_tooltip",
-                        )
-                except Exception:
-                    self.page_source_label.text = "UNKNOWN"
-
         return container
 
-    def set_page(self, index_plus_one: int, name: str, total: int):
+    def set_page(self, index_plus_one: int, total: int):
         logger.debug(
-            "Setting project navigation page to %s, name: %s, total: %s",
+            "Setting project navigation page to %s, total: %s",
             index_plus_one,
-            name,
             total,
         )
-        if self.page_index_box:
-            try:
-                self.page_index_box.text = name if name else "-"
-            except Exception:
-                pass
         if self.page_input:
             self.page_input.value = index_plus_one
         if self.page_total:

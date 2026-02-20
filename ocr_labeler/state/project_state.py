@@ -12,6 +12,7 @@ from typing import Callable, List, Optional
 from nicegui import background_tasks, run
 from pd_book_tools.ocr.page import Page
 
+from ..models.page_model import PageModel
 from ..models.project_model import Project
 from ..operations.ocr.navigation_operations import NavigationOperations
 from ..operations.ocr.page_operations import PageOperations
@@ -47,6 +48,9 @@ class ProjectState:
     page_states: dict[int, PageState] = field(
         default_factory=dict
     )  # Per-page state management
+    page_models: dict[int, PageModel] = field(
+        default_factory=dict
+    )  # Page wrappers for app-owned metadata
     page_ops: PageOperations = field(
         default_factory=PageOperations
     )  # For backward compatibility
@@ -115,7 +119,7 @@ class ProjectState:
     ) -> None:
         """Emit a structured page-load timing event."""
         page_timing_logger.info(
-            "page_load_timing: index=%s force_ocr=%s source=%s status=%s duration_ms=%.1f",
+            "page_model_load_timing: index=%s force_ocr=%s source=%s status=%s duration_ms=%.1f",
             index,
             force_ocr,
             source,
@@ -134,7 +138,7 @@ class ProjectState:
         """Emit a structured page-load step timing event."""
         suffix = f" {extra}" if extra else ""
         page_timing_logger.info(
-            "page_load_timing_step: index=%s step=%s duration_ms=%.1f%s",
+            "page_model_load_timing_step: index=%s step=%s duration_ms=%.1f%s",
             index,
             step,
             duration_ms,
@@ -161,6 +165,55 @@ class ProjectState:
             self.page_states[page_index] = page_state
         logger.debug("get_page_state: returning page_state for index %s", page_index)
         return self.page_states[page_index]
+
+    def get_page_model(self, page_index: int) -> PageModel | None:
+        """Get PageModel metadata wrapper for an index, if available."""
+        return self.page_models.get(page_index)
+
+    def upsert_page_model(
+        self,
+        page_index: int,
+        page: Page,
+        source: str,
+        *,
+        ocr_failed: bool = False,
+    ) -> PageModel:
+        """Create/update PageModel metadata for a loaded page."""
+        try:
+            page.page_source = source  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        image_path = None
+        image_paths = getattr(self.project, "image_paths", None)
+        if isinstance(image_paths, list) and 0 <= page_index < len(image_paths):
+            image_path = str(image_paths[page_index])
+
+        page_model = PageModel(
+            page=page,
+            page_source=source,
+            image_path=image_path,
+            name=getattr(page, "name", None),
+            index=page_index,
+            ocr_failed=ocr_failed,
+            ocr_provenance=getattr(page, "ocr_provenance", None),
+        )
+        self.page_models[page_index] = page_model
+        return page_model
+
+    def set_page_source(self, page_index: int, source: str) -> None:
+        """Update page source in PageModel metadata."""
+        page_model = self.page_models.get(page_index)
+        if page_model is not None:
+            page_model.page_source = source
+            try:
+                page_model.page.page_source = source  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+    def clear_page_model(self, page_index: int) -> None:
+        """Remove metadata wrapper for an index."""
+        self.page_models.pop(page_index, None)
 
     @property
     def current_page_state(self) -> PageState:
@@ -223,6 +276,7 @@ class ProjectState:
 
             # Clear page states for the new project
             self.page_states.clear()
+            self.page_models.clear()
         finally:
             self.is_project_loading = False
             self.notify()
@@ -312,18 +366,26 @@ class ProjectState:
         else:
             logger.warning("goto_page_index: navigation failed for index %s", index)
 
-    def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
-        """Get page at the specified index, loading it if necessary.
+    def get_or_load_page_model(
+        self, index: int, force_ocr: bool = False
+    ) -> Optional[PageModel]:
+        """Get PageModel at the specified index, loading it if necessary.
 
-        This method delegates to ensure_page for lazy loading.
+        This method delegates to ensure_page_model for lazy loading.
         """
-        logger.debug("get_page: called with index=%s, force_ocr=%s", index, force_ocr)
-        result = self.ensure_page(index, force_ocr=force_ocr)
-        logger.debug("get_page: returning page for index %s", index)
+        logger.debug(
+            "get_or_load_page_model: called with index=%s, force_ocr=%s",
+            index,
+            force_ocr,
+        )
+        result = self.ensure_page_model(index, force_ocr=force_ocr)
+        logger.debug("get_or_load_page_model: returning page model for index %s", index)
         return result
 
-    def ensure_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
-        """Ensure that the Page at index is loaded, loading it if necessary.
+    def ensure_page_model(
+        self, index: int, force_ocr: bool = False
+    ) -> Optional[PageModel]:
+        """Ensure that the PageModel at index is loaded, loading it if necessary.
 
         This method handles the state concern of lazy page loading, including:
         - Prioritizing saved pages if available (unless force_ocr is True)
@@ -337,7 +399,7 @@ class ProjectState:
             force_ocr: If True, skip loading saved page and force OCR processing
 
         Returns:
-            Optional[Page]: The loaded page or None if index is invalid
+            Optional[PageModel]: The loaded page model or None if index is invalid
         """
         ensure_started = perf_counter()
 
@@ -352,12 +414,12 @@ class ProjectState:
             )
 
         if not self.project.pages:
-            logger.info("ensure_page: no pages loaded yet")
+            logger.info("ensure_page_model: no pages loaded yet")
             _log_page_timing(source="none", status="no_pages")
             return None
         if not (0 <= index < len(self.project.pages)):
             logger.warning(
-                "ensure_page: index %s out of range (0..%s)",
+                "ensure_page_model: index %s out of range (0..%s)",
                 index,
                 len(self.project.pages) - 1,
             )
@@ -365,18 +427,24 @@ class ProjectState:
             return None
 
         def _attach_loaded_page_metadata(
-            loaded_page: Page,
+            loaded_page_model: PageModel,
             page_image_path: Path,
             page_index: int,
             source: str,
         ) -> None:
+            loaded_page = loaded_page_model.page
             if not hasattr(loaded_page, "image_path"):
                 loaded_page.image_path = str(page_image_path)  # type: ignore[attr-defined]
             if not hasattr(loaded_page, "name"):
                 loaded_page.name = page_image_path.name  # type: ignore[attr-defined]
             if not hasattr(loaded_page, "index"):
                 loaded_page.index = page_index  # type: ignore[attr-defined]
-            loaded_page.page_source = source  # type: ignore[attr-defined]
+            loaded_page_model.page_source = source
+            self.page_models[page_index] = loaded_page_model
+            try:
+                loaded_page.page_source = source  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
         def _user_saved_directories() -> list[str]:
             primary_save_dir = "local-data/labeled-ocr"
@@ -396,7 +464,7 @@ class ProjectState:
 
         def _try_load_user_saved_page(
             page_index: int, img_path: Path
-        ) -> Optional[Page]:
+        ) -> Optional[PageModel]:
             if self.project_root is None:
                 return None
 
@@ -419,13 +487,13 @@ class ProjectState:
                     continue
 
                 logger.info(
-                    "ensure_page: found user-saved candidate for index=%s at %s",
+                    "ensure_page_model: found user-saved candidate for index=%s at %s",
                     page_index,
                     user_saved_load_info.json_path,
                 )
 
                 load_started = perf_counter()
-                loaded_result = self.page_ops.load_page(
+                loaded_result = self.page_ops.load_page_model(
                     page_number=page_index + 1,
                     project_root=self.project_root,
                     save_directory=save_directory,
@@ -441,49 +509,55 @@ class ProjectState:
                 if loaded_result is None:
                     continue
 
-                loaded_page, _ = loaded_result
+                loaded_page_model, _ = loaded_result
                 logger.info(
-                    "ensure_page: loaded from user-saved for index=%s (json_path=%s)",
+                    "ensure_page_model: loaded from user-saved for index=%s (json_path=%s)",
                     page_index,
                     user_saved_load_info.json_path,
                 )
                 _attach_loaded_page_metadata(
-                    loaded_page=loaded_page,
+                    loaded_page_model=loaded_page_model,
                     page_image_path=img_path,
                     page_index=page_index,
                     source="filesystem",
                 )
-                return loaded_page
+                return loaded_page_model
 
             return None
 
         # If we already have a cached OCR page in memory, refresh from disk if a
         # user-labeled page now exists.
         current_page = self.project.pages[index]
+        current_page_model = self.get_page_model(index)
+        current_page_source = (
+            current_page_model.page_source
+            if current_page_model is not None
+            else getattr(current_page, "page_source", None)
+        )
         if (
             current_page is not None
             and not force_ocr
             and self.project_root is not None
-            and getattr(current_page, "page_source", None) in {"ocr", "cached_ocr"}
+            and current_page_source in {"ocr", "cached_ocr"}
         ):
             img_path = Path(self.project.image_paths[index])
-            loaded_page = _try_load_user_saved_page(index, img_path)
-            if loaded_page is not None:
+            loaded_page_model = _try_load_user_saved_page(index, img_path)
+            if loaded_page_model is not None:
                 logger.info(
-                    "ensure_page: replacing in-memory cached page with user-saved page for index=%s",
+                    "ensure_page_model: replacing in-memory cached page with user-saved page for index=%s",
                     index,
                 )
-                self.project.pages[index] = loaded_page
+                self.project.pages[index] = loaded_page_model.page
                 self.notify()
                 _log_page_timing(source="filesystem", status="loaded")
-                return self.project.pages[index]
+                return self.get_page_model(index)
 
         if self.project.pages[index] is None:
             img_path = Path(
                 self.project.image_paths[index]
             )  # Ensure it's a Path object
             logger.debug(
-                "ensure_page: cache miss for index=%s path=%s (force_ocr=%s)",
+                "ensure_page_model: cache miss for index=%s path=%s (force_ocr=%s)",
                 index,
                 img_path,
                 force_ocr,
@@ -491,16 +565,18 @@ class ProjectState:
 
             # Try to load from saved files first (unless forcing OCR)
             if not force_ocr and self.project_root is not None:
-                logger.info("ensure_page: checking for saved page at index=%s", index)
+                logger.info(
+                    "ensure_page_model: checking for saved page at index=%s", index
+                )
                 self.loading_status = "Checking for saved page..."
                 self.queue_notification(self.loading_status, "info")
                 # Don't notify here - it triggers recursion via viewmodel updates
-                loaded_page = None
+                loaded_page_model = None
 
                 # First try user-saved pages
                 try:
                     user_saved_started = perf_counter()
-                    loaded_page = _try_load_user_saved_page(index, img_path)
+                    loaded_page_model = _try_load_user_saved_page(index, img_path)
                     user_saved_duration_ms = (
                         perf_counter() - user_saved_started
                     ) * 1000
@@ -509,24 +585,24 @@ class ProjectState:
                         step="user_saved_lookup",
                         duration_ms=user_saved_duration_ms,
                     )
-                    if loaded_page is not None:
+                    if loaded_page_model is not None:
                         self.loading_status = "Loading page from disk..."
                         self.queue_notification(self.loading_status, "info")
                         # Don't notify here - it triggers recursion via viewmodel updates
-                        self.project.pages[index] = loaded_page
+                        self.project.pages[index] = loaded_page_model.page
                         # Notify after page is cached so UI can update (safe here, not in property getter)
                         self.notify()
                         _log_page_timing(source="filesystem", status="loaded")
-                        return self.project.pages[index]
+                        return self.get_page_model(index)
                 except Exception as e:
                     logger.debug(
-                        "ensure_page: failed to load user-saved page for index=%s: %s",
+                        "ensure_page_model: failed to load user-saved page for index=%s: %s",
                         index,
                         e,
                     )
 
                 # If no user-saved page, try cache
-                if loaded_page is None:
+                if loaded_page_model is None:
                     try:
                         cache_can_load_started = perf_counter()
                         cache_load_info = self.page_ops.can_load_page(
@@ -546,7 +622,7 @@ class ProjectState:
                         )
                         if cache_load_info.can_load:
                             cache_load_started = perf_counter()
-                            loaded_result = self.page_ops.load_page(
+                            loaded_result = self.page_ops.load_page_model(
                                 page_number=index + 1,  # Convert to 1-based
                                 project_root=self.project_root,
                                 save_directory="local-data/labeled-ocr/cache",
@@ -561,28 +637,28 @@ class ProjectState:
                                 duration_ms=cache_load_duration_ms,
                             )
                             if loaded_result is not None:
-                                loaded_page, _ = loaded_result
+                                loaded_page_model, _ = loaded_result
                                 logger.info(
-                                    "ensure_page: loaded from cache for index=%s",
+                                    "ensure_page_model: loaded from cache for index=%s",
                                     index,
                                 )
                                 self.loading_status = "Loading page from cache..."
                                 self.queue_notification(self.loading_status, "info")
                                 # Don't notify here - it triggers recursion via viewmodel updates
                                 _attach_loaded_page_metadata(
-                                    loaded_page=loaded_page,
+                                    loaded_page_model=loaded_page_model,
                                     page_image_path=img_path,
                                     page_index=index,
                                     source="cached_ocr",
                                 )
-                                self.project.pages[index] = loaded_page
+                                self.project.pages[index] = loaded_page_model.page
                                 # Notify after page is cached so UI can update (safe here, not in property getter)
                                 self.notify()
                                 _log_page_timing(source="cached_ocr", status="loaded")
-                                return self.project.pages[index]
+                                return self.get_page_model(index)
                     except Exception as e:
                         logger.debug(
-                            "ensure_page: failed to load cached page for index=%s: %s",
+                            "ensure_page_model: failed to load cached page for index=%s: %s",
                             index,
                             e,
                         )
@@ -590,7 +666,7 @@ class ProjectState:
             # Fall back to OCR processing
             if self.page_ops.page_parser:
                 logger.info(
-                    "ensure_page: running OCR on page at index=%s (in separate thread)",
+                    "ensure_page_model: running OCR on page at index=%s (in separate thread)",
                     index,
                 )
                 self.loading_status = "Running OCR on page (in background thread)..."
@@ -612,7 +688,7 @@ class ProjectState:
                         duration_ms=ocr_duration_ms,
                     )
                     logger.debug(
-                        "ensure_page: loader created page index=%s name=%s",
+                        "ensure_page_model: loader created page index=%s name=%s",
                         index,
                         getattr(page_obj, "name", img_path.name),
                     )
@@ -629,11 +705,12 @@ class ProjectState:
                     if not isinstance(page_index, int):
                         page_obj.index = index  # type: ignore[attr-defined]
 
-                    if not hasattr(page_obj, "page_source"):
-                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
-                    else:
-                        page_obj.page_source = "ocr"  # type: ignore[attr-defined]
                     self.project.pages[index] = page_obj
+                    self.upsert_page_model(
+                        page_index=index,
+                        page=page_obj,
+                        source="ocr",
+                    )
 
                     # Auto-save OCR result to cache for performance
                     page_image_path = getattr(page_obj, "image_path", None)
@@ -642,8 +719,9 @@ class ProjectState:
                     ):
                         try:
                             cache_save_started = perf_counter()
+                            page_model = self.get_page_model(index)
                             cache_saved = self.page_ops.save_page(
-                                page=page_obj,
+                                page=page_model if page_model is not None else page_obj,
                                 project_root=self.project_root,
                                 save_directory="local-data/labeled-ocr/cache",
                                 project_id=None,  # Will be derived from project_root.name
@@ -660,37 +738,37 @@ class ProjectState:
                             )
                             if cache_saved:
                                 logger.debug(
-                                    "ensure_page: auto-saved OCR result to cache for index=%s",
+                                    "ensure_page_model: auto-saved OCR result to cache for index=%s",
                                     index,
                                 )
-                                # Update page source to indicate it's cached
-                                page_obj.page_source = "cached_ocr"  # type: ignore[attr-defined]
+                                self.set_page_source(index, "cached_ocr")
                             else:
                                 logger.debug(
-                                    "ensure_page: failed to auto-save OCR result to cache for index=%s",
+                                    "ensure_page_model: failed to auto-save OCR result to cache for index=%s",
                                     index,
                                 )
                         except Exception as e:
                             logger.debug(
-                                "ensure_page: error auto-saving to cache for index=%s: %s",
+                                "ensure_page_model: error auto-saving to cache for index=%s: %s",
                                 index,
                                 e,
                             )
                     else:
                         logger.debug(
-                            "ensure_page: skipping auto-cache save for index=%s due to invalid image_path",
+                            "ensure_page_model: skipping auto-cache save for index=%s due to invalid image_path",
                             index,
                         )
 
                     # Notify after page is cached so UI can update
                     self.notify()
+                    page_model = self.get_page_model(index)
                     _log_page_timing(
-                        source=getattr(page_obj, "page_source", "ocr"),
+                        source=page_model.page_source if page_model else "ocr",
                         status="loaded",
                     )
                 except Exception:  # pragma: no cover - defensive
                     logger.exception(
-                        "ensure_page: loader failed for index=%s path=%s; using fallback page",
+                        "ensure_page_model: loader failed for index=%s path=%s; using fallback page",
                         index,
                         img_path,
                     )
@@ -702,31 +780,60 @@ class ProjectState:
                     self.project.pages[index] = self.create_fallback_page(
                         index, img_path
                     )
+                    self.upsert_page_model(
+                        page_index=index,
+                        page=self.project.pages[index],
+                        source="fallback",
+                        ocr_failed=True,
+                    )
                     # Notify after fallback page is cached
                     self.notify()
                     _log_page_timing(source="fallback", status="ocr_failed")
             else:
                 # No loader provided: keep legacy minimal placeholder behavior
                 logger.debug(
-                    "ensure_page: no loader provided, creating placeholder page for index=%s",
+                    "ensure_page_model: no loader provided, creating placeholder page for index=%s",
                     index,
                 )
                 self.project.pages[index] = self.create_fallback_page(index, img_path)
+                self.upsert_page_model(
+                    page_index=index,
+                    page=self.project.pages[index],
+                    source="fallback",
+                    ocr_failed=True,
+                )
                 _log_page_timing(source="fallback", status="no_loader")
         else:
-            logger.debug("ensure_page: cache hit for index=%s", index)
+            logger.debug("ensure_page_model: cache hit for index=%s", index)
+            page_model = self.get_page_model(index)
+            page_source = (
+                page_model.page_source
+                if page_model
+                else getattr(self.project.pages[index], "page_source", "memory")
+            )
             _log_page_timing(
-                source=getattr(self.project.pages[index], "page_source", "memory"),
+                source=page_source,
                 status="cache_hit",
             )
 
-        return self.project.pages[index]
+        page_model = self.get_page_model(index)
+        if page_model is not None:
+            return page_model
 
-    def current_page(self) -> Page | None:
-        """Get the current page."""
-        logger.debug("current_page: called, current_index=%s", self.current_page_index)
-        result = self.get_page(self.current_page_index)
-        logger.debug("current_page: returning page")
+        page = self.project.pages[index]
+        if page is None:
+            return None
+
+        page_source = str(getattr(page, "page_source", "ocr"))
+        return self.upsert_page_model(index, page, page_source)
+
+    def current_page_model(self) -> PageModel | None:
+        """Get the current page model."""
+        logger.debug(
+            "current_page_model: called, current_index=%s", self.current_page_index
+        )
+        result = self.get_or_load_page_model(self.current_page_index)
+        logger.debug("current_page_model: returning page model")
         return result
 
     def reload_current_page_with_ocr(self):
@@ -772,7 +879,7 @@ class ProjectState:
                     "[_background_load] Calling run.io_bound for page %s",
                     self.current_page_index,
                 )
-                await run.io_bound(self.get_page, self.current_page_index)
+                await run.io_bound(self.get_or_load_page_model, self.current_page_index)
                 logger.info(
                     "[_background_load] run.io_bound completed for page %s",
                     self.current_page_index,
@@ -840,7 +947,7 @@ class ProjectState:
                 )
                 # Fallback synchronous load
                 try:
-                    self.get_page(self.current_page_index)
+                    self.get_or_load_page_model(self.current_page_index)
                 finally:
                     self.is_project_loading = False
                     self.is_navigating = False
@@ -874,7 +981,7 @@ class ProjectState:
         page_state = self.get_page_state(self.current_page_index)
 
         # Try PageState first if page is available
-        if page_state.get_page(self.current_page_index) is not None:
+        if page_state.get_page_model(self.current_page_index) is not None:
             result = page_state.persist_page_to_file(
                 page_index=self.current_page_index,
                 save_directory=save_directory,
@@ -882,24 +989,21 @@ class ProjectState:
             )
         else:
             # Fall back to direct implementation for backward compatibility (tests)
-            page = self.current_page()
-            if page is None:
+            page_model = self.current_page_model()
+            if page_model is None:
                 logger.error("No current page available to save")
                 result = False
             else:
                 operations = PageOperations()
                 result = operations.save_page(
-                    page=page,
+                    page=page_model,
                     project_root=self.project_root,
                     save_directory=save_directory,
                     project_id=project_id,
                     source_lib=self.project.source_lib,
                 )
                 if result:
-                    # Update page source to indicate it's now on the filesystem
-                    if hasattr(page, "page_source"):
-                        page.page_source = "filesystem"  # type: ignore[attr-defined]
-                    page_state.page_sources[self.current_page_index] = "filesystem"
+                    self.set_page_source(self.current_page_index, "filesystem")
                     page_state.notify()
         logger.debug("save_current_page: completed, result=%s", result)
         return result
@@ -948,13 +1052,16 @@ class ProjectState:
         """
         logger.debug("refine_all_bboxes: called with padding_px=%s", padding_px)
         page_state = self.get_page_state(self.current_page_index)
-        page = page_state.get_page(self.current_page_index)
+        page_model = page_state.get_page_model(self.current_page_index)
 
-        if page is None:
+        if page_model is None:
             logger.error("No current page available to refine bboxes")
             return False
 
-        result = self.page_ops.refine_all_bboxes(page=page, padding_px=padding_px)
+        result = self.page_ops.refine_all_bboxes(
+            page=page_model,
+            padding_px=padding_px,
+        )
 
         if result:
             # Invalidate cache since page content changed
@@ -978,14 +1085,15 @@ class ProjectState:
             "expand_and_refine_all_bboxes: called with padding_px=%s", padding_px
         )
         page_state = self.get_page_state(self.current_page_index)
-        page = page_state.get_page(self.current_page_index)
+        page_model = page_state.get_page_model(self.current_page_index)
 
-        if page is None:
+        if page_model is None:
             logger.error("No current page available to expand and refine bboxes")
             return False
 
         result = self.page_ops.expand_and_refine_all_bboxes(
-            page=page, padding_px=padding_px
+            page=page_model,
+            padding_px=padding_px,
         )
 
         if result:
@@ -1005,13 +1113,13 @@ class ProjectState:
         """
         logger.debug("refresh_page_images: called")
         page_state = self.get_page_state(self.current_page_index)
-        page = page_state.get_page(self.current_page_index)
+        page_model = page_state.get_page_model(self.current_page_index)
 
-        if page is None:
+        if page_model is None:
             logger.error("No current page available to refresh images")
             return False
 
-        result = self.page_ops.refresh_page_images(page=page)
+        result = self.page_ops.refresh_page_images(page=page_model)
 
         if result:
             # Notify UI of changes
@@ -1019,65 +1127,6 @@ class ProjectState:
 
         logger.debug("refresh_page_images: completed, result=%s", result)
         return result
-
-    @property
-    def current_page_source_text(self) -> str:
-        """Get the source text for the current page.
-
-        Returns appropriate status text based on loading state and page availability.
-        """
-        logger.debug("current_page_source_text: called")
-
-        # If currently loading, show loading status
-        if self.is_project_loading or self.is_navigating:
-            logger.debug("current_page_source_text: currently loading")
-            return "LOADING..."
-
-        # Check if page is already loaded in cache
-        if (
-            not self.project.pages
-            or self.current_page_index < 0
-            or self.current_page_index >= len(self.project.pages)
-        ):
-            logger.debug("current_page_source_text: no pages or invalid index")
-            return "(NO PAGE)"
-
-        # Get the page directly from cache to avoid triggering loads
-        page = self.project.pages[self.current_page_index]
-
-        # If page is not yet loaded in cache, return appropriate status
-        if page is None:
-            logger.debug("current_page_source_text: page not yet in cache")
-            return "(NO PAGE)"
-
-        result = TextOperations.get_page_source_text(page, False)
-        logger.debug("current_page_source_text: returning text: %s", result)
-        return result
-
-    @property
-    def current_page_source_tooltip(self) -> str:
-        """Get provenance tooltip text for the current page source badge."""
-        if self.is_project_loading or self.is_navigating:
-            return ""
-
-        if (
-            not self.project.pages
-            or self.current_page_index < 0
-            or self.current_page_index >= len(self.project.pages)
-        ):
-            return ""
-
-        page = self.project.pages[self.current_page_index]
-        if page is None:
-            return ""
-
-        if TextOperations.get_page_source_text(page, False) not in (
-            "LABELED",
-            "CACHED OCR",
-        ):
-            return ""
-
-        return self.page_ops.get_page_provenance_summary(page)
 
     @property
     def current_ocr_text(self) -> str:

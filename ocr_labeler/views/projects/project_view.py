@@ -117,20 +117,12 @@ class ProjectView(
         if self.navigation_controls:
             current_index = self.viewmodel.current_page_index
             total = self.viewmodel.page_total
-            image_name = ""
-
-            project_state = getattr(self.viewmodel, "_project_state", None)
-            project = getattr(project_state, "project", None)
-            if project is not None and hasattr(project, "image_paths"):
-                if 0 <= current_index < len(project.image_paths):
-                    image_name = project.image_paths[current_index].name
 
             if total:
                 display_index = current_index + 1 if current_index >= 0 else 1
-                display_name = image_name or "(no page)"
-                self.navigation_controls.set_page(display_index, display_name, total)
+                self.navigation_controls.set_page(display_index, total)
             else:
-                self.navigation_controls.set_page(1, "(no page)", 0)
+                self.navigation_controls.set_page(1, 0)
 
     def _goto_page(self, raw_value):
         """Navigate to a specific page number with validation."""

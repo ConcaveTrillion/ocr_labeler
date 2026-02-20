@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from ocr_labeler.models.page_model import PageModel
 from ocr_labeler.state import project_state as project_state_module
 from ocr_labeler.state.project_state import ProjectState
 
@@ -16,7 +17,7 @@ def test_project_state_initialization():
     state = ProjectState()
     assert state.project is not None
     assert state.current_page_index == 0
-    assert state.current_page() is None  # No pages loaded yet
+    assert state.current_page_model() is None  # No pages loaded yet
     assert state.is_project_loading is False
     assert state.on_change == []
 
@@ -41,7 +42,7 @@ def test_project_state_delegation():
     state.goto_page_number(1)
 
     # Test current page returns None when no project loaded
-    assert state.current_page() is None
+    assert state.current_page_model() is None
 
 
 def test_load_current_page_success(tmp_path):
@@ -73,9 +74,9 @@ def test_load_current_page_success(tmp_path):
         # Mock the project.pages list
         mock_project = Mock()
         mock_project.pages = [None]  # Initially None, should be replaced
+        mock_project.ground_truth_map = {}
         state.project = mock_project
 
-        # Test load_current_page
         result = state.load_current_page(
             save_directory=str(save_dir),
             project_id="test_project",
@@ -171,6 +172,7 @@ def test_load_current_page_generates_project_id_from_root(tmp_path):
         # Mock the project.pages list
         mock_project = Mock()
         mock_project.pages = [None]
+        mock_project.ground_truth_map = {}
         state.project = mock_project
 
         # Test without providing project_id
@@ -207,13 +209,16 @@ def test_ensure_page_replaces_cached_page_with_disk_page(tmp_path):
             state.page_ops, "can_load_page", return_value=Mock(can_load=True)
         ) as mock_can_load,
         patch.object(
-            state.page_ops, "load_page", return_value=(disk_page, None)
+            state.page_ops,
+            "load_page_model",
+            return_value=(PageModel(page=disk_page, page_source="filesystem"), None),
         ) as mock_load,
         patch.object(state, "notify") as mock_notify,
     ):
-        result = state.ensure_page(0)
+        result = state.ensure_page_model(0)
 
-    assert result is disk_page
+    assert result is not None
+    assert result.page is disk_page
     assert state.project.pages[0] is disk_page
     assert disk_page.page_source == "filesystem"
     mock_can_load.assert_called_once_with(
@@ -258,13 +263,16 @@ def test_ensure_page_checks_disk_before_cache(tmp_path):
             ],
         ) as mock_can_load,
         patch.object(
-            state.page_ops, "load_page", return_value=(cached_page, None)
+            state.page_ops,
+            "load_page_model",
+            return_value=(PageModel(page=cached_page, page_source="cached_ocr"), None),
         ) as mock_load,
         patch.object(state, "notify"),
     ):
-        result = state.ensure_page(0)
+        result = state.ensure_page_model(0)
 
-    assert result is cached_page
+    assert result is not None
+    assert result.page is cached_page
     assert state.project.pages[0] is cached_page
     assert mock_can_load.call_count == 3
     assert (
@@ -306,13 +314,16 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
             side_effect=[Mock(can_load=False), Mock(can_load=True)],
         ) as mock_can_load,
         patch.object(
-            state.page_ops, "load_page", return_value=(labeled_page, None)
+            state.page_ops,
+            "load_page_model",
+            return_value=(PageModel(page=labeled_page, page_source="filesystem"), None),
         ) as mock_load,
         patch.object(state, "notify"),
     ):
-        result = state.ensure_page(0)
+        result = state.ensure_page_model(0)
 
-    assert result is labeled_page
+    assert result is not None
+    assert result.page is labeled_page
     assert state.project.pages[0] is labeled_page
     assert labeled_page.page_source == "filesystem"
     assert mock_can_load.call_count == 2
@@ -359,15 +370,19 @@ def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
                 Mock(can_load=True),
             ],
         ),
-        patch.object(state.page_ops, "load_page", return_value=(cached_page, None)),
+        patch.object(
+            state.page_ops,
+            "load_page_model",
+            return_value=(PageModel(page=cached_page, page_source="cached_ocr"), None),
+        ),
         patch.object(state, "notify"),
     ):
-        state.ensure_page(0)
+        state.ensure_page_model(0)
 
     timing_messages = [
         record.getMessage()
         for record in caplog.records
-        if "page_load_timing:" in record.getMessage()
+        if "page_model_load_timing:" in record.getMessage()
     ]
     assert timing_messages
     assert any(
@@ -470,14 +485,14 @@ def test_save_current_page_updates_source_label(tmp_path):
             side_effect=mock_save_page,
         ),
         patch(
-            "ocr_labeler.operations.ocr.page_operations.PageOperations.load_page",
+            "ocr_labeler.operations.ocr.page_operations.PageOperations.load_page_model",
             side_effect=lambda *args, **kwargs: None,
         ),
         patch.object(state.page_ops, "page_parser", return_value=mock_page),
     ):
         # 2. Verify initial status is RAW OCR (via get_page to initialize PageState)
-        state.get_page(0)
-        assert state.current_page_source_text == "RAW OCR"
+        state.get_or_load_page_model(0)
+        assert state.current_page_state.current_page_source_text == "RAW OCR"
 
         # 3. Perform save
         save_dir = tmp_path / "labeled"
@@ -485,7 +500,7 @@ def test_save_current_page_updates_source_label(tmp_path):
 
         # 4. Verify save was successful and label changed
         assert success is True
-        assert state.current_page_source_text == "LABELED"
+        assert state.current_page_state.current_page_source_text == "LABELED"
         assert mock_page.page_source == "filesystem"
 
 
@@ -511,7 +526,7 @@ def test_current_page_source_tooltip_for_labeled_page(tmp_path):
         "get_page_provenance_summary",
         return_value="Saved: 2026-02-15T12:00:00Z\nOCR: doctr (0.10.0)",
     ) as mock_summary:
-        tooltip = state.current_page_source_tooltip
+        tooltip = state.current_page_state.current_page_source_tooltip
 
     assert "Saved: 2026-02-15T12:00:00Z" in tooltip
     assert "OCR: doctr (0.10.0)" in tooltip
@@ -540,7 +555,7 @@ def test_current_page_source_tooltip_for_cached_ocr_page(tmp_path):
         "get_page_provenance_summary",
         return_value="Saved: 2026-02-15T12:00:00Z\nOCR: doctr (0.10.0)",
     ) as mock_summary:
-        tooltip = state.current_page_source_tooltip
+        tooltip = state.current_page_state.current_page_source_tooltip
 
     assert "Saved: 2026-02-15T12:00:00Z" in tooltip
     assert "OCR: doctr (0.10.0)" in tooltip
@@ -565,7 +580,7 @@ def test_current_page_source_tooltip_empty_for_raw_ocr_page(tmp_path):
     state.current_page_index = 0
 
     with patch.object(state.page_ops, "get_page_provenance_summary") as mock_summary:
-        tooltip = state.current_page_source_tooltip
+        tooltip = state.current_page_state.current_page_source_tooltip
 
     assert tooltip == ""
     mock_summary.assert_not_called()
@@ -602,7 +617,7 @@ def test_refine_all_bboxes_success(tmp_path):
         ) as mock_refine,
     ):
         mock_page_state = MagicMock()
-        mock_page_state.get_page.return_value = mock_page
+        mock_page_state.get_page_model.return_value = mock_page
         mock_get_page_state.return_value = mock_page_state
 
         # Call refine_all_bboxes
@@ -634,7 +649,7 @@ def test_refine_all_bboxes_no_page(tmp_path):
 
     with patch.object(state, "get_page_state") as mock_get_page_state:
         mock_page_state = MagicMock()
-        mock_page_state.get_page.return_value = None  # No page available
+        mock_page_state.get_page_model.return_value = None  # No page available
         mock_get_page_state.return_value = mock_page_state
 
         # Call refine_all_bboxes
@@ -670,7 +685,7 @@ def test_expand_and_refine_all_bboxes_success(tmp_path):
         ) as mock_expand_refine,
     ):
         mock_page_state = MagicMock()
-        mock_page_state.get_page.return_value = mock_page
+        mock_page_state.get_page_model.return_value = mock_page
         mock_get_page_state.return_value = mock_page_state
 
         mock_expand_refine.return_value = True
@@ -704,7 +719,7 @@ def test_expand_and_refine_all_bboxes_no_page(tmp_path):
 
     with patch.object(state, "get_page_state") as mock_get_page_state:
         mock_page_state = MagicMock()
-        mock_page_state.get_page.return_value = None  # No page available
+        mock_page_state.get_page_model.return_value = None  # No page available
         mock_get_page_state.return_value = mock_page_state
 
         # Call expand_and_refine_all_bboxes

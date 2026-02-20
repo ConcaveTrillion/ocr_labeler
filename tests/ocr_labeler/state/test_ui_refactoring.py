@@ -27,8 +27,8 @@ def test_project_state_direct_access_and_delegation_removal():
     # These should work through direct project_state access
     assert state.project_state.project is not None
     assert state.project_state.project_root == state.project_state.project_root
-    # current_page should now be accessed directly from project_state
-    assert hasattr(state.project_state, "current_page")
+    # current_page_model should now be accessed directly from project_state
+    assert hasattr(state.project_state, "current_page_model")
 
     # Test setters work
     state.is_loading = True
@@ -46,6 +46,6 @@ def test_project_state_direct_access_and_delegation_removal():
     assert not hasattr(state, "goto_page_number")
     assert not hasattr(state, "current_page")
     assert not hasattr(state, "reload_ground_truth")
-    # Note: current_page is now a method on ProjectState, not a property on AppState
+    # Note: current_page_model is now a method on ProjectState, not a property on AppState
     assert not hasattr(state, "project")  # Should no longer be on AppState
     assert not hasattr(state, "project_root")  # Should no longer be on AppState

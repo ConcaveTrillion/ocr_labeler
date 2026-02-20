@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable, List, Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
+from ..models.page_model import PageModel
 from ..operations.ocr.page_operations import PageOperations
 
 if TYPE_CHECKING:
@@ -36,10 +37,8 @@ class PageState:
     _project_state: Optional["ProjectState"] = field(
         default=None, init=False
     )  # Reference to parent ProjectState
-    page_sources: dict[int, str] = field(
-        default_factory=dict
-    )  # Track source of each page: 'ocr' or 'filesystem'
     current_page: Optional[Page] = field(default=None, init=False)
+    current_page_model: Optional[PageModel] = field(default=None, init=False)
     original_page: Optional[Page] = field(default=None, init=False)
 
     # Cached text values for current page
@@ -113,30 +112,50 @@ class PageState:
         if self._project_state:
             self._project_state.on_change.append(self._on_project_state_change)
 
-    def get_page(self, index: int, force_ocr: bool = False) -> Optional[Page]:
-        """Get page at the specified index, loading it if necessary."""
+    def get_page_model(
+        self, index: int, force_ocr: bool = False
+    ) -> Optional[PageModel]:
+        """Get page model at the specified index, loading it if necessary."""
         if not self._project_state:
-            logger.warning("PageState.get_page: no project state set")
+            logger.warning("PageState.get_page_model: no project state set")
             return None
 
-        logger.debug("PageState.get_page: index=%s, force_ocr=%s", index, force_ocr)
+        logger.debug(
+            "PageState.get_page_model: index=%s, force_ocr=%s", index, force_ocr
+        )
 
         # Delegate to ProjectState for page loading
-        page = self._project_state.ensure_page(index, force_ocr=force_ocr)
+        page_model = self._project_state.ensure_page_model(index, force_ocr=force_ocr)
+        page = page_model.page if page_model is not None else None
 
         # Cache the page reference so downstream consumers (e.g., word match view,
         # GT→OCR copy helpers) can access the most recent page without triggering
         # another ensure/load cycle.
         self.current_page = page
+        self.current_page_model = page_model
 
-        # Update page_sources dictionary based on the page's source
-        if page is not None and hasattr(page, "page_source"):
-            self.page_sources[index] = page.page_source
-            # If loaded from OCR and no original stored yet, store a copy
-            if page.page_source == "ocr" and self.original_page is None:
+        # If loaded from OCR and no original stored yet, store a copy
+        page_source = page_model.page_source if page_model is not None else None
+        if page_source is None:
+            page_source = (
+                str(getattr(page, "page_source", "")) if page is not None else ""
+            )
+
+        if (
+            page is not None
+            and page_source == "ocr"
+            and self.original_page is None
+            and hasattr(page, "to_dict")
+        ):
+            try:
                 self.original_page = Page.from_dict(page.to_dict())
+            except Exception:
+                logger.debug(
+                    "PageState.get_page_model: unable to snapshot original page",
+                    exc_info=True,
+                )
 
-        return page
+        return page_model
 
     def copy_ground_truth_to_ocr(self, page_index: int, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
@@ -193,13 +212,13 @@ class PageState:
             logger.error("PageState.save_page: no project root set")
             return False
 
-        page = self.get_page(page_index)
-        if page is None:
+        page_model = self.get_page_model(page_index)
+        if page_model is None:
             logger.error("No page available at index %s to save", page_index)
             return False
 
         success = self.page_ops.save_page(
-            page=page,
+            page=page_model,
             project_root=self._project_root,
             save_directory=save_directory,
             project_id=project_id,
@@ -210,10 +229,8 @@ class PageState:
         )
 
         if success:
-            # Update page source to indicate it's now on the filesystem
-            if hasattr(page, "page_source"):
-                page.page_source = "filesystem"  # type: ignore[attr-defined]
-            self.page_sources[page_index] = "filesystem"
+            if self._project_state:
+                self._project_state.set_page_source(page_index, "filesystem")
 
         return success
 
@@ -238,7 +255,7 @@ class PageState:
             logger.error("PageState.load_page: project context not set")
             return False
 
-        loaded_result = self.page_ops.load_page(
+        loaded_result = self.page_ops.load_page_model(
             page_number=page_index + 1,  # Convert to 1-based
             project_root=self._project_root,
             save_directory=save_directory,
@@ -249,7 +266,8 @@ class PageState:
             logger.warning("No saved page found for index %s", page_index)
             return False
 
-        loaded_page, original_page_dict = loaded_result
+        loaded_page_model, original_page_dict = loaded_result
+        loaded_page = loaded_page_model.page
 
         # Inject ground truth text if available
         if hasattr(loaded_page, "name") and self._project.ground_truth_map:
@@ -272,9 +290,14 @@ class PageState:
         # Replace the page in the project
         if 0 <= page_index < len(self._project.pages):
             self._project.pages[page_index] = loaded_page
-            self.page_sources[page_index] = (
-                "filesystem"  # Mark as loaded from filesystem
-            )
+            self.current_page = loaded_page
+            self.current_page_model = loaded_page_model
+            if self._project_state:
+                self._project_state.upsert_page_model(
+                    page_index=page_index,
+                    page=loaded_page,
+                    source="filesystem",
+                )
             # Set original page if available
             if original_page_dict:
                 self.original_page = Page.from_dict(original_page_dict)
@@ -300,31 +323,88 @@ class PageState:
         """
         return self.page_ops.find_ground_truth_text(page_name, ground_truth_map)
 
-    def get_page_source_text(self, page_index: int, is_loading: bool) -> str:
-        """Get the source text for a specific page.
-
-        Args:
-            page_index: Zero-based page index
-            is_loading: Whether OCR is currently loading
-
-        Returns:
-            Source text string
-        """
-        if is_loading:
+    @property
+    def current_page_source_text(self) -> str:
+        """Get source text for the current page from page-domain state."""
+        if self._project_state and (
+            self._project_state.is_project_loading or self._project_state.is_navigating
+        ):
             return "LOADING..."
-        elif not self._project:
-            return "(NO PROJECT)"
-        else:
-            page_source = self.page_sources.get(
-                page_index,
-                "ocr",  # Default to OCR if unknown
-            )
-            if page_source == "filesystem":
-                return "LABELED"
-            elif page_source == "cached_ocr":
-                return "CACHED OCR"
+
+        if (
+            not self._project
+            or not self._project.pages
+            or self._current_page_index < 0
+            or self._current_page_index >= len(self._project.pages)
+        ):
+            return "(NO PAGE)"
+
+        page = self._project.pages[self._current_page_index]
+        if page is None:
+            return "(NO PAGE)"
+
+        page_source = "ocr"
+        if self._project_state and hasattr(self._project_state, "get_page_model"):
+            page_model = self._project_state.get_page_model(self._current_page_index)
+            if page_model is not None:
+                page_source = page_model.page_source
             else:
-                return "RAW OCR"
+                page_source = str(getattr(page, "page_source", "ocr"))
+
+        if page_source == "filesystem":
+            return "LABELED"
+        if page_source == "cached_ocr":
+            return "CACHED OCR"
+        if page_source == "fallback":
+            return "RAW OCR"
+        return "RAW OCR"
+
+    @property
+    def current_page_source_tooltip(self) -> str:
+        """Get provenance tooltip text for the current page source badge."""
+        if self._project_state and (
+            self._project_state.is_project_loading or self._project_state.is_navigating
+        ):
+            return ""
+
+        if (
+            not self._project
+            or not self._project.pages
+            or self._current_page_index < 0
+            or self._current_page_index >= len(self._project.pages)
+        ):
+            return ""
+
+        page = self._project.pages[self._current_page_index]
+        if page is None:
+            return ""
+
+        page_source = "ocr"
+        if self._project_state and hasattr(self._project_state, "get_page_model"):
+            page_model = self._project_state.get_page_model(self._current_page_index)
+            if page_model is not None:
+                page_source = page_model.page_source
+            else:
+                page_source = str(getattr(page, "page_source", "ocr"))
+
+        if page_source not in (
+            "LABELED",
+            "CACHED OCR",
+            "filesystem",
+            "cached_ocr",
+        ):
+            return ""
+
+        if not self._project_state:
+            return ""
+
+        page_model = None
+        if self._project_state and hasattr(self._project_state, "get_page_model"):
+            page_model = self._project_state.get_page_model(self._current_page_index)
+
+        return self._project_state.page_ops.get_page_provenance_summary(
+            page_model if page_model is not None else page
+        )
 
     @notify_on_completion
     def reload_page_with_ocr(self, page_index: int) -> None:
@@ -340,11 +420,13 @@ class PageState:
         if 0 <= page_index < len(self._project.pages):
             # Clear the cached page to force reload
             self._project.pages[page_index] = None
+            if self.current_page_model and self.current_page_model.index == page_index:
+                self.current_page_model = None
+            if self._project_state:
+                self._project_state.clear_page_model(page_index)
             # Reload with force_ocr=True
-            page = self.get_page(page_index, force_ocr=True)
-            # Ensure the page source is set to "ocr" since we forced OCR processing
-            if page is not None:
-                self.page_sources[page_index] = "ocr"
+            page_model = self.get_page_model(page_index, force_ocr=True)
+            if page_model is not None:
                 # Invalidate cache since page content changed
                 self._invalidate_text_cache()
         else:
@@ -430,9 +512,10 @@ class PageState:
         if not self._project:
             return "", ""
 
-        page = self.get_page(page_index)
-        if not page:
+        page_model = self.get_page_model(page_index)
+        if not page_model:
             return "", ""
+        page = page_model.page
 
         # Get OCR text from page
         ocr_text = getattr(page, "text", "") or ""

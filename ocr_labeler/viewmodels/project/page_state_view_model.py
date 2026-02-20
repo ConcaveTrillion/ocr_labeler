@@ -36,6 +36,8 @@ class PageStateViewModel(BaseViewModel):
     # Exposed page metadata for UI binding
     page_index: int = -1
     page_source: str = ""
+    current_page_source_text: str = ""
+    current_page_source_tooltip: str = ""
 
     # Page state reference
     _page_state: Optional[PageState] = None
@@ -129,6 +131,8 @@ class PageStateViewModel(BaseViewModel):
         if not keep_metadata:
             self.page_index = -1
             self.page_source = ""
+        self.current_page_source_text = ""
+        self.current_page_source_tooltip = ""
 
     def _bind_to_page_state(self, page_state: PageState | None):
         """Bind the viewmodel to a PageState instance, managing listeners."""
@@ -154,6 +158,7 @@ class PageStateViewModel(BaseViewModel):
                     self._page_state.on_change = [self._on_page_state_change]
                 except Exception:
                     pass
+        self._sync_source_badge()
 
     def _on_project_state_change(self):
         """Handle project-level changes by rebinding to the new current PageState."""
@@ -180,13 +185,32 @@ class PageStateViewModel(BaseViewModel):
         except Exception as e:
             logger.exception("Error rebinding to new PageState: %s", e)
         finally:
+            self._sync_source_badge()
             # Always schedule an update so we refresh when navigation completes
             self._schedule_image_update()
 
     def _on_page_state_change(self):
         """Listener for PageState changes; update image sources."""
         logger.debug("PageState change detected, updating image sources")
+        self._sync_source_badge()
         self._schedule_image_update()
+
+    def _sync_source_badge(self):
+        """Synchronize source badge text/tooltip from page-domain state."""
+        if not self._page_state:
+            self.current_page_source_text = "(NO PAGE)"
+            self.current_page_source_tooltip = ""
+            return
+
+        try:
+            self.current_page_source_text = self._page_state.current_page_source_text
+            self.current_page_source_tooltip = (
+                self._page_state.current_page_source_tooltip
+            )
+        except Exception:
+            logger.debug("Failed to sync source badge from PageState", exc_info=True)
+            self.current_page_source_text = "(NO PAGE)"
+            self.current_page_source_tooltip = ""
 
     def _schedule_image_update(self):
         """Schedule an async image update using NiceGUI's background task API.
@@ -384,8 +408,8 @@ class PageStateViewModel(BaseViewModel):
         self._schedule_image_update()
 
         # Get current page. Support two shapes:
-        # - ProjectState: exposes current_page() method
         # - PageState: exposes current_page attribute (optional Page)
+        # - ProjectState-backed context: inspect in-memory project.pages cache only
 
     def _get_current_page_or_clear(self):
         """Return the current page or clear bindings if unavailable."""
@@ -422,7 +446,7 @@ class PageStateViewModel(BaseViewModel):
 
         # If PageState does not expose a current_page instance, but we are bound to
         # a ProjectState, inspect the in-memory project pages cache directly.
-        # Do not call ProjectState.current_page() here because it can trigger
+        # Do not call ProjectState.current_page_model() here because it can trigger
         # synchronous page/OCR loading and block UI updates (including queued
         # notifications) during route-driven initialization.
         if (not current_page) and getattr(self, "_project_state", None) is not None:

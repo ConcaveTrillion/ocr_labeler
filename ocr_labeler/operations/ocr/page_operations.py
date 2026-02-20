@@ -22,6 +22,7 @@ from pd_book_tools.ocr.page import Page  # type: ignore
 from ocr_labeler.models import (
     UNKNOWN_METADATA_VALUE,
     USER_PAGE_SCHEMA_VERSION,
+    PageModel,
     ProvenanceApp,
     ProvenanceOCR,
     ProvenanceOCRModel,
@@ -146,12 +147,12 @@ class PageOperations:
 
     def save_page(
         self,
-        page: Page,
+        page: PageModel | Page,
         project_root: Path,
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
         source_lib: str = "doctr-pgdp-labeled",
-        original_page: Optional[Page] = None,
+        original_page: Optional[PageModel | Page] = None,
     ) -> bool:
         """Save a single page object to a file with both image copy and JSON metadata.
 
@@ -187,6 +188,10 @@ class PageOperations:
             )
         """
         try:
+            page_model = self._to_page_model(page)
+            page_obj = page_model.page
+            original_page_obj = self._to_page(original_page)
+
             # Generate project ID if not provided
             if project_id is None:
                 project_id = project_root.name
@@ -196,10 +201,10 @@ class PageOperations:
             save_dir.mkdir(parents=True, exist_ok=True)
 
             # Get page number (1-based for filenames)
-            page_number = getattr(page, "index", 0) + 1
+            page_number = getattr(page_obj, "index", 0) + 1
 
             # Get original image path
-            image_path = getattr(page, "image_path", None)
+            image_path = getattr(page_obj, "image_path", None)
             if image_path is None:
                 logger.error("Page has no associated image_path")
                 return False
@@ -227,12 +232,12 @@ class PageOperations:
                 relative_path = Path(image_path).name
 
             envelope = self._build_user_page_envelope(
-                page=page,
+                page=page_model,
                 project_id=project_id,
                 page_number=page_number,
                 relative_path=relative_path,
                 source_lib=source_lib,
-                original_page=original_page,
+                original_page=original_page_obj,
             )
             json_data = envelope.to_dict()
 
@@ -242,7 +247,7 @@ class PageOperations:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
             logger.info(f"Saved JSON metadata to: {json_dest}")
 
-            self._store_saved_provenance(page, envelope.provenance.to_dict())
+            self._store_saved_provenance(page_model, envelope.provenance.to_dict())
 
             return True
 
@@ -250,13 +255,13 @@ class PageOperations:
             logger.exception(f"Failed to save page: {e}")
             return False
 
-    def load_page(
+    def load_page_model(
         self,
         page_number: int,
         project_root: Path,
         save_directory: str = "local-data/labeled-ocr",
         project_id: Optional[str] = None,
-    ) -> Optional[tuple[Page, Optional[dict[str, Any]]]]:
+    ) -> Optional[tuple[PageModel, Optional[dict[str, Any]]]]:
         """Load a previously saved page from disk with metadata and image.
 
         Looks for saved files in the save directory:
@@ -270,19 +275,19 @@ class PageOperations:
             project_id: Project identifier. If None, derives from project_root name.
 
         Returns:
-            tuple: (Page, original_page_dict) if found and valid, None otherwise.
+            tuple: (PageModel, original_page_dict) if found and valid, None otherwise.
                    original_page_dict is the dict of the original OCR page if saved, else None.
 
         Example:
             # Load page with default settings
             operations = PageOperations()
-            page, original_page_dict = operations.load_page(
+            page_model, original_page_dict = operations.load_page_model(
                 page_number=1,
                 project_root=Path("/path/to/project")
             )
 
             # Load with custom directory and project ID
-            page, original_page_dict = operations.load_page(
+            page_model, original_page_dict = operations.load_page_model(
                 page_number=5,
                 project_root=Path("/path/to/project"),
                 save_directory="my-output/labeled-data",
@@ -370,7 +375,20 @@ class PageOperations:
             else:
                 logger.warning(f"No image file found for prefix: {file_prefix}")
 
-            self._attach_loaded_provenance(page=page, json_data=json_data)
+            page_model = PageModel(page=page)
+            self._attach_loaded_provenance(page_model=page_model, json_data=json_data)
+
+            source_data = json_data.get("source", {})
+            if isinstance(source_data, dict):
+                source_index = source_data.get("page_index")
+                if isinstance(source_index, int):
+                    page_model.index = source_index
+                image_path = source_data.get("image_path")
+                if isinstance(image_path, str) and image_path:
+                    page_model.image_path = str(project_root / image_path)
+
+            page_model.name = str(getattr(page, "name", page_model.name) or "") or None
+            page_model.page_source = "filesystem"
 
             # Extract original page if saved
             original_page_dict = None
@@ -378,13 +396,13 @@ class PageOperations:
                 envelope = UserPageEnvelope.from_dict(json_data)
                 original_page_dict = envelope.payload.original_page
 
-            return page, original_page_dict
+            return page_model, original_page_dict
 
         except Exception as e:
             logger.exception(f"Failed to load page {page_number}: {e}")
             return None
 
-    def refine_all_bboxes(self, page: Page, padding_px: int = 2) -> bool:
+    def refine_all_bboxes(self, page: PageModel | Page, padding_px: int = 2) -> bool:
         """Refine all bounding boxes in a page with specified padding.
 
         Calls page.refine_bounding_boxes(padding_px) and refreshes page images.
@@ -397,12 +415,16 @@ class PageOperations:
             bool: True if refinement was successful, False otherwise.
         """
         try:
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to refine_all_bboxes")
+                return False
             logger.debug(f"Refining bboxes for page with padding_px={padding_px}")
-            page.refine_bounding_boxes(padding_px=padding_px)
+            page_obj.refine_bounding_boxes(padding_px=padding_px)
 
             # Refresh page images after bbox changes
-            if hasattr(page, "refresh_page_images"):
-                page.refresh_page_images()
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
                 logger.debug("Refreshed page images after bbox refinement")
 
             logger.info("Successfully refined bboxes for page")
@@ -411,7 +433,9 @@ class PageOperations:
             logger.exception(f"Failed to refine bboxes for page: {e}")
             return False
 
-    def expand_and_refine_all_bboxes(self, page: Page, padding_px: int = 2) -> bool:
+    def expand_and_refine_all_bboxes(
+        self, page: PageModel | Page, padding_px: int = 2
+    ) -> bool:
         """Expand and refine all bounding boxes in a page.
 
         Iterates through all words in the page, calling crop_bottom() and expand_to_content()
@@ -425,16 +449,20 @@ class PageOperations:
             bool: True if operation was successful, False otherwise.
         """
         try:
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to expand_and_refine_all_bboxes")
+                return False
             logger.debug(
                 f"Expanding and refining bboxes for page with padding_px={padding_px}"
             )
 
             # Iterate through all words and apply crop_bottom + expand_to_content
             word_blocks = None
-            if hasattr(page, "blocks"):
-                word_blocks = page.blocks
-            elif hasattr(page, "lines"):
-                word_blocks = page.lines
+            if hasattr(page_obj, "blocks"):
+                word_blocks = page_obj.blocks
+            elif hasattr(page_obj, "lines"):
+                word_blocks = page_obj.lines
 
             if word_blocks is None:
                 logger.warning(
@@ -443,8 +471,8 @@ class PageOperations:
                 return False
 
             page_image = None
-            if hasattr(page, "cv2_numpy_page_image"):
-                page_image = page.cv2_numpy_page_image
+            if hasattr(page_obj, "cv2_numpy_page_image"):
+                page_image = page_obj.cv2_numpy_page_image
 
             for block in word_blocks:
                 words = getattr(block, "words", None)
@@ -469,11 +497,11 @@ class PageOperations:
                                 raise
 
             # Then refine bboxes
-            page.refine_bounding_boxes(padding_px=padding_px)
+            page_obj.refine_bounding_boxes(padding_px=padding_px)
 
             # Refresh page images after bbox changes
-            if hasattr(page, "refresh_page_images"):
-                page.refresh_page_images()
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
                 logger.debug("Refreshed page images after expand and refine")
 
             logger.info("Successfully expanded and refined bboxes for page")
@@ -619,7 +647,7 @@ class PageOperations:
 
         return page
 
-    def refresh_page_images(self, page: Page) -> bool:
+    def refresh_page_images(self, page: PageModel | Page) -> bool:
         """Refresh all generated images (overlays) for a page.
 
         Calls page.refresh_page_images() if available.
@@ -631,8 +659,12 @@ class PageOperations:
             bool: True if refresh was successful, False otherwise.
         """
         try:
-            if hasattr(page, "refresh_page_images"):
-                page.refresh_page_images()
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to refresh_page_images")
+                return False
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
                 logger.info("Successfully refreshed page images using native method")
                 return True
             else:
@@ -734,15 +766,17 @@ class PageOperations:
 
     def _build_user_page_envelope(
         self,
-        page: Page,
+        page: PageModel | Page,
         project_id: str,
         page_number: int,
         relative_path: str,
         source_lib: str,
         original_page: Optional[Page] = None,
     ) -> UserPageEnvelope:
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
         source_fingerprint = self._build_image_fingerprint(
-            getattr(page, "image_path", None)
+            getattr(page_obj, "image_path", None)
         )
 
         return UserPageEnvelope(
@@ -755,32 +789,45 @@ class PageOperations:
                     pd_book_tools=self._safe_package_version("pd-book-tools"),
                 ),
                 ocr=self._resolve_ocr_provenance_for_save(
-                    page=page, source_lib=source_lib
+                    page=page_model, source_lib=source_lib
                 ),
             ),
             source=UserPageSource(
                 project_id=project_id,
-                page_index=getattr(page, "index", 0),
+                page_index=getattr(page_obj, "index", 0),
                 page_number=page_number,
                 image_path=relative_path,
                 image_fingerprint=source_fingerprint,
             ),
             payload=UserPagePayload(
-                page=page.to_dict(),
+                page=page_obj.to_dict(),
                 original_page=original_page.to_dict() if original_page else None,
             ),
         )
 
     def _resolve_ocr_provenance_for_save(
         self,
-        page: Page,
+        page: PageModel | Page,
         source_lib: str,
     ) -> ProvenanceOCR:
-        direct_provenance = self._coerce_page_ocr_provenance(page)
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
+
+        if isinstance(page_model.ocr_provenance, ProvenanceOCR):
+            return page_model.ocr_provenance
+        if isinstance(page_model.ocr_provenance, dict):
+            try:
+                return ProvenanceOCR.from_dict(page_model.ocr_provenance)
+            except Exception:
+                logger.debug(
+                    "Ignoring invalid page model OCR provenance dict", exc_info=True
+                )
+
+        direct_provenance = self._coerce_page_ocr_provenance(page_obj)
         if direct_provenance is not None:
             return direct_provenance
 
-        live_provenance = getattr(page, "_ocr_labeler_live_ocr_provenance", None)
+        live_provenance = getattr(page_obj, "_ocr_labeler_live_ocr_provenance", None)
         if isinstance(live_provenance, ProvenanceOCR):
             return live_provenance
         if isinstance(live_provenance, dict):
@@ -798,7 +845,7 @@ class PageOperations:
                     "Ignoring invalid live OCR provenance object", exc_info=True
                 )
 
-        provenance = self._resolve_saved_provenance(page)
+        provenance = self._resolve_saved_provenance(page_model)
         if isinstance(provenance, dict):
             ocr_data = provenance.get("ocr")
             if isinstance(ocr_data, dict):
@@ -811,7 +858,7 @@ class PageOperations:
 
         return self._build_live_ocr_provenance(source_lib)
 
-    def get_page_provenance_summary(self, page: Page | None) -> str:
+    def get_page_provenance_summary(self, page: PageModel | Page | None) -> str:
         """Return a compact provenance summary suitable for UI tooltip display."""
         if page is None:
             return ""
@@ -873,16 +920,27 @@ class PageOperations:
 
         return "\n".join(lines)
 
-    def _resolve_saved_provenance(self, page: Page) -> dict[str, Any] | None:
+    def _resolve_saved_provenance(
+        self, page: PageModel | Page
+    ) -> dict[str, Any] | None:
+        page_model = self._to_page_model(page)
+        if isinstance(page_model.saved_provenance, dict):
+            return page_model.saved_provenance
+
+        page_obj = page_model.page
         stored = getattr(page, PAGE_SAVED_PROVENANCE_ATTR, None)
         if isinstance(stored, dict):
             return stored
 
-        stored = self._saved_provenance_by_page_id.get(id(page))
+        stored = self._saved_provenance_by_page_id.get(id(page_obj))
         if isinstance(stored, dict):
             return stored
 
-        ocr_provenance = self._coerce_page_ocr_provenance(page)
+        stored = self._saved_provenance_by_page_id.get(id(page_model))
+        if isinstance(stored, dict):
+            return stored
+
+        ocr_provenance = self._coerce_page_ocr_provenance(page_obj)
         if ocr_provenance is not None:
             return {"ocr": ocr_provenance.to_dict()}
 
@@ -916,25 +974,42 @@ class PageOperations:
                     )
         return None
 
-    def _attach_loaded_provenance(self, page: Page, json_data: dict) -> None:
+    def _attach_loaded_provenance(self, page_model: PageModel, json_data: dict) -> None:
         if not is_user_page_envelope(json_data):
             return
         provenance_data = json_data.get("provenance", {})
         if not isinstance(provenance_data, dict):
             return
-        self._store_saved_provenance(page, provenance_data)
+        self._store_saved_provenance(page_model, provenance_data)
         ocr_data = provenance_data.get("ocr", {})
         if isinstance(ocr_data, dict):
-            page.ocr_provenance = ProvenanceOCR.from_dict(ocr_data)
+            page_model.ocr_provenance = ProvenanceOCR.from_dict(ocr_data)
+            page_model.page.ocr_provenance = page_model.ocr_provenance
 
     def _store_saved_provenance(
-        self, page: Page, provenance_data: dict[str, Any]
+        self, page: PageModel | Page, provenance_data: dict[str, Any]
     ) -> None:
-        self._saved_provenance_by_page_id[id(page)] = provenance_data
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
+        page_model.saved_provenance = provenance_data
+        self._saved_provenance_by_page_id[id(page_model)] = provenance_data
+        self._saved_provenance_by_page_id[id(page_obj)] = provenance_data
         try:
-            setattr(page, PAGE_SAVED_PROVENANCE_ATTR, provenance_data)
+            setattr(page_obj, PAGE_SAVED_PROVENANCE_ATTR, provenance_data)
         except Exception:
             pass
+
+    def _to_page(self, page: PageModel | Page | None) -> Page | None:
+        if page is None:
+            return None
+        if isinstance(page, PageModel):
+            return page.page
+        return page
+
+    def _to_page_model(self, page: PageModel | Page) -> PageModel:
+        if isinstance(page, PageModel):
+            return page
+        return PageModel(page=page)
 
     def _build_live_ocr_provenance(self, source_lib: str) -> ProvenanceOCR:
         return ProvenanceOCR(

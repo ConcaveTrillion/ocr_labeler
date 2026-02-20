@@ -32,7 +32,6 @@ class TestProjectNavigationControls:
         assert controls._on_goto == mock_on_goto
         assert controls.page_input is None
         assert controls.page_total is None
-        assert controls.page_source_label is None
 
     def test_navigation_controls_initialization_required_callbacks_only(self):
         """Test that ProjectNavigationControls initializes with required callbacks."""

@@ -1,4 +1,5 @@
 from .line_match_model import LineMatch
+from .page_model import PageModel
 from .project_model import Project
 from .user_page_persistence import (
     UNKNOWN_METADATA_VALUE,
@@ -22,6 +23,7 @@ from .word_match_model import MatchStatus, WordMatch
 
 __all__ = [
     "Project",
+    "PageModel",
     "WordMatch",
     "LineMatch",
     "MatchStatus",

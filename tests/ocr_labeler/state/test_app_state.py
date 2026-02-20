@@ -178,12 +178,12 @@ async def test_load_project_success_sets_state_and_clears_loading(
 
     await state.load_project(tmp_path)
 
-    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_or_load_page_model", mock_get_page)
 
     assert state.project_state.project_root == tmp_path
     assert isinstance(state.project_state.project, DummyProject)
     assert len(state.project_state.project.image_paths) == 2
-    assert state.project_state.current_page() == "page-0"
+    assert state.project_state.current_page_model() == "page-0"
     assert state.is_loading is False
     assert state.is_project_loading is False
     assert len(notifications) >= 2
@@ -207,9 +207,9 @@ async def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
             return f"page-{index}"
         return None
 
-    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_or_load_page_model", mock_get_page)
 
-    assert state.project_state.current_page() == "page-0"
+    assert state.project_state.current_page_model() == "page-0"
 
     def mock_get_running_loop():
         raise RuntimeError("no loop")
@@ -217,21 +217,21 @@ async def test_navigation_updates_current_page_and_flags(monkeypatch, tmp_path):
     monkeypatch.setattr("asyncio.get_running_loop", mock_get_running_loop)
 
     state.project_state.next_page()
-    assert state.project_state.current_page() == "page-1"
+    assert state.project_state.current_page_model() == "page-1"
     assert state.is_loading is False
 
     state.project_state.next_page()
     state.project_state.next_page()
-    assert state.project_state.current_page() == "page-2"
+    assert state.project_state.current_page_model() == "page-2"
 
     state.project_state.prev_page()
-    assert state.project_state.current_page() == "page-1"
+    assert state.project_state.current_page_model() == "page-1"
 
     state.project_state.goto_page_number(1)
-    assert state.project_state.current_page() == "page-0"
+    assert state.project_state.current_page_model() == "page-0"
 
     state.project_state.goto_page_number(99)
-    assert state.project_state.current_page() == "page-0"
+    assert state.project_state.current_page_model() == "page-0"
 
 
 def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
@@ -335,7 +335,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
             return sentinel_page
         return None
 
-    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_or_load_page_model", mock_get_page)
 
     notifications = []
 
@@ -346,7 +346,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
             (
                 state.is_loading,
                 state.is_project_loading,
-                state.project_state.current_page(),
+                state.project_state.current_page_model(),
             )
         )
 
@@ -364,7 +364,7 @@ def test_navigate_sync_fallback_sets_flags_and_loads_page(monkeypatch, tmp_path)
     assert notifications[1] == (False, False, sentinel_page)
     assert state.is_loading is False
     assert state.is_project_loading is False
-    assert state.project_state.current_page() is sentinel_page
+    assert state.project_state.current_page_model() is sentinel_page
 
 
 def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
@@ -381,7 +381,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
             return sentinel_page
         return None
 
-    monkeypatch.setattr(state.project_state, "get_page", mock_get_page)
+    monkeypatch.setattr(state.project_state, "get_or_load_page_model", mock_get_page)
 
     notifications = []
 
@@ -392,7 +392,7 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
             (
                 state.is_loading,
                 state.is_project_loading,
-                state.project_state.current_page(),
+                state.project_state.current_page_model(),
             )
         )
 
@@ -417,4 +417,4 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     assert notifications[0] == (True, False, None)
     assert state.is_loading is True
     assert state.is_project_loading is False
-    assert state.project_state.current_page() is None
+    assert state.project_state.current_page_model() is None

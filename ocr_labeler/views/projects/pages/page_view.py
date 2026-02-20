@@ -62,6 +62,7 @@ class PageView:  # pragma: no cover - UI wrapper file
     def build(self):
         self.page_actions = PageActions(
             self.project_view_model,
+            self.page_state_view_model,
             on_save_page=self.page_action_callbacks.save_page
             if self.page_action_callbacks
             else None,
@@ -86,6 +87,11 @@ class PageView:  # pragma: no cover - UI wrapper file
         self.root = self.content.build()
         return self.root
 
+    def set_page_metadata(self, name: str) -> None:
+        """Set page-level metadata displayed by page actions."""
+        if self.page_actions:
+            self.page_actions.set_page_metadata(name)
+
     def refresh(
         self,
         loading: bool,
@@ -109,6 +115,8 @@ class PageView:  # pragma: no cover - UI wrapper file
             self._sync_text_tabs(page)
 
         total = self.project_view_model.page_total
+        display_name = image_name or "(no page)" if total else "(no page)"
+        self.set_page_metadata(display_name)
         logger.debug(
             "Current page state - index: %d, image_name: %s, total_pages: %d, page_loaded: %s",
             current_index,

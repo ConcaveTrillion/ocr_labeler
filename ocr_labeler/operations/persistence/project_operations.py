@@ -457,15 +457,81 @@ class ProjectOperations:
 
         return saved_projects
 
+    def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
+        """Normalize pages.json entries for flexible filename lookup."""
+        image_exts = (".png", ".jpg", ".jpeg")
+        normalized: dict[str, str] = {}
+
+        for key, value in data.items():
+            if not isinstance(key, str):
+                continue
+
+            text_value: str | None = (
+                value
+                if isinstance(value, str)
+                else (str(value) if value is not None else None)
+            )
+            if text_value is None:
+                continue
+
+            normalized[key] = text_value
+            lower_key = key.lower()
+            normalized.setdefault(lower_key, text_value)
+
+            if "." not in key:
+                for ext in image_exts:
+                    normalized.setdefault(f"{key}{ext}", text_value)
+                    normalized.setdefault(f"{key}{ext}".lower(), text_value)
+
+        return normalized
+
     def reload_ground_truth_into_project(self, state):  # type: ignore[misc]
         """Reload ground truth data into an existing project.
-
-        Currently a placeholder for future implementation.
 
         Parameters
         ----------
         state : AppState
             Application state containing the project to update
         """
-        pass
-        # TODO: this should instead allow remapping of ground truth to OCR
+        project = getattr(state, "project", None)
+        project_root = getattr(state, "project_root", None)
+
+        if project is None or project_root is None:
+            logger.debug(
+                "reload_ground_truth_into_project: missing project or project_root"
+            )
+            return
+
+        pages_json = Path(project_root) / "pages.json"
+        new_map: dict[str, str] = {}
+
+        if pages_json.exists():
+            try:
+                raw_data = json.loads(pages_json.read_text(encoding="utf-8"))
+                if isinstance(raw_data, dict):
+                    new_map = self._normalize_ground_truth_entries(raw_data)
+                    logger.info(
+                        "Reloaded %d ground truth entries from %s",
+                        len(new_map),
+                        pages_json,
+                    )
+                else:
+                    logger.warning(
+                        "pages.json root is not an object (dict): %s", pages_json
+                    )
+            except Exception as exc:
+                logger.warning("Failed to reload pages.json (%s): %s", pages_json, exc)
+        else:
+            logger.info(
+                "No pages.json found in %s; clearing ground truth map", project_root
+            )
+
+        project.ground_truth_map = new_map
+
+        invalidate_cache = getattr(state, "_invalidate_text_cache", None)
+        if callable(invalidate_cache):
+            invalidate_cache()
+
+        notify = getattr(state, "notify", None)
+        if callable(notify):
+            notify()

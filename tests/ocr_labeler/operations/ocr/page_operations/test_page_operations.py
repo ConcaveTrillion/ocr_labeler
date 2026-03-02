@@ -78,6 +78,7 @@ class TestPageOperations:
 
         # Verify results
         assert result_page == mock_page
+        mock_page.reorganize_page.assert_called_once()
         mock_from_image_ocr.assert_called_once()
         mock_cv2_imread.assert_called_once_with(str(image_path))
 

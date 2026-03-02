@@ -61,6 +61,7 @@ class WordMatchViewModel(BaseViewModel):
         # Get lines from the page using the convenience method
         try:
             lines = page.lines if hasattr(page, "lines") else []
+            paragraph_lookup = self._build_line_paragraph_lookup(page)
 
             # Defensive check for Mock objects in tests - check if iterable
             try:
@@ -85,7 +86,12 @@ class WordMatchViewModel(BaseViewModel):
                 logger.debug("Found lines in page (count unavailable)")
 
             for line_idx, line in enumerate(lines):
-                line_match = self._create_line_match(line_idx, line, page)
+                line_match = self._create_line_match(
+                    line_idx,
+                    line,
+                    page,
+                    paragraph_lookup.get(id(line)),
+                )
                 if line_match:
                     new_line_matches.append(line_match)
 
@@ -97,7 +103,11 @@ class WordMatchViewModel(BaseViewModel):
         self._update_statistics()
 
     def _create_line_match(
-        self, line_idx: int, line: Block, page: Page
+        self,
+        line_idx: int,
+        line: Block,
+        page: Page,
+        paragraph_index: Optional[int] = None,
     ) -> Optional[LineMatch]:
         """Create a LineMatch from a line object."""
         try:
@@ -121,6 +131,7 @@ class WordMatchViewModel(BaseViewModel):
                 ocr_line_text=line.text,
                 ground_truth_line_text=line.ground_truth_text,
                 word_matches=word_matches,
+                paragraph_index=paragraph_index,
                 page_image=page_image,
                 line_object=line,  # Pass line object for bbox access
             )
@@ -128,6 +139,23 @@ class WordMatchViewModel(BaseViewModel):
         except Exception as e:
             logger.exception(f"Error creating line match for line {line_idx}: {e}")
             return None
+
+    def _build_line_paragraph_lookup(self, page: Page) -> dict[int, int]:
+        """Build a mapping of line object identity to zero-based paragraph index."""
+        paragraph_lookup: dict[int, int] = {}
+
+        if page is None or not hasattr(page, "paragraphs"):
+            return paragraph_lookup
+
+        try:
+            paragraphs = page.paragraphs or []
+            for paragraph_idx, paragraph in enumerate(paragraphs):
+                for paragraph_line in getattr(paragraph, "lines", []) or []:
+                    paragraph_lookup[id(paragraph_line)] = paragraph_idx
+        except Exception as e:
+            logger.debug("Unable to build line-to-paragraph lookup: %s", e)
+
+        return paragraph_lookup
 
     def _create_enhanced_word_matches(self, line: Block) -> List[WordMatch]:
         """Create word matches including unmatched ground truth words inserted before the next match."""

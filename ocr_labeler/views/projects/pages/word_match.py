@@ -271,11 +271,21 @@ class WordMatchView:
             self._last_display_signature = display_signature
             return
 
-        # Display filtered line matches in cards
+        # Display filtered line matches in collapsible paragraph sections
         logger.info(f"Displaying {len(lines_to_display)} line matches")
         with self.lines_container:
-            for line_match in lines_to_display:
-                self._create_line_card(line_match)
+            for (
+                paragraph_index,
+                paragraph_line_matches,
+            ) in self._group_lines_by_paragraph(lines_to_display):
+                with ui.expansion(
+                    self._format_paragraph_label(paragraph_index),
+                    value=True,
+                    icon="subject",
+                ).classes("full-width"):
+                    with ui.column().classes("full-width"):
+                        for line_match in paragraph_line_matches:
+                            self._create_line_card(line_match)
 
         self._display_update_render_count += 1
         self._last_display_signature = display_signature
@@ -299,6 +309,7 @@ class WordMatchView:
             line_signatures.append(
                 (
                     line_match.line_index,
+                    getattr(line_match, "paragraph_index", None),
                     line_match.overall_match_status.value,
                     line_match.exact_match_count,
                     line_match.fuzzy_match_count,
@@ -315,6 +326,29 @@ class WordMatchView:
             tuple(sorted(self.selected_word_indices)),
             tuple(line_signatures),
         )
+
+    def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
+        """Group line matches by paragraph index, keeping unassigned lines last."""
+        grouped: dict[Optional[int], list[LineMatch]] = {}
+        for line_match in line_matches:
+            paragraph_index = getattr(line_match, "paragraph_index", None)
+            grouped.setdefault(paragraph_index, []).append(line_match)
+
+        ordered_groups = []
+        for paragraph_index in sorted(k for k in grouped if k is not None):
+            ordered_groups.append((paragraph_index, grouped[paragraph_index]))
+
+        if None in grouped:
+            ordered_groups.append((None, grouped[None]))
+
+        return ordered_groups
+
+    @staticmethod
+    def _format_paragraph_label(paragraph_index: Optional[int]) -> str:
+        """Return a user-facing label for a paragraph index."""
+        if paragraph_index is None:
+            return "Paragraph Unassigned"
+        return f"Paragraph {paragraph_index + 1}"
 
     def set_selection_change_callback(self, callback) -> None:
         """Register callback invoked when selected words change."""
@@ -388,6 +422,11 @@ class WordMatchView:
                             )
                         )
                         ui.label(f"Line {line_match.line_index + 1}")
+                        ui.label(
+                            self._format_paragraph_label(
+                                getattr(line_match, "paragraph_index", None)
+                            )
+                        ).classes("text-caption")
                         ui.icon("bar_chart")
                         stats_items = [
                             f"✓ {line_match.exact_match_count}",

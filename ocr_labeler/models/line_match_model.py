@@ -19,6 +19,7 @@ class LineMatch:
     ocr_line_text: str
     ground_truth_line_text: str
     word_matches: List[WordMatch]
+    paragraph_index: Optional[int] = None
     page_image: Optional[object] = None  # Reference to page image for cropping
     line_object: Optional[object] = (
         None  # Reference to the original line Block object for bbox access
@@ -35,6 +36,7 @@ class LineMatch:
 
         return (
             self.line_index == other.line_index
+            and self.paragraph_index == other.paragraph_index
             and self.ocr_line_text == other.ocr_line_text
             and self.ground_truth_line_text == other.ground_truth_line_text
             and self.word_matches == other.word_matches
@@ -47,6 +49,7 @@ class LineMatch:
         return hash(
             (
                 self.line_index,
+                self.paragraph_index,
                 self.ocr_line_text,
                 self.ground_truth_line_text,
                 tuple(self.word_matches),

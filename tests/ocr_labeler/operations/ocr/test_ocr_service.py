@@ -64,6 +64,7 @@ class TestOCRService:
                     result = await service.process_page(temp_image)
 
                     assert result == mock_page
+                    mock_page.reorganize_page.assert_called_once()
                     mock_document.from_image_ocr_via_doctr.assert_called_once_with(
                         temp_image,
                         source_identifier=temp_image.name,
@@ -105,6 +106,7 @@ class TestOCRService:
                 result = await service.process_page(temp_image)
 
                 assert result == mock_page
+                mock_page.reorganize_page.assert_called_once()
                 mock_document.from_image_ocr_via_tesseract.assert_called_once_with(
                     temp_image,
                     source_identifier=temp_image.name,

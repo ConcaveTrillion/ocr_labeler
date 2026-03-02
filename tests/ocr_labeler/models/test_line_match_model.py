@@ -30,6 +30,7 @@ class TestLineMatch:
         )
 
         assert line_match.line_index == 0
+        assert line_match.paragraph_index is None
         assert line_match.ocr_line_text == "hello"
         assert line_match.ground_truth_line_text == "hello"
         assert len(line_match.word_matches) == 1
@@ -455,3 +456,41 @@ class TestLineMatchImageCropping:
 
         # Hashes should be equal even with different line_objects
         assert hash(line1) == hash(line2)
+
+    def test_equality_considers_paragraph_index(self):
+        """Test equality changes when paragraph_index differs."""
+        line1 = LineMatch(
+            line_index=0,
+            ocr_line_text="test",
+            ground_truth_line_text="test",
+            word_matches=[],
+            paragraph_index=0,
+        )
+        line2 = LineMatch(
+            line_index=0,
+            ocr_line_text="test",
+            ground_truth_line_text="test",
+            word_matches=[],
+            paragraph_index=1,
+        )
+
+        assert line1 != line2
+
+    def test_hash_includes_paragraph_index(self):
+        """Test hash changes when paragraph_index differs."""
+        line1 = LineMatch(
+            line_index=0,
+            ocr_line_text="test",
+            ground_truth_line_text="test",
+            word_matches=[],
+            paragraph_index=0,
+        )
+        line2 = LineMatch(
+            line_index=0,
+            ocr_line_text="test",
+            ground_truth_line_text="test",
+            word_matches=[],
+            paragraph_index=1,
+        )
+
+        assert hash(line1) != hash(line2)

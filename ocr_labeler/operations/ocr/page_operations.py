@@ -95,6 +95,17 @@ class PageOperations:
             self._predictor_initialized = True
         return self._docTR_predictor
 
+    def _reorganize_page_if_available(self, page_obj: Page) -> None:
+        """Run page reorganization when the page object supports it."""
+        try:
+            reorganize_page = getattr(page_obj, "reorganize_page", None)
+            if callable(reorganize_page):
+                reorganize_page()
+        except Exception as e:
+            logger.debug(
+                "Page reorganization failed, continuing with raw OCR layout: %s", e
+            )
+
     def build_initial_page_parser(self):
         """Return an initial page parser that performs OCR via DocTR when invoked.
 
@@ -128,15 +139,17 @@ class PageOperations:
             )
             page_obj: Page = doc.pages[0]
 
-            if ground_truth_string:
-                page_obj.add_ground_truth(ground_truth_string)
-
             from cv2 import imread as cv2_imread
 
             img = cv2_imread(str(path))
             if img is not None:
                 page_obj.cv2_numpy_page_image = img
                 logger.debug("attached cv2 image for index %s", index)
+
+            self._reorganize_page_if_available(page_obj)
+
+            if ground_truth_string:
+                page_obj.add_ground_truth(ground_truth_string)
 
             page_obj.ocr_provenance = self._build_live_ocr_provenance(
                 source_lib="doctr-pgdp-labeled"

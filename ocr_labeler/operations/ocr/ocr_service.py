@@ -47,6 +47,17 @@ class OCRService:
                 self._predictor = get_default_doctr_predictor()
         return self._predictor
 
+    def _reorganize_page_if_available(self, page_obj: Page) -> None:
+        """Run page reorganization when the page object supports it."""
+        try:
+            reorganize_page = getattr(page_obj, "reorganize_page", None)
+            if callable(reorganize_page):
+                reorganize_page()
+        except Exception as e:
+            logger.debug(
+                "Page reorganization failed, continuing with raw OCR layout: %s", e
+            )
+
     async def _process_page_with_doctr(
         self, image_path: Path, source_identifier: str
     ) -> Page:
@@ -130,6 +141,8 @@ class OCRService:
                     logger.debug("Attached cv2 image for OCR page: %s", image_path.name)
             except Exception:
                 logger.debug("cv2 load failed for OCR page: %s", image_path.name)
+
+            self._reorganize_page_if_available(page_obj)
 
             logger.info(f"Successfully processed page: {image_path}")
             return page_obj

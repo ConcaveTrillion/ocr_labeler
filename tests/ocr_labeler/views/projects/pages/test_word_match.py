@@ -202,3 +202,20 @@ def test_set_selected_words_emits_selection_callback():
     view.set_selected_words({(0, 0)})
 
     assert seen["s"] == {(0, 0)}
+
+
+def test_group_lines_by_paragraph_orders_unassigned_last():
+    view = WordMatchView()
+    line_matches = [
+        SimpleNamespace(line_index=2, paragraph_index=None),
+        SimpleNamespace(line_index=0, paragraph_index=1),
+        SimpleNamespace(line_index=1, paragraph_index=0),
+        SimpleNamespace(line_index=3, paragraph_index=0),
+    ]
+
+    grouped = view._group_lines_by_paragraph(line_matches)
+
+    assert [paragraph_index for paragraph_index, _ in grouped] == [0, 1, None]
+    assert [line.line_index for line in grouped[0][1]] == [1, 3]
+    assert [line.line_index for line in grouped[1][1]] == [0]
+    assert [line.line_index for line in grouped[2][1]] == [2]

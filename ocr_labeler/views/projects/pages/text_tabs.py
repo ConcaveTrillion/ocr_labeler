@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import logging
 
 from nicegui import binding, ui
@@ -106,6 +107,7 @@ class TextTabs:
 
         # Create callback for GT→OCR copy functionality
         copy_callback = None
+        copy_ocr_to_gt_callback = None
         if page_state:
             # Create a wrapper that passes the current page index
             def copy_gt_callback(line_index: int) -> bool:
@@ -118,6 +120,19 @@ class TextTabs:
 
             copy_callback = copy_gt_callback
             logger.debug("Created GT to OCR copy callback")
+
+            if hasattr(page_state, "copy_ocr_to_ground_truth"):
+
+                def copy_ocr_callback(line_index: int) -> bool:
+                    logger.debug(
+                        f"Copying OCR to GT for line {line_index} on page {page_index}"
+                    )
+                    result = page_state.copy_ocr_to_ground_truth(page_index, line_index)
+                    logger.debug(f"OCR to GT copy operation result: {result}")
+                    return result
+
+                copy_ocr_to_gt_callback = copy_ocr_callback
+                logger.debug("Created OCR to GT copy callback")
 
         merge_lines_callback = None
         if page_state:
@@ -153,6 +168,7 @@ class TextTabs:
 
         self.word_match_view = WordMatchView(
             copy_gt_to_ocr_callback=copy_callback,
+            copy_ocr_to_gt_callback=copy_ocr_to_gt_callback,
             merge_lines_callback=merge_lines_callback,
             delete_lines_callback=delete_lines_callback,
             notify_callback=notify_callback,
@@ -371,6 +387,19 @@ class TextTabs:
         """Build a lightweight key representing word-match-relevant page state."""
         lines = getattr(page, "lines", None)
         if lines:
+            fingerprint_builder = hashlib.sha1()
+            for line in lines:
+                words = getattr(line, "words", [])
+                unmatched_gt_words = getattr(line, "unmatched_ground_truth_words", [])
+                line_payload = (
+                    f"{getattr(line, 'text', '')}\x1f"
+                    f"{getattr(line, 'ground_truth_text', '')}\x1f"
+                    f"{len(words)}\x1f{len(unmatched_gt_words)}"
+                )
+                fingerprint_builder.update(
+                    line_payload.encode("utf-8", errors="ignore")
+                )
+
             line_count = len(lines)
             first_line_text = (
                 str(getattr(lines[0], "text", "")) if line_count > 0 else ""
@@ -387,6 +416,7 @@ class TextTabs:
                 line_count,
                 first_line_text,
                 last_line_text,
+                fingerprint_builder.hexdigest(),
             )
 
         blocks = getattr(page, "blocks", None)

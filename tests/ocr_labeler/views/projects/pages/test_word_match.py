@@ -94,3 +94,37 @@ def test_delete_single_line_restores_selection_on_failure(monkeypatch):
     view._handle_delete_line(7)
 
     assert view.selected_line_indices == {3}
+
+
+def test_copy_ocr_to_gt_success(monkeypatch):
+    seen = {}
+
+    view = WordMatchView(copy_ocr_to_gt_callback=lambda line_index: line_index == 2)
+
+    def capture_notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", capture_notify)
+
+    view._handle_copy_ocr_to_gt(2)
+
+    assert seen["type"] == "positive"
+    assert "Copied OCR to ground truth text" in seen["message"]
+
+
+def test_copy_ocr_to_gt_no_ocr_text(monkeypatch):
+    seen = {}
+
+    view = WordMatchView(copy_ocr_to_gt_callback=lambda _line_index: False)
+
+    def capture_notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", capture_notify)
+
+    view._handle_copy_ocr_to_gt(0)
+
+    assert seen["type"] == "warning"
+    assert "No OCR text found" in seen["message"]

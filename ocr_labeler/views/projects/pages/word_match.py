@@ -21,13 +21,15 @@ class WordMatchView:
     def __init__(
         self,
         copy_gt_to_ocr_callback=None,
+        copy_ocr_to_gt_callback=None,
         merge_lines_callback=None,
         delete_lines_callback=None,
         notify_callback=None,
     ):
         logger.debug(
-            "Initializing WordMatchView with copy_gt_to_ocr_callback=%s",
+            "Initializing WordMatchView with copy_gt_to_ocr_callback=%s, copy_ocr_to_gt_callback=%s",
             copy_gt_to_ocr_callback is not None,
+            copy_ocr_to_gt_callback is not None,
         )
         self.view_model = WordMatchViewModel()
         self.container = None
@@ -36,6 +38,7 @@ class WordMatchView:
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
+        self.copy_ocr_to_gt_callback = copy_ocr_to_gt_callback
         self.merge_lines_callback = merge_lines_callback
         self.delete_lines_callback = delete_lines_callback
         self.selected_line_indices: set[int] = set()
@@ -338,7 +341,7 @@ class WordMatchView:
 
                     # Right side: Action buttons
                     logger.debug(
-                        f"Line {line_match.line_index}: status={line_match.overall_match_status}, callback={self.copy_gt_to_ocr_callback is not None}"
+                        f"Line {line_match.line_index}: status={line_match.overall_match_status}, gt_to_ocr_callback={self.copy_gt_to_ocr_callback is not None}, ocr_to_gt_callback={self.copy_ocr_to_gt_callback is not None}"
                     )
                     with ui.row().classes("items-center"):
                         if (
@@ -354,6 +357,23 @@ class WordMatchView:
                                 "Copy ground truth text to OCR text for all words in this line"
                             ).on_click(
                                 lambda: self._handle_copy_gt_to_ocr(
+                                    line_match.line_index
+                                )
+                            )
+
+                        if (
+                            line_match.overall_match_status != MatchStatus.EXACT
+                            and self.copy_ocr_to_gt_callback
+                        ):
+                            logger.debug(
+                                f"Adding OCR→GT button for line {line_match.line_index}"
+                            )
+                            ui.button(
+                                "OCR→GT", icon="content_copy", color="primary"
+                            ).props("size=sm").tooltip(
+                                "Copy OCR text to ground truth text for all words in this line"
+                            ).on_click(
+                                lambda: self._handle_copy_ocr_to_gt(
                                     line_match.line_index
                                 )
                             )
@@ -866,6 +886,35 @@ class WordMatchView:
                 self._safe_notify(f"Error copying GT→OCR: {e}", type_="negative")
         else:
             logger.debug("No copy_gt_to_ocr_callback available")
+            self._safe_notify("Copy function not available", type_="warning")
+
+    def _handle_copy_ocr_to_gt(self, line_index: int):
+        """Handle the OCR→GT button click."""
+        logger.debug("Handling OCR→GT copy for line index %d", line_index)
+        if self.copy_ocr_to_gt_callback:
+            try:
+                logger.debug("Calling copy_ocr_to_gt_callback for line %d", line_index)
+                success = self.copy_ocr_to_gt_callback(line_index)
+                if success:
+                    logger.debug("OCR→GT copy successful for line %d", line_index)
+                    self._safe_notify(
+                        f"Copied OCR to ground truth text for line {line_index + 1}",
+                        type_="positive",
+                    )
+                else:
+                    logger.debug(
+                        "OCR→GT copy failed - no OCR text found for line %d",
+                        line_index,
+                    )
+                    self._safe_notify(
+                        f"No OCR text found to copy in line {line_index + 1}",
+                        type_="warning",
+                    )
+            except Exception as e:
+                logger.exception(f"Error copying OCR→GT for line {line_index}: {e}")
+                self._safe_notify(f"Error copying OCR→GT: {e}", type_="negative")
+        else:
+            logger.debug("No copy_ocr_to_gt_callback available")
             self._safe_notify("Copy function not available", type_="warning")
 
     def clear(self):

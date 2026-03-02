@@ -192,6 +192,40 @@ class PageState:
             logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
             return False
 
+    def copy_ocr_to_ground_truth(self, page_index: int, line_index: int) -> bool:
+        """Copy OCR text to ground truth text for all words in the specified line.
+
+        Args:
+            page_index: Zero-based page index
+            line_index: Zero-based line index to process
+
+        Returns:
+            bool: True if any modifications were made, False otherwise
+        """
+        page = self.current_page
+        if not page:
+            logger.critical(
+                "No page available at index %s for OCR→GT copy.", page_index
+            )
+            return False
+
+        # Import inside method to allow test monkeypatching
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.copy_ocr_to_ground_truth(page, line_index)
+
+            if result:
+                # Trigger UI refresh to show updated matches
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(f"Error in OCR→GT copy for line {line_index}: {e}")
+            return False
+
     @notify_on_completion
     def persist_page_to_file(
         self,
@@ -542,6 +576,20 @@ class PageState:
             bool: True if any modifications were made, False otherwise
         """
         return self.copy_ground_truth_to_ocr(self._current_page_index, line_index)
+
+    def copy_ocr_to_ground_truth_for_current_page(
+        self, current_page_index: int, line_index: int
+    ) -> bool:
+        """Copy OCR text to ground truth text for all words in the specified line on the current page.
+
+        Args:
+            current_page_index: Zero-based index of the current page
+            line_index: Zero-based line index to process
+
+        Returns:
+            bool: True if any modifications were made, False otherwise
+        """
+        return self.copy_ocr_to_ground_truth(self._current_page_index, line_index)
 
     def merge_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Merge selected lines on the current page into the first selected line.

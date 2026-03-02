@@ -139,6 +139,42 @@ def test_text_tabs_updates_when_line_payload_changes_even_if_page_object_same():
     assert text_tabs.word_match_view.update_from_page.call_count == 2
 
 
+def test_text_tabs_updates_when_ground_truth_changes_even_if_ocr_text_unchanged():
+    """GT-only edits (e.g., OCR→GT copy) should invalidate dedupe and refresh matches."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+    )
+
+    text_tabs = TextTabs(page_state=page_state)
+    text_tabs.word_match_view = MagicMock()
+
+    line = SimpleNamespace(
+        text="alpha beta",
+        ground_truth_text="",
+        words=[SimpleNamespace(text="alpha", ground_truth_text="")],
+        unmatched_ground_truth_words=[],
+    )
+    page = SimpleNamespace(name="p001.png", index=0, lines=[line])
+
+    text_tabs.update_word_matches(page)
+    line.words[0].ground_truth_text = "alpha"
+    line.ground_truth_text = "alpha"
+    text_tabs.update_word_matches(page)
+
+    assert text_tabs.word_match_view.update_from_page.call_count == 2
+
+
 def test_text_tabs_merge_callback_rematches_gt_on_merged_line(tmp_path):
     """TextTabs merge callback should merge lines and rematch GT text on merged line."""
     page_state = PageState()
@@ -235,3 +271,31 @@ def test_text_tabs_delete_callback_rematches_gt_after_delete(tmp_path):
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha"
     assert page.lines[0].ground_truth_text == "alpha"
+
+
+def test_text_tabs_ocr_to_gt_callback_invokes_page_state_method():
+    """TextTabs should wire OCR→GT callback to page_state.copy_ocr_to_ground_truth."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        copy_ocr_to_ground_truth=lambda page_index, line_index: (
+            calls.append((page_index, line_index)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=3)
+    result = text_tabs.word_match_view.copy_ocr_to_gt_callback(7)
+
+    assert result is True
+    assert calls == [(3, 7)]

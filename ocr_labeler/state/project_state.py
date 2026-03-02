@@ -1266,14 +1266,23 @@ class ProjectState:
         """
         if not name:
             return None
+        normalized_name = str(name).strip()
+        if not normalized_name:
+            return None
+
+        basename = Path(normalized_name).name
         candidates: list[str] = []
-        # Original provided name
-        candidates.append(name)
-        # Lowercase variant
-        candidates.append(name.lower())
+        candidates.extend(
+            [
+                normalized_name,
+                normalized_name.lower(),
+                basename,
+                basename.lower(),
+            ]
+        )
         # If name has extension, add base name variants; else add ext variants (handled by normalization)
-        if "." in name:
-            base = name.rsplit(".", 1)[0]
+        if "." in basename:
+            base = basename.rsplit(".", 1)[0]
             candidates.extend([base, base.lower()])
         # Deduplicate while preserving order
         seen = set()

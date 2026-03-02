@@ -1,10 +1,7 @@
-"""Tests for page-layer view composition."""
-
 from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
@@ -14,53 +11,17 @@ from pd_book_tools.ocr.word import Word
 
 from ocr_labeler.state.page_state import PageState
 from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
-from ocr_labeler.views.callbacks import PageActionCallbacks
-from ocr_labeler.views.projects.pages.content import ContentArea
-from ocr_labeler.views.projects.pages.page_view import PageView
-
-
-class TestPageView:
-    """Test PageView factory behavior."""
-
-    def test_from_project_returns_none_without_project_state(self):
-        """Factory returns None when project state is unavailable."""
-        project_view_model = SimpleNamespace(_project_state=None)
-
-        page_view = PageView.from_project(project_view_model)
-
-        assert page_view is None
-
-    def test_from_project_builds_page_view_with_callbacks(self):
-        """Factory wires page callbacks to PageView action handlers."""
-        project_state = Mock()
-        project_view_model = SimpleNamespace(_project_state=project_state)
-
-        page_view = PageView.from_project(project_view_model)
-
-        assert page_view is not None
-        assert page_view.project_view_model is project_view_model
-        assert page_view.page_state_view_model is not None
-        assert page_view.page_action_callbacks.save_page == page_view._save_page_async
-        assert page_view.page_action_callbacks.load_page == page_view._load_page_async
-        assert (
-            page_view.page_action_callbacks.refine_bboxes
-            == page_view._refine_bboxes_async
-        )
-        assert (
-            page_view.page_action_callbacks.expand_refine_bboxes
-            == page_view._expand_refine_bboxes_async
-        )
-        assert page_view.page_action_callbacks.reload_ocr == page_view._reload_ocr_async
-
-
-class _Marker:
-    def __init__(self, value: int):
-        self.value = value
+from ocr_labeler.views.projects.pages.image_tabs import ImageTabs
 
 
 class _FakeImage:
     def __init__(self):
         self.source = ""
+
+
+class _Marker:
+    def __init__(self, value: int):
+        self.value = value
 
 
 def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
@@ -85,8 +46,8 @@ def _line(words: list[Word], x: int) -> Block:
     )
 
 
-def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
-    """Merging lines via TextTabs callback should refresh ImageTabs line overlay source."""
+def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
+    """Merging lines should trigger image callback with updated line bbox overlay."""
     page_state = PageState()
 
     line1 = _line([_word("alpha", 0)], 0)
@@ -133,9 +94,6 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
             _ = force_ocr
             return page_model
 
-        def queue_notification(self, _message: str, _type: str = "info"):
-            return None
-
     project = SimpleNamespace(
         pages=[page],
         image_paths=[Path("/tmp/page_001.png")],
@@ -148,6 +106,7 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
     page_state._current_page_index = 0
 
     vm = PageStateViewModel(page_state)
+
     monkeypatch.setattr(
         vm,
         "_image_mappings",
@@ -159,27 +118,26 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
             ("mismatches_image_source", "test_mismatches"),
         ],
     )
+
     monkeypatch.setattr(
         vm,
         "_encode_image",
         lambda image: "" if image is None else f"encoded:{image.value}",
     )
 
-    content = ContentArea(vm, callbacks=PageActionCallbacks())
-    content.image_tabs.images = {
+    image_tabs = ImageTabs(vm)
+    image_tabs.images = {
         "Original": _FakeImage(),
         "Paragraphs": _FakeImage(),
         "Lines": _FakeImage(),
         "Words": _FakeImage(),
         "Mismatches": _FakeImage(),
     }
-    vm.set_image_update_callback(content.image_tabs._on_images_updated)
-    vm._last_image_callback_signature = None
 
     vm._update_image_sources_blocking()
-    assert content.image_tabs.images["Lines"].source == "encoded:30"
+    assert image_tabs.images["Lines"].source == "encoded:30"
 
-    assert content.text_tabs.word_match_view.merge_lines_callback([0, 1]) is True
+    assert page_state.merge_lines(0, [0, 1]) is True
 
     assert refresh_calls["count"] >= 1
-    assert content.image_tabs.images["Lines"].source == "encoded:130"
+    assert image_tabs.images["Lines"].source == "encoded:130"

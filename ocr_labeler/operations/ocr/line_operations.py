@@ -254,3 +254,86 @@ class LineOperations:
         except Exception as e:
             logger.exception(f"Error validating line {line_index}: {e}")
             return {"valid": False, "error": str(e)}
+
+    def merge_lines(self, page: "Page", line_indices: list[int]) -> bool:
+        """Merge multiple lines into the first selected line.
+
+        Args:
+            page: Page containing the lines to merge.
+            line_indices: Zero-based line indices to merge. At least two indices are required.
+
+        Returns:
+            bool: True if merge succeeded and modified the page, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for line merge")
+            return False
+
+        try:
+            from pd_book_tools.ocr.block import Block
+
+            lines = list(getattr(page, "lines", []))
+            line_count_before = len(lines)
+
+            logger.debug(
+                "merge_lines start: page_type=%s, line_count=%d, requested=%s",
+                type(page).__name__,
+                line_count_before,
+                line_indices,
+            )
+
+            if line_count_before < 2:
+                logger.warning("Line merge requires at least two available lines")
+                return False
+
+            unique_indices = sorted(set(line_indices or []))
+            if len(unique_indices) < 2:
+                logger.warning("Line merge requires selecting at least two lines")
+                return False
+
+            for index in unique_indices:
+                if index < 0 or index >= line_count_before:
+                    logger.warning(
+                        "Line index %s out of range (0-%s)",
+                        index,
+                        line_count_before - 1,
+                    )
+                    return False
+                if not isinstance(lines[index], Block):
+                    logger.warning(
+                        "Selected line is not a Block (index=%s, type=%s)",
+                        index,
+                        type(lines[index]).__name__,
+                    )
+                    return False
+
+            primary_index = unique_indices[0]
+            primary_line = lines[primary_index]
+            for index in unique_indices[1:]:
+                primary_line.merge(lines[index])
+
+            if not hasattr(page, "remove_line_if_exists") or not callable(
+                getattr(page, "remove_line_if_exists")
+            ):
+                logger.warning(
+                    "Page does not support remove_line_if_exists() (page_type=%s)",
+                    type(page).__name__,
+                )
+                return False
+
+            for index in reversed(unique_indices[1:]):
+                page.remove_line_if_exists(lines[index])
+
+            lines_after = len(list(getattr(page, "lines", [])))
+            logger.info(
+                "Merged %d lines into line %d (line_count %d -> %d)",
+                len(unique_indices),
+                primary_index,
+                line_count_before,
+                lines_after,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception("Error merging lines %s: %s", line_indices, e)
+            return False

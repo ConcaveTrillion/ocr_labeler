@@ -119,6 +119,17 @@ class TextTabs:
             copy_callback = copy_gt_callback
             logger.debug("Created GT to OCR copy callback")
 
+        merge_lines_callback = None
+        if page_state:
+
+            def merge_lines_callback(line_indices: list[int]) -> bool:
+                logger.debug(
+                    "Merging selected lines %s on page %d", line_indices, page_index
+                )
+                result = page_state.merge_lines(page_index, line_indices)
+                logger.debug("Merge lines operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -131,6 +142,7 @@ class TextTabs:
 
         self.word_match_view = WordMatchView(
             copy_gt_to_ocr_callback=copy_callback,
+            merge_lines_callback=merge_lines_callback,
             notify_callback=notify_callback,
         )
         self.container = None
@@ -345,6 +357,26 @@ class TextTabs:
 
     def _build_word_match_page_key(self, page: Page) -> tuple:
         """Build a lightweight key representing word-match-relevant page state."""
+        lines = getattr(page, "lines", None)
+        if lines:
+            line_count = len(lines)
+            first_line_text = (
+                str(getattr(lines[0], "text", "")) if line_count > 0 else ""
+            )
+            last_line_text = (
+                str(getattr(lines[-1], "text", ""))
+                if line_count > 1
+                else first_line_text
+            )
+            return (
+                getattr(page, "name", None),
+                getattr(page, "index", None),
+                "lines",
+                line_count,
+                first_line_text,
+                last_line_text,
+            )
+
         blocks = getattr(page, "blocks", None)
         if not blocks:
             return (
@@ -364,6 +396,7 @@ class TextTabs:
         return (
             getattr(page, "name", None),
             getattr(page, "index", None),
+            "blocks",
             block_count,
             first_line_text,
             last_line_text,

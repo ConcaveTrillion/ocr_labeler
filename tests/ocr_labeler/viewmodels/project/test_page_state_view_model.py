@@ -206,3 +206,65 @@ def test_schedule_image_update_skips_when_already_scheduled(tmp_path, monkeypatc
 
     assert len(create_calls) == 1
     create_calls[0].close()
+
+
+def test_update_request_during_in_progress_is_coalesced(tmp_path, monkeypatch):
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+
+    vm._update_in_progress = True
+    vm._schedule_image_update()
+
+    assert vm._update_reschedule_requested is True
+
+    schedule_calls: list[str] = []
+
+    def fake_schedule():
+        schedule_calls.append("called")
+
+    monkeypatch.setattr(vm, "_schedule_image_update", fake_schedule)
+    vm._update_in_progress = False
+    vm._update_reschedule_requested = True
+    vm._update_image_sources_blocking()
+
+    assert schedule_calls == ["called"]
+
+
+def test_encode_image_cached_skips_overlay_cache(tmp_path, monkeypatch):
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+
+    encode_calls = {"count": 0}
+
+    def fake_encode(_img):
+        encode_calls["count"] += 1
+        return f"encoded-{encode_calls['count']}"
+
+    monkeypatch.setattr(vm, "_encode_image_sync", fake_encode)
+    monkeypatch.setattr(vm, "_compute_image_hash", lambda _img: "same-hash")
+
+    marker = object()
+
+    first_overlay = vm._encode_image_cached(
+        marker, "cv2_numpy_page_image_line_with_bboxes"
+    )
+    second_overlay = vm._encode_image_cached(
+        marker, "cv2_numpy_page_image_line_with_bboxes"
+    )
+
+    assert first_overlay == "encoded-1"
+    assert second_overlay == "encoded-2"
+
+    first_original = vm._encode_image_cached(marker, "cv2_numpy_page_image")
+    second_original = vm._encode_image_cached(marker, "cv2_numpy_page_image")
+
+    assert first_original == "encoded-3"
+    assert second_original == "encoded-3"

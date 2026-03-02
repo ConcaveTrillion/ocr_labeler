@@ -45,6 +45,7 @@ class PageStateViewModel(BaseViewModel):
     # Flag to prevent concurrent updates
     _update_in_progress: bool = False
     _update_scheduled: bool = False
+    _update_reschedule_requested: bool = False
 
     # Cache for encoded images to avoid re-encoding unchanged images
     _encoded_image_cache: dict[str, str] = None
@@ -73,6 +74,7 @@ class PageStateViewModel(BaseViewModel):
         self._page_state: PageState | None = None
         self._update_in_progress: bool = False
         self._update_scheduled: bool = False
+        self._update_reschedule_requested: bool = False
         self._encoded_image_cache: dict[str, str] = {}
         self._image_update_callback: Optional[callable] = None
         self._last_image_callback_signature: tuple | None = None
@@ -220,10 +222,11 @@ class PageStateViewModel(BaseViewModel):
         """
         # Skip if an update is already in progress to prevent cascading updates
         if self._update_in_progress:
+            self._update_reschedule_requested = True
             self._image_update_schedule_skip_count += 1
             logger.debug("_schedule_image_update: update already in progress, skipping")
             logger.info(
-                "[_schedule_image_update] Skip in-progress (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+                "[_schedule_image_update] Skip in-progress and coalesce rerun (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
                 self._image_update_schedule_count,
                 self._image_update_schedule_skip_count,
                 self._image_update_emit_count,
@@ -352,6 +355,9 @@ class PageStateViewModel(BaseViewModel):
         finally:
             self._update_scheduled = False
             self._update_in_progress = False
+            if self._update_reschedule_requested:
+                self._update_reschedule_requested = False
+                self._schedule_image_update()
 
     def _update_image_sources_blocking(self):
         """Synchronous image update - WARNING: blocks event loop!
@@ -367,6 +373,7 @@ class PageStateViewModel(BaseViewModel):
             "_update_image_sources_blocking: BLOCKING image update called - "
             "this may cause connection loss in production!"
         )
+        self._update_in_progress = True
         try:
             current_page = self._get_current_page_or_clear()
             if current_page is None:
@@ -402,6 +409,10 @@ class PageStateViewModel(BaseViewModel):
             logger.debug("_update_image_sources_blocking: completed")
         finally:
             self._update_scheduled = False
+            self._update_in_progress = False
+            if self._update_reschedule_requested:
+                self._update_reschedule_requested = False
+                self._schedule_image_update()
 
     def _update_image_sources(self):
         """Maintain backward compatibility for direct calls."""
@@ -659,6 +670,12 @@ class PageStateViewModel(BaseViewModel):
         """Encode image with caching to avoid re-encoding unchanged images."""
         if np_img is None:
             return ""
+
+        # Overlay images (line/word/paragraph/mismatch bboxes) can change in ways
+        # that evade lightweight hashing and lead to stale UI redraws. Keep cache
+        # for the immutable original page image only.
+        if cache_key != "cv2_numpy_page_image":
+            return self._encode_image_sync(np_img)
 
         # Compute hash of the image
         img_hash = self._compute_image_hash(np_img)

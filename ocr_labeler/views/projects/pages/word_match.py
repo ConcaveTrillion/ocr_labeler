@@ -18,7 +18,12 @@ logger = logging.getLogger(__name__)
 class WordMatchView:
     """View component for displaying word-level OCR vs Ground Truth matching with color coding."""
 
-    def __init__(self, copy_gt_to_ocr_callback=None, notify_callback=None):
+    def __init__(
+        self,
+        copy_gt_to_ocr_callback=None,
+        merge_lines_callback=None,
+        notify_callback=None,
+    ):
         logger.debug(
             "Initializing WordMatchView with copy_gt_to_ocr_callback=%s",
             copy_gt_to_ocr_callback is not None,
@@ -30,6 +35,9 @@ class WordMatchView:
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
+        self.merge_lines_callback = merge_lines_callback
+        self.selected_line_indices: set[int] = set()
+        self.merge_lines_button = None
         self.notify_callback = notify_callback
         self._last_display_signature = None
         self._display_update_call_count = 0
@@ -86,6 +94,17 @@ class WordMatchView:
                             value="Mismatched Lines",
                         )
                         self.filter_selector.on_value_change(self._on_filter_change)
+                        self.merge_lines_button = (
+                            ui.button(
+                                "Merge Selected",
+                                icon="call_merge",
+                                on_click=self._handle_merge_selected_lines,
+                            )
+                            .props("size=sm")
+                            .tooltip(
+                                "Merge selected lines into the first selected line"
+                            )
+                        )
 
             # Scrollable container for word matches
             with ui.scroll_area().classes("fit"):
@@ -165,6 +184,13 @@ class WordMatchView:
         if not self.lines_container:
             logger.info("No lines_container, returning")
             return
+
+        available_line_indices = {
+            line_match.line_index for line_match in self.view_model.line_matches
+        }
+        if self.selected_line_indices:
+            self.selected_line_indices.intersection_update(available_line_indices)
+        self._update_merge_button_state()
 
         display_signature = self._compute_display_signature()
         if display_signature == self._last_display_signature:
@@ -274,6 +300,16 @@ class WordMatchView:
                 with ui.row().classes("items-center justify-between"):
                     # Left side: Line info and stats
                     with ui.row().classes("items-center"):
+                        ui.checkbox(
+                            value=line_match.line_index in self.selected_line_indices
+                        ).props("size=sm").on_value_change(
+                            lambda event, index=line_match.line_index: (
+                                self._on_line_selection_change(
+                                    index,
+                                    bool(event.value),
+                                )
+                            )
+                        )
                         ui.label(f"Line {line_match.line_index + 1}")
                         ui.icon("bar_chart")
                         stats_items = [
@@ -620,6 +656,68 @@ class WordMatchView:
         self._update_lines_display()
         logger.debug("Filter change handling complete")
 
+    def _on_line_selection_change(self, line_index: int, selected: bool) -> None:
+        """Track selected lines for merge workflow."""
+        if selected:
+            self.selected_line_indices.add(line_index)
+        else:
+            self.selected_line_indices.discard(line_index)
+        logger.debug(
+            "Line selection changed: line_index=%d selected=%s current_selection=%s",
+            line_index,
+            selected,
+            sorted(self.selected_line_indices),
+        )
+        self._update_merge_button_state()
+
+    def _update_merge_button_state(self) -> None:
+        """Enable merge button only when merge action is available and valid."""
+        if self.merge_lines_button is None:
+            return
+
+        self.merge_lines_button.disabled = (
+            self.merge_lines_callback is None or len(self.selected_line_indices) < 2
+        )
+
+    def _handle_merge_selected_lines(self):
+        """Merge selected lines into the first selected line."""
+        if self.merge_lines_callback is None:
+            self._safe_notify("Merge function not available", type_="warning")
+            return
+
+        if len(self.selected_line_indices) < 2:
+            self._safe_notify("Select at least two lines to merge", type_="warning")
+            return
+
+        selected_indices = sorted(self.selected_line_indices)
+        # Clear selection before invoking merge callback because merge can trigger
+        # synchronous page-state notifications and UI refreshes before callback
+        # returns; stale indices may otherwise map to different visible mismatch
+        # lines after reindexing.
+        self.selected_line_indices.clear()
+        self._update_merge_button_state()
+        logger.info("Merge requested for selected lines: %s", selected_indices)
+        try:
+            success = self.merge_lines_callback(selected_indices)
+            logger.info(
+                "Merge callback completed: selected=%s success=%s",
+                selected_indices,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Merged {len(selected_indices)} lines", type_="positive"
+                )
+            else:
+                self.selected_line_indices.update(selected_indices)
+                self._update_merge_button_state()
+                self._safe_notify("Failed to merge selected lines", type_="warning")
+        except Exception as e:
+            self.selected_line_indices.update(selected_indices)
+            self._update_merge_button_state()
+            logger.exception("Error merging selected lines %s: %s", selected_indices, e)
+            self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
+
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""
         logger.debug(
@@ -696,4 +794,6 @@ class WordMatchView:
         self._display_update_call_count = 0
         self._display_update_render_count = 0
         self._display_update_skip_count = 0
+        self.selected_line_indices.clear()
+        self._update_merge_button_state()
         logger.debug("WordMatchView clear complete")

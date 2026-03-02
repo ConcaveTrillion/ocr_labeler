@@ -1,4 +1,34 @@
+from pathlib import Path
+
+from pd_book_tools.geometry.bounding_box import BoundingBox
+from pd_book_tools.geometry.point import Point
+from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+from pd_book_tools.ocr.page import Page
+from pd_book_tools.ocr.word import Word
+
 from ocr_labeler.state.page_state import PageState
+
+
+def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
+    return BoundingBox(Point(x1, y1), Point(x2, y2), is_normalized=False)
+
+
+def _word(text: str, x: int) -> Word:
+    return Word(
+        text=text,
+        bounding_box=_bbox(x, 0, x + 10, 10),
+        ocr_confidence=1.0,
+        ground_truth_text="",
+    )
+
+
+def _line(words: list[Word], x: int) -> Block:
+    return Block(
+        items=words,
+        bounding_box=_bbox(x, 0, x + 20, 10),
+        child_type=BlockChildType.WORDS,
+        block_category=BlockCategory.LINE,
+    )
 
 
 def test_project_state_change_refreshes_loading_cache_when_page_finishes_loading(
@@ -53,3 +83,173 @@ def test_project_state_change_refreshes_loading_cache_when_page_finishes_loading
 
     assert page_state.current_ocr_text == "ocr text"
     assert page_state.current_gt_text == "ground truth text"
+
+
+def test_merge_lines_reapplies_ground_truth_after_merge(monkeypatch):
+    """Successful line merge should re-run page GT matching to keep word GT aligned."""
+    page_state = PageState()
+
+    class ProjectStub:
+        def __init__(self):
+            self.ground_truth_map = {"page_001.png": "ground truth content"}
+
+    class PageStub:
+        def __init__(self):
+            self.name = "page_001.png"
+            self.removed_gt = False
+            self.added_gt = None
+            self.overlay_refresh_called = False
+
+        def remove_ground_truth(self):
+            self.removed_gt = True
+
+        def add_ground_truth(self, text: str):
+            self.added_gt = text
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "merge_lines",
+        lambda _self, _page, _line_indices: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    page_state._project = ProjectStub()
+    page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
+
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.merge_lines(0, [0, 1])
+
+    assert result is True
+    assert page.removed_gt is True
+    assert page.added_gt == "ground truth content"
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
+def test_get_page_texts_falls_back_to_project_image_path_for_gt_lookup(tmp_path):
+    """GT lookup should still work when loaded page/model names are missing."""
+    page_state = PageState()
+
+    class PageStub:
+        text = "ocr text"
+        name = None
+        image_path = None
+
+    class PageModelStub:
+        def __init__(self):
+            self.page = PageStub()
+            self.name = None
+            self.image_path = None
+            self.page_source = "ocr"
+
+    class ParentStateStub:
+        def __init__(self):
+            self.current_page_index = 0
+            self.on_change = []
+
+        def ensure_page_model(self, _index: int, force_ocr: bool = False):
+            _ = force_ocr
+            return PageModelStub()
+
+    class ProjectStub:
+        def __init__(self):
+            self.pages = [PageStub()]
+            self.image_paths = [Path("/tmp/page_001.png")]
+            self.ground_truth_map = {"page_001.png": "ground truth text"}
+
+    page_state.set_project_context(ProjectStub(), tmp_path, ParentStateStub())
+
+    ocr_text, gt_text = page_state.get_page_texts(0)
+
+    assert ocr_text == "ocr text"
+    assert gt_text == "ground truth text"
+
+
+def test_merge_lines_reapplies_gt_via_project_image_path_when_page_name_missing(
+    monkeypatch,
+):
+    """Merge rematch should work even when current page has no name attribute value."""
+    page_state = PageState()
+
+    class ProjectStub:
+        def __init__(self):
+            self.ground_truth_map = {"page_001.png": "ground truth content"}
+            self.image_paths = [Path("/tmp/page_001.png")]
+
+    class PageStub:
+        def __init__(self):
+            self.name = None
+            self.removed_gt = False
+            self.added_gt = None
+
+        def remove_ground_truth(self):
+            self.removed_gt = True
+
+        def add_ground_truth(self, text: str):
+            self.added_gt = text
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "merge_lines",
+        lambda _self, _page, _line_indices: True,
+    )
+
+    page_state.current_page = PageStub()
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": None, "image_path": None},
+    )()
+    page_state._project = ProjectStub()
+    page_state._current_page_index = 0
+
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.merge_lines(0, [0, 1])
+
+    assert result is True
+    assert page_state.current_page.removed_gt is True
+    assert page_state.current_page.added_gt == "ground truth content"
+    assert notified == ["changed"]
+
+
+def test_merge_lines_rematches_ground_truth_on_merged_line():
+    """After merging lines, GT matching should rerun and annotate merged line text."""
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0)], 0)
+    line2 = _line([_word("beta", 20)], 20)
+    page = Page(width=100, height=100, page_index=0, items=[line1, line2])
+    page.name = "page_001.png"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": "alpha beta"},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    assert page_state.merge_lines(0, [0, 1]) is True
+    assert len(page.lines) == 1
+    assert page.lines[0].text == "alpha beta"
+    assert page.lines[0].ground_truth_text == "alpha beta"

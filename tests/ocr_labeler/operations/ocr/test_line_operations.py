@@ -3,9 +3,35 @@
 from unittest.mock import MagicMock
 
 import pytest
+from pd_book_tools.geometry.bounding_box import BoundingBox
+from pd_book_tools.geometry.point import Point
+from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
+from pd_book_tools.ocr.word import Word
 
 from ocr_labeler.operations.ocr.line_operations import LineOperations
+
+
+def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
+    return BoundingBox(Point(x1, y1), Point(x2, y2), is_normalized=False)
+
+
+def _word(text: str, gt: str | None, x: int) -> Word:
+    return Word(
+        text=text,
+        bounding_box=_bbox(x, 0, x + 10, 10),
+        ocr_confidence=1.0,
+        ground_truth_text=gt,
+    )
+
+
+def _line(words: list[Word], x: int) -> Block:
+    return Block(
+        items=words,
+        bounding_box=_bbox(x, 0, x + 20, 10),
+        child_type=BlockChildType.WORDS,
+        block_category=BlockCategory.LINE,
+    )
 
 
 class TestLineOperations:
@@ -250,3 +276,71 @@ class TestLineOperations:
         assert result["with_gt"] == 0
         assert result["matches"] == 0
         assert result["mismatches"] == 0
+
+    def test_merge_lines_success(self, operations):
+        """Test merging multiple lines into the first selected line."""
+        line1 = _line([_word("a", "A", 0)], 0)
+        line2 = _line([_word("b", "B", 20)], 20)
+        line3 = _line([_word("c", "C", 40)], 40)
+        page = Page(width=100, height=100, page_index=0, items=[line1, line2, line3])
+
+        expected_word_texts = ["a", "c"]
+
+        result = operations.merge_lines(page, [0, 2])
+
+        assert result is True
+        assert len(page.lines) == 2
+        assert [word.text for word in page.lines[0].words] == expected_word_texts
+        assert page.lines[0].text == "a c"
+        assert page.lines[0].ground_truth_text == "A C"
+
+    def test_merge_lines_requires_two_indices(self, operations):
+        """Test that merge fails when fewer than two lines are selected."""
+        page = Page(
+            width=100,
+            height=100,
+            page_index=0,
+            items=[_line([_word("a", "A", 0)], 0), _line([_word("b", "B", 20)], 20)],
+        )
+
+        assert operations.merge_lines(page, [0]) is False
+        assert operations.merge_lines(page, []) is False
+
+    def test_merge_lines_invalid_index(self, operations):
+        """Test that merge fails with out-of-range indices."""
+        page = Page(
+            width=100,
+            height=100,
+            page_index=0,
+            items=[_line([_word("a", "A", 0)], 0), _line([_word("b", "B", 20)], 20)],
+        )
+
+        result = operations.merge_lines(page, [0, 5])
+
+        assert result is False
+        assert len(page.lines) == 2
+
+    def test_merge_lines_fails_without_merge_method(self, operations):
+        """Test merge fails when selected lines are not Block instances."""
+        page = MagicMock(spec=Page)
+        page.lines = [MagicMock(), MagicMock()]
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is False
+
+    def test_merge_lines_fails_without_page_removal_api(self, operations):
+        """Test merge fails when page does not provide remove_line_if_exists()."""
+
+        class _PageWithoutRemoval:
+            def __init__(self):
+                self.lines = [
+                    _line([_word("a", "A", 0)], 0),
+                    _line([_word("b", "B", 20)], 20),
+                ]
+
+        page = _PageWithoutRemoval()
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is False

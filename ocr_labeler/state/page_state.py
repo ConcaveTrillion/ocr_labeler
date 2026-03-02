@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from functools import wraps
@@ -270,22 +271,19 @@ class PageState:
         loaded_page = loaded_page_model.page
 
         # Inject ground truth text if available
-        if hasattr(loaded_page, "name") and self._project.ground_truth_map:
-            page_name = getattr(loaded_page, "name", None)
-            if isinstance(page_name, str) and page_name:
-                gt_text = self.find_ground_truth_text(
-                    page_name, self._project.ground_truth_map
+        gt_text = self._resolve_ground_truth_text(
+            page=loaded_page,
+            page_model=loaded_page_model,
+            page_index=page_index,
+        )
+        if gt_text:
+            try:
+                loaded_page.add_ground_truth(gt_text)
+                logger.debug(f"Injected ground truth for loaded page {page_index}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to add ground truth to loaded page {page_index}: {e}"
                 )
-                if gt_text:
-                    try:
-                        loaded_page.add_ground_truth(gt_text)
-                        logger.debug(
-                            f"Injected ground truth for loaded page {page_index}"
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to add ground truth to loaded page {page_index}: {e}"
-                        )
 
         # Replace the page in the project
         if 0 <= page_index < len(self._project.pages):
@@ -322,6 +320,51 @@ class PageState:
             Ground truth text if found, None otherwise
         """
         return self.page_ops.find_ground_truth_text(page_name, ground_truth_map)
+
+    def _resolve_ground_truth_text(
+        self,
+        page: object | None,
+        page_model: object | None,
+        page_index: int,
+    ) -> str:
+        """Resolve GT text using multiple page/model/project identifiers."""
+        if not self._project:
+            return ""
+
+        ground_truth_map = getattr(self._project, "ground_truth_map", None)
+        if not isinstance(ground_truth_map, dict) or not ground_truth_map:
+            return ""
+
+        gt_candidates: list[object] = [
+            getattr(page, "name", None),
+            getattr(page_model, "name", None),
+            getattr(page, "image_path", None),
+            getattr(page_model, "image_path", None),
+        ]
+
+        project_image_paths = getattr(self._project, "image_paths", None)
+        if isinstance(project_image_paths, list) and 0 <= page_index < len(
+            project_image_paths
+        ):
+            image_path = project_image_paths[page_index]
+            gt_candidates.append(image_path)
+            gt_candidates.append(getattr(image_path, "name", None))
+
+        seen: set[str] = set()
+        for candidate in gt_candidates:
+            if candidate is None:
+                continue
+
+            lookup_key = str(candidate)
+            if not lookup_key or lookup_key in seen:
+                continue
+            seen.add(lookup_key)
+
+            matched = self.find_ground_truth_text(lookup_key, ground_truth_map)
+            if isinstance(matched, str) and matched.strip():
+                return matched
+
+        return ""
 
     @property
     def current_page_source_text(self) -> str:
@@ -500,6 +543,74 @@ class PageState:
         """
         return self.copy_ground_truth_to_ocr(self._current_page_index, line_index)
 
+    def merge_lines(self, page_index: int, line_indices: list[int]) -> bool:
+        """Merge selected lines on the current page into the first selected line.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Zero-based line indices to merge.
+
+        Returns:
+            bool: True if merge succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for line merge")
+            return False
+
+        logger.debug(
+            "PageState.merge_lines: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.merge_lines(page, line_indices)
+            logger.debug(
+                "PageState.merge_lines result: selected=%s success=%s",
+                line_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after merge for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception("Failed to re-match ground truth after line merge")
+
+                self._refresh_page_overlay_images(page)
+
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error merging lines %s: %s", line_indices, e)
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 
@@ -525,12 +636,11 @@ class PageState:
             ocr_text = ""
 
         # Get ground truth text from state mapping
-        gt_text = ""
-        if hasattr(page, "name") and self._project:
-            gt_text = (
-                self.find_ground_truth_text(page.name, self._project.ground_truth_map)
-                or ""
-            )
+        gt_text = self._resolve_ground_truth_text(
+            page=page,
+            page_model=page_model,
+            page_index=page_index,
+        )
 
         if isinstance(gt_text, str):
             gt_text = gt_text if gt_text.strip() else ""
@@ -579,6 +689,25 @@ class PageState:
         self._cached_page_index = -1
         self._cached_ocr_text = ""
         self._cached_gt_text = ""
+
+    def _refresh_page_overlay_images(self, page: object) -> None:
+        """Refresh page overlay images so bbox layers redraw after line edits."""
+        refresh_method = getattr(page, "refresh_page_images", None)
+        if callable(refresh_method):
+            with contextlib.suppress(Exception):
+                refresh_method()
+                return
+
+        # Fallback for lightweight test doubles that expose mutable overlay attrs.
+        overlay_attrs = (
+            "cv2_numpy_page_image_paragraph_with_bboxes",
+            "cv2_numpy_page_image_line_with_bboxes",
+            "cv2_numpy_page_image_word_with_bboxes",
+            "cv2_numpy_page_image_matched_word_with_colors",
+        )
+        for attr_name in overlay_attrs:
+            with contextlib.suppress(Exception):
+                setattr(page, attr_name, None)
 
     def _has_loading_placeholder(self) -> bool:
         """Check whether cached texts are currently in loading-placeholder state."""

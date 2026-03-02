@@ -102,6 +102,15 @@ def test_find_ground_truth_text_case_insensitive_base(project_state):
     assert result == "text1"
 
 
+def test_find_ground_truth_text_full_path_uses_basename(project_state):
+    """Lookup should succeed when page name is a full path string."""
+    ground_truth_map = {"001.png": "text1"}
+    result = project_state.find_ground_truth_text(
+        "/tmp/project/images/001.png", ground_truth_map
+    )
+    assert result == "text1"
+
+
 def test_find_ground_truth_text_no_extension_no_base(project_state):
     """Test name without extension, only tries name and lowercase."""
     ground_truth_map = {"001": "text1"}

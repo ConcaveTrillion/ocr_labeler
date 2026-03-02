@@ -42,6 +42,8 @@ class WordMatchView:
         self.merge_lines_callback = merge_lines_callback
         self.delete_lines_callback = delete_lines_callback
         self.selected_line_indices: set[int] = set()
+        self.selected_word_indices: set[tuple[int, int]] = set()
+        self._selection_change_callback = None
         self.merge_lines_button = None
         self.delete_lines_button = None
         self.notify_callback = notify_callback
@@ -206,6 +208,19 @@ class WordMatchView:
         }
         if self.selected_line_indices:
             self.selected_line_indices.intersection_update(available_line_indices)
+        if self.selected_word_indices:
+            word_count_by_line = {
+                line_match.line_index: len(line_match.word_matches)
+                for line_match in self.view_model.line_matches
+            }
+            self.selected_word_indices = {
+                (line_index, word_index)
+                for line_index, word_index in self.selected_word_indices
+                if line_index in available_line_indices
+                and 0 <= word_index < word_count_by_line.get(line_index, 0)
+            }
+        for line_index in available_line_indices:
+            self._sync_line_selection_from_words(line_index)
         self._update_merge_button_state()
 
         display_signature = self._compute_display_signature()
@@ -296,8 +311,54 @@ class WordMatchView:
 
         return (
             self.show_only_mismatches,
+            tuple(sorted(self.selected_line_indices)),
+            tuple(sorted(self.selected_word_indices)),
             tuple(line_signatures),
         )
+
+    def set_selection_change_callback(self, callback) -> None:
+        """Register callback invoked when selected words change."""
+        self._selection_change_callback = callback
+
+    def _emit_selection_changed(self) -> None:
+        """Emit selected words to listener (for image overlay sync)."""
+        if self._selection_change_callback is None:
+            return
+        try:
+            self._selection_change_callback(set(self.selected_word_indices))
+        except Exception:
+            logger.debug("Selection change callback failed", exc_info=True)
+
+    def _line_match_by_index(self, line_index: int):
+        for line_match in self.view_model.line_matches:
+            if line_match.line_index == line_index:
+                return line_match
+        return None
+
+    def _line_word_keys(self, line_index: int) -> set[tuple[int, int]]:
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return set()
+        return {
+            (line_index, word_index)
+            for word_index, _ in enumerate(line_match.word_matches)
+        }
+
+    def _is_line_fully_word_selected(self, line_index: int) -> bool:
+        keys = self._line_word_keys(line_index)
+        return bool(keys) and keys.issubset(self.selected_word_indices)
+
+    def _is_line_checked(self, line_index: int) -> bool:
+        return (
+            line_index in self.selected_line_indices
+            or self._is_line_fully_word_selected(line_index)
+        )
+
+    def _sync_line_selection_from_words(self, line_index: int) -> None:
+        if self._is_line_fully_word_selected(line_index):
+            self.selected_line_indices.add(line_index)
+        else:
+            self.selected_line_indices.discard(line_index)
 
     def _create_line_card(self, line_match):
         """Create a card display for a single line match."""
@@ -317,7 +378,7 @@ class WordMatchView:
                     # Left side: Line info and stats
                     with ui.row().classes("items-center"):
                         ui.checkbox(
-                            value=line_match.line_index in self.selected_line_indices
+                            value=self._is_line_checked(line_match.line_index)
                         ).props("size=sm").on_value_change(
                             lambda event, index=line_match.line_index: (
                                 self._on_line_selection_change(
@@ -431,6 +492,7 @@ class WordMatchView:
                 )
 
                 with ui.column():
+                    self._create_word_selection_cell(line_match.line_index, word_idx)
                     # Image cell
                     self._create_image_cell(word_match)
                     # OCR text cell
@@ -442,6 +504,19 @@ class WordMatchView:
         logger.debug(
             "Word comparison table creation complete for line %d", line_match.line_index
         )
+
+    def _create_word_selection_cell(self, line_index: int, word_index: int) -> None:
+        """Create a selection checkbox for a word column."""
+        selection_key = (line_index, word_index)
+        with ui.row().classes("items-center"):
+            ui.checkbox(value=selection_key in self.selected_word_indices).props(
+                "size=xs dense"
+            ).tooltip("Select word").on_value_change(
+                lambda event, key=selection_key: self._on_word_selection_change(
+                    key,
+                    bool(event.value),
+                )
+            )
 
     def _create_image_cell(self, word_match):
         """Create image cell for a word."""
@@ -701,8 +776,12 @@ class WordMatchView:
         """Track selected lines for merge workflow."""
         if selected:
             self.selected_line_indices.add(line_index)
+            self.selected_word_indices.update(self._line_word_keys(line_index))
         else:
             self.selected_line_indices.discard(line_index)
+            self.selected_word_indices.difference_update(
+                self._line_word_keys(line_index)
+            )
         logger.debug(
             "Line selection changed: line_index=%d selected=%s current_selection=%s",
             line_index,
@@ -710,20 +789,64 @@ class WordMatchView:
             sorted(self.selected_line_indices),
         )
         self._update_merge_button_state()
+        self._emit_selection_changed()
+        self._update_lines_display()
+
+    def _on_word_selection_change(
+        self, selection_key: tuple[int, int], selected: bool
+    ) -> None:
+        """Track selected words for box/checkbox-driven workflow."""
+        if selected:
+            self.selected_word_indices.add(selection_key)
+        else:
+            self.selected_word_indices.discard(selection_key)
+        self._sync_line_selection_from_words(selection_key[0])
+        logger.debug(
+            "Word selection changed: key=%s selected=%s current_words=%s",
+            selection_key,
+            selected,
+            sorted(self.selected_word_indices),
+        )
+        self._update_merge_button_state()
+        self._emit_selection_changed()
+        self._update_lines_display()
+
+    def _get_effective_selected_lines(self) -> list[int]:
+        """Return selected lines from both line and word selections."""
+        line_selection = set(self.selected_line_indices)
+        line_selection.update(
+            line_index for line_index, _ in self.selected_word_indices
+        )
+        return sorted(line_selection)
+
+    def set_selected_words(self, selection: set[tuple[int, int]]) -> None:
+        """Set selected words externally (e.g., box selection integration)."""
+        self.selected_word_indices = set(selection)
+        available_line_indices = {
+            line_match.line_index for line_match in self.view_model.line_matches
+        }
+        self.selected_line_indices = {
+            line_index
+            for line_index in available_line_indices
+            if self._is_line_fully_word_selected(line_index)
+        }
+        self._update_merge_button_state()
+        self._emit_selection_changed()
+        self._update_lines_display()
 
     def _update_merge_button_state(self) -> None:
         """Enable merge button only when merge action is available and valid."""
+        selected_lines = self._get_effective_selected_lines()
         if self.merge_lines_button is None:
             pass
         else:
             self.merge_lines_button.disabled = (
-                self.merge_lines_callback is None or len(self.selected_line_indices) < 2
+                self.merge_lines_callback is None or len(selected_lines) < 2
             )
 
         if self.delete_lines_button is not None:
             self.delete_lines_button.disabled = (
-                self.delete_lines_callback is None
-                or len(self.selected_line_indices) < 1
+                self.delete_lines_callback is None or len(selected_lines) < 1
             )
 
     def _handle_merge_selected_lines(self):
@@ -732,17 +855,21 @@ class WordMatchView:
             self._safe_notify("Merge function not available", type_="warning")
             return
 
-        if len(self.selected_line_indices) < 2:
+        selected_indices = self._get_effective_selected_lines()
+        if len(selected_indices) < 2:
             self._safe_notify("Select at least two lines to merge", type_="warning")
             return
 
-        selected_indices = sorted(self.selected_line_indices)
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
         # Clear selection before invoking merge callback because merge can trigger
         # synchronous page-state notifications and UI refreshes before callback
         # returns; stale indices may otherwise map to different visible mismatch
         # lines after reindexing.
         self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
         self._update_merge_button_state()
+        self._emit_selection_changed()
         logger.info("Merge requested for selected lines: %s", selected_indices)
         try:
             success = self.merge_lines_callback(selected_indices)
@@ -756,12 +883,16 @@ class WordMatchView:
                     f"Merged {len(selected_indices)} lines", type_="positive"
                 )
             else:
-                self.selected_line_indices.update(selected_indices)
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
                 self._update_merge_button_state()
+                self._emit_selection_changed()
                 self._safe_notify("Failed to merge selected lines", type_="warning")
         except Exception as e:
-            self.selected_line_indices.update(selected_indices)
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
             self._update_merge_button_state()
+            self._emit_selection_changed()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
 
@@ -771,11 +902,11 @@ class WordMatchView:
             self._safe_notify("Delete function not available", type_="warning")
             return
 
-        if not self.selected_line_indices:
+        selected_indices = self._get_effective_selected_lines()
+        if not selected_indices:
             self._safe_notify("Select at least one line to delete", type_="warning")
             return
 
-        selected_indices = sorted(self.selected_line_indices)
         self._delete_lines(
             selected_indices,
             success_message=f"Deleted {len(selected_indices)} lines",
@@ -803,8 +934,11 @@ class WordMatchView:
     ) -> None:
         """Execute line deletion and keep selection state consistent on failure."""
         previously_selected = set(self.selected_line_indices)
+        previously_selected_words = set(self.selected_word_indices)
         self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
         self._update_merge_button_state()
+        self._emit_selection_changed()
         logger.info("Delete requested for lines: %s", line_indices)
         try:
             success = self.delete_lines_callback(line_indices)
@@ -816,12 +950,16 @@ class WordMatchView:
             if success:
                 self._safe_notify(success_message, type_="positive")
             else:
-                self.selected_line_indices.update(previously_selected)
+                self.selected_line_indices = previously_selected
+                self.selected_word_indices = previously_selected_words
                 self._update_merge_button_state()
+                self._emit_selection_changed()
                 self._safe_notify(failure_message, type_="warning")
         except Exception as e:
-            self.selected_line_indices.update(previously_selected)
+            self.selected_line_indices = previously_selected
+            self.selected_word_indices = previously_selected_words
             self._update_merge_button_state()
+            self._emit_selection_changed()
             logger.exception("Error deleting lines %s: %s", line_indices, e)
             self._safe_notify(f"Error deleting lines: {e}", type_="negative")
 
@@ -931,5 +1069,7 @@ class WordMatchView:
         self._display_update_render_count = 0
         self._display_update_skip_count = 0
         self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
         self._update_merge_button_state()
+        self._emit_selection_changed()
         logger.debug("WordMatchView clear complete")

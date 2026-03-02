@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from ocr_labeler.views.projects.pages.word_match import WordMatchView
 
 
@@ -128,3 +130,75 @@ def test_copy_ocr_to_gt_no_ocr_text(monkeypatch):
 
     assert seen["type"] == "warning"
     assert "No OCR text found" in seen["message"]
+
+
+def test_merge_uses_word_selection_when_no_line_checkboxes(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_word_indices = {(1, 0), (3, 2), (3, 4)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def merge_callback(indices: list[int]) -> bool:
+        seen["indices"] = indices
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.merge_lines_callback = merge_callback
+    view._handle_merge_selected_lines()
+
+    assert seen["indices"] == [1, 3]
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_delete_restores_word_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_word_indices = {(2, 1), (4, 0)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.delete_lines_callback = lambda _indices: False
+    view._handle_delete_selected_lines()
+
+    assert view.selected_word_indices == {(2, 1), (4, 0)}
+
+
+def test_line_selection_selects_all_words_for_line():
+    view = WordMatchView()
+    view.view_model.line_matches = [
+        SimpleNamespace(line_index=2, word_matches=[object(), object(), object()])
+    ]
+
+    view._on_line_selection_change(2, True)
+
+    assert view.selected_line_indices == {2}
+    assert view.selected_word_indices == {(2, 0), (2, 1), (2, 2)}
+
+
+def test_all_words_selected_auto_selects_line():
+    view = WordMatchView()
+    view.view_model.line_matches = [
+        SimpleNamespace(line_index=1, word_matches=[object(), object()])
+    ]
+
+    view._on_word_selection_change((1, 0), True)
+    assert 1 not in view.selected_line_indices
+
+    view._on_word_selection_change((1, 1), True)
+    assert 1 in view.selected_line_indices
+
+
+def test_set_selected_words_emits_selection_callback():
+    view = WordMatchView()
+    view.view_model.line_matches = [
+        SimpleNamespace(line_index=0, word_matches=[object()])
+    ]
+    seen = {}
+    view.set_selection_change_callback(
+        lambda selection: seen.setdefault("s", selection)
+    )
+
+    view.set_selected_words({(0, 0)})
+
+    assert seen["s"] == {(0, 0)}

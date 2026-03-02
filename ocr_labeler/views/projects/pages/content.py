@@ -21,18 +21,38 @@ class ContentArea:
         logger.debug("Initializing ContentArea")
         self.page_state_view_model = page_state_view_model
         self.callbacks = callbacks
-        logger.debug("Creating ImageTabs component")
-        self.image_tabs = ImageTabs(page_state_view_model=self.page_state_view_model)
         logger.debug("Creating TextTabs component")
         self.text_tabs = TextTabs(
             page_state=self.page_state_view_model._page_state,
             on_save_page=None,  # Moved to PageActions
             on_load_page=None,  # Moved to PageActions
         )
+        logger.debug("Creating ImageTabs component")
+        self.image_tabs = ImageTabs(
+            page_state_view_model=self.page_state_view_model,
+            on_words_selected=self._on_words_selected,
+        )
+        self.text_tabs.word_match_view.set_selection_change_callback(
+            self._on_right_panel_words_selected
+        )
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
         self.root = None
         logger.debug("ContentArea initialization complete")
+
+    def _on_words_selected(self, selection: set[tuple[int, int]]) -> None:
+        """Propagate image-driven word selection to the Matches view."""
+        try:
+            self.text_tabs.word_match_view.set_selected_words(selection)
+        except Exception:
+            logger.debug("Failed to propagate words selection", exc_info=True)
+
+    def _on_right_panel_words_selected(self, selection: set[tuple[int, int]]) -> None:
+        """Propagate right-panel word selection to image overlay."""
+        try:
+            self.image_tabs.set_selected_words(selection)
+        except Exception:
+            logger.debug("Failed to propagate words selection to image", exc_info=True)
 
     def build(self):
         logger.debug("Building ContentArea UI components")

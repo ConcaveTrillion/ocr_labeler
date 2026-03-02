@@ -32,3 +32,65 @@ def test_merge_restores_selection_on_failure(monkeypatch):
     view._handle_merge_selected_lines()
 
     assert view.selected_line_indices == {4, 5}
+
+
+def test_delete_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1, 2}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def delete_callback(indices: list[int]) -> bool:
+        seen["indices"] = indices
+        seen["selection_during_callback"] = sorted(view.selected_line_indices)
+        return True
+
+    view.delete_lines_callback = delete_callback
+    view._handle_delete_selected_lines()
+
+    assert seen["indices"] == [1, 2]
+    assert seen["selection_during_callback"] == []
+    assert view.selected_line_indices == set()
+
+
+def test_delete_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {6}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.delete_lines_callback = lambda _indices: False
+    view._handle_delete_selected_lines()
+
+    assert view.selected_line_indices == {6}
+
+
+def test_delete_single_line_callback_invoked(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {2, 4}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def delete_callback(indices: list[int]) -> bool:
+        seen["indices"] = indices
+        seen["selection_during_callback"] = sorted(view.selected_line_indices)
+        return True
+
+    view.delete_lines_callback = delete_callback
+    view._handle_delete_line(5)
+
+    assert seen["indices"] == [5]
+    assert seen["selection_during_callback"] == []
+    assert view.selected_line_indices == set()
+
+
+def test_delete_single_line_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {3}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.delete_lines_callback = lambda _indices: False
+    view._handle_delete_line(7)
+
+    assert view.selected_line_indices == {3}

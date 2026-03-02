@@ -130,6 +130,17 @@ class TextTabs:
                 logger.debug("Merge lines operation result: %s", result)
                 return result
 
+        delete_lines_callback = None
+        if page_state:
+
+            def delete_lines_callback(line_indices: list[int]) -> bool:
+                logger.debug(
+                    "Deleting selected lines %s on page %d", line_indices, page_index
+                )
+                result = page_state.delete_lines(page_index, line_indices)
+                logger.debug("Delete lines operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -143,6 +154,7 @@ class TextTabs:
         self.word_match_view = WordMatchView(
             copy_gt_to_ocr_callback=copy_callback,
             merge_lines_callback=merge_lines_callback,
+            delete_lines_callback=delete_lines_callback,
             notify_callback=notify_callback,
         )
         self.container = None

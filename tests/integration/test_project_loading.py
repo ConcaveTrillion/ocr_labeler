@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -366,13 +367,19 @@ class TestNiceGuiIntegration:
         await user.should_see("Next")
 
     async def test_expand_refine_bboxes_button_triggers_operation(
-        self, mock_ocr_processing, user: User, test_projects_root: Path
+        self, mock_ocr_processing, user: User, test_projects_root: Path, caplog
     ):
         """Clicking Expand & Refine triggers bbox operation command deterministically."""
-        with patch(
-            "ocr_labeler.viewmodels.project.project_state_view_model.ProjectStateViewModel.command_expand_refine_bboxes",
-            return_value=True,
-        ) as mock_expand_refine:
+        with (
+            caplog.at_level(
+                logging.ERROR,
+                logger="ocr_labeler.state.project_state",
+            ),
+            patch(
+                "ocr_labeler.viewmodels.project.project_state_view_model.ProjectStateViewModel.command_expand_refine_bboxes",
+                return_value=True,
+            ) as mock_expand_refine,
+        ):
             labeler = NiceGuiLabeler(
                 project_root=test_projects_root,
                 projects_root=test_projects_root,
@@ -399,3 +406,11 @@ class TestNiceGuiIntegration:
                     break
                 await asyncio.sleep(0.05)
             mock_expand_refine.assert_called_once()
+
+            project_state_error_logs = [
+                record
+                for record in caplog.records
+                if record.name == "ocr_labeler.state.project_state"
+                and record.levelno >= logging.ERROR
+            ]
+            assert not project_state_error_logs

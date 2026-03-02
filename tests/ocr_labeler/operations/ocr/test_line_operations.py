@@ -344,3 +344,57 @@ class TestLineOperations:
         result = operations.merge_lines(page, [0, 1])
 
         assert result is False
+
+    def test_delete_lines_success(self, operations):
+        """Test deleting selected lines."""
+        line1 = _line([_word("a", "A", 0)], 0)
+        line2 = _line([_word("b", "B", 20)], 20)
+        line3 = _line([_word("c", "C", 40)], 40)
+        page = Page(width=100, height=100, page_index=0, items=[line1, line2, line3])
+
+        result = operations.delete_lines(page, [1, 2])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert page.lines[0].text == "a"
+
+    def test_delete_lines_requires_selection(self, operations):
+        """Test that deletion fails when no lines are selected."""
+        page = Page(
+            width=100,
+            height=100,
+            page_index=0,
+            items=[_line([_word("a", "A", 0)], 0), _line([_word("b", "B", 20)], 20)],
+        )
+
+        assert operations.delete_lines(page, []) is False
+
+    def test_delete_lines_invalid_index(self, operations):
+        """Test that deletion fails with out-of-range indices."""
+        page = Page(
+            width=100,
+            height=100,
+            page_index=0,
+            items=[_line([_word("a", "A", 0)], 0), _line([_word("b", "B", 20)], 20)],
+        )
+
+        result = operations.delete_lines(page, [0, 5])
+
+        assert result is False
+        assert len(page.lines) == 2
+
+    def test_delete_lines_fails_without_page_removal_api(self, operations):
+        """Test deletion fails when page does not provide remove_line_if_exists()."""
+
+        class _PageWithoutRemoval:
+            def __init__(self):
+                self.lines = [
+                    _line([_word("a", "A", 0)], 0),
+                    _line([_word("b", "B", 20)], 20),
+                ]
+
+        page = _PageWithoutRemoval()
+
+        result = operations.delete_lines(page, [0])
+
+        assert result is False

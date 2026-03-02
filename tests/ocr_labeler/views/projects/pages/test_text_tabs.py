@@ -186,3 +186,52 @@ def test_text_tabs_merge_callback_rematches_gt_on_merged_line(tmp_path):
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha beta"
     assert page.lines[0].ground_truth_text == "alpha beta"
+
+
+def test_text_tabs_delete_callback_rematches_gt_after_delete(tmp_path):
+    """TextTabs delete callback should remove lines and rematch GT text."""
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0)], 0)
+    line2 = _line([_word("beta", 20)], 20)
+    page = Page(width=100, height=100, page_index=0, items=[line1, line2])
+    page.name = "page_001.png"
+
+    page_model = SimpleNamespace(
+        page=page,
+        page_source="ocr",
+        name="page_001.png",
+        image_path=None,
+    )
+
+    class ParentStateStub:
+        def __init__(self):
+            self.current_page_index = 0
+            self.on_change = []
+
+        def ensure_page_model(self, _index: int, force_ocr: bool = False):
+            _ = force_ocr
+            return page_model
+
+        def queue_notification(self, _message: str, _type: str = "info"):
+            return None
+
+    project = SimpleNamespace(
+        pages=[page],
+        image_paths=[Path("/tmp/page_001.png")],
+        ground_truth_map={"page_001.png": "alpha"},
+    )
+
+    page_state.set_project_context(project, tmp_path, ParentStateStub())
+    page_state.current_page = page
+    page_state.current_page_model = page_model
+    page_state._current_page_index = 0
+
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
+
+    result = text_tabs.word_match_view.delete_lines_callback([1])
+
+    assert result is True
+    assert len(page.lines) == 1
+    assert page.lines[0].text == "alpha"
+    assert page.lines[0].ground_truth_text == "alpha"

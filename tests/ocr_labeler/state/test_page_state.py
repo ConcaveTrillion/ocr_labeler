@@ -253,3 +253,52 @@ def test_merge_lines_rematches_ground_truth_on_merged_line():
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha beta"
     assert page.lines[0].ground_truth_text == "alpha beta"
+
+
+def test_delete_lines_reapplies_ground_truth_after_delete(monkeypatch):
+    """Successful line deletion should re-run page GT matching to keep alignment stable."""
+    page_state = PageState()
+
+    class ProjectStub:
+        def __init__(self):
+            self.ground_truth_map = {"page_001.png": "ground truth content"}
+
+    class PageStub:
+        def __init__(self):
+            self.name = "page_001.png"
+            self.removed_gt = False
+            self.added_gt = None
+            self.overlay_refresh_called = False
+
+        def remove_ground_truth(self):
+            self.removed_gt = True
+
+        def add_ground_truth(self, text: str):
+            self.added_gt = text
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "delete_lines",
+        lambda _self, _page, _line_indices: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    page_state._project = ProjectStub()
+    page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
+
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.delete_lines(0, [1])
+
+    assert result is True
+    assert page.removed_gt is True
+    assert page.added_gt == "ground truth content"
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]

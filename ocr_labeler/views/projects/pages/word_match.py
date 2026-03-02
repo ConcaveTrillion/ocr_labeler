@@ -22,6 +22,7 @@ class WordMatchView:
         self,
         copy_gt_to_ocr_callback=None,
         merge_lines_callback=None,
+        delete_lines_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -36,8 +37,10 @@ class WordMatchView:
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         self.merge_lines_callback = merge_lines_callback
+        self.delete_lines_callback = delete_lines_callback
         self.selected_line_indices: set[int] = set()
         self.merge_lines_button = None
+        self.delete_lines_button = None
         self.notify_callback = notify_callback
         self._last_display_signature = None
         self._display_update_call_count = 0
@@ -104,6 +107,16 @@ class WordMatchView:
                             .tooltip(
                                 "Merge selected lines into the first selected line"
                             )
+                        )
+                        self.delete_lines_button = (
+                            ui.button(
+                                "Delete Selected",
+                                icon="delete",
+                                color="negative",
+                                on_click=self._handle_delete_selected_lines,
+                            )
+                            .props("size=sm")
+                            .tooltip("Delete selected lines")
                         )
 
             # Scrollable container for word matches
@@ -323,18 +336,18 @@ class WordMatchView:
                             stats_items.append(f"⚫ {line_match.unmatched_ocr_count}")
                         ui.label(" • ".join(stats_items))
 
-                    # Right side: Action button (only if not 100% match)
+                    # Right side: Action buttons
                     logger.debug(
                         f"Line {line_match.line_index}: status={line_match.overall_match_status}, callback={self.copy_gt_to_ocr_callback is not None}"
                     )
-                    if (
-                        line_match.overall_match_status != MatchStatus.EXACT
-                        and self.copy_gt_to_ocr_callback
-                    ):
-                        logger.debug(
-                            f"Adding GT→OCR button for line {line_match.line_index}"
-                        )
-                        with ui.row():
+                    with ui.row().classes("items-center"):
+                        if (
+                            line_match.overall_match_status != MatchStatus.EXACT
+                            and self.copy_gt_to_ocr_callback
+                        ):
+                            logger.debug(
+                                f"Adding GT→OCR button for line {line_match.line_index}"
+                            )
                             ui.button(
                                 "GT→OCR", icon="content_copy", color="primary"
                             ).props("size=sm").tooltip(
@@ -344,10 +357,18 @@ class WordMatchView:
                                     line_match.line_index
                                 )
                             )
-                    else:
-                        logger.debug(
-                            f"Not adding button for line {line_match.line_index}: status={line_match.overall_match_status}, has_callback={self.copy_gt_to_ocr_callback is not None}"
+
+                        delete_button = (
+                            ui.button(icon="delete", color="negative")
+                            .props("size=sm flat round")
+                            .tooltip("Delete this line")
                         )
+                        if self.delete_lines_callback:
+                            delete_button.on_click(
+                                lambda: self._handle_delete_line(line_match.line_index)
+                            )
+                        else:
+                            delete_button.disabled = True
                     # with ui.row():
                     #     # Status chip
                     #     ui.chip(
@@ -673,11 +694,17 @@ class WordMatchView:
     def _update_merge_button_state(self) -> None:
         """Enable merge button only when merge action is available and valid."""
         if self.merge_lines_button is None:
-            return
+            pass
+        else:
+            self.merge_lines_button.disabled = (
+                self.merge_lines_callback is None or len(self.selected_line_indices) < 2
+            )
 
-        self.merge_lines_button.disabled = (
-            self.merge_lines_callback is None or len(self.selected_line_indices) < 2
-        )
+        if self.delete_lines_button is not None:
+            self.delete_lines_button.disabled = (
+                self.delete_lines_callback is None
+                or len(self.selected_line_indices) < 1
+            )
 
     def _handle_merge_selected_lines(self):
         """Merge selected lines into the first selected line."""
@@ -717,6 +744,66 @@ class WordMatchView:
             self._update_merge_button_state()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
+
+    def _handle_delete_selected_lines(self):
+        """Delete selected lines from the current page."""
+        if self.delete_lines_callback is None:
+            self._safe_notify("Delete function not available", type_="warning")
+            return
+
+        if not self.selected_line_indices:
+            self._safe_notify("Select at least one line to delete", type_="warning")
+            return
+
+        selected_indices = sorted(self.selected_line_indices)
+        self._delete_lines(
+            selected_indices,
+            success_message=f"Deleted {len(selected_indices)} lines",
+            failure_message="Failed to delete selected lines",
+        )
+
+    def _handle_delete_line(self, line_index: int) -> None:
+        """Delete a single line from the current page."""
+        if self.delete_lines_callback is None:
+            self._safe_notify("Delete function not available", type_="warning")
+            return
+
+        self._delete_lines(
+            [line_index],
+            success_message=f"Deleted line {line_index + 1}",
+            failure_message=f"Failed to delete line {line_index + 1}",
+        )
+
+    def _delete_lines(
+        self,
+        line_indices: list[int],
+        *,
+        success_message: str,
+        failure_message: str,
+    ) -> None:
+        """Execute line deletion and keep selection state consistent on failure."""
+        previously_selected = set(self.selected_line_indices)
+        self.selected_line_indices.clear()
+        self._update_merge_button_state()
+        logger.info("Delete requested for lines: %s", line_indices)
+        try:
+            success = self.delete_lines_callback(line_indices)
+            logger.info(
+                "Delete callback completed: selected=%s success=%s",
+                line_indices,
+                success,
+            )
+            if success:
+                self._safe_notify(success_message, type_="positive")
+            else:
+                self.selected_line_indices.update(previously_selected)
+                self._update_merge_button_state()
+                self._safe_notify(failure_message, type_="warning")
+        except Exception as e:
+            self.selected_line_indices.update(previously_selected)
+            self._update_merge_button_state()
+            logger.exception("Error deleting lines %s: %s", line_indices, e)
+            self._safe_notify(f"Error deleting lines: {e}", type_="negative")
 
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""

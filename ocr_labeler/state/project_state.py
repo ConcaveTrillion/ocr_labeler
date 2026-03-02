@@ -673,10 +673,13 @@ class ProjectState:
                 self.queue_notification(self.loading_status, "info")
                 # Don't notify here - it triggers recursion via viewmodel updates
                 try:
+                    ground_truth_map = (
+                        self.project.ground_truth_map
+                        if self.project is not None
+                        else {}
+                    )
                     gt_text = (
-                        self.find_ground_truth_text(
-                            img_path.name, self.project.ground_truth_map
-                        )
+                        self.find_ground_truth_text(img_path.name, ground_truth_map)
                         or ""
                     )
                     ocr_started = perf_counter()
@@ -766,11 +769,12 @@ class ProjectState:
                         source=page_model.page_source if page_model else "ocr",
                         status="loaded",
                     )
-                except Exception:  # pragma: no cover - defensive
-                    logger.exception(
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning(
                         "ensure_page_model: loader failed for index=%s path=%s; using fallback page",
                         index,
                         img_path,
+                        exc_info=exc,
                     )
                     self.queue_notification(
                         "OCR failed for page; using fallback image.", "negative"

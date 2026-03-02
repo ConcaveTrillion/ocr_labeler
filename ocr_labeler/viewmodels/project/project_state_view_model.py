@@ -391,7 +391,7 @@ class ProjectStateViewModel(BaseViewModel):
         """
         try:
             if not self._project_state:
-                logger.error("No project state available for bbox expand & refine")
+                logger.warning("No project state available for bbox expand & refine")
                 return False
             return self._project_state.expand_and_refine_all_bboxes()
         except Exception as e:

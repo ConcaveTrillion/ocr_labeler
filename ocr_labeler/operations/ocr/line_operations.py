@@ -337,3 +337,67 @@ class LineOperations:
         except Exception as e:
             logger.exception("Error merging lines %s: %s", line_indices, e)
             return False
+
+    def delete_lines(self, page: "Page", line_indices: list[int]) -> bool:
+        """Delete selected lines from a page.
+
+        Args:
+            page: Page containing the lines to delete.
+            line_indices: Zero-based line indices to delete. At least one index is required.
+
+        Returns:
+            bool: True if deletion succeeded and modified the page, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for line deletion")
+            return False
+
+        try:
+            lines = list(getattr(page, "lines", []))
+            line_count_before = len(lines)
+
+            logger.debug(
+                "delete_lines start: page_type=%s, line_count=%d, requested=%s",
+                type(page).__name__,
+                line_count_before,
+                line_indices,
+            )
+
+            unique_indices = sorted(set(line_indices or []))
+            if not unique_indices:
+                logger.warning("Line deletion requires selecting at least one line")
+                return False
+
+            for index in unique_indices:
+                if index < 0 or index >= line_count_before:
+                    logger.warning(
+                        "Line index %s out of range (0-%s)",
+                        index,
+                        line_count_before - 1,
+                    )
+                    return False
+
+            if not hasattr(page, "remove_line_if_exists") or not callable(
+                getattr(page, "remove_line_if_exists")
+            ):
+                logger.warning(
+                    "Page does not support remove_line_if_exists() (page_type=%s)",
+                    type(page).__name__,
+                )
+                return False
+
+            for index in reversed(unique_indices):
+                page.remove_line_if_exists(lines[index])
+
+            lines_after = len(list(getattr(page, "lines", [])))
+            logger.info(
+                "Deleted %d lines (line_count %d -> %d)",
+                len(unique_indices),
+                line_count_before,
+                lines_after,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception("Error deleting lines %s: %s", line_indices, e)
+            return False

@@ -6,8 +6,6 @@
 ## Block/Line Editing
 
 - Paragraph block grouping from image region selection
-- Merge lines workflow with checkbox selection and accept action
-- Delete line workflow, including structural updates and refresh behavior
 
 ## Word Editing Infrastructure
 

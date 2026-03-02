@@ -391,6 +391,52 @@ def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
     )
 
 
+def test_ensure_page_loader_failure_logs_warning_not_error(tmp_path, caplog):
+    """Ensure OCR loader fallback path does not emit ERROR logs from ProjectState."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    project = Mock()
+    project.pages = [None]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    with (
+        caplog.at_level(logging.WARNING),
+        patch.object(
+            state.page_ops,
+            "can_load_page",
+            side_effect=[
+                Mock(can_load=False),
+                Mock(can_load=False),
+                Mock(can_load=False),
+            ],
+        ),
+        patch.object(
+            state.page_ops,
+            "page_parser",
+            side_effect=RuntimeError("ocr boom"),
+        ),
+        patch.object(state, "notify"),
+    ):
+        page_model = state.ensure_page_model(0)
+
+    assert page_model is not None
+    assert page_model.page_source == "fallback"
+
+    project_state_errors = [
+        record
+        for record in caplog.records
+        if record.name == "ocr_labeler.state.project_state"
+        and record.levelno >= logging.ERROR
+    ]
+    assert not project_state_errors
+
+
 @pytest.mark.asyncio
 async def test_load_project_schedules_initial_preload(monkeypatch, tmp_path):
     """Project load should always schedule initial page preload when images exist."""

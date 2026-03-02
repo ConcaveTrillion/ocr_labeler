@@ -611,6 +611,75 @@ class PageState:
             logger.exception("Error merging lines %s: %s", line_indices, e)
             return False
 
+    def delete_lines(self, page_index: int, line_indices: list[int]) -> bool:
+        """Delete selected lines on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Zero-based line indices to delete.
+
+        Returns:
+            bool: True if deletion succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for line deletion")
+            return False
+
+        logger.debug(
+            "PageState.delete_lines: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.delete_lines(page, line_indices)
+            logger.debug(
+                "PageState.delete_lines result: selected=%s success=%s",
+                line_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after line deletion for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after line deletion"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error deleting lines %s: %s", line_indices, e)
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 

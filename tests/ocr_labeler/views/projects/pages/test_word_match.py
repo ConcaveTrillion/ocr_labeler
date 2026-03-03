@@ -493,3 +493,57 @@ def test_delete_single_word_restores_selection_on_failure(monkeypatch):
 
     assert view.selected_line_indices == {5}
     assert view.selected_word_indices == {(5, 0)}
+
+
+def test_split_word_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 2)}
+    view._word_split_fractions[(1, 2)] = 0.5
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def split_callback(line_index: int, word_index: int, split_fraction: float) -> bool:
+        seen["args"] = (line_index, word_index, split_fraction)
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.split_word_callback = split_callback
+    view._handle_split_word(1, 2)
+
+    assert seen["args"] == (1, 2, 0.5)
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_split_word_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {3}
+    view.selected_word_indices = {(3, 1)}
+    view._word_split_fractions[(3, 1)] = 0.25
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.split_word_callback = lambda _line_index, _word_index, _split_fraction: False
+    view._handle_split_word(3, 1)
+
+    assert view.selected_line_indices == {3}
+    assert view.selected_word_indices == {(3, 1)}
+
+
+def test_split_word_requires_selected_marker(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+
+    def notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", notify)
+    view.split_word_callback = lambda _line_index, _word_index, _split_fraction: True
+
+    view._handle_split_word(0, 0)
+
+    assert seen["type"] == "warning"
+    assert "choose split position" in seen["message"]

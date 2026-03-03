@@ -273,6 +273,30 @@ class TextTabs:
                 logger.debug("Merge word right operation result: %s", result)
                 return result
 
+        split_word_callback = None
+        if page_state:
+
+            def split_word_callback(
+                line_index: int,
+                word_index: int,
+                split_fraction: float,
+            ) -> bool:
+                logger.debug(
+                    "Splitting word at (%s, %s) with split_fraction=%s on page %d",
+                    line_index,
+                    word_index,
+                    split_fraction,
+                    page_index,
+                )
+                result = page_state.split_word(
+                    page_index,
+                    line_index,
+                    word_index,
+                    split_fraction,
+                )
+                logger.debug("Split word operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -295,6 +319,7 @@ class TextTabs:
             delete_words_callback=delete_words_callback,
             merge_word_left_callback=merge_word_left_callback,
             merge_word_right_callback=merge_word_right_callback,
+            split_word_callback=split_word_callback,
             notify_callback=notify_callback,
         )
         self.container = None

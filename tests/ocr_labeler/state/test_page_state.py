@@ -539,6 +539,55 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
+    """Successful word split should re-run GT matching and refresh overlays."""
+    page_state = PageState()
+
+    class ProjectStub:
+        def __init__(self):
+            self.ground_truth_map = {"page_001.png": "ground truth content"}
+
+    class PageStub:
+        def __init__(self):
+            self.name = "page_001.png"
+            self.removed_gt = False
+            self.added_gt = None
+            self.overlay_refresh_called = False
+
+        def remove_ground_truth(self):
+            self.removed_gt = True
+
+        def add_ground_truth(self, text: str):
+            self.added_gt = text
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "split_word",
+        lambda _self, _page, _line_index, _word_index, _split_fraction: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    page_state._project = ProjectStub()
+    page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
+
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.split_word(0, 0, 0, 0.5)
+
+    assert result is True
+    assert page.removed_gt is True
+    assert page.added_gt == "ground truth content"
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
 def test_split_paragraph_after_line_splits_containing_paragraph_at_line():
     """Splitting after a selected line should split that line's paragraph in two."""
     page_state = PageState()

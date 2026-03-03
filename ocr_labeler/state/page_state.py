@@ -1052,6 +1052,72 @@ class PageState:
             )
             return False
 
+    def split_word(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+        split_fraction: float,
+    ) -> bool:
+        """Split a selected word into two words on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            split_fraction: Relative split position in range (0, 1).
+
+        Returns:
+            bool: True if split succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word split")
+            return False
+
+        logger.debug(
+            "PageState.split_word: page_index=%s current_index=%s line_index=%s word_index=%s split_fraction=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            word_index,
+            split_fraction,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_word(
+                page,
+                line_index,
+                word_index,
+                split_fraction,
+            )
+            logger.debug(
+                "PageState.split_word result: line_index=%s word_index=%s split_fraction=%s success=%s",
+                line_index,
+                word_index,
+                split_fraction,
+                result,
+            )
+
+            if result:
+                self._finalize_structural_edit(page, "word split")
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting word line=%s word=%s split_fraction=%s: %s",
+                line_index,
+                word_index,
+                split_fraction,
+                e,
+            )
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 

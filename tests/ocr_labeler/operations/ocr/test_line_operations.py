@@ -481,6 +481,25 @@ class TestLineOperations:
         assert result is False
         assert [word.text for word in page.lines[0].words] == ["alpha", "beta"]
 
+    def test_split_word_success(self, operations):
+        """Splitting a word should create two words and clear GT for the line."""
+        line = _line([_word("alphabet", "ALPHABET", 0), _word("gamma", "GAMMA", 20)], 0)
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        result = operations.split_word(page, 0, 0, 0.5)
+
+        assert result is True
+        assert [word.text for word in page.lines[0].words] == ["alph", "abet", "gamma"]
+        assert [word.ground_truth_text for word in page.lines[0].words] == ["", "", ""]
+
+    def test_split_word_rejects_edge_fraction(self, operations):
+        """Split should fail when requested at start/end boundaries."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        assert operations.split_word(page, 0, 0, 0.0) is False
+        assert operations.split_word(page, 0, 0, 1.0) is False
+
     def test_split_paragraph_after_line_success(self, operations):
         """Splitting after selected line should split one paragraph into two."""
         line1 = _line([_word("a", "A", 0)], 0)

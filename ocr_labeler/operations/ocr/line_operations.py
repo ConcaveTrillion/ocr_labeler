@@ -975,6 +975,139 @@ class LineOperations:
             direction="right",
         )
 
+    def split_word(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        split_fraction: float,
+    ) -> bool:
+        """Split a word into two words at a relative horizontal position.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index to split.
+            split_fraction: Relative split position in range (0, 1).
+
+        Returns:
+            bool: True when split succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word split")
+            return False
+
+        if split_fraction <= 0.0 or split_fraction >= 1.0:
+            logger.warning(
+                "Word split fraction must be between 0 and 1 (exclusive), got %s",
+                split_fraction,
+            )
+            return False
+
+        try:
+            lines = list(page.lines)
+            if line_index < 0 or line_index >= len(lines):
+                logger.warning(
+                    "Line index %s out of range (0-%s)",
+                    line_index,
+                    len(lines) - 1,
+                )
+                return False
+
+            line = lines[line_index]
+            words = list(getattr(line, "words", []) or [])
+            if word_index < 0 or word_index >= len(words):
+                logger.warning(
+                    "Word split index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(words) - 1,
+                )
+                return False
+
+            word = words[word_index]
+            word_text = str(getattr(word, "text", "") or "")
+            if len(word_text) < 2:
+                logger.warning(
+                    "Word split requires at least two characters (line=%s, word=%s)",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            bbox = getattr(word, "bounding_box", None)
+            bbox_width = float(getattr(bbox, "width", 0.0) or 0.0)
+            if bbox is None or bbox_width <= 0.0:
+                logger.warning(
+                    "Word split requires valid non-zero bounding box (line=%s, word=%s)",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            character_split_index = int(round(len(word_text) * split_fraction))
+            character_split_index = max(
+                1, min(len(word_text) - 1, character_split_index)
+            )
+
+            epsilon = min(1e-6, bbox_width / 10) if bbox_width > 0 else 0.0
+            bbox_split_offset = bbox_width * split_fraction
+            bbox_split_offset = max(
+                epsilon, min(bbox_width - epsilon, bbox_split_offset)
+            )
+
+            split_word = getattr(line, "split_word", None)
+            if callable(split_word):
+                split_word(
+                    split_word_index=word_index,
+                    bbox_split_offset=bbox_split_offset,
+                    character_split_index=character_split_index,
+                )
+            else:
+                word_left, word_right = word.split(
+                    bbox_split_offset=bbox_split_offset,
+                    character_split_index=character_split_index,
+                )
+                remove_item = getattr(line, "remove_item", None)
+                add_item = getattr(line, "add_item", None)
+                if callable(remove_item) and callable(add_item):
+                    remove_item(word)
+                    add_item(word_left)
+                    add_item(word_right)
+                else:
+                    logger.warning(
+                        "Line type %s does not support split replacement APIs",
+                        type(line).__name__,
+                    )
+                    return False
+
+            updated_words = self._validated_line_words(page, line_index)
+            if updated_words is None:
+                return False
+            for updated_word in updated_words:
+                updated_word.ground_truth_text = ""
+
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Split word line=%d index=%d fraction=%.3f char_index=%d",
+                line_index,
+                word_index,
+                split_fraction,
+                character_split_index,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error splitting word line=%s index=%s split_fraction=%s: %s",
+                line_index,
+                word_index,
+                split_fraction,
+                e,
+            )
+            return False
+
     def _merge_adjacent_words(
         self,
         page: "Page",

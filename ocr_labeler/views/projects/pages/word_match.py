@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from nicegui import ui
+from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
 
 from ....models.line_match_model import LineMatch
@@ -31,6 +31,7 @@ class WordMatchView:
         delete_words_callback=None,
         merge_word_left_callback=None,
         merge_word_right_callback=None,
+        split_word_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -57,9 +58,15 @@ class WordMatchView:
         self.delete_words_callback = delete_words_callback
         self.merge_word_left_callback = merge_word_left_callback
         self.merge_word_right_callback = merge_word_right_callback
+        self.split_word_callback = split_word_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
         self.selected_paragraph_indices: set[int] = set()
+        self._word_split_fractions: dict[tuple[int, int], float] = {}
+        self._word_split_marker_x: dict[tuple[int, int], float] = {}
+        self._word_split_image_refs: dict[tuple[int, int], object] = {}
+        self._word_split_image_sizes: dict[tuple[int, int], tuple[float, float]] = {}
+        self._word_split_button_refs: dict[tuple[int, int], object] = {}
         self._selection_change_callback = None
         self._paragraph_selection_change_callback = None
         self.merge_lines_button = None
@@ -309,6 +316,22 @@ class WordMatchView:
             }
         for line_index in available_line_indices:
             self._sync_line_selection_from_words(line_index)
+        valid_split_keys = {
+            (line_match.line_index, word_match.word_index)
+            for line_match in self.view_model.line_matches
+            for word_match in line_match.word_matches
+            if word_match.word_index is not None
+        }
+        self._word_split_fractions = {
+            key: value
+            for key, value in self._word_split_fractions.items()
+            if key in valid_split_keys
+        }
+        self._word_split_marker_x = {
+            key: value
+            for key, value in self._word_split_marker_x.items()
+            if key in valid_split_keys
+        }
         available_paragraph_indices = {
             line_match.paragraph_index
             for line_match in self.view_model.line_matches
@@ -332,6 +355,9 @@ class WordMatchView:
 
         # Clear existing content
         self.lines_container.clear()
+        self._word_split_image_refs = {}
+        self._word_split_image_sizes = {}
+        self._word_split_button_refs = {}
 
         if not self.view_model.line_matches:
             logger.info("No line matches in view model")
@@ -656,7 +682,16 @@ class WordMatchView:
                 with ui.column():
                     self._create_word_selection_cell(line_match.line_index, word_idx)
                     # Image cell
-                    self._create_image_cell(word_match)
+                    split_word_index = (
+                        word_match.word_index
+                        if word_match.word_index is not None
+                        else -1
+                    )
+                    self._create_image_cell(
+                        line_match.line_index,
+                        split_word_index,
+                        word_match,
+                    )
                     # OCR text cell
                     self._create_ocr_cell(word_match)
                     # Ground Truth text cell
@@ -667,6 +702,7 @@ class WordMatchView:
                     self._create_word_actions_cell(
                         line_match.line_index,
                         word_idx,
+                        split_word_index,
                         len(line_match.word_matches),
                     )
         logger.debug(
@@ -686,7 +722,12 @@ class WordMatchView:
                 )
             )
 
-    def _create_image_cell(self, word_match):
+    def _create_image_cell(
+        self,
+        line_index: int,
+        split_word_index: int,
+        word_match,
+    ):
         """Create image cell for a word."""
         with ui.row().classes("fit"):
             # Unmatched GT words don't have images since they don't have word objects
@@ -700,7 +741,36 @@ class WordMatchView:
                     word_image = None
                     ui.icon("error").classes("text-red-600").style("height: 2.25em")
                 if word_image:
-                    ui.interactive_image(word_image).style("height: 2.25em")
+                    image_source: str | None = None
+                    image_width: float | None = None
+                    image_height: float | None = None
+
+                    if isinstance(word_image, tuple) and len(word_image) == 3:
+                        image_source, image_width, image_height = word_image
+                    elif isinstance(word_image, str):
+                        image_source = word_image
+
+                    if not image_source:
+                        ui.icon("image_not_supported")
+                        return
+
+                    image = ui.interactive_image(
+                        image_source,
+                        events=["mousedown"],
+                        on_mouse=lambda event, li=line_index, wi=split_word_index: (
+                            self._handle_word_image_click(li, wi, event)
+                        ),
+                        sanitize=False,
+                    ).style("height: 2.25em")
+                    if split_word_index >= 0:
+                        key = (line_index, split_word_index)
+                        self._word_split_image_refs[key] = image
+                        if image_width is not None and image_height is not None:
+                            self._word_split_image_sizes[key] = (
+                                float(image_width),
+                                float(image_height),
+                            )
+                        self._render_word_split_marker(key)
                 else:
                     ui.icon("image_not_supported")
 
@@ -744,7 +814,11 @@ class WordMatchView:
                     ui.label(f"{word_match.fuzz_score:.2f}")
 
     def _create_word_actions_cell(
-        self, line_index: int, word_index: int, word_count: int
+        self,
+        line_index: int,
+        word_index: int,
+        split_word_index: int,
+        word_count: int,
     ) -> None:
         """Create per-word action buttons displayed below each word."""
         with ui.row().classes("items-center gap-1"):
@@ -789,6 +863,108 @@ class WordMatchView:
             )
             delete_button.disabled = self.delete_words_callback is None
 
+            split_button = (
+                ui.button(
+                    icon="call_split",
+                    on_click=lambda: self._handle_split_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Split word at selected marker")
+            )
+            if split_word_index >= 0:
+                split_key = (line_index, split_word_index)
+                self._word_split_button_refs[split_key] = split_button
+            split_button.disabled = not self._is_split_action_enabled(
+                line_index,
+                split_word_index,
+            )
+
+    def _line_word_match_by_ocr_index(
+        self,
+        line_index: int,
+        word_index: int,
+    ):
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return None
+        for word_match in line_match.word_matches:
+            if word_match.word_index == word_index:
+                return word_match
+        return None
+
+    def _is_split_action_enabled(self, line_index: int, word_index: int) -> bool:
+        if self.split_word_callback is None or word_index < 0:
+            return False
+
+        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if word_match is None:
+            return False
+        word_text = str(getattr(word_match, "ocr_text", "") or "")
+        if len(word_text) < 2:
+            return False
+
+        return (line_index, word_index) in self._word_split_fractions
+
+    def _render_word_split_marker(self, split_key: tuple[int, int]) -> None:
+        image = self._word_split_image_refs.get(split_key)
+        if image is None:
+            return
+
+        marker_x = self._word_split_marker_x.get(split_key)
+        if marker_x is None:
+            try:
+                image.content = ""
+            except Exception:
+                logger.debug("Failed to clear split marker", exc_info=True)
+            return
+
+        try:
+            _width, height = self._word_split_image_sizes.get(split_key, (0.0, 0.0))
+            marker_height = max(1.0, float(height) if height > 0.0 else 1000.0)
+            image.content = (
+                f'<line x1="{marker_x:.2f}" y1="0" x2="{marker_x:.2f}" y2="{marker_height:.2f}" '
+                'stroke="#2563eb" stroke-width="2" pointer-events="none" />'
+            )
+        except Exception:
+            logger.debug("Failed to render split marker", exc_info=True)
+
+    def _handle_word_image_click(
+        self,
+        line_index: int,
+        word_index: int,
+        event: events.MouseEventArguments,
+    ) -> None:
+        if word_index < 0:
+            return
+
+        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if word_match is None:
+            return
+
+        split_key = (line_index, word_index)
+        image_width = self._word_split_image_sizes.get(split_key, (0.0, 0.0))[0]
+        image_x = float(getattr(event, "image_x", -1.0))
+        if image_width <= 0.0 or image_x <= 0.0 or image_x >= image_width:
+            return
+
+        split_fraction = image_x / image_width
+        if split_fraction <= 0.0 or split_fraction >= 1.0:
+            return
+
+        self._word_split_fractions[split_key] = split_fraction
+        self._word_split_marker_x[split_key] = image_x
+        self._render_word_split_marker(split_key)
+
+        split_button = self._word_split_button_refs.get(split_key)
+        if split_button is not None:
+            split_button.disabled = not self._is_split_action_enabled(
+                line_index,
+                word_index,
+            )
+
     def _create_word_text_display(self, word_matches, text_type):
         """Create a display of words with appropriate coloring."""
         if not word_matches:
@@ -830,7 +1006,7 @@ class WordMatchView:
         return "\\n".join(lines) if lines else None
 
     def _get_word_image(self, word_match):
-        """Get cropped word image as base64 data URL."""
+        """Get cropped word image as base64 data URL with image dimensions."""
         logger.debug(
             "Getting word image for match with status %s", word_match.match_status.value
         )
@@ -888,7 +1064,8 @@ class WordMatchView:
                 len(data_url),
             )
 
-            return data_url
+            height, width = cropped_img.shape[:2]
+            return data_url, float(width), float(height)
 
         except Exception as e:
             logger.debug(f"Error creating word image: {e}")
@@ -1591,6 +1768,62 @@ class WordMatchView:
                 e,
             )
             self._safe_notify(f"Error merging word: {e}", type_="negative")
+
+    def _handle_split_word(self, line_index: int, word_index: int) -> None:
+        """Split the selected word at the current marker."""
+        if self.split_word_callback is None:
+            self._safe_notify("Split word function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word to split", type_="warning")
+            return
+
+        split_key = (line_index, word_index)
+        split_fraction = self._word_split_fractions.get(split_key)
+        if split_fraction is None:
+            self._safe_notify(
+                "Click inside the word image to choose split position",
+                type_="warning",
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.split_word_callback(line_index, word_index, split_fraction)
+            if success:
+                self._word_split_fractions.pop(split_key, None)
+                self._word_split_marker_x.pop(split_key, None)
+                self._render_word_split_marker(split_key)
+                split_button = self._word_split_button_refs.get(split_key)
+                if split_button is not None:
+                    split_button.disabled = True
+                self._safe_notify(
+                    f"Split word {word_index + 1} on line {line_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to split word", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error split-word (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error splitting word: {e}", type_="negative")
 
     def _handle_delete_line(self, line_index: int) -> None:
         """Delete a single line from the current page."""

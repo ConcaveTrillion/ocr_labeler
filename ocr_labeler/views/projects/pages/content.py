@@ -31,9 +31,13 @@ class ContentArea:
         self.image_tabs = ImageTabs(
             page_state_view_model=self.page_state_view_model,
             on_words_selected=self._on_words_selected,
+            on_paragraphs_selected=self._on_paragraphs_selected,
         )
         self.text_tabs.word_match_view.set_selection_change_callback(
             self._on_right_panel_words_selected
+        )
+        self.text_tabs.word_match_view.set_paragraph_selection_change_callback(
+            self._on_right_panel_paragraphs_selected
         )
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
@@ -53,6 +57,22 @@ class ContentArea:
             self.image_tabs.set_selected_words(selection)
         except Exception:
             logger.debug("Failed to propagate words selection to image", exc_info=True)
+
+    def _on_paragraphs_selected(self, selection: set[int]) -> None:
+        """Propagate image-driven paragraph selection to the Matches view."""
+        try:
+            self.text_tabs.word_match_view.set_selected_paragraphs(selection)
+        except Exception:
+            logger.debug("Failed to propagate paragraphs selection", exc_info=True)
+
+    def _on_right_panel_paragraphs_selected(self, selection: set[int]) -> None:
+        """Propagate right-panel paragraph selection to image overlay."""
+        try:
+            self.image_tabs.set_selected_paragraphs(selection)
+        except Exception:
+            logger.debug(
+                "Failed to propagate paragraphs selection to image", exc_info=True
+            )
 
     def build(self):
         logger.debug("Building ContentArea UI components")

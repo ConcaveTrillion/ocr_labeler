@@ -24,6 +24,11 @@ class WordMatchView:
         copy_ocr_to_gt_callback=None,
         merge_lines_callback=None,
         delete_lines_callback=None,
+        merge_paragraphs_callback=None,
+        delete_paragraphs_callback=None,
+        split_paragraph_after_line_callback=None,
+        split_paragraph_with_selected_lines_callback=None,
+        delete_words_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -41,11 +46,25 @@ class WordMatchView:
         self.copy_ocr_to_gt_callback = copy_ocr_to_gt_callback
         self.merge_lines_callback = merge_lines_callback
         self.delete_lines_callback = delete_lines_callback
+        self.merge_paragraphs_callback = merge_paragraphs_callback
+        self.delete_paragraphs_callback = delete_paragraphs_callback
+        self.split_paragraph_after_line_callback = split_paragraph_after_line_callback
+        self.split_paragraph_with_selected_lines_callback = (
+            split_paragraph_with_selected_lines_callback
+        )
+        self.delete_words_callback = delete_words_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
+        self.selected_paragraph_indices: set[int] = set()
         self._selection_change_callback = None
+        self._paragraph_selection_change_callback = None
         self.merge_lines_button = None
         self.delete_lines_button = None
+        self.merge_paragraphs_button = None
+        self.delete_paragraphs_button = None
+        self.split_paragraph_after_line_button = None
+        self.split_paragraph_by_selection_button = None
+        self.delete_words_button = None
         self.notify_callback = notify_callback
         self._last_display_signature = None
         self._display_update_call_count = 0
@@ -102,9 +121,60 @@ class WordMatchView:
                             value="Mismatched Lines",
                         )
                         self.filter_selector.on_value_change(self._on_filter_change)
+
+                    # Paragraph operations row
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label("Paragraph Operations").classes(
+                            "text-sm font-semibold"
+                        )
+                        self.merge_paragraphs_button = (
+                            ui.button(
+                                "Merge",
+                                icon="call_merge",
+                                on_click=self._handle_merge_selected_paragraphs,
+                            )
+                            .props("size=sm")
+                            .tooltip("Merge selected paragraphs")
+                        )
+                        self.delete_paragraphs_button = (
+                            ui.button(
+                                "Delete",
+                                icon="delete",
+                                color="negative",
+                                on_click=self._handle_delete_selected_paragraphs,
+                            )
+                            .props("size=sm")
+                            .tooltip("Delete selected paragraphs")
+                        )
+                        self.split_paragraph_after_line_button = (
+                            ui.button(
+                                "Split After",
+                                icon="call_split",
+                                on_click=self._handle_split_paragraph_after_selected_line,
+                            )
+                            .props("size=sm")
+                            .tooltip(
+                                "Split the containing paragraph immediately after the selected line"
+                            )
+                        )
+                        self.split_paragraph_by_selection_button = (
+                            ui.button(
+                                "Split Select",
+                                icon="call_split",
+                                on_click=self._handle_split_paragraph_by_selected_lines,
+                            )
+                            .props("size=sm")
+                            .tooltip(
+                                "Split one paragraph into selected and unselected lines"
+                            )
+                        )
+
+                    # Line operations row
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label("Line Operations").classes("text-sm font-semibold")
                         self.merge_lines_button = (
                             ui.button(
-                                "Merge Selected",
+                                "Merge",
                                 icon="call_merge",
                                 on_click=self._handle_merge_selected_lines,
                             )
@@ -115,13 +185,27 @@ class WordMatchView:
                         )
                         self.delete_lines_button = (
                             ui.button(
-                                "Delete Selected",
+                                "Delete",
                                 icon="delete",
                                 color="negative",
                                 on_click=self._handle_delete_selected_lines,
                             )
                             .props("size=sm")
                             .tooltip("Delete selected lines")
+                        )
+
+                    # Word operations row
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label("Word Operations").classes("text-sm font-semibold")
+                        self.delete_words_button = (
+                            ui.button(
+                                "Delete",
+                                icon="delete",
+                                color="negative",
+                                on_click=self._handle_delete_selected_words,
+                            )
+                            .props("size=sm")
+                            .tooltip("Delete selected words")
                         )
 
             # Scrollable container for word matches
@@ -221,7 +305,13 @@ class WordMatchView:
             }
         for line_index in available_line_indices:
             self._sync_line_selection_from_words(line_index)
-        self._update_merge_button_state()
+        available_paragraph_indices = {
+            line_match.paragraph_index
+            for line_match in self.view_model.line_matches
+            if getattr(line_match, "paragraph_index", None) is not None
+        }
+        self.selected_paragraph_indices.intersection_update(available_paragraph_indices)
+        self._update_action_button_state()
 
         display_signature = self._compute_display_signature()
         if display_signature == self._last_display_signature:
@@ -283,6 +373,19 @@ class WordMatchView:
                     value=True,
                     icon="subject",
                 ).classes("full-width"):
+                    if paragraph_index is not None:
+                        with ui.row().classes("items-center"):
+                            ui.checkbox(
+                                value=paragraph_index in self.selected_paragraph_indices
+                            ).props("size=sm").on_value_change(
+                                lambda event, index=paragraph_index: (
+                                    self._on_paragraph_selection_change(
+                                        index,
+                                        bool(event.value),
+                                    )
+                                )
+                            )
+                            ui.label("Select paragraph")
                     with ui.column().classes("full-width"):
                         for line_match in paragraph_line_matches:
                             self._create_line_card(line_match)
@@ -324,6 +427,7 @@ class WordMatchView:
             self.show_only_mismatches,
             tuple(sorted(self.selected_line_indices)),
             tuple(sorted(self.selected_word_indices)),
+            tuple(sorted(self.selected_paragraph_indices)),
             tuple(line_signatures),
         )
 
@@ -354,6 +458,10 @@ class WordMatchView:
         """Register callback invoked when selected words change."""
         self._selection_change_callback = callback
 
+    def set_paragraph_selection_change_callback(self, callback) -> None:
+        """Register callback invoked when selected paragraphs change."""
+        self._paragraph_selection_change_callback = callback
+
     def _emit_selection_changed(self) -> None:
         """Emit selected words to listener (for image overlay sync)."""
         if self._selection_change_callback is None:
@@ -362,6 +470,17 @@ class WordMatchView:
             self._selection_change_callback(set(self.selected_word_indices))
         except Exception:
             logger.debug("Selection change callback failed", exc_info=True)
+
+    def _emit_paragraph_selection_changed(self) -> None:
+        """Emit selected paragraphs to listener (for image overlay sync)."""
+        if self._paragraph_selection_change_callback is None:
+            return
+        try:
+            self._paragraph_selection_change_callback(
+                set(self.selected_paragraph_indices)
+            )
+        except Exception:
+            logger.debug("Paragraph selection callback failed", exc_info=True)
 
     def _line_match_by_index(self, line_index: int):
         for line_match in self.view_model.line_matches:
@@ -827,7 +946,7 @@ class WordMatchView:
             selected,
             sorted(self.selected_line_indices),
         )
-        self._update_merge_button_state()
+        self._update_action_button_state()
         self._emit_selection_changed()
         self._update_lines_display()
 
@@ -846,8 +965,26 @@ class WordMatchView:
             selected,
             sorted(self.selected_word_indices),
         )
-        self._update_merge_button_state()
+        self._update_action_button_state()
         self._emit_selection_changed()
+        self._update_lines_display()
+
+    def _on_paragraph_selection_change(
+        self, paragraph_index: int, selected: bool
+    ) -> None:
+        """Track selected paragraphs for paragraph actions."""
+        if selected:
+            self.selected_paragraph_indices.add(paragraph_index)
+        else:
+            self.selected_paragraph_indices.discard(paragraph_index)
+        logger.debug(
+            "Paragraph selection changed: paragraph_index=%d selected=%s current_selection=%s",
+            paragraph_index,
+            selected,
+            sorted(self.selected_paragraph_indices),
+        )
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
         self._update_lines_display()
 
     def _get_effective_selected_lines(self) -> list[int]:
@@ -869,12 +1006,28 @@ class WordMatchView:
             for line_index in available_line_indices
             if self._is_line_fully_word_selected(line_index)
         }
-        self._update_merge_button_state()
+        self._update_action_button_state()
         self._emit_selection_changed()
         self._update_lines_display()
 
-    def _update_merge_button_state(self) -> None:
-        """Enable merge button only when merge action is available and valid."""
+    def set_selected_paragraphs(self, selection: set[int]) -> None:
+        """Set selected paragraphs externally (e.g., image box selection)."""
+        available_paragraph_indices = {
+            line_match.paragraph_index
+            for line_match in self.view_model.line_matches
+            if getattr(line_match, "paragraph_index", None) is not None
+        }
+        self.selected_paragraph_indices = {
+            paragraph_index
+            for paragraph_index in selection
+            if paragraph_index in available_paragraph_indices
+        }
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
+        self._update_lines_display()
+
+    def _update_action_button_state(self) -> None:
+        """Enable/disable line and paragraph action buttons based on selection."""
         selected_lines = self._get_effective_selected_lines()
         if self.merge_lines_button is None:
             pass
@@ -886,6 +1039,36 @@ class WordMatchView:
         if self.delete_lines_button is not None:
             self.delete_lines_button.disabled = (
                 self.delete_lines_callback is None or len(selected_lines) < 1
+            )
+
+        if self.merge_paragraphs_button is not None:
+            self.merge_paragraphs_button.disabled = (
+                self.merge_paragraphs_callback is None
+                or len(self.selected_paragraph_indices) < 2
+            )
+
+        if self.delete_paragraphs_button is not None:
+            self.delete_paragraphs_button.disabled = (
+                self.delete_paragraphs_callback is None
+                or len(self.selected_paragraph_indices) < 1
+            )
+
+        if self.split_paragraph_after_line_button is not None:
+            self.split_paragraph_after_line_button.disabled = (
+                self.split_paragraph_after_line_callback is None
+                or len(selected_lines) != 1
+            )
+
+        if self.split_paragraph_by_selection_button is not None:
+            self.split_paragraph_by_selection_button.disabled = (
+                self.split_paragraph_with_selected_lines_callback is None
+                or len(selected_lines) < 1
+            )
+
+        if self.delete_words_button is not None:
+            self.delete_words_button.disabled = (
+                self.delete_words_callback is None
+                or len(self.selected_word_indices) < 1
             )
 
     def _handle_merge_selected_lines(self):
@@ -907,7 +1090,7 @@ class WordMatchView:
         # lines after reindexing.
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
-        self._update_merge_button_state()
+        self._update_action_button_state()
         self._emit_selection_changed()
         logger.info("Merge requested for selected lines: %s", selected_indices)
         try:
@@ -924,16 +1107,255 @@ class WordMatchView:
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
-                self._update_merge_button_state()
+                self._update_action_button_state()
                 self._emit_selection_changed()
                 self._safe_notify("Failed to merge selected lines", type_="warning")
         except Exception as e:
             self.selected_line_indices = previous_line_selection
             self.selected_word_indices = previous_word_selection
-            self._update_merge_button_state()
+            self._update_action_button_state()
             self._emit_selection_changed()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
+
+    def _handle_merge_selected_paragraphs(self):
+        """Merge selected paragraphs into the first selected paragraph."""
+        if self.merge_paragraphs_callback is None:
+            self._safe_notify("Merge paragraph function not available", type_="warning")
+            return
+
+        selected_indices = sorted(self.selected_paragraph_indices)
+        if len(selected_indices) < 2:
+            self._safe_notify(
+                "Select at least two paragraphs to merge", type_="warning"
+            )
+            return
+
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
+        logger.info("Merge requested for selected paragraphs: %s", selected_indices)
+        try:
+            success = self.merge_paragraphs_callback(selected_indices)
+            logger.info(
+                "Merge paragraph callback completed: selected=%s success=%s",
+                selected_indices,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Merged {len(selected_indices)} paragraphs", type_="positive"
+                )
+            else:
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to merge selected paragraphs", type_="warning"
+                )
+        except Exception as e:
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error merging selected paragraphs %s: %s",
+                selected_indices,
+                e,
+            )
+            self._safe_notify(
+                f"Error merging selected paragraphs: {e}",
+                type_="negative",
+            )
+
+    def _handle_delete_selected_paragraphs(self):
+        """Delete selected paragraphs from the current page."""
+        if self.delete_paragraphs_callback is None:
+            self._safe_notify(
+                "Delete paragraph function not available", type_="warning"
+            )
+            return
+
+        selected_indices = sorted(self.selected_paragraph_indices)
+        if not selected_indices:
+            self._safe_notify(
+                "Select at least one paragraph to delete", type_="warning"
+            )
+            return
+
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
+        logger.info("Delete requested for selected paragraphs: %s", selected_indices)
+        try:
+            success = self.delete_paragraphs_callback(selected_indices)
+            logger.info(
+                "Delete paragraph callback completed: selected=%s success=%s",
+                selected_indices,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Deleted {len(selected_indices)} paragraphs", type_="positive"
+                )
+            else:
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to delete selected paragraphs",
+                    type_="warning",
+                )
+        except Exception as e:
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error deleting selected paragraphs %s: %s",
+                selected_indices,
+                e,
+            )
+            self._safe_notify(
+                f"Error deleting selected paragraphs: {e}",
+                type_="negative",
+            )
+
+    def _handle_split_paragraph_after_selected_line(self):
+        """Split the selected line's paragraph immediately after that line."""
+        if self.split_paragraph_after_line_callback is None:
+            self._safe_notify("Split paragraph function not available", type_="warning")
+            return
+
+        selected_line_indices = self._get_effective_selected_lines()
+        if len(selected_line_indices) != 1:
+            self._safe_notify(
+                "Select exactly one line to split paragraph", type_="warning"
+            )
+            return
+
+        selected_line_index = selected_line_indices[0]
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+        logger.info("Split requested after selected line: %s", selected_line_index)
+        try:
+            success = self.split_paragraph_after_line_callback(selected_line_index)
+            logger.info(
+                "Split paragraph-after-line callback completed: line=%s success=%s",
+                selected_line_index,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Split paragraph after line {selected_line_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify("Failed to split paragraph", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error splitting paragraph after line %s: %s",
+                selected_line_index,
+                e,
+            )
+            self._safe_notify(
+                f"Error splitting paragraph: {e}",
+                type_="negative",
+            )
+
+    def _handle_split_paragraph_by_selected_lines(self):
+        """Split one paragraph into selected and unselected lines."""
+        logger.debug(
+            "[split_by_selection] handler.start selected_lines=%s selected_words=%s selected_paragraphs=%s",
+            sorted(self.selected_line_indices),
+            sorted(self.selected_word_indices),
+            sorted(self.selected_paragraph_indices),
+        )
+        if self.split_paragraph_with_selected_lines_callback is None:
+            self._safe_notify("Split paragraph function not available", type_="warning")
+            return
+
+        selected_line_indices = self._get_effective_selected_lines()
+        if not selected_line_indices:
+            self._safe_notify(
+                "Select one or more lines to split paragraph", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        logger.debug("[split_by_selection] handler.selection_cleared")
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+        logger.info(
+            "[split_by_selection] handler.requested lines=%s", selected_line_indices
+        )
+        try:
+            logger.debug(
+                "[split_by_selection] handler.callback_invoke lines=%s",
+                selected_line_indices,
+            )
+            success = self.split_paragraph_with_selected_lines_callback(
+                selected_line_indices
+            )
+            logger.info(
+                "[split_by_selection] handler.callback_done lines=%s success=%s",
+                selected_line_indices,
+                success,
+            )
+            if success:
+                logger.debug(
+                    "[split_by_selection] handler.success awaiting_page_state_refresh"
+                )
+                self._safe_notify("Split paragraph by selected lines", type_="positive")
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify("Failed to split paragraph", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error splitting paragraph by selected lines %s: %s",
+                selected_line_indices,
+                e,
+            )
+            self._safe_notify(
+                f"Error splitting paragraph: {e}",
+                type_="negative",
+            )
 
     def _handle_delete_selected_lines(self):
         """Delete selected lines from the current page."""
@@ -951,6 +1373,50 @@ class WordMatchView:
             success_message=f"Deleted {len(selected_indices)} lines",
             failure_message="Failed to delete selected lines",
         )
+
+    def _handle_delete_selected_words(self):
+        """Delete selected words from the current page."""
+        if self.delete_words_callback is None:
+            self._safe_notify("Delete word function not available", type_="warning")
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify("Select at least one word to delete", type_="warning")
+            return
+
+        previously_selected_lines = set(self.selected_line_indices)
+        previously_selected_words = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        logger.info("Delete requested for selected words: %s", selected_words)
+        try:
+            success = self.delete_words_callback(selected_words)
+            logger.info(
+                "Delete words callback completed: selected=%s success=%s",
+                selected_words,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Deleted {len(selected_words)} words",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previously_selected_lines
+                self.selected_word_indices = previously_selected_words
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to delete selected words", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previously_selected_lines
+            self.selected_word_indices = previously_selected_words
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception("Error deleting words %s: %s", selected_words, e)
+            self._safe_notify(f"Error deleting words: {e}", type_="negative")
 
     def _handle_delete_line(self, line_index: int) -> None:
         """Delete a single line from the current page."""
@@ -976,7 +1442,7 @@ class WordMatchView:
         previously_selected_words = set(self.selected_word_indices)
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
-        self._update_merge_button_state()
+        self._update_action_button_state()
         self._emit_selection_changed()
         logger.info("Delete requested for lines: %s", line_indices)
         try:
@@ -991,13 +1457,13 @@ class WordMatchView:
             else:
                 self.selected_line_indices = previously_selected
                 self.selected_word_indices = previously_selected_words
-                self._update_merge_button_state()
+                self._update_action_button_state()
                 self._emit_selection_changed()
                 self._safe_notify(failure_message, type_="warning")
         except Exception as e:
             self.selected_line_indices = previously_selected
             self.selected_word_indices = previously_selected_words
-            self._update_merge_button_state()
+            self._update_action_button_state()
             self._emit_selection_changed()
             logger.exception("Error deleting lines %s: %s", line_indices, e)
             self._safe_notify(f"Error deleting lines: {e}", type_="negative")
@@ -1109,6 +1575,8 @@ class WordMatchView:
         self._display_update_skip_count = 0
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
-        self._update_merge_button_state()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
         self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
         logger.debug("WordMatchView clear complete")

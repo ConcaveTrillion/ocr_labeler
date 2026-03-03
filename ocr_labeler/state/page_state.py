@@ -728,6 +728,420 @@ class PageState:
             logger.exception("Error deleting lines %s: %s", line_indices, e)
             return False
 
+    def merge_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+        """Merge selected paragraphs on the current page into the first selected paragraph.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Zero-based paragraph indices to merge.
+
+        Returns:
+            bool: True if merge succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for paragraph merge")
+            return False
+
+        logger.debug(
+            "PageState.merge_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            paragraph_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.merge_paragraphs(page, paragraph_indices)
+            logger.debug(
+                "PageState.merge_paragraphs result: selected=%s success=%s",
+                paragraph_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after paragraph merge for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after paragraph merge"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error merging paragraphs %s: %s", paragraph_indices, e)
+            return False
+
+    def delete_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+        """Delete selected paragraphs on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Zero-based paragraph indices to delete.
+
+        Returns:
+            bool: True if deletion succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for paragraph deletion")
+            return False
+
+        logger.debug(
+            "PageState.delete_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            paragraph_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.delete_paragraphs(page, paragraph_indices)
+            logger.debug(
+                "PageState.delete_paragraphs result: selected=%s success=%s",
+                paragraph_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after paragraph deletion"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error deleting paragraphs %s: %s", paragraph_indices, e)
+            return False
+
+    def split_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+        """Split selected paragraphs on the current page into one paragraph per line.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Zero-based paragraph indices to split.
+
+        Returns:
+            bool: True if any selected paragraph was split, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for paragraph split")
+            return False
+
+        logger.debug(
+            "PageState.split_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            paragraph_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_paragraphs(page, paragraph_indices)
+            logger.debug(
+                "PageState.split_paragraphs result: selected=%s success=%s",
+                paragraph_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after paragraph split for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after paragraph split"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error splitting paragraphs %s: %s", paragraph_indices, e)
+            return False
+
+    def split_paragraph_after_line(self, page_index: int, line_index: int) -> bool:
+        """Split the current line's paragraph immediately after the selected line.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index used as split point.
+
+        Returns:
+            bool: True if split succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for paragraph split-after-line")
+            return False
+
+        logger.debug(
+            "PageState.split_paragraph_after_line: page_index=%s current_index=%s line_index=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_paragraph_after_line(page, line_index)
+            logger.debug(
+                "PageState.split_paragraph_after_line result: line_index=%s success=%s",
+                line_index,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after paragraph split-after-line for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after paragraph split-after-line"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting paragraph after line index %s: %s", line_index, e
+            )
+            return False
+
+    def split_paragraph_with_selected_lines(
+        self, page_index: int, line_indices: list[int]
+    ) -> bool:
+        """Split one paragraph into selected lines and unselected lines.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Zero-based selected line indices.
+
+        Returns:
+            bool: True if split succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for split-by-selected-lines")
+            return False
+
+        logger.debug(
+            "PageState.split_paragraph_with_selected_lines: page_index=%s current_index=%s line_indices=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_indices,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_paragraph_with_selected_lines(page, line_indices)
+            logger.debug(
+                "PageState.split_paragraph_with_selected_lines result: line_indices=%s success=%s",
+                line_indices,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                        logger.debug(
+                            "Re-matched ground truth after split-by-selected-lines for page index %s",
+                            self._current_page_index,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after split-by-selected-lines"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting paragraph with selected lines %s: %s",
+                line_indices,
+                e,
+            )
+            return False
+
+    def delete_words(self, page_index: int, word_keys: list[tuple[int, int]]) -> bool:
+        """Delete selected words on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: List of (line_index, word_index) pairs to delete.
+
+        Returns:
+            bool: True if deletion succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word deletion")
+            return False
+
+        logger.debug(
+            "PageState.delete_words: page_index=%s current_index=%s selected=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            word_keys,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.delete_words(page, word_keys)
+            logger.debug(
+                "PageState.delete_words result: selected=%s success=%s",
+                word_keys,
+                result,
+            )
+
+            if result:
+                try:
+                    gt_text = self._resolve_ground_truth_text(
+                        page=page,
+                        page_model=self.current_page_model,
+                        page_index=self._current_page_index,
+                    )
+                    if gt_text:
+                        if hasattr(page, "remove_ground_truth") and callable(
+                            getattr(page, "remove_ground_truth")
+                        ):
+                            page.remove_ground_truth()
+                        if hasattr(page, "add_ground_truth") and callable(
+                            getattr(page, "add_ground_truth")
+                        ):
+                            page.add_ground_truth(gt_text)
+                except Exception:
+                    logger.exception(
+                        "Failed to re-match ground truth after word deletion"
+                    )
+
+                self._refresh_page_overlay_images(page)
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception("Error deleting words %s: %s", word_keys, e)
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 

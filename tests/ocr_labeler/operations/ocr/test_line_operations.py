@@ -34,6 +34,15 @@ def _line(words: list[Word], x: int) -> Block:
     )
 
 
+def _paragraph(lines: list[Block], y: int) -> Block:
+    return Block(
+        items=lines,
+        bounding_box=_bbox(0, y, 80, y + 20),
+        child_type=BlockChildType.BLOCKS,
+        block_category=BlockCategory.PARAGRAPH,
+    )
+
+
 class TestLineOperations:
     """Test LineOperations class methods."""
 
@@ -398,3 +407,86 @@ class TestLineOperations:
         result = operations.delete_lines(page, [0])
 
         assert result is False
+
+    def test_delete_paragraphs_success(self, operations):
+        """Deleting selected paragraphs should remove them from the page."""
+        para1 = _paragraph([_line([_word("a", "A", 0)], 0)], 0)
+        para2 = _paragraph([_line([_word("b", "B", 20)], 20)], 30)
+        page = Page(width=100, height=100, page_index=0, items=[para1, para2])
+
+        result = operations.delete_paragraphs(page, [1])
+
+        assert result is True
+        assert len(page.paragraphs) == 1
+        assert page.paragraphs[0].text == "a"
+
+    def test_delete_words_success(self, operations):
+        """Deleting selected words should remove only the targeted words."""
+        line = _line(
+            [
+                _word("alpha", "A", 0),
+                _word("beta", "B", 20),
+                _word("gamma", "C", 40),
+            ],
+            0,
+        )
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        result = operations.delete_words(page, [(0, 1)])
+
+        assert result is True
+        assert [word.text for word in page.lines[0].words] == ["alpha", "gamma"]
+
+    def test_split_paragraph_after_line_success(self, operations):
+        """Splitting after selected line should split one paragraph into two."""
+        line1 = _line([_word("a", "A", 0)], 0)
+        line2 = _line([_word("b", "B", 20)], 20)
+        para = _paragraph([line1, line2], 0)
+        page = Page(width=100, height=100, page_index=0, items=[para])
+
+        result = operations.split_paragraph_after_line(page, 0)
+
+        assert result is True
+        assert len(page.paragraphs) == 2
+        assert page.paragraphs[0].lines[0].text == "a"
+        assert page.paragraphs[1].lines[0].text == "b"
+
+    def test_split_paragraph_after_line_fails_on_last_line(self, operations):
+        """Splitting after last line should fail (no trailing segment)."""
+        line1 = _line([_word("a", "A", 0)], 0)
+        line2 = _line([_word("b", "B", 20)], 20)
+        para = _paragraph([line1, line2], 0)
+        page = Page(width=100, height=100, page_index=0, items=[para])
+
+        result = operations.split_paragraph_after_line(page, 1)
+
+        assert result is False
+        assert len(page.paragraphs) == 1
+
+    def test_split_paragraph_with_selected_lines_success(self, operations):
+        """Selected lines should split a paragraph into selected and unselected groups."""
+        line1 = _line([_word("a", "A", 0)], 0)
+        line2 = _line([_word("b", "B", 20)], 20)
+        line3 = _line([_word("c", "C", 40)], 40)
+        para = _paragraph([line1, line2, line3], 0)
+        page = Page(width=100, height=100, page_index=0, items=[para])
+
+        result = operations.split_paragraph_with_selected_lines(page, [0, 2])
+
+        assert result is True
+        assert len(page.paragraphs) == 2
+        assert [line.text for line in page.paragraphs[0].lines] == ["a", "c"]
+        assert [line.text for line in page.paragraphs[1].lines] == ["b"]
+
+    def test_split_paragraph_with_selected_lines_fails_across_paragraphs(
+        self, operations
+    ):
+        """Split-by-selection should fail when lines span multiple paragraphs."""
+        para1 = _paragraph([_line([_word("a", "A", 0)], 0)], 0)
+        para2 = _paragraph([_line([_word("b", "B", 20)], 20)], 30)
+        page = Page(width=100, height=100, page_index=0, items=[para1, para2])
+
+        result = operations.split_paragraph_with_selected_lines(page, [0, 1])
+
+        assert result is False
+        assert len(page.paragraphs) == 2

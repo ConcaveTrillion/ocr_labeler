@@ -175,6 +175,45 @@ def test_text_tabs_updates_when_ground_truth_changes_even_if_ocr_text_unchanged(
     assert text_tabs.word_match_view.update_from_page.call_count == 2
 
 
+def test_text_tabs_updates_when_paragraph_structure_changes_even_if_lines_same():
+    """Paragraph-only edits should invalidate dedupe and refresh word matches."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+    )
+
+    text_tabs = TextTabs(page_state=page_state)
+    text_tabs.word_match_view = MagicMock()
+
+    line1 = SimpleNamespace(text="line1", ground_truth_text="", words=[])
+    line2 = SimpleNamespace(text="line2", ground_truth_text="", words=[])
+    page = SimpleNamespace(
+        name="p001.png",
+        index=0,
+        lines=[line1, line2],
+        paragraphs=[SimpleNamespace(text="line1\nline2", lines=[line1, line2])],
+    )
+
+    text_tabs.update_word_matches(page)
+    page.paragraphs = [
+        SimpleNamespace(text="line1", lines=[line1]),
+        SimpleNamespace(text="line2", lines=[line2]),
+    ]
+    text_tabs.update_word_matches(page)
+
+    assert text_tabs.word_match_view.update_from_page.call_count == 2
+
+
 def test_text_tabs_merge_callback_rematches_gt_on_merged_line(tmp_path):
     """TextTabs merge callback should merge lines and rematch GT text on merged line."""
     page_state = PageState()
@@ -299,3 +338,151 @@ def test_text_tabs_ocr_to_gt_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(3, 7)]
+
+
+def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda page_index, paragraph_indices: (
+            calls.append((page_index, paragraph_indices)) or True
+        ),
+        split_paragraph_after_line=lambda *_: False,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=5)
+    result = text_tabs.word_match_view.merge_paragraphs_callback([0, 2])
+
+    assert result is True
+    assert calls == [(5, [0, 2])]
+
+
+def test_text_tabs_split_paragraph_after_line_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda page_index, line_index: (
+            calls.append((page_index, line_index)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=6)
+    result = text_tabs.word_match_view.split_paragraph_after_line_callback(1)
+
+    assert result is True
+    assert calls == [(6, 1)]
+
+
+def test_text_tabs_split_paragraph_with_selected_lines_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda page_index, line_indices: (
+            calls.append((page_index, line_indices)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=7)
+    result = text_tabs.word_match_view.split_paragraph_with_selected_lines_callback(
+        [0, 2]
+    )
+
+    assert result is True
+    assert calls == [(7, [0, 2])]
+
+
+def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        delete_paragraphs=lambda page_index, paragraph_indices: (
+            calls.append((page_index, paragraph_indices)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=8)
+    result = text_tabs.word_match_view.delete_paragraphs_callback([1, 2])
+
+    assert result is True
+    assert calls == [(8, [1, 2])]
+
+
+def test_text_tabs_delete_words_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        delete_paragraphs=lambda *_: False,
+        delete_words=lambda page_index, word_keys: (
+            calls.append((page_index, word_keys)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=9)
+    result = text_tabs.word_match_view.delete_words_callback([(0, 1), (2, 3)])
+
+    assert result is True
+    assert calls == [(9, [(0, 1), (2, 3)])]

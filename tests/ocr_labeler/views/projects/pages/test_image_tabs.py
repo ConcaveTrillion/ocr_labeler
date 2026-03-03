@@ -52,6 +52,15 @@ def _line(words: list[Word], x: int) -> Block:
     )
 
 
+def _paragraph(lines: list[Block], y: int) -> Block:
+    return Block(
+        items=lines,
+        bounding_box=_bbox(0, y, 180, y + 20),
+        child_type=BlockChildType.BLOCKS,
+        block_category=BlockCategory.PARAGRAPH,
+    )
+
+
 def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
     """Merging lines should trigger image callback with updated line bbox overlay."""
     page_state = PageState()
@@ -333,6 +342,48 @@ def test_image_tabs_apply_box_selection_on_lines_selects_line_words():
     image_tabs._apply_box_selection("Lines")
 
     assert captured["selection"] == {(0, 0), (0, 1)}
+
+
+def test_image_tabs_select_paragraphs_in_rect_returns_indices():
+    para1 = _paragraph([_line([_word("alpha", 10)], 10)], 0)
+    para2 = _paragraph([_line([_word("beta", 10)], 10)], 30)
+    page = Page(width=200, height=100, page_index=0, items=[para1, para2])
+
+    vm = SimpleNamespace(set_image_update_callback=lambda _cb: None)
+    image_tabs = ImageTabs(vm)
+
+    selected = image_tabs._select_paragraphs_in_rect(page, 0, 0, 200, 22)
+
+    assert selected == {0}
+
+
+def test_image_tabs_apply_box_selection_on_paragraphs_invokes_callback():
+    para1 = _paragraph([_line([_word("alpha", 10)], 10)], 0)
+    para2 = _paragraph([_line([_word("beta", 10)], 10)], 30)
+    page = Page(width=200, height=100, page_index=0, items=[para1, para2])
+
+    captured = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_paragraphs_selected=lambda selection: captured.setdefault(
+            "selection", selection
+        ),
+    )
+    image_tabs._drag_start = (0.0, 0.0)
+    image_tabs._drag_current = (200.0, 22.0)
+
+    image_tabs._apply_box_selection("Paragraphs")
+
+    assert captured["selection"] == {0}
+    assert image_tabs._selected_paragraph_indices == {0}
 
 
 def test_image_tabs_ctrl_drag_on_lines_adds_line_words():

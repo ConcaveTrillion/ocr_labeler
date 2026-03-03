@@ -156,6 +156,91 @@ class TextTabs:
                 logger.debug("Delete lines operation result: %s", result)
                 return result
 
+        merge_paragraphs_callback = None
+        if page_state:
+
+            def merge_paragraphs_callback(paragraph_indices: list[int]) -> bool:
+                logger.debug(
+                    "Merging selected paragraphs %s on page %d",
+                    paragraph_indices,
+                    page_index,
+                )
+                result = page_state.merge_paragraphs(page_index, paragraph_indices)
+                logger.debug("Merge paragraphs operation result: %s", result)
+                return result
+
+        delete_paragraphs_callback = None
+        if page_state:
+
+            def delete_paragraphs_callback(paragraph_indices: list[int]) -> bool:
+                logger.debug(
+                    "Deleting selected paragraphs %s on page %d",
+                    paragraph_indices,
+                    page_index,
+                )
+                result = page_state.delete_paragraphs(page_index, paragraph_indices)
+                logger.debug("Delete paragraphs operation result: %s", result)
+                return result
+
+        split_paragraph_after_line_callback = None
+        if page_state:
+
+            def split_paragraph_after_line_callback(line_index: int) -> bool:
+                logger.debug(
+                    "Splitting paragraph after line %s on page %d",
+                    line_index,
+                    page_index,
+                )
+                result = page_state.split_paragraph_after_line(page_index, line_index)
+                logger.debug("Split paragraph after line operation result: %s", result)
+                return result
+
+        split_paragraph_with_selected_lines_callback = None
+        if page_state:
+
+            def split_paragraph_with_selected_lines_callback(
+                line_indices: list[int],
+            ) -> bool:
+                previous_key_head = (
+                    self._last_word_match_page_key[:4]
+                    if self._last_word_match_page_key is not None
+                    else None
+                )
+                logger.debug(
+                    "[split_by_selection] callback.start page=%d lines=%s last_key_head=%s",
+                    page_index,
+                    line_indices,
+                    previous_key_head,
+                )
+                result = page_state.split_paragraph_with_selected_lines(
+                    page_index,
+                    line_indices,
+                )
+                logger.debug(
+                    "[split_by_selection] callback.done page=%d success=%s last_key_head_now=%s",
+                    page_index,
+                    result,
+                    (
+                        self._last_word_match_page_key[:4]
+                        if self._last_word_match_page_key is not None
+                        else None
+                    ),
+                )
+                return result
+
+        delete_words_callback = None
+        if page_state:
+
+            def delete_words_callback(word_keys: list[tuple[int, int]]) -> bool:
+                logger.debug(
+                    "Deleting selected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.delete_words(page_index, word_keys)
+                logger.debug("Delete words operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -171,6 +256,11 @@ class TextTabs:
             copy_ocr_to_gt_callback=copy_ocr_to_gt_callback,
             merge_lines_callback=merge_lines_callback,
             delete_lines_callback=delete_lines_callback,
+            merge_paragraphs_callback=merge_paragraphs_callback,
+            delete_paragraphs_callback=delete_paragraphs_callback,
+            split_paragraph_after_line_callback=split_paragraph_after_line_callback,
+            split_paragraph_with_selected_lines_callback=split_paragraph_with_selected_lines_callback,
+            delete_words_callback=delete_words_callback,
             notify_callback=notify_callback,
         )
         self.container = None
@@ -372,8 +462,18 @@ class TextTabs:
             return
 
         page_key = self._build_word_match_page_key(page)
+        logger.debug(
+            "[word_match_refresh] dedupe.check prev_key_head=%s next_key_head=%s",
+            self._last_word_match_page_key[:4]
+            if self._last_word_match_page_key is not None
+            else None,
+            page_key[:4],
+        )
         if page_key == self._last_word_match_page_key:
-            logger.debug("Skipping word match update; page payload unchanged")
+            logger.debug(
+                "[word_match_refresh] dedupe.skip key_head=%s",
+                page_key[:4],
+            )
             return
 
         logger.debug(
@@ -385,6 +485,20 @@ class TextTabs:
 
     def _build_word_match_page_key(self, page: Page) -> tuple:
         """Build a lightweight key representing word-match-relevant page state."""
+        paragraph_fingerprint = ""
+        paragraphs = getattr(page, "paragraphs", None)
+        if paragraphs:
+            paragraph_fingerprint_builder = hashlib.sha1()
+            for paragraph in paragraphs:
+                paragraph_lines = getattr(paragraph, "lines", [])
+                paragraph_payload = (
+                    f"{getattr(paragraph, 'text', '')}\x1f{len(paragraph_lines)}"
+                )
+                paragraph_fingerprint_builder.update(
+                    paragraph_payload.encode("utf-8", errors="ignore")
+                )
+            paragraph_fingerprint = paragraph_fingerprint_builder.hexdigest()
+
         lines = getattr(page, "lines", None)
         if lines:
             fingerprint_builder = hashlib.sha1()
@@ -417,6 +531,7 @@ class TextTabs:
                 first_line_text,
                 last_line_text,
                 fingerprint_builder.hexdigest(),
+                paragraph_fingerprint,
             )
 
         blocks = getattr(page, "blocks", None)
@@ -442,4 +557,5 @@ class TextTabs:
             block_count,
             first_line_text,
             last_line_text,
+            paragraph_fingerprint,
         )

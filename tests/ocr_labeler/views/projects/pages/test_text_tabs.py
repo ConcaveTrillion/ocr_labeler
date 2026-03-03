@@ -486,3 +486,69 @@ def test_text_tabs_delete_words_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(9, [(0, 1), (2, 3)])]
+
+
+def test_text_tabs_merge_word_left_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        delete_paragraphs=lambda *_: False,
+        delete_words=lambda *_: False,
+        merge_word_left=lambda page_index, line_index, word_index: (
+            calls.append((page_index, line_index, word_index)) or True
+        ),
+        merge_word_right=lambda *_: False,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=10)
+    result = text_tabs.word_match_view.merge_word_left_callback(2, 3)
+
+    assert result is True
+    assert calls == [(10, 2, 3)]
+
+
+def test_text_tabs_merge_word_right_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        delete_paragraphs=lambda *_: False,
+        delete_words=lambda *_: False,
+        merge_word_left=lambda *_: False,
+        merge_word_right=lambda page_index, line_index, word_index: (
+            calls.append((page_index, line_index, word_index)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=11)
+    result = text_tabs.word_match_view.merge_word_right_callback(1, 0)
+
+    assert result is True
+    assert calls == [(11, 1, 0)]

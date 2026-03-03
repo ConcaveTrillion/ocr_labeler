@@ -241,6 +241,38 @@ class TextTabs:
                 logger.debug("Delete words operation result: %s", result)
                 return result
 
+        merge_word_left_callback = None
+        if page_state:
+
+            def merge_word_left_callback(line_index: int, word_index: int) -> bool:
+                logger.debug(
+                    "Merging word left at (%s, %s) on page %d",
+                    line_index,
+                    word_index,
+                    page_index,
+                )
+                result = page_state.merge_word_left(page_index, line_index, word_index)
+                logger.debug("Merge word left operation result: %s", result)
+                return result
+
+        merge_word_right_callback = None
+        if page_state:
+
+            def merge_word_right_callback(line_index: int, word_index: int) -> bool:
+                logger.debug(
+                    "Merging word right at (%s, %s) on page %d",
+                    line_index,
+                    word_index,
+                    page_index,
+                )
+                result = page_state.merge_word_right(
+                    page_index,
+                    line_index,
+                    word_index,
+                )
+                logger.debug("Merge word right operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -261,6 +293,8 @@ class TextTabs:
             split_paragraph_after_line_callback=split_paragraph_after_line_callback,
             split_paragraph_with_selected_lines_callback=split_paragraph_with_selected_lines_callback,
             delete_words_callback=delete_words_callback,
+            merge_word_left_callback=merge_word_left_callback,
+            merge_word_right_callback=merge_word_right_callback,
             notify_callback=notify_callback,
         )
         self.container = None

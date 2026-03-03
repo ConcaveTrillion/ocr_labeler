@@ -29,6 +29,8 @@ class WordMatchView:
         split_paragraph_after_line_callback=None,
         split_paragraph_with_selected_lines_callback=None,
         delete_words_callback=None,
+        merge_word_left_callback=None,
+        merge_word_right_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -53,6 +55,8 @@ class WordMatchView:
             split_paragraph_with_selected_lines_callback
         )
         self.delete_words_callback = delete_words_callback
+        self.merge_word_left_callback = merge_word_left_callback
+        self.merge_word_right_callback = merge_word_right_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
         self.selected_paragraph_indices: set[int] = set()
@@ -659,6 +663,12 @@ class WordMatchView:
                     self._create_gt_cell(word_match)
                     # Status cell
                     self._create_status_cell(word_match)
+                    # Per-word actions
+                    self._create_word_actions_cell(
+                        line_match.line_index,
+                        word_idx,
+                        len(line_match.word_matches),
+                    )
         logger.debug(
             "Word comparison table creation complete for line %d", line_match.line_index
         )
@@ -732,6 +742,52 @@ class WordMatchView:
                 ui.icon(status_icon).classes(status_color_classes)
                 if word_match.fuzz_score is not None:
                     ui.label(f"{word_match.fuzz_score:.2f}")
+
+    def _create_word_actions_cell(
+        self, line_index: int, word_index: int, word_count: int
+    ) -> None:
+        """Create per-word action buttons displayed below each word."""
+        with ui.row().classes("items-center gap-1"):
+            merge_left_button = (
+                ui.button(
+                    icon="keyboard_arrow_left",
+                    on_click=lambda: self._handle_merge_word_left(
+                        line_index, word_index
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Merge with left word")
+            )
+            merge_left_button.disabled = (
+                self.merge_word_left_callback is None or word_index <= 0
+            )
+
+            merge_right_button = (
+                ui.button(
+                    icon="keyboard_arrow_right",
+                    on_click=lambda: self._handle_merge_word_right(
+                        line_index, word_index
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Merge with right word")
+            )
+            merge_right_button.disabled = (
+                self.merge_word_right_callback is None or word_index >= word_count - 1
+            )
+
+            delete_button = (
+                ui.button(
+                    icon="delete",
+                    color="negative",
+                    on_click=lambda: self._handle_delete_single_word(
+                        line_index, word_index
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Delete word")
+            )
+            delete_button.disabled = self.delete_words_callback is None
 
     def _create_word_text_display(self, word_matches, text_type):
         """Create a display of words with appropriate coloring."""
@@ -1417,6 +1473,124 @@ class WordMatchView:
             self._emit_selection_changed()
             logger.exception("Error deleting words %s: %s", selected_words, e)
             self._safe_notify(f"Error deleting words: {e}", type_="negative")
+
+    def _handle_delete_single_word(self, line_index: int, word_index: int) -> None:
+        """Delete a single word from a specific line."""
+        if self.delete_words_callback is None:
+            self._safe_notify("Delete word function not available", type_="warning")
+            return
+
+        word_key = (line_index, word_index)
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.delete_words_callback([word_key])
+            if success:
+                self._safe_notify(
+                    f"Deleted word {word_index + 1} from line {line_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to delete word", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error deleting single word (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error deleting word: {e}", type_="negative")
+
+    def _handle_merge_word_left(self, line_index: int, word_index: int) -> None:
+        """Merge selected word into its left neighbor."""
+        if self.merge_word_left_callback is None:
+            self._safe_notify("Merge word function not available", type_="warning")
+            return
+        if word_index <= 0:
+            self._safe_notify("No left word to merge into", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.merge_word_left_callback(line_index, word_index)
+            if success:
+                self._safe_notify(
+                    f"Merged word {word_index + 1} into word {word_index}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to merge word left", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error merge-word-left (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error merging word: {e}", type_="negative")
+
+    def _handle_merge_word_right(self, line_index: int, word_index: int) -> None:
+        """Merge selected word with its right neighbor."""
+        if self.merge_word_right_callback is None:
+            self._safe_notify("Merge word function not available", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.merge_word_right_callback(line_index, word_index)
+            if success:
+                self._safe_notify(
+                    f"Merged word {word_index + 2} into word {word_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to merge word right", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error merge-word-right (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error merging word: {e}", type_="negative")
 
     def _handle_delete_line(self, line_index: int) -> None:
         """Delete a single line from the current page."""

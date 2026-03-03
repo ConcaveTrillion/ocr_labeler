@@ -627,32 +627,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after merge for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception("Failed to re-match ground truth after line merge")
-
-                self._refresh_page_overlay_images(page)
-
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "line merge")
 
             return result
         except Exception as e:
@@ -695,33 +670,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after line deletion for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after line deletion"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "line deletion")
 
             return result
         except Exception as e:
@@ -764,33 +713,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after paragraph merge for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after paragraph merge"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "paragraph merge")
 
             return result
         except Exception as e:
@@ -833,29 +756,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after paragraph deletion"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "paragraph deletion")
 
             return result
         except Exception as e:
@@ -898,33 +799,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after paragraph split for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after paragraph split"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "paragraph split")
 
             return result
         except Exception as e:
@@ -967,33 +842,7 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after paragraph split-after-line for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after paragraph split-after-line"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "paragraph split-after-line")
 
             return result
         except Exception as e:
@@ -1040,33 +889,10 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                        logger.debug(
-                            "Re-matched ground truth after split-by-selected-lines for page index %s",
-                            self._current_page_index,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after split-by-selected-lines"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(
+                    page,
+                    "paragraph split-by-selected-lines",
+                )
 
             return result
         except Exception as e:
@@ -1113,33 +939,117 @@ class PageState:
             )
 
             if result:
-                try:
-                    gt_text = self._resolve_ground_truth_text(
-                        page=page,
-                        page_model=self.current_page_model,
-                        page_index=self._current_page_index,
-                    )
-                    if gt_text:
-                        if hasattr(page, "remove_ground_truth") and callable(
-                            getattr(page, "remove_ground_truth")
-                        ):
-                            page.remove_ground_truth()
-                        if hasattr(page, "add_ground_truth") and callable(
-                            getattr(page, "add_ground_truth")
-                        ):
-                            page.add_ground_truth(gt_text)
-                except Exception:
-                    logger.exception(
-                        "Failed to re-match ground truth after word deletion"
-                    )
-
-                self._refresh_page_overlay_images(page)
-                self._invalidate_text_cache()
-                self.notify()
+                self._finalize_structural_edit(page, "word deletion")
 
             return result
         except Exception as e:
             logger.exception("Error deleting words %s: %s", word_keys, e)
+            return False
+
+    def merge_word_left(
+        self, page_index: int, line_index: int, word_index: int
+    ) -> bool:
+        """Merge selected word into its immediate left neighbor.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+
+        Returns:
+            bool: True if merge succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word merge-left")
+            return False
+
+        logger.debug(
+            "PageState.merge_word_left: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            word_index,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.merge_word_left(page, line_index, word_index)
+            logger.debug(
+                "PageState.merge_word_left result: line_index=%s word_index=%s success=%s",
+                line_index,
+                word_index,
+                result,
+            )
+
+            if result:
+                self._finalize_structural_edit(page, "word merge-left")
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error merging word left line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
+    def merge_word_right(
+        self, page_index: int, line_index: int, word_index: int
+    ) -> bool:
+        """Merge selected word with its immediate right neighbor.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+
+        Returns:
+            bool: True if merge succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word merge-right")
+            return False
+
+        logger.debug(
+            "PageState.merge_word_right: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            word_index,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.merge_word_right(page, line_index, word_index)
+            logger.debug(
+                "PageState.merge_word_right result: line_index=%s word_index=%s success=%s",
+                line_index,
+                word_index,
+                result,
+            )
+
+            if result:
+                self._finalize_structural_edit(page, "word merge-right")
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error merging word right line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
             return False
 
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
@@ -1220,6 +1130,45 @@ class PageState:
         self._cached_page_index = -1
         self._cached_ocr_text = ""
         self._cached_gt_text = ""
+
+    def _rematch_page_ground_truth(self, page: object, operation: str) -> None:
+        """Re-apply page-level ground truth mapping after structural edits."""
+        gt_text = self._resolve_ground_truth_text(
+            page=page,
+            page_model=self.current_page_model,
+            page_index=self._current_page_index,
+        )
+        if not gt_text:
+            return
+
+        remove_ground_truth = getattr(page, "remove_ground_truth", None)
+        add_ground_truth = getattr(page, "add_ground_truth", None)
+        if not callable(remove_ground_truth) or not callable(add_ground_truth):
+            logger.debug(
+                "Skipping GT rematch after %s; page type %s lacks GT methods",
+                operation,
+                type(page).__name__,
+            )
+            return
+
+        remove_ground_truth()
+        add_ground_truth(gt_text)
+        logger.debug(
+            "Re-matched ground truth after %s for page index %s",
+            operation,
+            self._current_page_index,
+        )
+
+    def _finalize_structural_edit(self, page: object, operation: str) -> None:
+        """Run post-success page updates after structural OCR edits."""
+        try:
+            self._rematch_page_ground_truth(page, operation)
+        except Exception:
+            logger.exception("Failed to re-match ground truth after %s", operation)
+
+        self._refresh_page_overlay_images(page)
+        self._invalidate_text_cache()
+        self.notify()
 
     def _refresh_page_overlay_images(self, page: object) -> None:
         """Refresh page overlay images so bbox layers redraw after line edits."""

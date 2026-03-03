@@ -45,7 +45,7 @@ class LineOperations:
             return False
 
         try:
-            lines = getattr(page, "lines", [])
+            lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
                     f"Line index {line_index} out of range (0-{len(lines) - 1})"
@@ -53,14 +53,14 @@ class LineOperations:
                 return False
 
             line = lines[line_index]
-            words = getattr(line, "words", [])
+            words = line.words
             if not words:
                 logger.info(f"No words found in line {line_index}")
                 return False
 
             modified_count = 0
             for word_idx, word in enumerate(words):
-                gt_text = getattr(word, "ground_truth_text", "")
+                gt_text = word.ground_truth_text
                 if gt_text:
                     # Copy ground truth to OCR text
                     word.text = gt_text
@@ -97,7 +97,7 @@ class LineOperations:
             return False
 
         try:
-            lines = getattr(page, "lines", [])
+            lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
                     f"Line index {line_index} out of range (0-{len(lines) - 1})"
@@ -105,14 +105,14 @@ class LineOperations:
                 return False
 
             line = lines[line_index]
-            words = getattr(line, "words", [])
+            words = line.words
             if not words:
                 logger.info(f"No words found in line {line_index}")
                 return False
 
             modified_count = 0
             for word_idx, word in enumerate(words):
-                ocr_text = getattr(word, "text", "")
+                ocr_text = word.text
                 if ocr_text:
                     # Copy OCR text to ground truth
                     word.ground_truth_text = ocr_text
@@ -149,7 +149,7 @@ class LineOperations:
             return False
 
         try:
-            lines = getattr(page, "lines", [])
+            lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
                     f"Line index {line_index} out of range (0-{len(lines) - 1})"
@@ -157,16 +157,14 @@ class LineOperations:
                 return False
 
             line = lines[line_index]
-            words = getattr(line, "words", [])
+            words = line.words
             if not words:
                 logger.info(f"No words found in line {line_index}")
                 return False
 
             modified_count = 0
             for word_idx, word in enumerate(words):
-                if hasattr(word, "ground_truth_text") and getattr(
-                    word, "ground_truth_text", ""
-                ):
+                if word.ground_truth_text:
                     word.ground_truth_text = ""
                     modified_count += 1
                     logger.debug(f"Cleared GT for word {word_idx} in line {line_index}")
@@ -201,7 +199,7 @@ class LineOperations:
             return {"valid": False, "error": "No page provided"}
 
         try:
-            lines = getattr(page, "lines", [])
+            lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 return {
                     "valid": False,
@@ -209,7 +207,7 @@ class LineOperations:
                 }
 
             line = lines[line_index]
-            words = getattr(line, "words", [])
+            words = line.words
             if not words:
                 return {
                     "valid": True,
@@ -225,8 +223,8 @@ class LineOperations:
             mismatches = []
 
             for word_idx, word in enumerate(words):
-                ocr_text = getattr(word, "text", "")
-                gt_text = getattr(word, "ground_truth_text", "")
+                ocr_text = word.text
+                gt_text = word.ground_truth_text
 
                 if gt_text:
                     words_with_gt += 1
@@ -272,7 +270,7 @@ class LineOperations:
         try:
             from pd_book_tools.ocr.block import Block
 
-            lines = list(getattr(page, "lines", []))
+            lines = list(page.lines)
             line_count_before = len(lines)
 
             logger.debug(
@@ -312,9 +310,8 @@ class LineOperations:
             for index in unique_indices[1:]:
                 primary_line.merge(lines[index])
 
-            if not hasattr(page, "remove_line_if_exists") or not callable(
-                getattr(page, "remove_line_if_exists")
-            ):
+            remove_line_if_exists = page.remove_line_if_exists
+            if not callable(remove_line_if_exists):
                 logger.warning(
                     "Page does not support remove_line_if_exists() (page_type=%s)",
                     type(page).__name__,
@@ -322,9 +319,9 @@ class LineOperations:
                 return False
 
             for index in reversed(unique_indices[1:]):
-                page.remove_line_if_exists(lines[index])
+                remove_line_if_exists(lines[index])
 
-            lines_after = len(list(getattr(page, "lines", [])))
+            lines_after = len(list(page.lines))
             logger.info(
                 "Merged %d lines into line %d (line_count %d -> %d)",
                 len(unique_indices),
@@ -353,7 +350,7 @@ class LineOperations:
             return False
 
         try:
-            lines = list(getattr(page, "lines", []))
+            lines = list(page.lines)
             line_count_before = len(lines)
 
             logger.debug(
@@ -377,9 +374,8 @@ class LineOperations:
                     )
                     return False
 
-            if not hasattr(page, "remove_line_if_exists") or not callable(
-                getattr(page, "remove_line_if_exists")
-            ):
+            remove_line_if_exists = page.remove_line_if_exists
+            if not callable(remove_line_if_exists):
                 logger.warning(
                     "Page does not support remove_line_if_exists() (page_type=%s)",
                     type(page).__name__,
@@ -387,9 +383,9 @@ class LineOperations:
                 return False
 
             for index in reversed(unique_indices):
-                page.remove_line_if_exists(lines[index])
+                remove_line_if_exists(lines[index])
 
-            lines_after = len(list(getattr(page, "lines", [])))
+            lines_after = len(list(page.lines))
             logger.info(
                 "Deleted %d lines (line_count %d -> %d)",
                 len(unique_indices),
@@ -894,21 +890,20 @@ class LineOperations:
             return False
 
         try:
-            lines = list(getattr(page, "lines", []) or [])
             unique_keys = sorted(set(word_keys or []))
             if not unique_keys:
                 logger.warning("Word deletion requires selecting at least one word")
                 return False
 
+            validated_by_line: dict[int, list[object]] = {}
+
             for line_index, word_index in unique_keys:
-                if line_index < 0 or line_index >= len(lines):
-                    logger.warning(
-                        "Word deletion line index %s out of range (0-%s)",
-                        line_index,
-                        len(lines) - 1,
-                    )
-                    return False
-                line_words = list(getattr(lines[line_index], "words", []) or [])
+                line_words = validated_by_line.get(line_index)
+                if line_words is None:
+                    line_words = self._validated_line_words(page, line_index)
+                    if line_words is None:
+                        return False
+                    validated_by_line[line_index] = line_words
                 if word_index < 0 or word_index >= len(line_words):
                     logger.warning(
                         "Word index %s out of range for line %s (0-%s)",
@@ -923,35 +918,19 @@ class LineOperations:
                 keys_by_line.setdefault(line_index, []).append(word_index)
 
             for line_index, word_indices in keys_by_line.items():
-                line = lines[line_index]
-                line_words = list(getattr(line, "words", []) or [])
-                remove_item = getattr(line, "remove_item", None)
-                if callable(remove_item):
-                    for word_index in sorted(word_indices, reverse=True):
-                        remove_item(line_words[word_index])
-                else:
-                    kept_words = [
-                        word
-                        for idx, word in enumerate(line_words)
-                        if idx not in set(word_indices)
-                    ]
-                    if hasattr(line, "items"):
-                        setattr(line, "items", kept_words)
-                    else:
-                        logger.warning(
-                            "Line type %s does not support word removal",
-                            type(line).__name__,
-                        )
+                line_words = self._validated_line_words(page, line_index)
+                if line_words is None:
+                    return False
+                for word_index in sorted(word_indices, reverse=True):
+                    if not self._remove_word_from_line(
+                        page=page,
+                        line_index=line_index,
+                        word_index=word_index,
+                        line_words=line_words,
+                    ):
                         return False
 
-            if hasattr(page, "remove_empty_items") and callable(
-                getattr(page, "remove_empty_items")
-            ):
-                page.remove_empty_items()
-            if hasattr(page, "recompute_bounding_box") and callable(
-                getattr(page, "recompute_bounding_box")
-            ):
-                page.recompute_bounding_box()
+            self._finalize_page_structure(page)
 
             logger.info("Deleted %d selected words", len(unique_keys))
             return True
@@ -959,6 +938,189 @@ class LineOperations:
         except Exception as e:
             logger.exception("Error deleting selected words %s: %s", word_keys, e)
             return False
+
+    def merge_word_left(self, page: "Page", line_index: int, word_index: int) -> bool:
+        """Merge the selected word into its immediate left neighbor.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index to merge into the left neighbor.
+
+        Returns:
+            bool: True when merge succeeds, False otherwise.
+        """
+        return self._merge_adjacent_words(
+            page=page,
+            line_index=line_index,
+            word_index=word_index,
+            direction="left",
+        )
+
+    def merge_word_right(self, page: "Page", line_index: int, word_index: int) -> bool:
+        """Merge the selected word with its immediate right neighbor.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index to merge with the right neighbor.
+
+        Returns:
+            bool: True when merge succeeds, False otherwise.
+        """
+        return self._merge_adjacent_words(
+            page=page,
+            line_index=line_index,
+            word_index=word_index,
+            direction="right",
+        )
+
+    def _merge_adjacent_words(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        direction: str,
+    ) -> bool:
+        """Merge adjacent words on a line.
+
+        Direction:
+            - "left": merge selected word into immediate left word
+            - "right": merge immediate right word into selected word
+        """
+        if not page:
+            logger.warning("No page provided for word merge")
+            return False
+
+        try:
+            line_words = self._validated_line_words(page, line_index)
+            if line_words is None:
+                return False
+            if len(line_words) < 2:
+                logger.warning("Word merge requires at least two words in line")
+                return False
+
+            if word_index < 0 or word_index >= len(line_words):
+                logger.warning(
+                    "Word merge index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(line_words) - 1,
+                )
+                return False
+
+            if direction == "left":
+                if word_index == 0:
+                    logger.warning("Cannot merge first word to the left")
+                    return False
+                keep_index = word_index - 1
+                remove_index = word_index
+            elif direction == "right":
+                if word_index >= len(line_words) - 1:
+                    logger.warning("Cannot merge last word to the right")
+                    return False
+                keep_index = word_index
+                remove_index = word_index + 1
+            else:
+                logger.warning("Unsupported word merge direction: %s", direction)
+                return False
+
+            kept_word = line_words[keep_index]
+            removed_word = line_words[remove_index]
+            kept_word.merge(removed_word)
+
+            if not self._remove_word_from_line(
+                page=page,
+                line_index=line_index,
+                word_index=remove_index,
+                line_words=line_words,
+            ):
+                return False
+
+            updated_words = self._validated_line_words(page, line_index)
+            if updated_words is None:
+                return False
+            for word in updated_words:
+                word.ground_truth_text = ""
+
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Merged word %d %s on line %d",
+                word_index,
+                direction,
+                line_index,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error merging word line=%s index=%s direction=%s: %s",
+                line_index,
+                word_index,
+                direction,
+                e,
+            )
+            return False
+
+    def _validated_line_words(
+        self, page: "Page", line_index: int
+    ) -> list[object] | None:
+        """Validate line index and return line words list."""
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            logger.warning(
+                "Line index %s out of range (0-%s)",
+                line_index,
+                len(lines) - 1,
+            )
+            return None
+
+        return list(lines[line_index].words)
+
+    def _remove_word_from_line(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        line_words: list[object] | None = None,
+    ) -> bool:
+        """Remove a word from a line using available line APIs."""
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            return False
+
+        line = lines[line_index]
+        words = list(line_words) if line_words is not None else list(line.words)
+        if word_index < 0 or word_index >= len(words):
+            return False
+
+        remove_item = getattr(line, "remove_item", None)
+        if callable(remove_item):
+            remove_item(words[word_index])
+            return True
+
+        kept_words = [word for idx, word in enumerate(words) if idx != word_index]
+        if hasattr(line, "items"):
+            setattr(line, "items", kept_words)
+            return True
+
+        logger.warning(
+            "Line type %s does not support word removal",
+            type(line).__name__,
+        )
+        return False
+
+    def _finalize_page_structure(self, page: object) -> None:
+        """Run optional page cleanup/recompute hooks after structural edits."""
+        if hasattr(page, "remove_empty_items") and callable(
+            getattr(page, "remove_empty_items")
+        ):
+            page.remove_empty_items()
+        if hasattr(page, "recompute_bounding_box") and callable(
+            getattr(page, "recompute_bounding_box")
+        ):
+            page.recompute_bounding_box()
 
     def _find_parent_block(self, container: object, target: object) -> object | None:
         """Find parent block/page that directly contains target in its child items."""

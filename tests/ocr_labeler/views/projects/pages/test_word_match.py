@@ -388,3 +388,108 @@ def test_delete_words_restores_selection_on_failure(monkeypatch):
 
     assert view.selected_line_indices == {3}
     assert view.selected_word_indices == {(3, 0)}
+
+
+def test_merge_word_left_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 2)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def merge_callback(line_index: int, word_index: int) -> bool:
+        seen["args"] = (line_index, word_index)
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.merge_word_left_callback = merge_callback
+    view._handle_merge_word_left(1, 2)
+
+    assert seen["args"] == (1, 2)
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_merge_word_left_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {2}
+    view.selected_word_indices = {(2, 1)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.merge_word_left_callback = lambda _line_index, _word_index: False
+    view._handle_merge_word_left(2, 1)
+
+    assert view.selected_line_indices == {2}
+    assert view.selected_word_indices == {(2, 1)}
+
+
+def test_merge_word_right_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 0)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def merge_callback(line_index: int, word_index: int) -> bool:
+        seen["args"] = (line_index, word_index)
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.merge_word_right_callback = merge_callback
+    view._handle_merge_word_right(1, 0)
+
+    assert seen["args"] == (1, 0)
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_merge_word_right_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {4}
+    view.selected_word_indices = {(4, 0)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.merge_word_right_callback = lambda _line_index, _word_index: False
+    view._handle_merge_word_right(4, 0)
+
+    assert view.selected_line_indices == {4}
+    assert view.selected_word_indices == {(4, 0)}
+
+
+def test_delete_single_word_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {2}
+    view.selected_word_indices = {(2, 1), (2, 2)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def delete_callback(word_keys: list[tuple[int, int]]) -> bool:
+        seen["word_keys"] = word_keys
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.delete_words_callback = delete_callback
+    view._handle_delete_single_word(2, 1)
+
+    assert seen["word_keys"] == [(2, 1)]
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_delete_single_word_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {5}
+    view.selected_word_indices = {(5, 0)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.delete_words_callback = lambda _word_keys: False
+    view._handle_delete_single_word(5, 0)
+
+    assert view.selected_line_indices == {5}
+    assert view.selected_word_indices == {(5, 0)}

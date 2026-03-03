@@ -437,6 +437,50 @@ class TestLineOperations:
         assert result is True
         assert [word.text for word in page.lines[0].words] == ["alpha", "gamma"]
 
+    def test_merge_word_left_success(self, operations):
+        """Merging word left should concatenate with immediate left neighbor."""
+        line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        result = operations.merge_word_left(page, 0, 1)
+
+        assert result is True
+        assert [word.text for word in page.lines[0].words] == ["alphabeta", "gamma"]
+        assert [word.ground_truth_text for word in page.lines[0].words] == ["", ""]
+        merged_box = page.lines[0].words[0].bounding_box
+        assert merged_box.top_left.x == 0
+        assert merged_box.bottom_right.x == 30
+
+    def test_merge_word_right_success(self, operations):
+        """Merging word right should concatenate with immediate right neighbor."""
+        line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        result = operations.merge_word_right(page, 0, 1)
+
+        assert result is True
+        assert [word.text for word in page.lines[0].words] == ["alpha", "betagamma"]
+        assert [word.ground_truth_text for word in page.lines[0].words] == ["", ""]
+        merged_box = page.lines[0].words[1].bounding_box
+        assert merged_box.top_left.x == 20
+        assert merged_box.bottom_right.x == 50
+
+    def test_merge_word_left_fails_for_first_word(self, operations):
+        """Merging left on first word should fail."""
+        line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
+        result = operations.merge_word_left(page, 0, 0)
+
+        assert result is False
+        assert [word.text for word in page.lines[0].words] == ["alpha", "beta"]
+
     def test_split_paragraph_after_line_success(self, operations):
         """Splitting after selected line should split one paragraph into two."""
         line1 = _line([_word("a", "A", 0)], 0)

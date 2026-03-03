@@ -6,14 +6,17 @@ Status: planning snapshot.
 
 ## Current Focus
 
-- Editing core (word and line-level)
+- Editing core (word/line/paragraph-level)
 - Page cache reliability and compatibility checks
 - User metadata + session snapshot persistence baseline
+- Started next editing-core item: word merge-left/merge-right actions
 
 ## Completed
 
 - Foundational persistence, OCR save/load/reset, notifications
 - BBox operations, line filtering, font injection
+- Paragraph region selection + paragraph merge/delete/split workflows
+- Word deletion workflow + edit-triggered overlay/cache refresh improvements
 
 ## Next Milestones
 

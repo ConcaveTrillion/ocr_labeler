@@ -3,15 +3,26 @@
 **Priority:** High
 **Status:** In Progress
 
+## Recently Completed
+
+- Paragraph block grouping from image region selection (two-way image/panel sync)
+- Paragraph actions: merge, delete, split-after-line, split-by-selected-lines
+- Word action: delete selected words
+- Post-edit state refresh: overlay refresh + text cache invalidation + GT re-match hooks
+
+## Active Next Item (Started)
+
+- Word actions: merge-left, merge-right
+
 ## Block/Line Editing
 
-- Paragraph block grouping from image region selection
+- Additional line/paragraph refinement workflows
 
 ## Word Editing Infrastructure
 
 - Word view-model abstraction strategy
 - Per-line advanced editor (thumbnails, OCR/GT controls, validation actions)
-- Word actions: delete, merge-left, merge-right
+- Word actions: merge-left, merge-right
 - Split-word UI and edit-bbox workflow
 - Quick crop actions and post-edit overlay refresh
 

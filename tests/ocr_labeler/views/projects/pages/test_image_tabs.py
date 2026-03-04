@@ -443,3 +443,51 @@ def test_image_tabs_clear_drag_state_removes_dashed_overlay():
     assert image_tabs._drag_add_mode is False
     assert "stroke-dasharray" not in image_tabs.images["Words"].content
     assert "stroke-dasharray" not in image_tabs.images["Lines"].content
+
+
+def test_image_tabs_word_rebox_drag_emits_source_bbox_and_disables_mode():
+    page = Page(
+        width=100,
+        height=100,
+        page_index=0,
+        items=[_line([_word("alpha", 10)], 10)],
+    )
+    captured = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault(
+            "bbox", (x1, y1, x2, y2)
+        ),
+    )
+    image_tabs.images = {
+        "Words": _FakeInteractiveImage(),
+    }
+    image_tabs.enable_word_rebox_mode()
+
+    image_tabs._handle_drag_mouse(
+        "Words", SimpleNamespace(type="mousedown", image_x=10.0, image_y=15.0)
+    )
+    image_tabs._handle_drag_mouse(
+        "Words", SimpleNamespace(type="mouseup", image_x=30.0, image_y=35.0)
+    )
+
+    assert captured["bbox"] == (10.0, 15.0, 30.0, 35.0)
+    assert image_tabs._word_rebox_mode is False
+
+
+def test_image_tabs_clear_drag_state_disables_word_rebox_mode():
+    vm = SimpleNamespace(set_image_update_callback=lambda _cb: None)
+    image_tabs = ImageTabs(vm)
+    image_tabs._word_rebox_mode = True
+
+    image_tabs._clear_drag_state()
+
+    assert image_tabs._word_rebox_mode is False

@@ -618,3 +618,126 @@ def test_text_tabs_split_word_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(12, 1, 2, 0.4)]
+
+
+def test_text_tabs_rebox_word_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        delete_paragraphs=lambda *_: False,
+        delete_words=lambda *_: False,
+        merge_word_left=lambda *_: False,
+        merge_word_right=lambda *_: False,
+        split_word=lambda *_: False,
+        rebox_word=lambda page_index, line_index, word_index, x1, y1, x2, y2: (
+            calls.append((page_index, line_index, word_index, x1, y1, x2, y2)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=13)
+    result = text_tabs.word_match_view.rebox_word_callback(
+        1,
+        2,
+        10.0,
+        11.0,
+        20.0,
+        21.0,
+    )
+
+    assert result is True
+    assert calls == [(13, 1, 2, 10.0, 11.0, 20.0, 21.0)]
+
+
+def test_text_tabs_refine_words_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        refine_words=lambda page_index, word_keys: (
+            calls.append((page_index, word_keys)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=14)
+    result = text_tabs.word_match_view.refine_words_callback([(1, 2)])
+
+    assert result is True
+    assert calls == [(14, [(1, 2)])]
+
+
+def test_text_tabs_refine_lines_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        refine_lines=lambda page_index, line_indices: (
+            calls.append((page_index, line_indices)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=15)
+    result = text_tabs.word_match_view.refine_lines_callback([1, 2])
+
+    assert result is True
+    assert calls == [(15, [1, 2])]
+
+
+def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        refine_paragraphs=lambda page_index, paragraph_indices: (
+            calls.append((page_index, paragraph_indices)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=16)
+    result = text_tabs.word_match_view.refine_paragraphs_callback([0])
+
+    assert result is True
+    assert calls == [(16, [0])]

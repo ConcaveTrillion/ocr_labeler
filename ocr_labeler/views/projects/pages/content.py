@@ -32,12 +32,16 @@ class ContentArea:
             page_state_view_model=self.page_state_view_model,
             on_words_selected=self._on_words_selected,
             on_paragraphs_selected=self._on_paragraphs_selected,
+            on_word_rebox_drawn=self._on_word_rebox_drawn,
         )
         self.text_tabs.word_match_view.set_selection_change_callback(
             self._on_right_panel_words_selected
         )
         self.text_tabs.word_match_view.set_paragraph_selection_change_callback(
             self._on_right_panel_paragraphs_selected
+        )
+        self.text_tabs.word_match_view.set_rebox_request_callback(
+            self._on_right_panel_word_rebox_requested
         )
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
@@ -73,6 +77,31 @@ class ContentArea:
             logger.debug(
                 "Failed to propagate paragraphs selection to image", exc_info=True
             )
+
+    def _on_right_panel_word_rebox_requested(
+        self,
+        line_index: int,
+        word_index: int,
+    ) -> None:
+        """Enable image-side rebox drawing after per-word action request."""
+        try:
+            _ = (line_index, word_index)
+            self.image_tabs.enable_word_rebox_mode()
+        except Exception:
+            logger.debug("Failed to enable image rebox mode", exc_info=True)
+
+    def _on_word_rebox_drawn(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> None:
+        """Apply drawn image rectangle to the pending word rebox target."""
+        try:
+            self.text_tabs.word_match_view.apply_rebox_bbox(x1, y1, x2, y2)
+        except Exception:
+            logger.debug("Failed to apply drawn word rebox bbox", exc_info=True)
 
     def build(self):
         logger.debug("Building ContentArea UI components")

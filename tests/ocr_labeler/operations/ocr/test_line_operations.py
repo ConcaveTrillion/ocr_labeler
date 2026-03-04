@@ -556,6 +556,81 @@ class TestLineOperations:
         assert operations.split_word(page, 0, 0, 0.0) is False
         assert operations.split_word(page, 0, 0, 1.0) is False
 
+    def test_rebox_word_replaces_word_bounding_box(self, operations):
+        """Reboxing should replace the target word bounding box coordinates."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+
+        result = operations.rebox_word(page, 0, 0, 30.0, 5.0, 70.0, 25.0)
+
+        assert result is True
+        updated_bbox = page.lines[0].words[0].bounding_box
+        assert updated_bbox.top_left.x == 30.0
+        assert updated_bbox.top_left.y == 5.0
+        assert updated_bbox.bottom_right.x == 70.0
+        assert updated_bbox.bottom_right.y == 25.0
+
+    def test_rebox_word_runs_word_refine_helpers(self, operations):
+        """Rebox should auto-refine the updated word when helper methods exist."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        target_word = page.lines[0].words[0]
+
+        seen = []
+        target_word.crop_bottom = lambda: seen.append("crop")
+        target_word.expand_to_content = lambda: seen.append("expand")
+
+        result = operations.rebox_word(page, 0, 0, 30.0, 5.0, 70.0, 25.0)
+
+        assert result is True
+        assert seen == ["crop", "expand"]
+
+    def test_refine_words_runs_refine_for_selected_words(self, operations):
+        """Refining words should run per-word helper methods for selected keys."""
+        line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        first_word = page.lines[0].words[0]
+        second_word = page.lines[0].words[1]
+
+        seen = []
+        first_word.crop_bottom = lambda: seen.append("first")
+        second_word.crop_bottom = lambda: seen.append("second")
+
+        result = operations.refine_words(page, [(0, 1)])
+
+        assert result is True
+        assert seen == ["second"]
+
+    def test_refine_lines_runs_refine_for_line_words(self, operations):
+        """Refining lines should process all words in selected lines."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        page = Page(width=200, height=100, page_index=0, items=[line1, line2])
+
+        seen = []
+        page.lines[0].words[0].crop_bottom = lambda: seen.append("line1")
+        page.lines[1].words[0].crop_bottom = lambda: seen.append("line2")
+
+        result = operations.refine_lines(page, [1])
+
+        assert result is True
+        assert seen == ["line2"]
+
+    def test_refine_paragraphs_runs_refine_for_paragraph_words(self, operations):
+        """Refining paragraphs should process words only in selected paragraphs."""
+        para1 = _paragraph([_line([_word("alpha", "A", 0)], 0)], 0)
+        para2 = _paragraph([_line([_word("beta", "B", 20)], 20)], 30)
+        page = Page(width=200, height=100, page_index=0, items=[para1, para2])
+
+        seen = []
+        page.paragraphs[0].lines[0].words[0].crop_bottom = lambda: seen.append("p1")
+        page.paragraphs[1].lines[0].words[0].crop_bottom = lambda: seen.append("p2")
+
+        result = operations.refine_paragraphs(page, [0])
+
+        assert result is True
+        assert seen == ["p1"]
+
     def test_split_paragraph_after_line_success(self, operations):
         """Splitting after selected line should split one paragraph into two."""
         line1 = _line([_word("a", "A", 0)], 0)

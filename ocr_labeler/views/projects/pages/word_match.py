@@ -32,6 +32,10 @@ class WordMatchView:
         merge_word_left_callback=None,
         merge_word_right_callback=None,
         split_word_callback=None,
+        rebox_word_callback=None,
+        refine_words_callback=None,
+        refine_lines_callback=None,
+        refine_paragraphs_callback=None,
         edit_word_ground_truth_callback=None,
         notify_callback=None,
     ):
@@ -60,6 +64,10 @@ class WordMatchView:
         self.merge_word_left_callback = merge_word_left_callback
         self.merge_word_right_callback = merge_word_right_callback
         self.split_word_callback = split_word_callback
+        self.rebox_word_callback = rebox_word_callback
+        self.refine_words_callback = refine_words_callback
+        self.refine_lines_callback = refine_lines_callback
+        self.refine_paragraphs_callback = refine_paragraphs_callback
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
@@ -72,13 +80,18 @@ class WordMatchView:
         self._word_gt_input_refs: dict[tuple[int, int], object] = {}
         self._selection_change_callback = None
         self._paragraph_selection_change_callback = None
+        self._rebox_request_callback = None
+        self._pending_rebox_word_key: tuple[int, int] | None = None
         self.merge_lines_button = None
         self.delete_lines_button = None
+        self.refine_lines_button = None
         self.merge_paragraphs_button = None
         self.delete_paragraphs_button = None
+        self.refine_paragraphs_button = None
         self.split_paragraph_after_line_button = None
         self.split_paragraph_by_selection_button = None
         self.delete_words_button = None
+        self.refine_words_button = None
         self.notify_callback = notify_callback
         self._last_display_signature = None
         self._display_update_call_count = 0
@@ -160,6 +173,15 @@ class WordMatchView:
                             .props("size=sm")
                             .tooltip("Delete selected paragraphs")
                         )
+                        self.refine_paragraphs_button = (
+                            ui.button(
+                                "Refine",
+                                icon="auto_fix_high",
+                                on_click=self._handle_refine_selected_paragraphs,
+                            )
+                            .props("size=sm")
+                            .tooltip("Refine selected paragraphs")
+                        )
                         self.split_paragraph_after_line_button = (
                             ui.button(
                                 "Split After",
@@ -207,6 +229,15 @@ class WordMatchView:
                             .props("size=sm")
                             .tooltip("Delete selected lines")
                         )
+                        self.refine_lines_button = (
+                            ui.button(
+                                "Refine",
+                                icon="auto_fix_high",
+                                on_click=self._handle_refine_selected_lines,
+                            )
+                            .props("size=sm")
+                            .tooltip("Refine selected lines")
+                        )
 
                     # Word operations row
                     with ui.row().classes("items-center gap-2"):
@@ -220,6 +251,15 @@ class WordMatchView:
                             )
                             .props("size=sm")
                             .tooltip("Delete selected words")
+                        )
+                        self.refine_words_button = (
+                            ui.button(
+                                "Refine",
+                                icon="auto_fix_high",
+                                on_click=self._handle_refine_selected_words,
+                            )
+                            .props("size=sm")
+                            .tooltip("Refine selected words")
                         )
 
             # Scrollable container for word matches
@@ -495,6 +535,10 @@ class WordMatchView:
     def set_paragraph_selection_change_callback(self, callback) -> None:
         """Register callback invoked when selected paragraphs change."""
         self._paragraph_selection_change_callback = callback
+
+    def set_rebox_request_callback(self, callback) -> None:
+        """Register callback invoked when user starts a word rebox request."""
+        self._rebox_request_callback = callback
 
     def _emit_selection_changed(self) -> None:
         """Emit selected words to listener (for image overlay sync)."""
@@ -1079,6 +1123,36 @@ class WordMatchView:
                 split_word_index,
             )
 
+            rebox_button = (
+                ui.button(
+                    icon="crop_free",
+                    on_click=lambda: self._handle_start_rebox_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Redraw word bounding box")
+            )
+            rebox_button.disabled = (
+                self.rebox_word_callback is None or split_word_index < 0
+            )
+
+            refine_button = (
+                ui.button(
+                    icon="auto_fix_high",
+                    on_click=lambda: self._handle_refine_single_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Refine word bounding box")
+            )
+            refine_button.disabled = (
+                self.refine_words_callback is None or split_word_index < 0
+            )
+
     def _line_word_match_by_ocr_index(
         self,
         line_index: int,
@@ -1471,6 +1545,11 @@ class WordMatchView:
                 self.delete_lines_callback is None or len(selected_lines) < 1
             )
 
+        if self.refine_lines_button is not None:
+            self.refine_lines_button.disabled = (
+                self.refine_lines_callback is None or len(selected_lines) < 1
+            )
+
         if self.merge_paragraphs_button is not None:
             self.merge_paragraphs_button.disabled = (
                 self.merge_paragraphs_callback is None
@@ -1480,6 +1559,12 @@ class WordMatchView:
         if self.delete_paragraphs_button is not None:
             self.delete_paragraphs_button.disabled = (
                 self.delete_paragraphs_callback is None
+                or len(self.selected_paragraph_indices) < 1
+            )
+
+        if self.refine_paragraphs_button is not None:
+            self.refine_paragraphs_button.disabled = (
+                self.refine_paragraphs_callback is None
                 or len(self.selected_paragraph_indices) < 1
             )
 
@@ -1498,6 +1583,12 @@ class WordMatchView:
         if self.delete_words_button is not None:
             self.delete_words_button.disabled = (
                 self.delete_words_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+        if self.refine_words_button is not None:
+            self.refine_words_button.disabled = (
+                self.refine_words_callback is None
                 or len(self.selected_word_indices) < 1
             )
 
@@ -1848,6 +1939,167 @@ class WordMatchView:
             logger.exception("Error deleting words %s: %s", selected_words, e)
             self._safe_notify(f"Error deleting words: {e}", type_="negative")
 
+    def _handle_refine_selected_words(self) -> None:
+        """Refine selected word bounding boxes."""
+        if self.refine_words_callback is None:
+            self._safe_notify("Refine word function not available", type_="warning")
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify("Select at least one word to refine", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.refine_words_callback(selected_words)
+            if success:
+                self._safe_notify(
+                    f"Refined {len(selected_words)} words",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to refine selected words", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception("Error refining words %s: %s", selected_words, e)
+            self._safe_notify(f"Error refining words: {e}", type_="negative")
+
+    def _handle_refine_selected_lines(self) -> None:
+        """Refine selected lines."""
+        if self.refine_lines_callback is None:
+            self._safe_notify("Refine line function not available", type_="warning")
+            return
+
+        selected_lines = self._get_effective_selected_lines()
+        if not selected_lines:
+            self._safe_notify("Select at least one line to refine", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.refine_lines_callback(selected_lines)
+            if success:
+                self._safe_notify(
+                    f"Refined {len(selected_lines)} lines",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to refine selected lines", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception("Error refining lines %s: %s", selected_lines, e)
+            self._safe_notify(f"Error refining lines: {e}", type_="negative")
+
+    def _handle_refine_selected_paragraphs(self) -> None:
+        """Refine selected paragraphs."""
+        if self.refine_paragraphs_callback is None:
+            self._safe_notify(
+                "Refine paragraph function not available", type_="warning"
+            )
+            return
+
+        selected_paragraphs = sorted(self.selected_paragraph_indices)
+        if not selected_paragraphs:
+            self._safe_notify(
+                "Select at least one paragraph to refine", type_="warning"
+            )
+            return
+
+        previous_selection = set(self.selected_paragraph_indices)
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
+        try:
+            success = self.refine_paragraphs_callback(selected_paragraphs)
+            if success:
+                self._safe_notify(
+                    f"Refined {len(selected_paragraphs)} paragraphs",
+                    type_="positive",
+                )
+            else:
+                self.selected_paragraph_indices = previous_selection
+                self._update_action_button_state()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to refine selected paragraphs", type_="warning"
+                )
+        except Exception as e:
+            self.selected_paragraph_indices = previous_selection
+            self._update_action_button_state()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error refining paragraphs %s: %s",
+                selected_paragraphs,
+                e,
+            )
+            self._safe_notify(f"Error refining paragraphs: {e}", type_="negative")
+
+    def _handle_refine_single_word(self, line_index: int, word_index: int) -> None:
+        """Refine a single word bbox."""
+        if self.refine_words_callback is None:
+            self._safe_notify("Refine word function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word to refine", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.refine_words_callback([(line_index, word_index)])
+            if success:
+                self._safe_notify(
+                    f"Refined word {word_index + 1} on line {line_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to refine word", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error refining word (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error refining word: {e}", type_="negative")
+
     def _handle_delete_single_word(self, line_index: int, word_index: int) -> None:
         """Delete a single word from a specific line."""
         if self.delete_words_callback is None:
@@ -2022,6 +2274,82 @@ class WordMatchView:
             )
             self._safe_notify(f"Error splitting word: {e}", type_="negative")
 
+    def _handle_start_rebox_word(self, line_index: int, word_index: int) -> None:
+        """Start rebox mode for a selected word."""
+        if self.rebox_word_callback is None:
+            self._safe_notify("Rebox word function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word to rebox", type_="warning")
+            return
+
+        self._pending_rebox_word_key = (line_index, word_index)
+        if self._rebox_request_callback is not None:
+            try:
+                self._rebox_request_callback(line_index, word_index)
+            except Exception:
+                logger.debug("Rebox request callback failed", exc_info=True)
+        self._safe_notify(
+            (
+                f"Rebox word {word_index + 1} on line {line_index + 1}: "
+                "draw a new rectangle on the Words image"
+            ),
+            type_="info",
+        )
+
+    def apply_rebox_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
+        """Apply a drawn bbox to the currently pending rebox word target."""
+        if self.rebox_word_callback is None:
+            self._safe_notify("Rebox word function not available", type_="warning")
+            return
+
+        target_key = self._pending_rebox_word_key
+        if target_key is None:
+            self._safe_notify("No active word rebox request", type_="warning")
+            return
+
+        line_index, word_index = target_key
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+
+        try:
+            success = self.rebox_word_callback(
+                line_index,
+                word_index,
+                x1,
+                y1,
+                x2,
+                y2,
+            )
+            if success:
+                self._pending_rebox_word_key = None
+                self._safe_notify(
+                    f"Reboxed word {word_index + 1} on line {line_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to rebox word", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error reboxing word (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error reboxing word: {e}", type_="negative")
+
     def _handle_delete_line(self, line_index: int) -> None:
         """Delete a single line from the current page."""
         if self.delete_lines_callback is None:
@@ -2180,6 +2508,7 @@ class WordMatchView:
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
         self.selected_paragraph_indices.clear()
+        self._pending_rebox_word_key = None
         self._update_action_button_state()
         self._emit_selection_changed()
         self._emit_paragraph_selection_changed()

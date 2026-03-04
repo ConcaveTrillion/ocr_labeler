@@ -16,6 +16,7 @@ class ImageTabs:
         page_state_view_model: PageStateViewModel,
         on_words_selected: Callable[[set[tuple[int, int]]], None] | None = None,
         on_paragraphs_selected: Callable[[set[int]], None] | None = None,
+        on_word_rebox_drawn: Callable[[float, float, float, float], None] | None = None,
     ):
         self._tab_ids = ["Original", "Paragraphs", "Lines", "Words", "Mismatches"]
         logger.debug("Initializing ImageTabs with tab IDs: %s", self._tab_ids)
@@ -23,11 +24,13 @@ class ImageTabs:
         self.page_state_view_model = page_state_view_model
         self._on_words_selected = on_words_selected
         self._on_paragraphs_selected = on_paragraphs_selected
+        self._on_word_rebox_drawn = on_word_rebox_drawn
         self._drag_start: tuple[float, float] | None = None
         self._drag_current: tuple[float, float] | None = None
         self._drag_target_tab: str | None = None
         self._drag_remove_mode = False
         self._drag_add_mode = False
+        self._word_rebox_mode = False
         self._selected_word_indices: set[tuple[int, int]] = set()
         self._selected_paragraph_indices: set[int] = set()
         self._selected_word_boxes: list[tuple[float, float, float, float]] = []
@@ -122,6 +125,10 @@ class ImageTabs:
         self, tab_name: str, event: events.MouseEventArguments
     ) -> None:
         """Handle drag selection gestures on an interactive image tab."""
+        if tab_name == "Words" and self._word_rebox_mode:
+            self._handle_word_rebox_drag(event)
+            return
+
         event_type = getattr(event, "type", "")
         x = float(getattr(event, "image_x", 0.0))
         y = float(getattr(event, "image_y", 0.0))
@@ -152,6 +159,77 @@ class ImageTabs:
             self._drag_remove_mode = False
             self._drag_add_mode = False
             self._render_selection_overlay(tab_name)
+
+    def _handle_word_rebox_drag(self, event: events.MouseEventArguments) -> None:
+        """Handle drag gesture when word rebox mode is active."""
+        event_type = getattr(event, "type", "")
+        x = float(getattr(event, "image_x", 0.0))
+        y = float(getattr(event, "image_y", 0.0))
+
+        if event_type == "mousedown":
+            self._drag_target_tab = "Words"
+            self._drag_start = (x, y)
+            self._drag_current = (x, y)
+            self._drag_remove_mode = False
+            self._drag_add_mode = False
+            self._render_drag_overlay("Words")
+            return
+
+        if self._drag_start is None or self._drag_target_tab != "Words":
+            return
+
+        if event_type == "mousemove":
+            self._drag_current = (x, y)
+            self._render_drag_overlay("Words")
+            return
+
+        if event_type == "mouseup":
+            self._drag_current = (x, y)
+            self._emit_word_rebox_bbox()
+            self._drag_start = None
+            self._drag_current = None
+            self._drag_target_tab = None
+            self._drag_remove_mode = False
+            self._drag_add_mode = False
+            self._word_rebox_mode = False
+            self._render_selection_overlay("Words")
+
+    def _emit_word_rebox_bbox(self) -> None:
+        """Emit a drawn rebox rectangle in source image coordinates."""
+        if self._on_word_rebox_drawn is None:
+            return
+        if self._drag_start is None or self._drag_current is None:
+            return
+
+        page_state = getattr(self.page_state_view_model, "_page_state", None)
+        page = getattr(page_state, "current_page", None) if page_state else None
+        if page is None:
+            return
+
+        x1, y1, x2, y2 = self._normalized_rect(*self._drag_start, *self._drag_current)
+        scale_x, scale_y = self._get_display_scale(page, tab_name="Words")
+        if scale_x <= 0.0 or scale_y <= 0.0:
+            return
+
+        source_rect = (
+            x1 / scale_x,
+            y1 / scale_y,
+            x2 / scale_x,
+            y2 / scale_y,
+        )
+        sx1, sy1, sx2, sy2 = source_rect
+        if sx2 <= sx1 or sy2 <= sy1:
+            return
+
+        self._on_word_rebox_drawn(sx1, sy1, sx2, sy2)
+
+    def enable_word_rebox_mode(self) -> None:
+        """Enable drag-to-rebox mode on the Words image tab."""
+        self._word_rebox_mode = True
+
+    def disable_word_rebox_mode(self) -> None:
+        """Disable drag-to-rebox mode on the Words image tab."""
+        self._word_rebox_mode = False
 
     def _render_drag_overlay(self, tab_name: str) -> None:
         """Render selection overlay while drag is in progress."""
@@ -213,6 +291,7 @@ class ImageTabs:
         self._drag_target_tab = None
         self._drag_remove_mode = False
         self._drag_add_mode = False
+        self._word_rebox_mode = False
         self._clear_drag_overlay("Words")
         self._clear_drag_overlay("Lines")
         self._clear_drag_overlay("Paragraphs")

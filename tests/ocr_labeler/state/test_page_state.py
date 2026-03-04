@@ -588,6 +588,170 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_rebox_word_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful word rebox should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "rebox_word",
+        lambda _self, _page, _line_index, _word_index, _x1, _y1, _x2, _y2: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.rebox_word(0, 0, 1, 10.0, 11.0, 20.0, 21.0)
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
+def test_rebox_word_invalidates_overlay_cache_before_refresh(monkeypatch):
+    """Rebox should clear overlay caches so refresh regenerates updated bboxes."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+            self.cv2_numpy_page_image_paragraph_with_bboxes = "stale-p"
+            self.cv2_numpy_page_image_line_with_bboxes = "stale-l"
+            self.cv2_numpy_page_image_word_with_bboxes = "stale-w"
+            self.cv2_numpy_page_image_matched_word_with_colors = "stale-m"
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+            if (
+                self.cv2_numpy_page_image_paragraph_with_bboxes is None
+                and self.cv2_numpy_page_image_line_with_bboxes is None
+                and self.cv2_numpy_page_image_word_with_bboxes is None
+                and self.cv2_numpy_page_image_matched_word_with_colors is None
+            ):
+                self.cv2_numpy_page_image_word_with_bboxes = "fresh-word-overlay"
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "rebox_word",
+        lambda _self, _page, _line_index, _word_index, _x1, _y1, _x2, _y2: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+
+    result = page_state.rebox_word(0, 0, 1, 10.0, 11.0, 20.0, 21.0)
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert page.cv2_numpy_page_image_word_with_bboxes == "fresh-word-overlay"
+
+
+def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful word refine should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "refine_words",
+        lambda _self, _page, _word_keys: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.refine_words(0, [(0, 1)])
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
+def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful line refine should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "refine_lines",
+        lambda _self, _page, _line_indices: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.refine_lines(0, [0])
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
+def test_refine_paragraphs_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful paragraph refine should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "refine_paragraphs",
+        lambda _self, _page, _paragraph_indices: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.refine_paragraphs(0, [0])
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
 def test_update_word_ground_truth_notifies_on_success(monkeypatch):
     """Successful per-word GT edit should notify listeners for UI refresh."""
     page_state = PageState()

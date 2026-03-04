@@ -11,6 +11,9 @@
 - Post-edit state refresh: overlay refresh + text cache invalidation + GT re-match hooks
 - Word actions: merge-left, merge-right
 - Split-word UI and bbox-aware split workflow
+- Rebox workflow: redraw an existing word bbox from the UI and replace it
+- Rebox auto-refine: newly redrawn word bboxes are refined immediately
+- Selection refine actions for word/line/paragraph scopes in the word editor
 - Word/line visual crop previews in the editor surface
 - GT rematch + overlay/cache refresh after structural edits
 - Per-word GT inline editing with simple single-line text input
@@ -31,8 +34,6 @@
 ### BBox Editing
 
 - Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)
-- Rebox workflow: redraw an existing word bbox from the UI (replace current bbox with drawn bbox)
-- Refine-bbox action for selected word(s)
 - Expand-bbox action for selected word(s)
 
 ## Image Interaction

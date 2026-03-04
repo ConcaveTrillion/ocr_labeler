@@ -1170,6 +1170,178 @@ class PageState:
             )
             return False
 
+    def rebox_word(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> bool:
+        """Replace an existing word bounding box on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            x1: Left x-coordinate in page pixel space.
+            y1: Top y-coordinate in page pixel space.
+            x2: Right x-coordinate in page pixel space.
+            y2: Bottom y-coordinate in page pixel space.
+
+        Returns:
+            bool: True if rebox succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word rebox")
+            return False
+
+        logger.debug(
+            "PageState.rebox_word: page_index=%s current_index=%s line_index=%s word_index=%s bbox=(%s,%s,%s,%s) page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            word_index,
+            x1,
+            y1,
+            x2,
+            y2,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.rebox_word(
+                page,
+                line_index,
+                word_index,
+                x1,
+                y1,
+                x2,
+                y2,
+            )
+            logger.debug(
+                "PageState.rebox_word result: line_index=%s word_index=%s success=%s",
+                line_index,
+                word_index,
+                result,
+            )
+
+            if result:
+                self._finalize_bbox_edit(page)
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error reboxing word line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
+    def refine_words(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Refine selected words on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: Selected (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word refine")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.refine_words(page, word_keys)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error refining words %s: %s", word_keys, e)
+            return False
+
+    def refine_lines(self, page_index: int, line_indices: list[int]) -> bool:
+        """Refine selected lines on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Selected line indices.
+
+        Returns:
+            bool: True if refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for line refine")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.refine_lines(page, line_indices)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error refining lines %s: %s", line_indices, e)
+            return False
+
+    def refine_paragraphs(
+        self,
+        page_index: int,
+        paragraph_indices: list[int],
+    ) -> bool:
+        """Refine selected paragraphs on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Selected paragraph indices.
+
+        Returns:
+            bool: True if refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for paragraph refine")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.refine_paragraphs(page, paragraph_indices)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error refining paragraphs %s: %s",
+                paragraph_indices,
+                e,
+            )
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 
@@ -1288,24 +1460,32 @@ class PageState:
         self._invalidate_text_cache()
         self.notify()
 
+    def _finalize_bbox_edit(self, page: object) -> None:
+        """Run post-success updates after bbox-only edits."""
+        self._refresh_page_overlay_images(page)
+        self.notify()
+
     def _refresh_page_overlay_images(self, page: object) -> None:
         """Refresh page overlay images so bbox layers redraw after line edits."""
-        refresh_method = getattr(page, "refresh_page_images", None)
-        if callable(refresh_method):
-            with contextlib.suppress(Exception):
-                refresh_method()
-                return
-
-        # Fallback for lightweight test doubles that expose mutable overlay attrs.
         overlay_attrs = (
             "cv2_numpy_page_image_paragraph_with_bboxes",
             "cv2_numpy_page_image_line_with_bboxes",
             "cv2_numpy_page_image_word_with_bboxes",
             "cv2_numpy_page_image_matched_word_with_colors",
         )
+
         for attr_name in overlay_attrs:
             with contextlib.suppress(Exception):
                 setattr(page, attr_name, None)
+
+        refresh_method = getattr(page, "refresh_page_images", None)
+        if callable(refresh_method):
+            with contextlib.suppress(Exception):
+                refresh_method()
+                return
+
+        # If page has no refresh method, cleared overlay attrs ensure downstream
+        # viewmodel refresh path regenerates overlays lazily.
 
     def _has_loading_placeholder(self) -> bool:
         """Check whether cached texts are currently in loading-placeholder state."""

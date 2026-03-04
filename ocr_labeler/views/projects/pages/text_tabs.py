@@ -297,6 +297,78 @@ class TextTabs:
                 logger.debug("Split word operation result: %s", result)
                 return result
 
+        rebox_word_callback = None
+        if page_state and hasattr(page_state, "rebox_word"):
+
+            def rebox_word_callback(
+                line_index: int,
+                word_index: int,
+                x1: float,
+                y1: float,
+                x2: float,
+                y2: float,
+            ) -> bool:
+                logger.debug(
+                    "Reboxing word at (%s, %s) with bbox=(%s, %s, %s, %s) on page %d",
+                    line_index,
+                    word_index,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    page_index,
+                )
+                result = page_state.rebox_word(
+                    page_index,
+                    line_index,
+                    word_index,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                )
+                logger.debug("Rebox word operation result: %s", result)
+                return result
+
+        refine_words_callback = None
+        if page_state and hasattr(page_state, "refine_words"):
+
+            def refine_words_callback(word_keys: list[tuple[int, int]]) -> bool:
+                logger.debug(
+                    "Refining selected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.refine_words(page_index, word_keys)
+                logger.debug("Refine words operation result: %s", result)
+                return result
+
+        refine_lines_callback = None
+        if page_state and hasattr(page_state, "refine_lines"):
+
+            def refine_lines_callback(line_indices: list[int]) -> bool:
+                logger.debug(
+                    "Refining selected lines %s on page %d",
+                    line_indices,
+                    page_index,
+                )
+                result = page_state.refine_lines(page_index, line_indices)
+                logger.debug("Refine lines operation result: %s", result)
+                return result
+
+        refine_paragraphs_callback = None
+        if page_state and hasattr(page_state, "refine_paragraphs"):
+
+            def refine_paragraphs_callback(paragraph_indices: list[int]) -> bool:
+                logger.debug(
+                    "Refining selected paragraphs %s on page %d",
+                    paragraph_indices,
+                    page_index,
+                )
+                result = page_state.refine_paragraphs(page_index, paragraph_indices)
+                logger.debug("Refine paragraphs operation result: %s", result)
+                return result
+
         edit_word_ground_truth_callback = None
         if page_state and hasattr(page_state, "update_word_ground_truth"):
 
@@ -343,6 +415,10 @@ class TextTabs:
             merge_word_left_callback=merge_word_left_callback,
             merge_word_right_callback=merge_word_right_callback,
             split_word_callback=split_word_callback,
+            rebox_word_callback=rebox_word_callback,
+            refine_words_callback=refine_words_callback,
+            refine_lines_callback=refine_lines_callback,
+            refine_paragraphs_callback=refine_paragraphs_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             notify_callback=notify_callback,
         )
@@ -591,7 +667,8 @@ class TextTabs:
                 words_payload = "\x1e".join(
                     (
                         f"{getattr(word, 'text', '')}\x1d"
-                        f"{getattr(word, 'ground_truth_text', '')}"
+                        f"{getattr(word, 'ground_truth_text', '')}\x1d"
+                        f"{self._word_bbox_signature(word)}"
                     )
                     for word in words
                 )
@@ -650,3 +727,16 @@ class TextTabs:
             last_line_text,
             paragraph_fingerprint,
         )
+
+    def _word_bbox_signature(self, word: object) -> str:
+        """Return a stable bbox signature for dedupe checks."""
+        bbox = getattr(word, "bounding_box", None)
+        if bbox is None:
+            return ""
+
+        min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
+        min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
+        max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
+        max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
+        is_normalized = bool(getattr(bbox, "is_normalized", False))
+        return f"{min_x:.6f}:{min_y:.6f}:{max_x:.6f}:{max_y:.6f}:{int(is_normalized)}"

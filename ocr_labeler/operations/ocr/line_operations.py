@@ -1193,6 +1193,262 @@ class LineOperations:
             )
             return False
 
+    def rebox_word(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> bool:
+        """Replace a word bounding box with the provided rectangle.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index to rebox.
+            x1: Left x-coordinate in page pixel space.
+            y1: Top y-coordinate in page pixel space.
+            x2: Right x-coordinate in page pixel space.
+            y2: Bottom y-coordinate in page pixel space.
+
+        Returns:
+            bool: True when rebox succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word rebox")
+            return False
+
+        try:
+            line_words = self._validated_line_words(page, line_index)
+            if line_words is None:
+                return False
+            if word_index < 0 or word_index >= len(line_words):
+                logger.warning(
+                    "Word rebox index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(line_words) - 1,
+                )
+                return False
+
+            rx1, ry1 = min(float(x1), float(x2)), min(float(y1), float(y2))
+            rx2, ry2 = max(float(x1), float(x2)), max(float(y1), float(y2))
+            if rx2 <= rx1 or ry2 <= ry1:
+                logger.warning(
+                    "Invalid rebox rectangle for line=%s word=%s: (%s, %s, %s, %s)",
+                    line_index,
+                    word_index,
+                    rx1,
+                    ry1,
+                    rx2,
+                    ry2,
+                )
+                return False
+
+            from pd_book_tools.geometry.bounding_box import BoundingBox
+            from pd_book_tools.geometry.point import Point
+
+            word = line_words[word_index]
+            existing_bbox = getattr(word, "bounding_box", None)
+            is_normalized = bool(getattr(existing_bbox, "is_normalized", False))
+
+            if is_normalized:
+                page_width, page_height = self._resolve_page_dimensions(page)
+                if page_width <= 0.0 or page_height <= 0.0:
+                    logger.warning(
+                        "Unable to resolve page dimensions for normalized rebox"
+                    )
+                    return False
+                new_bbox = BoundingBox(
+                    Point(rx1 / page_width, ry1 / page_height),
+                    Point(rx2 / page_width, ry2 / page_height),
+                    is_normalized=True,
+                )
+            else:
+                new_bbox = BoundingBox(
+                    Point(rx1, ry1),
+                    Point(rx2, ry2),
+                    is_normalized=False,
+                )
+
+            word.bounding_box = new_bbox
+            self._refine_word_bbox(page, word)
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Reboxed word line=%d index=%d bbox=(%.2f, %.2f, %.2f, %.2f)",
+                line_index,
+                word_index,
+                rx1,
+                ry1,
+                rx2,
+                ry2,
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error reboxing word line=%s index=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
+    def refine_words(self, page: "Page", word_keys: list[tuple[int, int]]) -> bool:
+        """Refine selected word bounding boxes.
+
+        Args:
+            page: Page containing lines/words.
+            word_keys: List of (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if any selected words were refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word refine")
+            return False
+
+        unique_keys = sorted(set(word_keys or []))
+        if not unique_keys:
+            logger.warning("Word refine requires selecting at least one word")
+            return False
+
+        try:
+            refined_any = False
+            for line_index, word_index in unique_keys:
+                line_words = self._validated_line_words(page, line_index)
+                if line_words is None:
+                    return False
+                if word_index < 0 or word_index >= len(line_words):
+                    logger.warning(
+                        "Word refine index %s out of range for line %s (0-%s)",
+                        word_index,
+                        line_index,
+                        len(line_words) - 1,
+                    )
+                    return False
+
+                refined_any = (
+                    self._refine_word_bbox(page, line_words[word_index]) or refined_any
+                )
+
+            if not refined_any:
+                logger.warning("Selected words could not be refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info("Refined %d selected words", len(unique_keys))
+            return True
+        except Exception as e:
+            logger.exception("Error refining words %s: %s", unique_keys, e)
+            return False
+
+    def refine_lines(self, page: "Page", line_indices: list[int]) -> bool:
+        """Refine all words/bboxes in selected lines.
+
+        Args:
+            page: Page containing lines.
+            line_indices: Zero-based selected line indices.
+
+        Returns:
+            bool: True if any selected lines were refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for line refine")
+            return False
+
+        unique_indices = sorted(set(line_indices or []))
+        if not unique_indices:
+            logger.warning("Line refine requires selecting at least one line")
+            return False
+
+        try:
+            lines = list(page.lines)
+            refined_any = False
+            for line_index in unique_indices:
+                if line_index < 0 or line_index >= len(lines):
+                    logger.warning(
+                        "Line refine index %s out of range (0-%s)",
+                        line_index,
+                        len(lines) - 1,
+                    )
+                    return False
+                refined_any = (
+                    self._refine_block_words(page, lines[line_index]) or refined_any
+                )
+
+            if not refined_any:
+                logger.warning("Selected lines could not be refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info("Refined %d selected lines", len(unique_indices))
+            return True
+        except Exception as e:
+            logger.exception("Error refining lines %s: %s", unique_indices, e)
+            return False
+
+    def refine_paragraphs(self, page: "Page", paragraph_indices: list[int]) -> bool:
+        """Refine all words/bboxes in selected paragraphs.
+
+        Args:
+            page: Page containing paragraphs.
+            paragraph_indices: Zero-based selected paragraph indices.
+
+        Returns:
+            bool: True if any selected paragraphs were refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for paragraph refine")
+            return False
+
+        unique_indices = sorted(set(paragraph_indices or []))
+        if not unique_indices:
+            logger.warning("Paragraph refine requires selecting at least one paragraph")
+            return False
+
+        try:
+            paragraphs = list(getattr(page, "paragraphs", []) or [])
+            if not paragraphs:
+                logger.warning("Page has no paragraphs to refine")
+                return False
+
+            refined_any = False
+            for paragraph_index in unique_indices:
+                if paragraph_index < 0 or paragraph_index >= len(paragraphs):
+                    logger.warning(
+                        "Paragraph refine index %s out of range (0-%s)",
+                        paragraph_index,
+                        len(paragraphs) - 1,
+                    )
+                    return False
+
+                paragraph = paragraphs[paragraph_index]
+                paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                for line in paragraph_lines:
+                    refined_any = self._refine_block_words(page, line) or refined_any
+                recompute_paragraph = getattr(paragraph, "recompute_bounding_box", None)
+                if callable(recompute_paragraph):
+                    recompute_paragraph()
+
+            if not refined_any:
+                logger.warning("Selected paragraphs could not be refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info("Refined %d selected paragraphs", len(unique_indices))
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error refining paragraphs %s: %s",
+                unique_indices,
+                e,
+            )
+            return False
+
     def _merge_adjacent_words(
         self,
         page: "Page",
@@ -1295,6 +1551,73 @@ class LineOperations:
             return None
 
         return list(lines[line_index].words)
+
+    def _refine_block_words(self, page: object, block: object) -> bool:
+        """Refine all words in a line-like block and recompute block bbox."""
+        words = list(getattr(block, "words", []) or [])
+        refined_any = False
+        for word in words:
+            refined_any = self._refine_word_bbox(page, word) or refined_any
+
+        recompute_block = getattr(block, "recompute_bounding_box", None)
+        if callable(recompute_block):
+            recompute_block()
+
+        return refined_any
+
+    def _refine_word_bbox(self, page: object, word: object) -> bool:
+        """Run available word-level bbox refinement helpers."""
+        refined = False
+        page_image = getattr(page, "cv2_numpy_page_image", None)
+
+        crop_bottom = getattr(word, "crop_bottom", None)
+        if callable(crop_bottom):
+            try:
+                crop_bottom()
+            except TypeError:
+                if page_image is not None:
+                    crop_bottom(page_image)
+                else:
+                    logger.debug(
+                        "Skipping crop_bottom refine; page image unavailable",
+                        exc_info=True,
+                    )
+            refined = True
+
+        expand_to_content = getattr(word, "expand_to_content", None)
+        if callable(expand_to_content):
+            try:
+                expand_to_content()
+            except TypeError:
+                if page_image is not None:
+                    expand_to_content(page_image)
+                else:
+                    logger.debug(
+                        "Skipping expand_to_content refine; page image unavailable",
+                        exc_info=True,
+                    )
+            refined = True
+
+        recompute_word = getattr(word, "recompute_bounding_box", None)
+        if callable(recompute_word):
+            recompute_word()
+            refined = True
+
+        return refined
+
+    def _resolve_page_dimensions(self, page: object) -> tuple[float, float]:
+        """Return page dimensions in pixels when available."""
+        width = float(getattr(page, "width", 0.0) or 0.0)
+        height = float(getattr(page, "height", 0.0) or 0.0)
+        if width > 0.0 and height > 0.0:
+            return width, height
+
+        base_image = getattr(page, "cv2_numpy_page_image", None)
+        if getattr(base_image, "shape", None) is not None:
+            image_height, image_width = base_image.shape[:2]
+            return float(image_width), float(image_height)
+
+        return 0.0, 0.0
 
     def _remove_word_from_line(
         self,

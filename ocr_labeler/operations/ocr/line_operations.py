@@ -321,6 +321,8 @@ class LineOperations:
             for index in reversed(unique_indices[1:]):
                 remove_line_if_exists(lines[index])
 
+            self._finalize_page_structure(page)
+
             lines_after = len(list(page.lines))
             logger.info(
                 "Merged %d lines into line %d (line_count %d -> %d)",
@@ -1250,10 +1252,22 @@ class LineOperations:
             getattr(page, "remove_empty_items")
         ):
             page.remove_empty_items()
+        self._recompute_nested_bounding_boxes(page)
         if hasattr(page, "recompute_bounding_box") and callable(
             getattr(page, "recompute_bounding_box")
         ):
             page.recompute_bounding_box()
+
+    def _recompute_nested_bounding_boxes(self, container: object) -> None:
+        """Recursively recompute bounding boxes bottom-up for nested blocks."""
+        child_items = list(getattr(container, "items", []) or [])
+        for child in child_items:
+            if hasattr(child, "items"):
+                self._recompute_nested_bounding_boxes(child)
+
+        recompute = getattr(container, "recompute_bounding_box", None)
+        if callable(recompute):
+            recompute()
 
     def _find_parent_block(self, container: object, target: object) -> object | None:
         """Find parent block/page that directly contains target in its child items."""

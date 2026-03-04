@@ -354,6 +354,34 @@ class TestLineOperations:
 
         assert result is False
 
+    def test_merge_lines_recomputes_paragraph_bbox_across_paragraphs(self, operations):
+        """Merging lines across paragraphs should recompute destination paragraph bbox."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        para1 = Block(
+            items=[line1],
+            bounding_box=_bbox(0, 0, 20, 10),
+            child_type=BlockChildType.BLOCKS,
+            block_category=BlockCategory.PARAGRAPH,
+        )
+        para2 = Block(
+            items=[line2],
+            bounding_box=_bbox(20, 0, 40, 10),
+            child_type=BlockChildType.BLOCKS,
+            block_category=BlockCategory.PARAGRAPH,
+        )
+        page = Page(width=100, height=100, page_index=0, items=[para1, para2])
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert len(page.paragraphs) == 1
+        merged_paragraph = page.paragraphs[0]
+        assert merged_paragraph.bounding_box is not None
+        assert merged_paragraph.bounding_box.top_left.x == 0
+        assert merged_paragraph.bounding_box.bottom_right.x == 30
+
     def test_delete_lines_success(self, operations):
         """Test deleting selected lines."""
         line1 = _line([_word("a", "A", 0)], 0)

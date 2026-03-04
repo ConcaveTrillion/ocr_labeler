@@ -150,11 +150,13 @@ def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
     }
 
     vm._update_image_sources_blocking()
+    assert image_tabs.images["Paragraphs"].source == "encoded:20"
     assert image_tabs.images["Lines"].source == "encoded:30"
 
     assert page_state.merge_lines(0, [0, 1]) is True
 
     assert refresh_calls["count"] >= 1
+    assert image_tabs.images["Paragraphs"].source == "encoded:120"
     assert image_tabs.images["Lines"].source == "encoded:130"
 
 

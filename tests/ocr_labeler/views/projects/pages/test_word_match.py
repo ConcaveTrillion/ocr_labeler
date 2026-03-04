@@ -547,3 +547,140 @@ def test_split_word_requires_selected_marker(monkeypatch):
 
     assert seen["type"] == "warning"
     assert "choose split position" in seen["message"]
+
+
+def test_word_gt_edit_invokes_callback(monkeypatch):
+    seen = {}
+
+    def update_callback(line_index: int, word_index: int, text: str) -> bool:
+        seen["args"] = (line_index, word_index, text)
+        return True
+
+    view = WordMatchView(edit_word_ground_truth_callback=update_callback)
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view._handle_word_gt_edit(1, 3, "new-gt")
+
+    assert seen["args"] == (1, 3, "new-gt")
+
+
+def test_word_gt_edit_warns_on_failure(monkeypatch):
+    seen = {}
+
+    view = WordMatchView(
+        edit_word_ground_truth_callback=lambda _line, _word, _text: False
+    )
+
+    def notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", notify)
+
+    view._handle_word_gt_edit(0, 0, "x")
+
+    assert seen["type"] == "warning"
+    assert "Failed to update word ground truth" in seen["message"]
+
+
+def test_word_gt_input_width_prefers_current_value():
+    view = WordMatchView()
+
+    width = view._word_gt_input_width_chars("alphabet", "ocr")
+
+    assert width == len("alphabet") + 3
+
+
+def test_word_gt_input_width_falls_back_to_ocr_word():
+    view = WordMatchView()
+
+    width = view._word_gt_input_width_chars("", "token")
+
+    assert width == len("token") + 3
+
+
+def test_word_gt_input_width_has_minimum():
+    view = WordMatchView()
+
+    width = view._word_gt_input_width_chars("", "")
+
+    assert width == 6
+
+
+def test_word_gt_commit_uses_input_value_on_blur(monkeypatch):
+    seen = {}
+    view = WordMatchView(
+        edit_word_ground_truth_callback=lambda line_index, word_index, text: (
+            seen.setdefault("args", (line_index, word_index, text)) or True
+        )
+    )
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    input_stub = SimpleNamespace(value="updated-on-blur")
+    view._commit_word_gt_input_change(2, 4, input_stub)
+
+    assert seen["args"] == (2, 4, "updated-on-blur")
+
+
+def test_next_word_gt_key_forward_ordering():
+    view = WordMatchView()
+    view._word_gt_input_refs = {
+        (0, 0): object(),
+        (0, 1): object(),
+        (1, 0): object(),
+    }
+
+    assert view._next_word_gt_key((0, 0), reverse=False) == (0, 1)
+    assert view._next_word_gt_key((0, 1), reverse=False) == (1, 0)
+    assert view._next_word_gt_key((1, 0), reverse=False) is None
+
+
+def test_next_word_gt_key_reverse_ordering():
+    view = WordMatchView()
+    view._word_gt_input_refs = {
+        (0, 0): object(),
+        (0, 1): object(),
+        (1, 0): object(),
+    }
+
+    assert view._next_word_gt_key((1, 0), reverse=True) == (0, 1)
+    assert view._next_word_gt_key((0, 1), reverse=True) == (0, 0)
+    assert view._next_word_gt_key((0, 0), reverse=True) is None
+
+
+def test_word_gt_keydown_ignores_non_tab(monkeypatch):
+    view = WordMatchView()
+    seen = {"called": False}
+
+    monkeypatch.setattr(
+        view,
+        "_handle_word_gt_tab_navigation",
+        lambda *_args, **_kwargs: seen.__setitem__("called", True),
+    )
+
+    event = SimpleNamespace(args={"key": "Enter", "shiftKey": False})
+    view._handle_word_gt_keydown(event, (0, 0))
+
+    assert seen["called"] is False
+
+
+def test_word_gt_keydown_routes_tab_and_shift_tab(monkeypatch):
+    view = WordMatchView()
+    seen = []
+
+    monkeypatch.setattr(
+        view,
+        "_handle_word_gt_tab_navigation",
+        lambda key, reverse: seen.append((key, reverse)),
+    )
+
+    view._handle_word_gt_keydown(
+        SimpleNamespace(args={"key": "Tab", "shiftKey": False}),
+        (0, 1),
+    )
+    view._handle_word_gt_keydown(
+        SimpleNamespace(args={"key": "Tab", "shiftKey": True}),
+        (0, 1),
+    )
+
+    assert seen == [((0, 1), False), ((0, 1), True)]

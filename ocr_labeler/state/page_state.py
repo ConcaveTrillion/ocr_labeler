@@ -226,6 +226,58 @@ class PageState:
             logger.exception(f"Error in OCR→GT copy for line {line_index}: {e}")
             return False
 
+    def update_word_ground_truth(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+        ground_truth_text: str,
+    ) -> bool:
+        """Update ground truth text for a single word on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            ground_truth_text: New GT text value.
+
+        Returns:
+            bool: True if update succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical(
+                "No page available at index %s for word GT update.",
+                page_index,
+            )
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.update_word_ground_truth(
+                page,
+                line_index,
+                word_index,
+                ground_truth_text,
+            )
+
+            if result:
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error updating word GT line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     @notify_on_completion
     def persist_page_to_file(
         self,

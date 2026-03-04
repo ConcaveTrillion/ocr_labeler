@@ -32,6 +32,7 @@ class WordMatchView:
         merge_word_left_callback=None,
         merge_word_right_callback=None,
         split_word_callback=None,
+        edit_word_ground_truth_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -59,6 +60,7 @@ class WordMatchView:
         self.merge_word_left_callback = merge_word_left_callback
         self.merge_word_right_callback = merge_word_right_callback
         self.split_word_callback = split_word_callback
+        self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
         self.selected_paragraph_indices: set[int] = set()
@@ -67,6 +69,7 @@ class WordMatchView:
         self._word_split_image_refs: dict[tuple[int, int], object] = {}
         self._word_split_image_sizes: dict[tuple[int, int], tuple[float, float]] = {}
         self._word_split_button_refs: dict[tuple[int, int], object] = {}
+        self._word_gt_input_refs: dict[tuple[int, int], object] = {}
         self._selection_change_callback = None
         self._paragraph_selection_change_callback = None
         self.merge_lines_button = None
@@ -358,6 +361,7 @@ class WordMatchView:
         self._word_split_image_refs = {}
         self._word_split_image_sizes = {}
         self._word_split_button_refs = {}
+        self._word_gt_input_refs = {}
 
         if not self.view_model.line_matches:
             logger.info("No line matches in view model")
@@ -695,7 +699,11 @@ class WordMatchView:
                     # OCR text cell
                     self._create_ocr_cell(word_match)
                     # Ground Truth text cell
-                    self._create_gt_cell(word_match)
+                    self._create_gt_cell(
+                        line_match.line_index,
+                        split_word_index,
+                        word_match,
+                    )
                     # Status cell
                     self._create_status_cell(word_match)
                     # Per-word actions
@@ -789,16 +797,205 @@ class WordMatchView:
                 else:
                     ui.label("[empty]").classes("monospace")
 
-    def _create_gt_cell(self, word_match):
+    def _create_gt_cell(self, line_index: int, word_index: int, word_match):
         """Create Ground Truth text cell for a word."""
         with ui.row():
-            if word_match.ground_truth_text.strip():
+            if word_index >= 0:
+                initial_value = str(word_match.ground_truth_text or "")
+                input_element = (
+                    ui.input(value=initial_value)
+                    .props("dense outlined")
+                    .classes("monospace")
+                )
+                current_key = (line_index, word_index)
+                self._word_gt_input_refs[current_key] = input_element
+                self._set_word_gt_input_width(
+                    input_element,
+                    value=initial_value,
+                    fallback_text=str(word_match.ocr_text or ""),
+                )
+                input_element.on_value_change(
+                    lambda event: self._handle_word_gt_input_change(
+                        input_element,
+                        str(event.value or ""),
+                        str(word_match.ocr_text or ""),
+                    )
+                )
+                input_element.on(
+                    "blur",
+                    lambda _event, li=line_index, wi=word_index: (
+                        self._commit_word_gt_input_change(
+                            li,
+                            wi,
+                            input_element,
+                        )
+                    ),
+                )
+                input_element.on(
+                    "keydown.enter",
+                    lambda _event, li=line_index, wi=word_index: (
+                        self._commit_word_gt_input_change(
+                            li,
+                            wi,
+                            input_element,
+                        )
+                    ),
+                )
+                input_element.on(
+                    "keydown",
+                    lambda event, key=current_key: self._handle_word_gt_keydown(
+                        event, key
+                    ),
+                )
+                input_element.enabled = self.edit_word_ground_truth_callback is not None
+                tooltip_content = self._create_word_tooltip(word_match)
+                if tooltip_content:
+                    input_element.tooltip(tooltip_content)
+            elif word_match.ground_truth_text.strip():
                 gt_element = ui.label(word_match.ground_truth_text).classes("monospace")
                 tooltip_content = self._create_word_tooltip(word_match)
                 if tooltip_content:
                     gt_element.tooltip(tooltip_content)
             else:
                 ui.label("[no GT]").classes("monospace")
+
+    def _handle_word_gt_input_change(
+        self,
+        input_element,
+        ground_truth_text: str,
+        fallback_text: str,
+    ) -> None:
+        """Resize GT input while user types."""
+        self._set_word_gt_input_width(
+            input_element,
+            value=ground_truth_text,
+            fallback_text=fallback_text,
+        )
+
+    def _commit_word_gt_input_change(
+        self,
+        line_index: int,
+        word_index: int,
+        input_element,
+    ) -> None:
+        """Persist GT edit when focus leaves the input (Quasar blur event)."""
+        self._handle_word_gt_edit(
+            line_index,
+            word_index,
+            str(getattr(input_element, "value", "") or ""),
+        )
+
+    def _next_word_gt_key(
+        self,
+        current_key: tuple[int, int],
+        reverse: bool = False,
+    ) -> tuple[int, int] | None:
+        """Return adjacent GT input key in reading order."""
+        ordered_keys = sorted(self._word_gt_input_refs.keys())
+        if not ordered_keys:
+            return None
+
+        try:
+            index = ordered_keys.index(current_key)
+        except ValueError:
+            return None
+
+        next_index = index - 1 if reverse else index + 1
+        if next_index < 0 or next_index >= len(ordered_keys):
+            return None
+        return ordered_keys[next_index]
+
+    def _focus_word_gt_input(self, key: tuple[int, int]) -> None:
+        """Move focus to a GT input if available."""
+        input_element = self._word_gt_input_refs.get(key)
+        if input_element is None:
+            return
+        try:
+            input_element.focus()
+        except Exception:
+            logger.debug("Failed to focus GT input for key %s", key, exc_info=True)
+
+    def _handle_word_gt_keydown(self, event, current_key: tuple[int, int]) -> None:
+        """Handle GT input keyboard navigation keys."""
+        event_args = getattr(event, "args", {}) or {}
+        if str(event_args.get("key", "")) != "Tab":
+            return
+
+        is_reverse = bool(event_args.get("shiftKey", False))
+        self._handle_word_gt_tab_navigation(current_key, is_reverse)
+
+    def _handle_word_gt_tab_navigation(
+        self,
+        current_key: tuple[int, int],
+        is_reverse: bool,
+    ) -> None:
+        """Handle Tab/Shift+Tab navigation between GT inputs."""
+        current_input = self._word_gt_input_refs.get(current_key)
+        if current_input is None:
+            return
+
+        self._commit_word_gt_input_change(current_key[0], current_key[1], current_input)
+        target_key = self._next_word_gt_key(current_key, reverse=is_reverse)
+        if target_key is None:
+            return
+
+        ui.timer(
+            0,
+            lambda key=target_key: self._focus_word_gt_input(key),
+            once=True,
+        )
+
+    def _set_word_gt_input_width(
+        self,
+        input_element,
+        value: str,
+        fallback_text: str,
+    ) -> None:
+        """Apply monospace width based on current/fallback text length."""
+        width_chars = self._word_gt_input_width_chars(value, fallback_text)
+        try:
+            input_element.style(
+                f"width: {width_chars}ch; min-width: 4ch; max-width: 100%;"
+            )
+        except Exception:
+            logger.debug("Failed to apply GT input width", exc_info=True)
+
+    def _word_gt_input_width_chars(self, value: str, fallback_text: str) -> int:
+        """Compute desired GT input width in monospace character units."""
+        effective_text = str(value or "") or str(fallback_text or "")
+        return max(6, len(effective_text) + 3)
+
+    def _handle_word_gt_edit(
+        self,
+        line_index: int,
+        word_index: int,
+        ground_truth_text: str,
+    ) -> None:
+        """Handle updates to per-word GT text from inline input fields."""
+        if self.edit_word_ground_truth_callback is None:
+            self._safe_notify(
+                "Edit ground truth function not available", type_="warning"
+            )
+            return
+
+        try:
+            success = self.edit_word_ground_truth_callback(
+                line_index,
+                word_index,
+                ground_truth_text,
+            )
+            if not success:
+                self._safe_notify("Failed to update word ground truth", type_="warning")
+        except Exception as e:
+            logger.exception(
+                "Error updating word ground truth (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(
+                f"Error updating word ground truth: {e}", type_="negative"
+            )
 
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""

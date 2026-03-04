@@ -297,6 +297,29 @@ class TextTabs:
                 logger.debug("Split word operation result: %s", result)
                 return result
 
+        edit_word_ground_truth_callback = None
+        if page_state and hasattr(page_state, "update_word_ground_truth"):
+
+            def edit_word_ground_truth_callback(
+                line_index: int,
+                word_index: int,
+                ground_truth_text: str,
+            ) -> bool:
+                logger.debug(
+                    "Updating word GT at (%s, %s) on page %d",
+                    line_index,
+                    word_index,
+                    page_index,
+                )
+                result = page_state.update_word_ground_truth(
+                    page_index,
+                    line_index,
+                    word_index,
+                    ground_truth_text,
+                )
+                logger.debug("Update word GT operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -320,6 +343,7 @@ class TextTabs:
             merge_word_left_callback=merge_word_left_callback,
             merge_word_right_callback=merge_word_right_callback,
             split_word_callback=split_word_callback,
+            edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             notify_callback=notify_callback,
         )
         self.container = None
@@ -564,10 +588,18 @@ class TextTabs:
             for line in lines:
                 words = getattr(line, "words", [])
                 unmatched_gt_words = getattr(line, "unmatched_ground_truth_words", [])
+                words_payload = "\x1e".join(
+                    (
+                        f"{getattr(word, 'text', '')}\x1d"
+                        f"{getattr(word, 'ground_truth_text', '')}"
+                    )
+                    for word in words
+                )
                 line_payload = (
                     f"{getattr(line, 'text', '')}\x1f"
                     f"{getattr(line, 'ground_truth_text', '')}\x1f"
-                    f"{len(words)}\x1f{len(unmatched_gt_words)}"
+                    f"{len(words)}\x1f{len(unmatched_gt_words)}\x1f"
+                    f"{words_payload}"
                 )
                 fingerprint_builder.update(
                     line_payload.encode("utf-8", errors="ignore")

@@ -340,6 +340,38 @@ def test_text_tabs_ocr_to_gt_callback_invokes_page_state_method():
     assert calls == [(3, 7)]
 
 
+def test_text_tabs_edit_word_gt_callback_invokes_page_state_method():
+    """TextTabs should wire per-word GT edit callback to PageState."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_ground_truth=lambda page_index, line_index, word_index, text: (
+            calls.append((page_index, line_index, word_index, text)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=2)
+    result = text_tabs.word_match_view.edit_word_ground_truth_callback(
+        4,
+        1,
+        "edited-gt",
+    )
+
+    assert result is True
+    assert calls == [(2, 4, 1, "edited-gt")]
+
+
 def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():
     project_state = SimpleNamespace(
         on_change=[],

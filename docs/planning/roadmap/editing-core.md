@@ -13,6 +13,10 @@
 - Split-word UI and bbox-aware split workflow
 - Word/line visual crop previews in the editor surface
 - GT rematch + overlay/cache refresh after structural edits
+- Per-word GT inline editing with simple single-line text input
+- Per-word GT input UX polish: dynamic width near word length with live resize while typing
+- Per-word GT commit behavior: persist on blur and Enter
+- Per-word GT keyboard navigation: Tab to next word, Shift+Tab to previous word
 
 ## Block/Line Editing
 

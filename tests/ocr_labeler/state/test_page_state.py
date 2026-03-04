@@ -588,6 +588,31 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_update_word_ground_truth_notifies_on_success(monkeypatch):
+    """Successful per-word GT edit should notify listeners for UI refresh."""
+    page_state = PageState()
+
+    class PageStub:
+        pass
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "update_word_ground_truth",
+        lambda _self, _page, _line_index, _word_index, _text: True,
+    )
+
+    page_state.current_page = PageStub()
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.update_word_ground_truth(0, 1, 2, "edited")
+
+    assert result is True
+    assert notified == ["changed"]
+
+
 def test_split_paragraph_after_line_splits_containing_paragraph_at_line():
     """Splitting after a selected line should split that line's paragraph in two."""
     page_state = PageState()

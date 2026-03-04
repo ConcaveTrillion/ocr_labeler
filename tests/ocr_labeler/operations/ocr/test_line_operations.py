@@ -154,6 +154,34 @@ class TestLineOperations:
 
         assert result is False
 
+    def test_update_word_ground_truth_success(self, operations, mock_page_with_lines):
+        """Test updating ground truth text for a specific word."""
+        result = operations.update_word_ground_truth(
+            mock_page_with_lines,
+            0,
+            1,
+            "updated-world",
+        )
+
+        assert result is True
+        line1 = mock_page_with_lines.lines[0]
+        assert line1.words[1].ground_truth_text == "updated-world"
+
+    def test_update_word_ground_truth_invalid_word_index(
+        self,
+        operations,
+        mock_page_with_lines,
+    ):
+        """Test updating ground truth text with invalid word index."""
+        result = operations.update_word_ground_truth(
+            mock_page_with_lines,
+            0,
+            99,
+            "ignored",
+        )
+
+        assert result is False
+
     def test_clear_ground_truth_for_line_no_ground_truth(self, operations):
         """Test clearing ground truth when none exists."""
         page = MagicMock(spec=Page)

@@ -182,6 +182,89 @@ class LineOperations:
             logger.exception(f"Error clearing GT for line {line_index}: {e}")
             return False
 
+    def update_word_ground_truth(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        ground_truth_text: str,
+    ) -> bool:
+        """Update ground truth text for a specific word.
+
+        Args:
+            page: Page containing the line and word to update.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            ground_truth_text: New ground truth text value.
+
+        Returns:
+            bool: True if update succeeded, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word GT update")
+            return False
+
+        try:
+            line_words = self._validated_line_words(page, line_index)
+            if line_words is None:
+                return False
+
+            if word_index < 0 or word_index >= len(line_words):
+                logger.warning(
+                    "Word index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(line_words) - 1,
+                )
+                return False
+
+            normalized_value = str(ground_truth_text or "")
+            target_word = line_words[word_index]
+            if (
+                str(getattr(target_word, "ground_truth_text", "") or "")
+                == normalized_value
+            ):
+                logger.debug(
+                    "Word GT unchanged for line=%s word=%s",
+                    line_index,
+                    word_index,
+                )
+                return True
+
+            target_word.ground_truth_text = normalized_value
+
+            lines = list(page.lines)
+            target_line = lines[line_index]
+            if hasattr(target_line, "words"):
+                line_gt = " ".join(
+                    str(getattr(word, "ground_truth_text", "") or "")
+                    for word in list(getattr(target_line, "words", []) or [])
+                ).strip()
+                with_gt = bool(line_gt)
+                try:
+                    target_line.ground_truth_text = line_gt if with_gt else ""
+                except Exception:
+                    logger.debug(
+                        "Unable to update line ground_truth_text after word edit",
+                        exc_info=True,
+                    )
+
+            logger.info(
+                "Updated GT for line=%d word=%d",
+                line_index,
+                word_index,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error updating word GT line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     def validate_line_consistency(
         self, page: "Page", line_index: int
     ) -> dict[str, any]:

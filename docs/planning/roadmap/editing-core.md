@@ -9,10 +9,10 @@
 - Paragraph actions: merge, delete, split-after-line, split-by-selected-lines
 - Word action: delete selected words
 - Post-edit state refresh: overlay refresh + text cache invalidation + GT re-match hooks
-
-## Active Next Item (Started)
-
 - Word actions: merge-left, merge-right
+- Split-word UI and bbox-aware split workflow
+- Word/line visual crop previews in the editor surface
+- GT rematch + overlay/cache refresh after structural edits
 
 ## Block/Line Editing
 
@@ -20,14 +20,21 @@
 
 ## Word Editing Infrastructure
 
-- Word view-model abstraction strategy
-- Per-line advanced editor (thumbnails, OCR/GT controls, validation actions)
-- Word actions: merge-left, merge-right
-- Split-word UI and edit-bbox workflow
-- Quick crop actions and post-edit overlay refresh
+### Editing State
+
+- Persist/restore validation-focused per-line editing state where missing
+
+### BBox Editing
+
+- Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)
+- Rebox workflow: redraw an existing word bbox from the UI (replace current bbox with drawn bbox)
+- Refine-bbox action for selected word(s)
+- Expand-bbox action for selected word(s)
+
+## Image Interaction
+
+- Zoom controls for image inspection/editing (zoom in, zoom out, reset)
 
 ## Ground Truth and State
 
-- Recompute fuzz scores after GT edits
-- Invalidate per-page image cache after edits
 - Persist and restore line validation + word GT fields

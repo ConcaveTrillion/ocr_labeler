@@ -2,14 +2,14 @@
 
 Development roadmap for OCR Labeler.
 
-Status: planning snapshot.
+Status: implementation-aligned snapshot.
 
 ## Current Focus
 
-- Editing core (word/line/paragraph-level)
-- Page cache reliability and compatibility checks
-- User metadata + session snapshot persistence baseline
-- Started next editing-core item: word merge-left/merge-right actions
+- Editing-core wrap-up (remaining line/paragraph refinement and persistence details)
+- Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
+- Testing/documentation follow-through
+- Export UX wiring for training/validation workflows
 
 ## Completed
 
@@ -17,11 +17,14 @@ Status: planning snapshot.
 - BBox operations, line filtering, font injection
 - Paragraph region selection + paragraph merge/delete/split workflows
 - Word deletion workflow + edit-triggered overlay/cache refresh improvements
+- Word merge-left/merge-right + split-word edit workflows
+- Enhanced matching UI baseline (unmatched GT placeholders, mismatch overlays, monospace surfaces)
+- Multi-page navigation controls + route/page index synchronization
+- Backend project export formats (json/jsonl/csv)
 
 ## Next Milestones
 
-- Enhanced UI and matching (after metadata persistence baseline is in place)
-- Navigation and multi-page support (includes disconnect/session flush integration)
+- Navigation and multi-page support (remaining ingestion gap)
 - Performance and polish (includes derived cache and performance-focused persistence)
 - Testing and documentation
 - Training and validation export
@@ -29,12 +32,11 @@ Status: planning snapshot.
 
 ## Integrated Sequence
 
-- Editing core + page cache reliability
-- User metadata persistence gate before broader feature additions
-- Enhanced UI and matching on top of metadata-aware persistence
-- Navigation/multi-page + reliable disconnect/session flush behavior
+- Finish editing-core persistence details
+- Close remaining navigation ingestion work
 - Performance/polish + deferred derived cache strategy
-- Testing/docs, export workflows, and distribution strategy
+- Testing/docs + export UI integration
+- Distribution strategy
 
 ## References
 

@@ -14,7 +14,6 @@ This track captures persistence work that cuts across product roadmap milestones
 
 ## Planned Sequence
 
-- **Page Cache Baseline (MVP):** page-level auto-cache lane + compatibility checks
 - **Metadata + Session Baseline:** user metadata + session snapshot save/restore
 - **Disconnect/Prewarm Reliability:** disconnect flush + optional cache prewarm
 - **Derived Cache Optimization (later):** derived word/line cache strategy and performance-focused persistence

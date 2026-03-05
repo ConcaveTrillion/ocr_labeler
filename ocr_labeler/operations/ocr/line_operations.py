@@ -1346,6 +1346,60 @@ class LineOperations:
             logger.exception("Error refining words %s: %s", unique_keys, e)
             return False
 
+    def expand_then_refine_words(
+        self,
+        page: "Page",
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Expand then refine selected word bounding boxes.
+
+        Args:
+            page: Page containing lines/words.
+            word_keys: List of (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if any selected words were expanded/refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for expand-then-refine")
+            return False
+
+        unique_keys = sorted(set(word_keys or []))
+        if not unique_keys:
+            logger.warning("Expand-then-refine requires selecting at least one word")
+            return False
+
+        try:
+            refined_any = False
+            for line_index, word_index in unique_keys:
+                line_words = self._validated_line_words(page, line_index)
+                if line_words is None:
+                    return False
+                if word_index < 0 or word_index >= len(line_words):
+                    logger.warning(
+                        "Expand-then-refine word index %s out of range for line %s (0-%s)",
+                        word_index,
+                        line_index,
+                        len(line_words) - 1,
+                    )
+                    return False
+
+                refined_any = (
+                    self._expand_then_refine_word_bbox(page, line_words[word_index])
+                    or refined_any
+                )
+
+            if not refined_any:
+                logger.warning("Selected words could not be expanded/refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info("Expand-then-refined %d selected words", len(unique_keys))
+            return True
+        except Exception as e:
+            logger.exception("Error expand-then-refining words %s: %s", unique_keys, e)
+            return False
+
     def refine_lines(self, page: "Page", line_indices: list[int]) -> bool:
         """Refine all words/bboxes in selected lines.
 
@@ -1448,6 +1502,114 @@ class LineOperations:
                 e,
             )
             return False
+
+    def nudge_word_bbox(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+    ) -> bool:
+        """Expand/contract a word bounding box by pixel deltas.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            left_delta: Left-edge size delta in pixels (+ expands left, - contracts).
+            right_delta: Right-edge size delta in pixels (+ expands right, - contracts).
+            top_delta: Top-edge size delta in pixels (+ expands up, - contracts).
+            bottom_delta: Bottom-edge size delta in pixels (+ expands down, - contracts).
+
+        Returns:
+            bool: True when nudge succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word bbox nudge")
+            return False
+
+        try:
+            line_words = self._validated_line_words(page, line_index)
+            if line_words is None:
+                return False
+            if word_index < 0 or word_index >= len(line_words):
+                logger.warning(
+                    "Word nudge index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(line_words) - 1,
+                )
+                return False
+
+            word = line_words[word_index]
+            bbox = getattr(word, "bounding_box", None)
+            if bbox is None:
+                logger.warning(
+                    "Word bbox nudge requires an existing bbox for line=%s word=%s",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            is_normalized = bool(getattr(bbox, "is_normalized", False))
+            if is_normalized:
+                page_width, page_height = self._resolve_page_dimensions(page)
+                if page_width <= 0.0 or page_height <= 0.0:
+                    logger.warning(
+                        "Unable to resolve page dimensions for normalized bbox nudge"
+                    )
+                    return False
+                x1 = float(getattr(bbox, "minX", 0.0) or 0.0) * page_width
+                y1 = float(getattr(bbox, "minY", 0.0) or 0.0) * page_height
+                x2 = float(getattr(bbox, "maxX", 0.0) or 0.0) * page_width
+                y2 = float(getattr(bbox, "maxY", 0.0) or 0.0) * page_height
+            else:
+                x1 = float(getattr(bbox, "minX", 0.0) or 0.0)
+                y1 = float(getattr(bbox, "minY", 0.0) or 0.0)
+                x2 = float(getattr(bbox, "maxX", 0.0) or 0.0)
+                y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
+
+            nx1 = x1 - float(left_delta)
+            ny1 = y1 - float(top_delta)
+            nx2 = x2 + float(right_delta)
+            ny2 = y2 + float(bottom_delta)
+
+            page_width, page_height = self._resolve_page_dimensions(page)
+            nx1 = max(0.0, nx1)
+            ny1 = max(0.0, ny1)
+            if page_width > 0.0:
+                nx2 = min(nx2, page_width)
+            if page_height > 0.0:
+                ny2 = min(ny2, page_height)
+
+            if nx2 <= nx1 or ny2 <= ny1:
+                logger.warning(
+                    "Invalid bbox size after resize for line=%s word=%s: (%s, %s, %s, %s)",
+                    line_index,
+                    word_index,
+                    nx1,
+                    ny1,
+                    nx2,
+                    ny2,
+                )
+                return False
+
+            return self.rebox_word(page, line_index, word_index, nx1, ny1, nx2, ny2)
+        except Exception as e:
+            logger.exception(
+                "Error resizing word bbox line=%s index=%s deltas=(l=%s r=%s t=%s b=%s): %s",
+                line_index,
+                word_index,
+                left_delta,
+                right_delta,
+                top_delta,
+                bottom_delta,
+                e,
+            )
+            raise
 
     def _merge_adjacent_words(
         self,
@@ -1605,6 +1767,106 @@ class LineOperations:
 
         return refined
 
+    def _expand_then_refine_word_bbox(self, page: object, word: object) -> bool:
+        """Run expand-first then refine for a single word bbox."""
+        refined = False
+        page_image = getattr(page, "cv2_numpy_page_image", None)
+
+        previous_signature = self._word_bbox_signature(word)
+        seen_signatures: set[tuple[float, float, float, float, bool] | None] = {
+            previous_signature
+        }
+        for _ in range(8):
+            used_bbox_refine = False
+            bbox = getattr(word, "bounding_box", None)
+            bbox_refine = getattr(bbox, "refine", None) if bbox is not None else None
+            if callable(bbox_refine) and page_image is not None:
+                try:
+                    refined_bbox = bbox_refine(
+                        page_image,
+                        padding_px=0,
+                        expand_beyond_original=True,
+                    )
+                    if refined_bbox is not None:
+                        setattr(word, "bounding_box", refined_bbox)
+                        refined = True
+                        used_bbox_refine = True
+                except Exception:
+                    logger.debug(
+                        "Bounding-box refine (expand_beyond_original=True) failed; falling back",
+                        exc_info=True,
+                    )
+
+            if not used_bbox_refine:
+                expand_to_content = getattr(word, "expand_to_content", None)
+                if callable(expand_to_content):
+                    try:
+                        expand_to_content()
+                    except TypeError:
+                        if page_image is not None:
+                            expand_to_content(page_image)
+                        else:
+                            logger.debug(
+                                "Skipping expand_to_content; page image unavailable",
+                                exc_info=True,
+                            )
+                    refined = True
+
+                crop_bottom = getattr(word, "crop_bottom", None)
+                if callable(crop_bottom):
+                    try:
+                        crop_bottom()
+                    except TypeError:
+                        if page_image is not None:
+                            crop_bottom(page_image)
+                        else:
+                            logger.debug(
+                                "Skipping crop_bottom; page image unavailable",
+                                exc_info=True,
+                            )
+                    refined = True
+
+            recompute_word = getattr(word, "recompute_bounding_box", None)
+            if not used_bbox_refine and callable(recompute_word):
+                recompute_word()
+                refined = True
+
+            if used_bbox_refine:
+                break
+
+            current_signature = self._word_bbox_signature(word)
+            if current_signature == previous_signature:
+                break
+            if current_signature in seen_signatures:
+                break
+
+            seen_signatures.add(current_signature)
+            previous_signature = current_signature
+
+        return refined
+
+    def _word_bbox_signature(
+        self,
+        word: object,
+    ) -> tuple[float, float, float, float, bool] | None:
+        """Return a stable bbox signature for convergence checks."""
+        bbox = getattr(word, "bounding_box", None)
+        if bbox is None:
+            return None
+
+        min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
+        min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
+        max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
+        max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
+        is_normalized = bool(getattr(bbox, "is_normalized", False))
+        return (
+            round(min_x, 6),
+            round(min_y, 6),
+            round(max_x, 6),
+            round(max_y, 6),
+            is_normalized,
+        )
+
     def _resolve_page_dimensions(self, page: object) -> tuple[float, float]:
         """Return page dimensions in pixels when available."""
         width = float(getattr(page, "width", 0.0) or 0.0)
@@ -1672,7 +1934,7 @@ class LineOperations:
                 self._recompute_nested_bounding_boxes(child)
 
         recompute = getattr(container, "recompute_bounding_box", None)
-        if callable(recompute):
+        if child_items and callable(recompute):
             recompute()
 
     def _find_parent_block(self, container: object, target: object) -> object | None:

@@ -659,6 +659,39 @@ def test_rebox_word_invalidates_overlay_cache_before_refresh(monkeypatch):
     assert page.cv2_numpy_page_image_word_with_bboxes == "fresh-word-overlay"
 
 
+def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful word bbox nudge should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "nudge_word_bbox",
+        lambda _self, _page, _line_index, _word_index, _left, _right, _top, _bottom: (
+            True
+        ),
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.nudge_word_bbox(0, 0, 1, 1.0, 1.0, -1.0, -1.0)
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
 def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     """Successful word refine should refresh overlays and notify listeners."""
     page_state = PageState()
@@ -684,6 +717,37 @@ def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     page_state.on_change = [lambda: notified.append("changed")]
 
     result = page_state.refine_words(0, [(0, 1)])
+
+    assert result is True
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
+def test_expand_then_refine_words_refreshes_overlay_and_notifies(monkeypatch):
+    """Successful expand-then-refine should refresh overlays and notify listeners."""
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.overlay_refresh_called = False
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "expand_then_refine_words",
+        lambda _self, _page, _word_keys: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.expand_then_refine_words(0, [(0, 1)])
 
     assert result is True
     assert page.overlay_refresh_called is True

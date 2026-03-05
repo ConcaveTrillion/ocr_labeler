@@ -470,7 +470,7 @@ class PageOperations:
                 f"Expanding and refining bboxes for page with padding_px={padding_px}"
             )
 
-            # Iterate through all words and apply crop_bottom + expand_to_content
+            # Iterate through all words and prefer BoundingBox.refine(expand_beyond_original=True)
             word_blocks = None
             if hasattr(page_obj, "blocks"):
                 word_blocks = page_obj.blocks
@@ -487,30 +487,57 @@ class PageOperations:
             if hasattr(page_obj, "cv2_numpy_page_image"):
                 page_image = page_obj.cv2_numpy_page_image
 
+            used_bbox_refine_any = False
             for block in word_blocks:
                 words = getattr(block, "words", None)
                 if not words:
                     continue
                 for word in words:
-                    if hasattr(word, "crop_bottom"):
-                        try:
-                            word.crop_bottom()  # type: ignore[attr-defined]
-                        except TypeError:
-                            if page_image is not None:
-                                word.crop_bottom(page_image)  # type: ignore[attr-defined]
-                            else:
-                                raise
-                    if hasattr(word, "expand_to_content"):
-                        try:
-                            word.expand_to_content()  # type: ignore[attr-defined]
-                        except TypeError:
-                            if page_image is not None:
-                                word.expand_to_content(page_image)  # type: ignore[attr-defined]
-                            else:
-                                raise
+                    used_bbox_refine = False
+                    bbox = getattr(word, "bounding_box", None)
+                    bbox_refine = (
+                        getattr(bbox, "refine", None) if bbox is not None else None
+                    )
+                    if callable(bbox_refine) and page_image is not None:
+                        refined_bbox = bbox_refine(
+                            page_image,
+                            padding_px=padding_px,
+                            expand_beyond_original=True,
+                        )
+                        if refined_bbox is not None:
+                            word.bounding_box = refined_bbox
+                            used_bbox_refine = True
+                            used_bbox_refine_any = True
 
-            # Then refine bboxes
-            page_obj.refine_bounding_boxes(padding_px=padding_px)
+                    if not used_bbox_refine:
+                        crop_bottom = getattr(word, "crop_bottom", None)
+                        if callable(crop_bottom):
+                            try:
+                                crop_bottom()
+                            except TypeError:
+                                if page_image is not None:
+                                    crop_bottom(page_image)
+                                else:
+                                    raise
+                        expand_to_content = getattr(word, "expand_to_content", None)
+                        if callable(expand_to_content):
+                            try:
+                                expand_to_content()
+                            except TypeError:
+                                if page_image is not None:
+                                    expand_to_content(page_image)
+                                else:
+                                    raise
+
+                recompute_block = getattr(block, "recompute_bounding_box", None)
+                if callable(recompute_block):
+                    recompute_block()
+
+            recompute_page = getattr(page_obj, "recompute_bounding_box", None)
+            if callable(recompute_page):
+                recompute_page()
+            elif not used_bbox_refine_any:
+                page_obj.refine_bounding_boxes(padding_px=padding_px)
 
             # Refresh page images after bbox changes
             if hasattr(page_obj, "refresh_page_images"):

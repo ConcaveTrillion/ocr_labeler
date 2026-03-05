@@ -1246,6 +1246,65 @@ class PageState:
             )
             return False
 
+    def nudge_word_bbox(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+    ) -> bool:
+        """Resize a word bounding box by per-edge pixel deltas on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            left_delta: Left-edge size delta in pixels (+ expands left, - contracts).
+            right_delta: Right-edge size delta in pixels (+ expands right, - contracts).
+            top_delta: Top-edge size delta in pixels (+ expands up, - contracts).
+            bottom_delta: Bottom-edge size delta in pixels (+ expands down, - contracts).
+
+        Returns:
+            bool: True if nudge succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for word bbox nudge")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.nudge_word_bbox(
+                page,
+                line_index,
+                word_index,
+                left_delta,
+                right_delta,
+                top_delta,
+                bottom_delta,
+            )
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error resizing word bbox line=%s word=%s deltas=(l=%s r=%s t=%s b=%s): %s",
+                line_index,
+                word_index,
+                left_delta,
+                right_delta,
+                top_delta,
+                bottom_delta,
+                e,
+            )
+            raise
+
     def refine_words(
         self,
         page_index: int,
@@ -1276,6 +1335,38 @@ class PageState:
             return result
         except Exception as e:
             logger.exception("Error refining words %s: %s", word_keys, e)
+            return False
+
+    def expand_then_refine_words(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Expand then refine selected words on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: Selected (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if expand/refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-then-refine")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_then_refine_words(page, word_keys)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error expand-then-refining words %s: %s", word_keys, e)
             return False
 
     def refine_lines(self, page_index: int, line_indices: list[int]) -> bool:

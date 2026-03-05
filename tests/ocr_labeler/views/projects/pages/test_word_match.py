@@ -694,6 +694,228 @@ def test_refine_single_word_clears_selection_before_callback(monkeypatch):
     assert seen["selection_during_callback"] == ([], [])
 
 
+def test_toggle_bbox_fine_tune_opens_and_closes_editor(monkeypatch):
+    view = WordMatchView(nudge_word_bbox_callback=lambda *_args: True)
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(view, "_update_lines_display", lambda: None)
+
+    view._toggle_bbox_fine_tune(1, 2)
+    assert (1, 2) in view._bbox_editor_open_keys
+
+    view._toggle_bbox_fine_tune(1, 2)
+    assert (1, 2) not in view._bbox_editor_open_keys
+
+
+def test_nudge_single_word_bbox_accumulates_pending_without_callback(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+        )
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    view._bbox_nudge_step_px = 5
+    view.selected_line_indices = {2}
+    view.selected_word_indices = {(2, 1)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view._handle_nudge_single_word_bbox(
+        2,
+        1,
+        left_units=-1.0,
+        right_units=1.0,
+        top_units=0.0,
+        bottom_units=1.0,
+    )
+
+    assert seen == {}
+    assert view._bbox_pending_deltas[(2, 1)] == (-5.0, 5.0, 0.0, 5.0)
+    assert view.selected_line_indices == {2}
+    assert view.selected_word_indices == {(2, 1)}
+
+
+def test_apply_pending_single_word_bbox_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+        )
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    view.selected_line_indices = {2}
+    view.selected_word_indices = {(2, 1)}
+    view._bbox_pending_deltas[(2, 1)] = (-5.0, 5.0, 0.0, 5.0)
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view._apply_pending_single_word_bbox_nudge(2, 1)
+
+    assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0)
+    assert seen["selection_during_callback"] == ([], [])
+    assert (2, 1) not in view._bbox_pending_deltas
+
+
+def test_expand_then_refine_single_word_clears_selection_before_callback(monkeypatch):
+    seen = {}
+
+    def expand_then_refine_callback(word_keys: list[tuple[int, int]]) -> bool:
+        seen["word_keys"] = word_keys
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+        )
+        return True
+
+    view = WordMatchView(
+        expand_then_refine_words_callback=expand_then_refine_callback,
+    )
+    view.selected_line_indices = {4}
+    view.selected_word_indices = {(4, 1)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view._handle_expand_then_refine_single_word(4, 1)
+
+    assert seen["word_keys"] == [(4, 1)]
+    assert seen["selection_during_callback"] == ([], [])
+
+
+def test_set_bbox_nudge_step_updates_step_and_refreshes(monkeypatch):
+    view = WordMatchView()
+    seen = {"refresh": 0}
+    monkeypatch.setattr(
+        view,
+        "_update_lines_display",
+        lambda: seen.__setitem__("refresh", seen["refresh"] + 1),
+    )
+
+    view._set_bbox_nudge_step("10")
+
+    assert view._bbox_nudge_step_px == 10
+    assert seen["refresh"] == 1
+
+
+def test_bbox_nudge_step_defaults_to_five_px():
+    view = WordMatchView()
+
+    assert view._bbox_nudge_step_px == 5
+
+
+def test_display_signature_changes_when_word_bbox_changes():
+    view = WordMatchView()
+    bbox = SimpleNamespace(
+        minX=10.0, minY=20.0, maxX=30.0, maxY=40.0, is_normalized=False
+    )
+    word_object = SimpleNamespace(bounding_box=bbox)
+    word_match = SimpleNamespace(
+        match_status=SimpleNamespace(value="exact"),
+        ocr_text="token",
+        ground_truth_text="token",
+        fuzz_score=1.0,
+        word_object=word_object,
+    )
+    line_match = SimpleNamespace(
+        line_index=0,
+        paragraph_index=0,
+        overall_match_status=SimpleNamespace(value="exact"),
+        exact_match_count=1,
+        fuzzy_match_count=0,
+        mismatch_count=0,
+        unmatched_gt_count=0,
+        unmatched_ocr_count=0,
+        word_matches=[word_match],
+    )
+    view.view_model.line_matches = [line_match]
+
+    before = view._compute_display_signature()
+    bbox.maxX = 35.0
+    after = view._compute_display_signature()
+
+    assert before != after
+
+
+def test_preview_bbox_for_word_applies_pending_deltas():
+    view = WordMatchView()
+    view._bbox_pending_deltas[(1, 2)] = (3.0, 4.0, 5.0, 6.0)
+
+    bbox = SimpleNamespace(
+        minX=10.0,
+        minY=20.0,
+        maxX=30.0,
+        maxY=40.0,
+        is_normalized=False,
+    )
+    word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
+    page_image = SimpleNamespace(shape=(100, 200, 3))
+
+    preview_bbox = view._preview_bbox_for_word(
+        word_match,
+        page_image,
+        line_index=1,
+        word_index=2,
+    )
+
+    assert preview_bbox == (7, 15, 34, 46)
+
+
+def test_preview_bbox_for_word_handles_normalized_bbox():
+    view = WordMatchView()
+    view._bbox_pending_deltas[(0, 0)] = (10.0, 0.0, 0.0, 10.0)
+
+    bbox = SimpleNamespace(
+        minX=0.10,
+        minY=0.20,
+        maxX=0.30,
+        maxY=0.40,
+        is_normalized=True,
+    )
+    word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
+    page_image = SimpleNamespace(shape=(100, 200, 3))
+
+    preview_bbox = view._preview_bbox_for_word(
+        word_match,
+        page_image,
+        line_index=0,
+        word_index=0,
+    )
+
+    assert preview_bbox == (10, 20, 60, 50)
+
+
 def test_word_gt_edit_invokes_callback(monkeypatch):
     seen = {}
 

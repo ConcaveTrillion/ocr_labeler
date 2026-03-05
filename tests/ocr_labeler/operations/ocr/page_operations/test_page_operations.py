@@ -575,13 +575,19 @@ class TestPageOperations:
         mock_word = MagicMock()
         mock_word.crop_bottom = MagicMock()
         mock_word.expand_to_content = MagicMock()
+        mock_bbox = MagicMock()
+        mock_word.bounding_box = mock_bbox
+        mock_refined_bbox = MagicMock()
+        mock_bbox.refine = MagicMock(return_value=mock_refined_bbox)
 
         mock_block = MagicMock()
         mock_block.words = [mock_word]
+        mock_block.recompute_bounding_box = MagicMock()
 
         mock_page = MagicMock(spec=Page)
         mock_page.blocks = [mock_block]
-        mock_page.refine_bounding_boxes = MagicMock()
+        mock_page.cv2_numpy_page_image = object()
+        mock_page.recompute_bounding_box = MagicMock()
         mock_page.refresh_page_images = MagicMock()
 
         # Call expand_and_refine_all_bboxes
@@ -589,23 +595,34 @@ class TestPageOperations:
 
         # Verify the methods were called correctly
         assert result is True
-        mock_word.crop_bottom.assert_called_once()
-        mock_word.expand_to_content.assert_called_once()
-        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+        mock_bbox.refine.assert_called_once_with(
+            mock_page.cv2_numpy_page_image,
+            padding_px=2,
+            expand_beyond_original=True,
+        )
+        assert mock_word.bounding_box is mock_refined_bbox
+        mock_word.crop_bottom.assert_not_called()
+        mock_word.expand_to_content.assert_not_called()
+        mock_block.recompute_bounding_box.assert_called_once()
+        mock_page.recompute_bounding_box.assert_called_once()
         mock_page.refresh_page_images.assert_called_once()
 
     def test_expand_and_refine_all_bboxes_no_methods(self, operations):
         """Test bbox expansion and refinement when words have no crop/expand methods."""
         # Create a mock page with words that don't have the methods
         mock_word = MagicMock()
-        # Don't add crop_bottom or expand_to_content methods
+        mock_word.bounding_box = None
+        mock_word.crop_bottom = None
+        mock_word.expand_to_content = None
 
         mock_block = MagicMock()
         mock_block.words = [mock_word]
+        mock_block.recompute_bounding_box = MagicMock()
 
         mock_page = MagicMock(spec=Page)
         mock_page.blocks = [mock_block]
-        mock_page.refine_bounding_boxes = MagicMock()
+        mock_page.cv2_numpy_page_image = None
+        mock_page.recompute_bounding_box = MagicMock()
         mock_page.refresh_page_images = MagicMock()
 
         # Call expand_and_refine_all_bboxes
@@ -613,34 +630,36 @@ class TestPageOperations:
 
         # Verify the method was called correctly
         assert result is True
-        # crop_bottom and expand_to_content should not be called since they don't exist
-        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=3)
+        mock_block.recompute_bounding_box.assert_called_once()
+        mock_page.recompute_bounding_box.assert_called_once()
         mock_page.refresh_page_images.assert_called_once()
 
     def test_expand_and_refine_all_bboxes_refine_fails(self, operations):
-        """Test bbox expansion and refinement when refine_bounding_boxes raises an exception."""
+        """Test bbox expansion and refinement when BoundingBox.refine raises."""
         # Create a mock page that raises an exception
         mock_word = MagicMock()
-        mock_word.crop_bottom = MagicMock()
-        mock_word.expand_to_content = MagicMock()
+        mock_word.bounding_box = MagicMock()
+        mock_word.bounding_box.refine = MagicMock(
+            side_effect=Exception("Refine failed")
+        )
 
         mock_block = MagicMock()
         mock_block.words = [mock_word]
 
         mock_page = MagicMock(spec=Page)
         mock_page.blocks = [mock_block]
-        mock_page.refine_bounding_boxes = MagicMock(
-            side_effect=Exception("Refine failed")
-        )
+        mock_page.cv2_numpy_page_image = object()
 
         # Call expand_and_refine_all_bboxes
         result = operations.expand_and_refine_all_bboxes(mock_page)
 
         # Verify the result is False
         assert result is False
-        mock_word.crop_bottom.assert_called_once()
-        mock_word.expand_to_content.assert_called_once()
-        mock_page.refine_bounding_boxes.assert_called_once_with(padding_px=2)
+        mock_word.bounding_box.refine.assert_called_once_with(
+            mock_page.cv2_numpy_page_image,
+            padding_px=2,
+            expand_beyond_original=True,
+        )
 
     @patch("pd_book_tools.ocr.doctr_support.get_default_doctr_predictor")
     @patch("pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr")

@@ -330,6 +330,39 @@ class TextTabs:
                 logger.debug("Rebox word operation result: %s", result)
                 return result
 
+        nudge_word_bbox_callback = None
+        if page_state and hasattr(page_state, "nudge_word_bbox"):
+
+            def nudge_word_bbox_callback(
+                line_index: int,
+                word_index: int,
+                left_delta: float,
+                right_delta: float,
+                top_delta: float,
+                bottom_delta: float,
+            ) -> bool:
+                logger.debug(
+                    "Resizing word bbox at (%s, %s) with deltas l=%s r=%s t=%s b=%s on page %d",
+                    line_index,
+                    word_index,
+                    left_delta,
+                    right_delta,
+                    top_delta,
+                    bottom_delta,
+                    page_index,
+                )
+                result = page_state.nudge_word_bbox(
+                    page_index,
+                    line_index,
+                    word_index,
+                    left_delta,
+                    right_delta,
+                    top_delta,
+                    bottom_delta,
+                )
+                logger.debug("Nudge word bbox operation result: %s", result)
+                return result
+
         refine_words_callback = None
         if page_state and hasattr(page_state, "refine_words"):
 
@@ -341,6 +374,21 @@ class TextTabs:
                 )
                 result = page_state.refine_words(page_index, word_keys)
                 logger.debug("Refine words operation result: %s", result)
+                return result
+
+        expand_then_refine_words_callback = None
+        if page_state and hasattr(page_state, "expand_then_refine_words"):
+
+            def expand_then_refine_words_callback(
+                word_keys: list[tuple[int, int]],
+            ) -> bool:
+                logger.debug(
+                    "Expand-then-refining selected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.expand_then_refine_words(page_index, word_keys)
+                logger.debug("Expand-then-refine words operation result: %s", result)
                 return result
 
         refine_lines_callback = None
@@ -416,7 +464,9 @@ class TextTabs:
             merge_word_right_callback=merge_word_right_callback,
             split_word_callback=split_word_callback,
             rebox_word_callback=rebox_word_callback,
+            nudge_word_bbox_callback=nudge_word_bbox_callback,
             refine_words_callback=refine_words_callback,
+            expand_then_refine_words_callback=expand_then_refine_words_callback,
             refine_lines_callback=refine_lines_callback,
             refine_paragraphs_callback=refine_paragraphs_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,

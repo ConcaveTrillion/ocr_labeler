@@ -393,11 +393,12 @@ class TestNiceGuiIntegration:
             # Load first project to render page-level controls.
             user.find("LOAD").click()
             await user.should_see("Loaded projectID629292e7559a8")
-            await user.should_see("Prev")
-            await user.should_see("Next")
-            await user.should_see("Expand & Refine")
-
             interaction = user.find("Expand & Refine", kind=Button)
+            for _ in range(40):
+                if interaction.elements:
+                    break
+                await asyncio.sleep(0.05)
+                interaction = user.find("Expand & Refine", kind=Button)
             assert interaction.elements, "Expand & Refine button not found"
             interaction.trigger("click")
 

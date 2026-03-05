@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
@@ -585,6 +586,29 @@ class TestLineOperations:
         assert result is True
         assert seen == ["crop", "expand"]
 
+    def test_nudge_word_bbox_expands_and_contracts_size(self, operations):
+        """Nudging should resize bbox dimensions, not translate position."""
+        line = _line([_word("alpha", "A", 20)], 20)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+
+        result = operations.nudge_word_bbox(page, 0, 0, 3.0, 3.0, 2.0, 2.0)
+
+        assert result is True
+        updated_bbox = page.lines[0].words[0].bounding_box
+        assert updated_bbox.top_left.x == 17.0
+        assert updated_bbox.top_left.y == 0.0
+        assert updated_bbox.bottom_right.x == 33.0
+        assert updated_bbox.bottom_right.y == 12.0
+
+        contract_result = operations.nudge_word_bbox(page, 0, 0, -2.0, -2.0, -1.0, -1.0)
+
+        assert contract_result is True
+        contracted_bbox = page.lines[0].words[0].bounding_box
+        assert contracted_bbox.top_left.x == 19.0
+        assert contracted_bbox.top_left.y == 1.0
+        assert contracted_bbox.bottom_right.x == 31.0
+        assert contracted_bbox.bottom_right.y == 11.0
+
     def test_refine_words_runs_refine_for_selected_words(self, operations):
         """Refining words should run per-word helper methods for selected keys."""
         line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
@@ -600,6 +624,80 @@ class TestLineOperations:
 
         assert result is True
         assert seen == ["second"]
+
+    def test_expand_then_refine_words_runs_expand_before_refine(self, operations):
+        """Expand-then-refine should run expand_to_content before crop_bottom."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        word = page.lines[0].words[0]
+
+        seen = []
+        word.expand_to_content = lambda: seen.append("expand")
+        word.crop_bottom = lambda: seen.append("crop")
+
+        result = operations.expand_then_refine_words(page, [(0, 0)])
+
+        assert result is True
+        assert seen == ["expand", "crop"]
+
+    def test_expand_then_refine_words_iterates_until_bbox_stabilizes(self, operations):
+        """Expand-then-refine should run multiple passes until bbox no longer changes."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        word = page.lines[0].words[0]
+
+        calls = {"expand": 0, "crop": 0}
+
+        def _expand_to_content() -> None:
+            calls["expand"] += 1
+            bbox = word.bounding_box
+            min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
+            min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
+            max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
+            max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
+            if calls["expand"] == 1:
+                max_x += 3.0
+            elif calls["expand"] == 2:
+                max_x += 2.0
+            word.bounding_box = _bbox(int(min_x), int(min_y), int(max_x), int(max_y))
+
+        def _crop_bottom() -> None:
+            calls["crop"] += 1
+
+        word.expand_to_content = _expand_to_content
+        word.crop_bottom = _crop_bottom
+
+        result = operations.expand_then_refine_words(page, [(0, 0)])
+
+        assert result is True
+        assert calls["expand"] >= 2
+        assert calls["crop"] >= 2
+        assert page.lines[0].words[0].bounding_box.bottom_right.x == 15
+
+    def test_expand_then_refine_words_prefers_bbox_refine_expand_mode(self, operations):
+        """Expand-then-refine should prefer BoundingBox.refine(expand_beyond_original=True)."""
+        line = _line([_word("alpha", "A", 0)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        page.cv2_numpy_page_image = np.zeros((20, 20), dtype=np.uint8)
+        word = page.lines[0].words[0]
+
+        original_bbox = word.bounding_box
+        refined_bbox = _bbox(0, 0, 12, 10)
+        original_bbox.refine = MagicMock(return_value=refined_bbox)
+        word.expand_to_content = MagicMock()
+        word.crop_bottom = MagicMock()
+
+        result = operations.expand_then_refine_words(page, [(0, 0)])
+
+        assert result is True
+        original_bbox.refine.assert_called_with(
+            page.cv2_numpy_page_image,
+            padding_px=0,
+            expand_beyond_original=True,
+        )
+        word.expand_to_content.assert_not_called()
+        word.crop_bottom.assert_not_called()
+        assert word.bounding_box.to_ltrb() == refined_bbox.to_ltrb()
 
     def test_refine_lines_runs_refine_for_line_words(self, operations):
         """Refining lines should process all words in selected lines."""

@@ -33,7 +33,9 @@ class WordMatchView:
         merge_word_right_callback=None,
         split_word_callback=None,
         rebox_word_callback=None,
+        nudge_word_bbox_callback=None,
         refine_words_callback=None,
+        expand_then_refine_words_callback=None,
         refine_lines_callback=None,
         refine_paragraphs_callback=None,
         edit_word_ground_truth_callback=None,
@@ -65,7 +67,9 @@ class WordMatchView:
         self.merge_word_right_callback = merge_word_right_callback
         self.split_word_callback = split_word_callback
         self.rebox_word_callback = rebox_word_callback
+        self.nudge_word_bbox_callback = nudge_word_bbox_callback
         self.refine_words_callback = refine_words_callback
+        self.expand_then_refine_words_callback = expand_then_refine_words_callback
         self.refine_lines_callback = refine_lines_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
@@ -78,6 +82,11 @@ class WordMatchView:
         self._word_split_image_sizes: dict[tuple[int, int], tuple[float, float]] = {}
         self._word_split_button_refs: dict[tuple[int, int], object] = {}
         self._word_gt_input_refs: dict[tuple[int, int], object] = {}
+        self._bbox_editor_open_keys: set[tuple[int, int]] = set()
+        self._bbox_pending_deltas: dict[
+            tuple[int, int], tuple[float, float, float, float]
+        ] = {}
+        self._bbox_nudge_step_px: int = 5
         self._selection_change_callback = None
         self._paragraph_selection_change_callback = None
         self._rebox_request_callback = None
@@ -375,6 +384,7 @@ class WordMatchView:
             for key, value in self._word_split_marker_x.items()
             if key in valid_split_keys
         }
+        self._bbox_editor_open_keys.intersection_update(valid_split_keys)
         available_paragraph_indices = {
             line_match.paragraph_index
             for line_match in self.view_model.line_matches
@@ -450,7 +460,9 @@ class WordMatchView:
                     if paragraph_index is not None:
                         with ui.row().classes("items-center"):
                             ui.checkbox(
-                                value=paragraph_index in self.selected_paragraph_indices
+                                text="",
+                                value=paragraph_index
+                                in self.selected_paragraph_indices,
                             ).props("size=sm").on_value_change(
                                 lambda event, index=paragraph_index: (
                                     self._on_paragraph_selection_change(
@@ -479,6 +491,7 @@ class WordMatchView:
                     round(word_match.fuzz_score, 6)
                     if word_match.fuzz_score is not None
                     else None,
+                    self._word_match_bbox_signature(word_match),
                 )
                 for word_match in line_match.word_matches
             )
@@ -502,8 +515,27 @@ class WordMatchView:
             tuple(sorted(self.selected_line_indices)),
             tuple(sorted(self.selected_word_indices)),
             tuple(sorted(self.selected_paragraph_indices)),
+            tuple(sorted(self._bbox_editor_open_keys)),
+            tuple(sorted(self._bbox_pending_deltas.items())),
             tuple(line_signatures),
         )
+
+    def _word_match_bbox_signature(self, word_match: object) -> str:
+        """Return a stable bbox signature for a word-match object."""
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return ""
+
+        bbox = getattr(word_object, "bounding_box", None)
+        if bbox is None:
+            return ""
+
+        min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
+        min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
+        max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
+        max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
+        is_normalized = bool(getattr(bbox, "is_normalized", False))
+        return f"{min_x:.6f}:{min_y:.6f}:{max_x:.6f}:{max_y:.6f}:{int(is_normalized)}"
 
     def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
@@ -609,7 +641,8 @@ class WordMatchView:
                     # Left side: Line info and stats
                     with ui.row().classes("items-center"):
                         ui.checkbox(
-                            value=self._is_line_checked(line_match.line_index)
+                            text="",
+                            value=self._is_line_checked(line_match.line_index),
                         ).props("size=sm").on_value_change(
                             lambda event, index=line_match.line_index: (
                                 self._on_line_selection_change(
@@ -765,9 +798,10 @@ class WordMatchView:
         """Create a selection checkbox for a word column."""
         selection_key = (line_index, word_index)
         with ui.row().classes("items-center"):
-            ui.checkbox(value=selection_key in self.selected_word_indices).props(
-                "size=xs dense"
-            ).tooltip("Select word").on_value_change(
+            ui.checkbox(
+                text="",
+                value=selection_key in self.selected_word_indices,
+            ).props("size=xs dense").tooltip("Select word").on_value_change(
                 lambda event, key=selection_key: self._on_word_selection_change(
                     key,
                     bool(event.value),
@@ -787,7 +821,11 @@ class WordMatchView:
                 ui.icon("text_fields").classes("text-blue-600").style("height: 2.25em")
             else:
                 try:
-                    word_image = self._get_word_image(word_match)
+                    word_image = self._get_word_image(
+                        word_match,
+                        line_index=line_index,
+                        word_index=split_word_index,
+                    )
                 except Exception as e:
                     logger.error(f"Error getting word image: {e}")
                     word_image = None
@@ -1153,6 +1191,181 @@ class WordMatchView:
                 self.refine_words_callback is None or split_word_index < 0
             )
 
+            expand_then_refine_button = (
+                ui.button(
+                    icon="unfold_more",
+                    on_click=lambda: self._handle_expand_then_refine_single_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Expand then refine word bounding box")
+            )
+            expand_then_refine_button.disabled = (
+                self.expand_then_refine_words_callback is None or split_word_index < 0
+            )
+
+            edit_bbox_button = (
+                ui.button(
+                    icon="tune",
+                    on_click=lambda: self._toggle_bbox_fine_tune(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Fine-tune word bbox by pixels")
+            )
+            edit_bbox_button.disabled = (
+                self.nudge_word_bbox_callback is None or split_word_index < 0
+            )
+
+        fine_tune_key = (line_index, split_word_index)
+        if (
+            fine_tune_key in self._bbox_editor_open_keys
+            and self.nudge_word_bbox_callback is not None
+            and split_word_index >= 0
+        ):
+            pending_left, pending_right, pending_top, pending_bottom = (
+                self._bbox_pending_deltas.get(
+                    fine_tune_key,
+                    (0.0, 0.0, 0.0, 0.0),
+                )
+            )
+            logger.debug(
+                "Rendering bbox fine-tune controls for key=%s with step=%spx",
+                fine_tune_key,
+                self._bbox_nudge_step_px,
+            )
+            with ui.row().classes("items-center gap-1"):
+                ui.label("Fine tune")
+                ui.radio(
+                    options={1: "1px", 5: "5px", 10: "10px"},
+                    value=self._bbox_nudge_step_px,
+                    on_change=lambda event: self._set_bbox_nudge_step(event.value),
+                ).props("inline dense")
+            with ui.row().classes("items-center gap-1"):
+                ui.label("Left")
+                ui.button(
+                    "X-",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=-1.0,
+                        right_units=0.0,
+                        top_units=0.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+                ui.button(
+                    "X+",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=1.0,
+                        right_units=0.0,
+                        top_units=0.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+
+                ui.label("Right")
+                ui.button(
+                    "X-",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=-1.0,
+                        top_units=0.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+                ui.button(
+                    "X+",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=1.0,
+                        top_units=0.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+
+            with ui.row().classes("items-center gap-1"):
+                ui.label("Top")
+                ui.button(
+                    "Y-",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=0.0,
+                        top_units=-1.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+                ui.button(
+                    "Y+",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=0.0,
+                        top_units=1.0,
+                        bottom_units=0.0,
+                    ),
+                ).props("size=xs flat")
+
+                ui.label("Bottom")
+                ui.button(
+                    "Y-",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=0.0,
+                        top_units=0.0,
+                        bottom_units=-1.0,
+                    ),
+                ).props("size=xs flat")
+                ui.button(
+                    "Y+",
+                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                        line_index,
+                        split_word_index,
+                        left_units=0.0,
+                        right_units=0.0,
+                        top_units=0.0,
+                        bottom_units=1.0,
+                    ),
+                ).props("size=xs flat")
+
+            with ui.row().classes("items-center gap-2"):
+                ui.label(
+                    "Pending "
+                    f"L:{pending_left:.0f} "
+                    f"R:{pending_right:.0f} "
+                    f"T:{pending_top:.0f} "
+                    f"B:{pending_bottom:.0f} px"
+                ).classes("text-xs")
+                ui.button(
+                    "Reset",
+                    on_click=lambda: self._reset_pending_single_word_bbox_nudge(
+                        line_index,
+                        split_word_index,
+                    ),
+                ).props("size=xs flat")
+                ui.button(
+                    "Apply",
+                    on_click=lambda: self._apply_pending_single_word_bbox_nudge(
+                        line_index,
+                        split_word_index,
+                    ),
+                ).props("size=xs")
+
     def _line_word_match_by_ocr_index(
         self,
         line_index: int,
@@ -1276,7 +1489,13 @@ class WordMatchView:
 
         return "\\n".join(lines) if lines else None
 
-    def _get_word_image(self, word_match):
+    def _get_word_image(
+        self,
+        word_match,
+        *,
+        line_index: int,
+        word_index: int,
+    ):
         """Get cropped word image as base64 data URL with image dimensions."""
         logger.debug(
             "Getting word image for match with status %s", word_match.match_status.value
@@ -1307,19 +1526,46 @@ class WordMatchView:
             logger.debug(
                 "Found line match with page image, attempting to crop word image"
             )
-            # Get cropped image from word match
-            try:
-                cropped_img = word_match.get_cropped_image(line_match.page_image)
-                if cropped_img is None:
-                    logger.debug("Cropped image is None")
-                    return None
-                logger.debug(
-                    "Successfully cropped image, shape: %s",
-                    cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
+            page_image = line_match.page_image
+            pending_key = (line_index, word_index)
+            pending_deltas = self._bbox_pending_deltas.get(pending_key)
+            cropped_img = None
+
+            if pending_deltas is not None:
+                preview_bbox = self._preview_bbox_for_word(
+                    word_match,
+                    page_image,
+                    line_index=line_index,
+                    word_index=word_index,
                 )
-            except Exception as e:
-                logger.debug(f"Error cropping word image: {e}")
-                return None
+                if preview_bbox is None:
+                    logger.debug(
+                        "Preview bbox invalid for key=%s; skipping preview crop",
+                        pending_key,
+                    )
+                    return None
+
+                px1, py1, px2, py2 = preview_bbox
+                cropped_img = page_image[py1:py2, px1:px2]
+                if cropped_img is None or getattr(cropped_img, "size", 0) == 0:
+                    logger.debug(
+                        "Preview crop produced empty image for key=%s", pending_key
+                    )
+                    return None
+            else:
+                try:
+                    cropped_img = word_match.get_cropped_image(page_image)
+                    if cropped_img is None:
+                        logger.debug("Cropped image is None")
+                        return None
+                except Exception as e:
+                    logger.debug(f"Error cropping word image: {e}")
+                    return None
+
+            logger.debug(
+                "Successfully cropped image, shape: %s",
+                cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
+            )
 
             # Convert to base64 data URL for display in browser
             import base64
@@ -1341,6 +1587,67 @@ class WordMatchView:
         except Exception as e:
             logger.debug(f"Error creating word image: {e}")
             return None
+
+    def _preview_bbox_for_word(
+        self,
+        word_match,
+        page_image,
+        *,
+        line_index: int,
+        word_index: int,
+    ) -> tuple[int, int, int, int] | None:
+        """Build clamped preview bbox in pixel coordinates for a word image crop."""
+        if word_index < 0:
+            return None
+
+        shape = getattr(page_image, "shape", None)
+        if shape is None or len(shape) < 2:
+            return None
+
+        page_height = int(shape[0])
+        page_width = int(shape[1])
+        if page_width <= 0 or page_height <= 0:
+            return None
+
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return None
+        bbox = getattr(word_object, "bounding_box", None)
+        if bbox is None:
+            return None
+
+        is_normalized = bool(getattr(bbox, "is_normalized", False))
+        if is_normalized:
+            x1 = float(getattr(bbox, "minX", 0.0) or 0.0) * float(page_width)
+            y1 = float(getattr(bbox, "minY", 0.0) or 0.0) * float(page_height)
+            x2 = float(getattr(bbox, "maxX", 0.0) or 0.0) * float(page_width)
+            y2 = float(getattr(bbox, "maxY", 0.0) or 0.0) * float(page_height)
+        else:
+            x1 = float(getattr(bbox, "minX", 0.0) or 0.0)
+            y1 = float(getattr(bbox, "minY", 0.0) or 0.0)
+            x2 = float(getattr(bbox, "maxX", 0.0) or 0.0)
+            y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
+
+        left_delta, right_delta, top_delta, bottom_delta = (
+            self._bbox_pending_deltas.get(
+                (line_index, word_index),
+                (0.0, 0.0, 0.0, 0.0),
+            )
+        )
+        x1 -= float(left_delta)
+        x2 += float(right_delta)
+        y1 -= float(top_delta)
+        y2 += float(bottom_delta)
+
+        ix1 = max(0, min(int(x1), page_width - 1))
+        iy1 = max(0, min(int(y1), page_height - 1))
+        ix2 = max(ix1 + 1, min(int(x2), page_width))
+        iy2 = max(iy1 + 1, min(int(y2), page_height))
+
+        if ix2 <= ix1 or iy2 <= iy1:
+            return None
+
+        return ix1, iy1, ix2, iy2
 
     def _get_line_image(self, line_match: "LineMatch") -> Optional[str]:
         """Get cropped line image as base64 data URL.
@@ -2100,6 +2407,60 @@ class WordMatchView:
             )
             self._safe_notify(f"Error refining word: {e}", type_="negative")
 
+    def _handle_expand_then_refine_single_word(
+        self,
+        line_index: int,
+        word_index: int,
+    ) -> None:
+        """Expand then refine a single word bbox."""
+        if self.expand_then_refine_words_callback is None:
+            self._safe_notify(
+                "Expand-then-refine function not available",
+                type_="warning",
+            )
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word to refine", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.expand_then_refine_words_callback([(line_index, word_index)])
+            if success:
+                self._safe_notify(
+                    (
+                        f"Expanded then refined word {word_index + 1} "
+                        f"on line {line_index + 1}"
+                    ),
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to expand then refine word", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error expand-then-refining word (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(
+                f"Error expanding then refining word: {e}",
+                type_="negative",
+            )
+
     def _handle_delete_single_word(self, line_index: int, word_index: int) -> None:
         """Delete a single word from a specific line."""
         if self.delete_words_callback is None:
@@ -2296,6 +2657,182 @@ class WordMatchView:
             ),
             type_="info",
         )
+
+    def _toggle_bbox_fine_tune(self, line_index: int, word_index: int) -> None:
+        """Toggle fine-tune controls for a single word bbox."""
+        if self.nudge_word_bbox_callback is None:
+            self._safe_notify("Edit bbox function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
+            return
+        key = (line_index, word_index)
+        try:
+            if key in self._bbox_editor_open_keys:
+                self._bbox_editor_open_keys.remove(key)
+                self._bbox_pending_deltas.pop(key, None)
+                logger.debug("Closed bbox fine-tune controls for key=%s", key)
+            else:
+                self._bbox_editor_open_keys.add(key)
+                logger.debug("Opened bbox fine-tune controls for key=%s", key)
+            self._update_lines_display()
+        except Exception as e:
+            logger.exception("Error toggling bbox fine-tune controls for key=%s", key)
+            self._safe_notify(
+                f"Error opening fine-tune controls: {e}", type_="negative"
+            )
+            raise
+
+    def _set_bbox_nudge_step(self, value: object) -> None:
+        """Set active bbox nudge step in pixels."""
+        try:
+            step = int(float(value))
+
+            if step <= 0:
+                logger.debug("Ignored invalid non-positive bbox nudge step: %s", value)
+                return
+            if step == self._bbox_nudge_step_px:
+                logger.debug("BBox nudge step unchanged at %spx", step)
+                return
+
+            logger.debug(
+                "Updating bbox nudge step from %spx to %spx",
+                self._bbox_nudge_step_px,
+                step,
+            )
+            self._bbox_nudge_step_px = step
+            self._update_lines_display()
+        except Exception as e:
+            logger.exception("Error updating bbox nudge step from value=%s", value)
+            self._safe_notify(f"Error updating nudge step: {e}", type_="negative")
+            raise
+
+    def _handle_nudge_single_word_bbox(
+        self,
+        line_index: int,
+        word_index: int,
+        *,
+        left_units: float,
+        right_units: float,
+        top_units: float,
+        bottom_units: float,
+    ) -> None:
+        """Accumulate a pending bbox nudge for a single word."""
+        if self.nudge_word_bbox_callback is None:
+            self._safe_notify("Edit bbox function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
+            return
+
+        key = (line_index, word_index)
+        try:
+            left_delta = float(left_units) * float(self._bbox_nudge_step_px)
+            right_delta = float(right_units) * float(self._bbox_nudge_step_px)
+            top_delta = float(top_units) * float(self._bbox_nudge_step_px)
+            bottom_delta = float(bottom_units) * float(self._bbox_nudge_step_px)
+            current_left, current_right, current_top, current_bottom = (
+                self._bbox_pending_deltas.get(
+                    key,
+                    (0.0, 0.0, 0.0, 0.0),
+                )
+            )
+            self._bbox_pending_deltas[key] = (
+                current_left + left_delta,
+                current_right + right_delta,
+                current_top + top_delta,
+                current_bottom + bottom_delta,
+            )
+            self._update_lines_display()
+        except Exception as e:
+            logger.exception(
+                "Error accumulating nudge for word bbox (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(
+                f"Error updating pending bbox edit: {e}", type_="negative"
+            )
+            raise
+
+    def _reset_pending_single_word_bbox_nudge(
+        self,
+        line_index: int,
+        word_index: int,
+    ) -> None:
+        """Reset pending bbox deltas for a single word."""
+        key = (line_index, word_index)
+        self._bbox_pending_deltas.pop(key, None)
+        self._update_lines_display()
+
+    def _apply_pending_single_word_bbox_nudge(
+        self,
+        line_index: int,
+        word_index: int,
+    ) -> None:
+        """Apply pending bbox deltas for a single word."""
+        if self.nudge_word_bbox_callback is None:
+            self._safe_notify("Edit bbox function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
+            return
+
+        key = (line_index, word_index)
+        left_delta, right_delta, top_delta, bottom_delta = (
+            self._bbox_pending_deltas.get(
+                key,
+                (0.0, 0.0, 0.0, 0.0),
+            )
+        )
+        if (
+            left_delta == 0.0
+            and right_delta == 0.0
+            and top_delta == 0.0
+            and bottom_delta == 0.0
+        ):
+            self._safe_notify("No pending bbox edits to apply", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+
+        try:
+            success = self.nudge_word_bbox_callback(
+                line_index,
+                word_index,
+                left_delta,
+                right_delta,
+                top_delta,
+                bottom_delta,
+            )
+            if success:
+                self._bbox_pending_deltas.pop(key, None)
+                self._safe_notify("Applied bbox fine-tune edits", type_="positive")
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to apply bbox edits", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error applying pending bbox nudge (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error applying bbox edits: {e}", type_="negative")
+            raise
 
     def apply_rebox_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
         """Apply a drawn bbox to the currently pending rebox word target."""
@@ -2508,6 +3045,8 @@ class WordMatchView:
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
         self.selected_paragraph_indices.clear()
+        self._bbox_editor_open_keys.clear()
+        self._bbox_pending_deltas.clear()
         self._pending_rebox_word_key = None
         self._update_action_button_state()
         self._emit_selection_changed()

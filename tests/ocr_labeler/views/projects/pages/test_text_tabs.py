@@ -741,3 +741,75 @@ def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(16, [0])]
+
+
+def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        nudge_word_bbox=lambda page_index, line_index, word_index, left_delta, right_delta, top_delta, bottom_delta: (
+            calls.append(
+                (
+                    page_index,
+                    line_index,
+                    word_index,
+                    left_delta,
+                    right_delta,
+                    top_delta,
+                    bottom_delta,
+                )
+            )
+            or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=17)
+    result = text_tabs.word_match_view.nudge_word_bbox_callback(
+        2,
+        3,
+        1.0,
+        -1.0,
+        2.0,
+        -2.0,
+    )
+
+    assert result is True
+    assert calls == [(17, 2, 3, 1.0, -1.0, 2.0, -2.0)]
+
+
+def test_text_tabs_expand_then_refine_words_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        expand_then_refine_words=lambda page_index, word_keys: (
+            calls.append((page_index, word_keys)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=18)
+    result = text_tabs.word_match_view.expand_then_refine_words_callback([(1, 2)])
+
+    assert result is True
+    assert calls == [(18, [(1, 2)])]

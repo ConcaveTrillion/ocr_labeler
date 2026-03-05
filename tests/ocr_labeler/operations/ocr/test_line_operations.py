@@ -183,6 +183,40 @@ class TestLineOperations:
 
         assert result is False
 
+    def test_update_word_attributes_success(self, operations, mock_page_with_lines):
+        """Test updating style attributes for a specific word."""
+        result = operations.update_word_attributes(
+            mock_page_with_lines,
+            0,
+            1,
+            italic=True,
+            small_caps=True,
+            blackletter=False,
+        )
+
+        assert result is True
+        line1 = mock_page_with_lines.lines[0]
+        assert bool(line1.words[1].italic) is True
+        assert bool(line1.words[1].small_caps) is True
+        assert bool(line1.words[1].blackletter) is False
+
+    def test_update_word_attributes_invalid_word_index(
+        self,
+        operations,
+        mock_page_with_lines,
+    ):
+        """Test updating style attributes with invalid word index."""
+        result = operations.update_word_attributes(
+            mock_page_with_lines,
+            0,
+            99,
+            italic=True,
+            small_caps=False,
+            blackletter=False,
+        )
+
+        assert result is False
+
     def test_clear_ground_truth_for_line_no_ground_truth(self, operations):
         """Test clearing ground truth when none exists."""
         page = MagicMock(spec=Page)
@@ -410,6 +444,64 @@ class TestLineOperations:
         assert merged_paragraph.bounding_box is not None
         assert merged_paragraph.bounding_box.top_left.x == 0
         assert merged_paragraph.bounding_box.bottom_right.x == 30
+
+    def test_merge_lines_falls_back_on_malformed_bbox_metadata(
+        self,
+        operations,
+        monkeypatch,
+    ):
+        """Merge should still succeed when Block.merge fails with NoneType.is_normalized."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        page = Page(width=100, height=100, page_index=0, items=[line1, line2])
+
+        from pd_book_tools.ocr.block import Block as OCRBlock
+
+        def _broken_merge(_self, _other):
+            raise AttributeError("'NoneType' object has no attribute 'is_normalized'")
+
+        monkeypatch.setattr(OCRBlock, "merge", _broken_merge)
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert [word.text for word in page.lines[0].words] == ["alpha", "beta"]
+
+    def test_merge_lines_ignores_finalize_malformed_bbox_error(
+        self,
+        operations,
+        monkeypatch,
+    ):
+        """Merge should succeed when finalize recompute raises NoneType.is_normalized."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        page = Page(width=100, height=100, page_index=0, items=[line1, line2])
+
+        from pd_book_tools.ocr.block import Block as OCRBlock
+
+        original_recompute = OCRBlock.recompute_bounding_box
+
+        def _broken_merge(_self, _other):
+            raise AttributeError("'NoneType' object has no attribute 'is_normalized'")
+
+        def _sometimes_broken_recompute(self):
+            if self is page.lines[0]:
+                raise AttributeError(
+                    "'NoneType' object has no attribute 'is_normalized'"
+                )
+            return original_recompute(self)
+
+        monkeypatch.setattr(OCRBlock, "merge", _broken_merge)
+        monkeypatch.setattr(
+            OCRBlock, "recompute_bounding_box", _sometimes_broken_recompute
+        )
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert [word.text for word in page.lines[0].words] == ["alpha", "beta"]
 
     def test_delete_lines_success(self, operations):
         """Test deleting selected lines."""

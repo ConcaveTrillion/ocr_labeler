@@ -265,6 +265,118 @@ class LineOperations:
             )
             return False
 
+    def update_word_attributes(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> bool:
+        """Update style attributes for a specific word.
+
+        Args:
+            page: Page containing the line and word to update.
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            italic: Whether word is italic.
+            small_caps: Whether word is small caps.
+            blackletter: Whether word is blackletter.
+
+        Returns:
+            bool: True if update succeeded, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for word attribute update")
+            return False
+
+        try:
+            line_words = self._validated_line_words(page, line_index)
+            if line_words is None:
+                return False
+
+            if word_index < 0 or word_index >= len(line_words):
+                logger.warning(
+                    "Word index %s out of range for line %s (0-%s)",
+                    word_index,
+                    line_index,
+                    len(line_words) - 1,
+                )
+                return False
+
+            target_word = line_words[word_index]
+
+            desired_italic = bool(italic)
+            desired_small_caps = bool(small_caps)
+            desired_blackletter = bool(blackletter)
+
+            current_italic = self._read_word_attribute(
+                target_word,
+                "italic",
+                aliases=("is_italic",),
+            )
+            current_small_caps = self._read_word_attribute(
+                target_word,
+                "small_caps",
+                aliases=("is_small_caps",),
+            )
+            current_blackletter = self._read_word_attribute(
+                target_word,
+                "blackletter",
+                aliases=("is_blackletter",),
+            )
+
+            if (
+                current_italic == desired_italic
+                and current_small_caps == desired_small_caps
+                and current_blackletter == desired_blackletter
+            ):
+                logger.debug(
+                    "Word attributes unchanged for line=%s word=%s",
+                    line_index,
+                    word_index,
+                )
+                return True
+
+            self._write_word_attribute(
+                target_word,
+                "italic",
+                desired_italic,
+                aliases=("is_italic",),
+            )
+            self._write_word_attribute(
+                target_word,
+                "small_caps",
+                desired_small_caps,
+                aliases=("is_small_caps",),
+            )
+            self._write_word_attribute(
+                target_word,
+                "blackletter",
+                desired_blackletter,
+                aliases=("is_blackletter",),
+            )
+
+            logger.info(
+                "Updated attributes for line=%d word=%d italic=%s small_caps=%s blackletter=%s",
+                line_index,
+                word_index,
+                desired_italic,
+                desired_small_caps,
+                desired_blackletter,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error updating attributes line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     def validate_line_consistency(
         self, page: "Page", line_index: int
     ) -> dict[str, any]:
@@ -391,7 +503,23 @@ class LineOperations:
             primary_index = unique_indices[0]
             primary_line = lines[primary_index]
             for index in unique_indices[1:]:
-                primary_line.merge(lines[index])
+                secondary_line = lines[index]
+                try:
+                    primary_line.merge(secondary_line)
+                except Exception as merge_error:
+                    if not self._is_geometry_normalization_error(merge_error):
+                        raise
+                    logger.warning(
+                        "Line merge hit malformed bbox metadata (primary=%s secondary=%s): %s; applying merge fallback",
+                        primary_index,
+                        index,
+                        merge_error,
+                    )
+                    if not self._merge_line_blocks_fallback(
+                        primary_line,
+                        secondary_line,
+                    ):
+                        return False
 
             remove_line_if_exists = page.remove_line_if_exists
             if not callable(remove_line_if_exists):
@@ -404,7 +532,15 @@ class LineOperations:
             for index in reversed(unique_indices[1:]):
                 remove_line_if_exists(lines[index])
 
-            self._finalize_page_structure(page)
+            try:
+                self._finalize_page_structure(page)
+            except Exception as finalize_error:
+                if not self._is_geometry_normalization_error(finalize_error):
+                    raise
+                logger.warning(
+                    "Merged lines but skipped final bbox recompute due to malformed geometry: %s",
+                    finalize_error,
+                )
 
             lines_after = len(list(page.lines))
             logger.info(
@@ -1713,6 +1849,82 @@ class LineOperations:
             return None
 
         return list(lines[line_index].words)
+
+    def _is_geometry_normalization_error(self, error: Exception) -> bool:
+        """Return True for known malformed-bbox normalization failures."""
+        message = str(error)
+        return "NoneType" in message and "is_normalized" in message
+
+    def _merge_line_blocks_fallback(
+        self,
+        primary_line: object,
+        secondary_line: object,
+    ) -> bool:
+        """Fallback line merge that concatenates items when Block.merge fails on malformed bbox metadata."""
+        try:
+            if not hasattr(primary_line, "items"):
+                logger.warning(
+                    "Fallback merge unavailable: primary line has no items attribute (type=%s)",
+                    type(primary_line).__name__,
+                )
+                return False
+
+            merged_items = [
+                *list(getattr(primary_line, "items", []) or []),
+                *list(getattr(secondary_line, "items", []) or []),
+            ]
+
+            if hasattr(primary_line, "_items"):
+                primary_line._items = list(merged_items)
+                sort_items = getattr(primary_line, "_sort_items", None)
+                if callable(sort_items):
+                    sort_items()
+            else:
+                primary_line.items = list(merged_items)
+
+            recompute_line = getattr(primary_line, "recompute_bounding_box", None)
+            if callable(recompute_line):
+                try:
+                    recompute_line()
+                except Exception as recompute_error:
+                    if not self._is_geometry_normalization_error(recompute_error):
+                        raise
+                    logger.warning(
+                        "Fallback merge skipped line bbox recompute due to malformed geometry: %s",
+                        recompute_error,
+                    )
+
+            return True
+        except Exception as fallback_error:
+            logger.exception("Fallback line merge failed: %s", fallback_error)
+            return False
+
+    def _read_word_attribute(
+        self,
+        word: object,
+        primary_name: str,
+        aliases: tuple[str, ...] = (),
+    ) -> bool:
+        """Read bool style attribute from word using fallback aliases."""
+        if bool(getattr(word, primary_name, False)):
+            return True
+        for alias in aliases:
+            if bool(getattr(word, alias, False)):
+                return True
+        return False
+
+    def _write_word_attribute(
+        self,
+        word: object,
+        primary_name: str,
+        value: bool,
+        aliases: tuple[str, ...] = (),
+    ) -> None:
+        """Write bool style attribute to primary name and compatible aliases."""
+        setattr(word, primary_name, bool(value))
+        for alias in aliases:
+            if hasattr(word, alias):
+                setattr(word, alias, bool(value))
 
     def _refine_block_words(self, page: object, block: object) -> bool:
         """Refine all words in a line-like block and recompute block bbox."""

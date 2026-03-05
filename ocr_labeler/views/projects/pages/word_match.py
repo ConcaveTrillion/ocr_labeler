@@ -39,6 +39,7 @@ class WordMatchView:
         refine_lines_callback=None,
         refine_paragraphs_callback=None,
         edit_word_ground_truth_callback=None,
+        set_word_attributes_callback=None,
         notify_callback=None,
     ):
         logger.debug(
@@ -73,6 +74,7 @@ class WordMatchView:
         self.refine_lines_callback = refine_lines_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
+        self.set_word_attributes_callback = set_word_attributes_callback
         self.selected_line_indices: set[int] = set()
         self.selected_word_indices: set[tuple[int, int]] = set()
         self.selected_paragraph_indices: set[int] = set()
@@ -492,6 +494,7 @@ class WordMatchView:
                     if word_match.fuzz_score is not None
                     else None,
                     self._word_match_bbox_signature(word_match),
+                    self._word_match_attribute_signature(word_match),
                 )
                 for word_match in line_match.word_matches
             )
@@ -536,6 +539,11 @@ class WordMatchView:
         max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
         is_normalized = bool(getattr(bbox, "is_normalized", False))
         return f"{min_x:.6f}:{min_y:.6f}:{max_x:.6f}:{max_y:.6f}:{int(is_normalized)}"
+
+    def _word_match_attribute_signature(self, word_match: object) -> str:
+        """Return a stable signature for word style attributes."""
+        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}"
 
     def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
@@ -761,12 +769,17 @@ class WordMatchView:
                 )
 
                 with ui.column():
-                    self._create_word_selection_cell(line_match.line_index, word_idx)
                     # Image cell
                     split_word_index = (
                         word_match.word_index
                         if word_match.word_index is not None
                         else -1
+                    )
+                    self._create_word_selection_cell(
+                        line_match.line_index,
+                        word_idx,
+                        split_word_index,
+                        len(line_match.word_matches),
                     )
                     self._create_image_cell(
                         line_match.line_index,
@@ -786,15 +799,20 @@ class WordMatchView:
                     # Per-word actions
                     self._create_word_actions_cell(
                         line_match.line_index,
-                        word_idx,
                         split_word_index,
-                        len(line_match.word_matches),
+                        word_match,
                     )
         logger.debug(
             "Word comparison table creation complete for line %d", line_match.line_index
         )
 
-    def _create_word_selection_cell(self, line_index: int, word_index: int) -> None:
+    def _create_word_selection_cell(
+        self,
+        line_index: int,
+        word_index: int,
+        split_word_index: int,
+        word_count: int,
+    ) -> None:
         """Create a selection checkbox for a word column."""
         selection_key = (line_index, word_index)
         with ui.row().classes("items-center"):
@@ -806,6 +824,58 @@ class WordMatchView:
                     key,
                     bool(event.value),
                 )
+            )
+
+            merge_button = (
+                ui.button(
+                    icon="call_merge",
+                    on_click=lambda: self._handle_merge_word_right(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Merge with next word")
+            )
+            merge_button.disabled = (
+                self.merge_word_right_callback is None
+                or split_word_index < 0
+                or word_index >= word_count - 1
+            )
+
+            split_button = (
+                ui.button(
+                    icon="call_split",
+                    on_click=lambda: self._handle_split_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Split word at selected marker")
+            )
+            if split_word_index >= 0:
+                split_key = (line_index, split_word_index)
+                self._word_split_button_refs[split_key] = split_button
+            split_button.disabled = not self._is_split_action_enabled(
+                line_index,
+                split_word_index,
+            )
+
+            delete_button = (
+                ui.button(
+                    icon="delete",
+                    color="negative",
+                    on_click=lambda: self._handle_delete_single_word(
+                        line_index,
+                        split_word_index,
+                    ),
+                )
+                .props("size=xs flat round")
+                .tooltip("Delete word")
+            )
+            delete_button.disabled = (
+                self.delete_words_callback is None or split_word_index < 0
             )
 
     def _create_image_cell(
@@ -1079,6 +1149,66 @@ class WordMatchView:
                 f"Error updating word ground truth: {e}", type_="negative"
             )
 
+    def _word_style_flags(self, word_match: object) -> tuple[bool, bool, bool]:
+        """Return (italic, small_caps, blackletter) for a word match."""
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return False, False, False
+
+        italic = bool(
+            getattr(word_object, "italic", False)
+            or getattr(word_object, "is_italic", False)
+        )
+        small_caps = bool(
+            getattr(word_object, "small_caps", False)
+            or getattr(word_object, "is_small_caps", False)
+        )
+        blackletter = bool(
+            getattr(word_object, "blackletter", False)
+            or getattr(word_object, "is_blackletter", False)
+        )
+        return italic, small_caps, blackletter
+
+    def _handle_set_word_attributes(
+        self,
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> None:
+        """Persist per-word style attributes via callback."""
+        if self.set_word_attributes_callback is None:
+            self._safe_notify(
+                "Set word attributes function not available", type_="warning"
+            )
+            return
+
+        if word_index < 0:
+            self._safe_notify(
+                "Cannot set attributes for unmatched word", type_="warning"
+            )
+            return
+
+        try:
+            success = self.set_word_attributes_callback(
+                line_index,
+                word_index,
+                bool(italic),
+                bool(small_caps),
+                bool(blackletter),
+            )
+            if not success:
+                self._safe_notify("Failed to update word attributes", type_="warning")
+        except Exception as e:
+            logger.exception(
+                "Error updating word attributes (%s, %s): %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error updating word attributes: {e}", type_="negative")
+
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""
         status_icon = self._get_status_icon(word_match.match_status.value)
@@ -1095,72 +1225,84 @@ class WordMatchView:
     def _create_word_actions_cell(
         self,
         line_index: int,
-        word_index: int,
         split_word_index: int,
-        word_count: int,
+        word_match,
     ) -> None:
         """Create per-word action buttons displayed below each word."""
+        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        style_button_width = "width: 3rem;"
+
         with ui.row().classes("items-center gap-1"):
-            merge_left_button = (
+            italic_button = (
                 ui.button(
-                    icon="keyboard_arrow_left",
-                    on_click=lambda: self._handle_merge_word_left(
-                        line_index, word_index
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Merge with left word")
-            )
-            merge_left_button.disabled = (
-                self.merge_word_left_callback is None or word_index <= 0
-            )
-
-            merge_right_button = (
-                ui.button(
-                    icon="keyboard_arrow_right",
-                    on_click=lambda: self._handle_merge_word_right(
-                        line_index, word_index
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Merge with right word")
-            )
-            merge_right_button.disabled = (
-                self.merge_word_right_callback is None or word_index >= word_count - 1
-            )
-
-            delete_button = (
-                ui.button(
-                    icon="delete",
-                    color="negative",
-                    on_click=lambda: self._handle_delete_single_word(
-                        line_index, word_index
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Delete word")
-            )
-            delete_button.disabled = self.delete_words_callback is None
-
-            split_button = (
-                ui.button(
-                    icon="call_split",
-                    on_click=lambda: self._handle_split_word(
+                    "I",
+                    on_click=lambda: self._handle_set_word_attributes(
                         line_index,
                         split_word_index,
+                        not italic,
+                        small_caps,
+                        blackletter,
                     ),
                 )
-                .props("size=xs flat round")
-                .tooltip("Split word at selected marker")
+                .props("size=xs dense")
+                .style(style_button_width)
+                .tooltip("Toggle italic")
             )
-            if split_word_index >= 0:
-                split_key = (line_index, split_word_index)
-                self._word_split_button_refs[split_key] = split_button
-            split_button.disabled = not self._is_split_action_enabled(
-                line_index,
-                split_word_index,
+            italic_button.disabled = (
+                self.set_word_attributes_callback is None or split_word_index < 0
             )
+            if italic:
+                italic_button.props("color=primary")
+            else:
+                italic_button.props("color=grey-5 text-color=black")
 
+            small_caps_button = (
+                ui.button(
+                    "SC",
+                    on_click=lambda: self._handle_set_word_attributes(
+                        line_index,
+                        split_word_index,
+                        italic,
+                        not small_caps,
+                        blackletter,
+                    ),
+                )
+                .props("size=xs dense")
+                .style(style_button_width)
+                .tooltip("Toggle small caps")
+            )
+            small_caps_button.disabled = (
+                self.set_word_attributes_callback is None or split_word_index < 0
+            )
+            if small_caps:
+                small_caps_button.props("color=primary")
+            else:
+                small_caps_button.props("color=grey-5 text-color=black")
+
+            blackletter_button = (
+                ui.button(
+                    "BL",
+                    on_click=lambda: self._handle_set_word_attributes(
+                        line_index,
+                        split_word_index,
+                        italic,
+                        small_caps,
+                        not blackletter,
+                    ),
+                )
+                .props("size=xs dense")
+                .style(style_button_width)
+                .tooltip("Toggle blackletter")
+            )
+            blackletter_button.disabled = (
+                self.set_word_attributes_callback is None or split_word_index < 0
+            )
+            if blackletter:
+                blackletter_button.props("color=primary")
+            else:
+                blackletter_button.props("color=grey-5 text-color=black")
+
+        with ui.row().classes("items-center gap-1"):
             rebox_button = (
                 ui.button(
                     icon="crop_free",
@@ -1479,6 +1621,17 @@ class WordMatchView:
     def _create_word_tooltip(self, word_match):
         """Create tooltip content for a word match."""
         lines = [f"Status: {word_match.match_status.value.title()}"]
+
+        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        active_attributes: list[str] = []
+        if italic:
+            active_attributes.append("italic")
+        if small_caps:
+            active_attributes.append("small_caps")
+        if blackletter:
+            active_attributes.append("blackletter")
+        if active_attributes:
+            lines.append(f"Attributes: {', '.join(active_attributes)}")
 
         if word_match.fuzz_score is not None:
             lines.append(f"Similarity: {word_match.fuzz_score:.3f}")

@@ -268,11 +268,14 @@ class UserPageSource:
 class UserPagePayload:
     page: dict[str, Any]
     original_page: Optional[dict[str, Any]] = None
+    word_attributes: Optional[dict[str, dict[str, bool]]] = None
 
     def to_dict(self) -> dict[str, Any]:
         result = {"page": self.page}
         if self.original_page is not None:
             result["original_page"] = self.original_page
+        if self.word_attributes is not None:
+            result["word_attributes"] = self.word_attributes
         return result
 
     @classmethod
@@ -283,7 +286,25 @@ class UserPagePayload:
         original_page_data = data.get("original_page")
         if original_page_data is not None and not isinstance(original_page_data, dict):
             original_page_data = None
-        return cls(page=page_data, original_page=original_page_data)
+        raw_word_attributes = data.get("word_attributes")
+        word_attributes: dict[str, dict[str, bool]] | None = None
+        if isinstance(raw_word_attributes, dict):
+            normalized: dict[str, dict[str, bool]] = {}
+            for key, value in raw_word_attributes.items():
+                if not isinstance(key, str) or not isinstance(value, dict):
+                    continue
+                normalized[key] = {
+                    str(attr_name): bool(attr_value)
+                    for attr_name, attr_value in value.items()
+                    if isinstance(attr_name, str)
+                }
+            word_attributes = normalized
+
+        return cls(
+            page=page_data,
+            original_page=original_page_data,
+            word_attributes=word_attributes,
+        )
 
 
 @dataclass(frozen=True)

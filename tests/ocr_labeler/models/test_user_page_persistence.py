@@ -90,6 +90,36 @@ def test_from_dict_uses_safe_defaults_for_partial_payload() -> None:
     assert envelope.payload.page == {}
 
 
+def test_payload_round_trip_with_word_attributes() -> None:
+    envelope = UserPageEnvelope(
+        schema=UserPageSchema(),
+        provenance=UserPageProvenance(saved_at="2026-02-15T00:00:00Z"),
+        source=UserPageSource(
+            project_id="book-1",
+            page_index=0,
+            page_number=1,
+            image_path="images/001.png",
+        ),
+        payload=UserPagePayload(
+            page={"type": "Page", "items": []},
+            word_attributes={
+                "0:0": {
+                    "italic": True,
+                    "small_caps": False,
+                    "blackletter": True,
+                }
+            },
+        ),
+    )
+
+    restored = UserPageEnvelope.from_dict(envelope.to_dict())
+
+    assert restored.payload.word_attributes is not None
+    assert restored.payload.word_attributes["0:0"]["italic"] is True
+    assert restored.payload.word_attributes["0:0"]["small_caps"] is False
+    assert restored.payload.word_attributes["0:0"]["blackletter"] is True
+
+
 def test_is_user_page_envelope() -> None:
     assert is_user_page_envelope({"schema": {"name": USER_PAGE_SCHEMA_NAME}}) is True
     assert is_user_page_envelope({"schema": {"name": "other"}}) is False

@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
@@ -841,6 +842,31 @@ def test_update_word_ground_truth_notifies_on_success(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_update_word_attributes_notifies_on_success(monkeypatch):
+    """Successful per-word attribute edit should notify listeners for UI refresh."""
+    page_state = PageState()
+
+    class PageStub:
+        pass
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "update_word_attributes",
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter: True,
+    )
+
+    page_state.current_page = PageStub()
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.update_word_attributes(0, 1, 2, True, False, True)
+
+    assert result is True
+    assert notified == ["changed"]
+
+
 def test_split_paragraph_after_line_splits_containing_paragraph_at_line():
     """Splitting after a selected line should split that line's paragraph in two."""
     page_state = PageState()
@@ -903,3 +929,48 @@ def test_split_paragraph_with_selected_lines_splits_selected_vs_unselected():
     assert len(page.paragraphs) == 2
     assert [line.text for line in page.paragraphs[0].lines] == ["alpha", "gamma"]
     assert [line.text for line in page.paragraphs[1].lines] == ["beta"]
+
+
+def test_persist_page_to_file_prefers_current_in_memory_page(tmp_path):
+    """Saving current page should use in-memory edited page, not reload stale saved page."""
+    page_state = PageState()
+
+    image_path = tmp_path / "page_001.png"
+    image_path.write_bytes(b"x")
+
+    current_page = SimpleNamespace(
+        image_path=str(image_path),
+        index=0,
+        name="page_001.png",
+        page_source="ocr",
+        ocr_provenance=None,
+        to_dict=lambda: {"type": "page", "items": []},
+    )
+
+    page_state._project_root = tmp_path
+    page_state._project = SimpleNamespace(source_lib="doctr-pgdp-labeled")
+    page_state._current_page_index = 0
+    page_state.current_page = current_page
+    page_state.current_page_model = None
+
+    get_page_model_calls = []
+
+    def _unexpected_get_page_model(_page_index: int, force_ocr: bool = False):
+        _ = force_ocr
+        get_page_model_calls.append(_page_index)
+        return None
+
+    page_state.get_page_model = _unexpected_get_page_model  # type: ignore[method-assign]
+
+    captured = {}
+
+    def _save_page_stub(**kwargs):
+        captured.update(kwargs)
+        return True
+
+    page_state.page_ops.save_page = _save_page_stub  # type: ignore[method-assign]
+
+    assert page_state.persist_page_to_file(0) is True
+    assert get_page_model_calls == []
+    assert captured.get("page") is not None
+    assert getattr(captured["page"], "page", None) is current_page

@@ -342,6 +342,13 @@ class PageOperations:
             page = Page.from_dict(page_dict)
             logger.info(f"Successfully loaded page from: {json_path}")
 
+            if is_user_page_envelope(json_data):
+                envelope = UserPageEnvelope.from_dict(json_data)
+                self._apply_word_attributes_to_page(
+                    page,
+                    envelope.payload.word_attributes,
+                )
+
             # Restore the original image path from source_path
             source_path = self._extract_source_path(json_data)
             if source_path:
@@ -851,8 +858,97 @@ class PageOperations:
             payload=UserPagePayload(
                 page=page_obj.to_dict(),
                 original_page=original_page.to_dict() if original_page else None,
+                word_attributes=self._collect_word_attributes(page_obj),
             ),
         )
+
+    def _collect_word_attributes(
+        self,
+        page: Page,
+    ) -> dict[str, dict[str, bool]] | None:
+        """Collect word style attributes keyed by line/word indices."""
+        try:
+            lines = list(getattr(page, "lines", []) or [])
+        except TypeError:
+            return None
+        word_attributes: dict[str, dict[str, bool]] = {}
+
+        for line_index, line in enumerate(lines):
+            try:
+                words = list(getattr(line, "words", []) or [])
+            except TypeError:
+                continue
+            for word_index, word in enumerate(words):
+                italic = self._word_style_attr(word, "italic", "is_italic")
+                small_caps = self._word_style_attr(
+                    word,
+                    "small_caps",
+                    "is_small_caps",
+                )
+                blackletter = self._word_style_attr(
+                    word,
+                    "blackletter",
+                    "is_blackletter",
+                )
+                if not (italic or small_caps or blackletter):
+                    continue
+
+                word_attributes[f"{line_index}:{word_index}"] = {
+                    "italic": italic,
+                    "small_caps": small_caps,
+                    "blackletter": blackletter,
+                }
+
+        return word_attributes or None
+
+    def _word_style_attr(self, word: object, *attribute_names: str) -> bool:
+        """Return True if any given attribute name is truthy on the word."""
+        for attribute_name in attribute_names:
+            if bool(getattr(word, attribute_name, False)):
+                return True
+        return False
+
+    def _apply_word_attributes_to_page(
+        self,
+        page: Page,
+        word_attributes: dict[str, dict[str, bool]] | None,
+    ) -> None:
+        """Apply persisted style attributes to words in a loaded page."""
+        if not word_attributes:
+            return
+
+        lines = list(getattr(page, "lines", []) or [])
+        for key, attributes in word_attributes.items():
+            try:
+                line_part, word_part = str(key).split(":", 1)
+                line_index = int(line_part)
+                word_index = int(word_part)
+            except (TypeError, ValueError):
+                continue
+
+            if line_index < 0 or line_index >= len(lines):
+                continue
+
+            words = list(getattr(lines[line_index], "words", []) or [])
+            if word_index < 0 or word_index >= len(words):
+                continue
+
+            target_word = words[word_index]
+            italic = bool(attributes.get("italic", False))
+            small_caps = bool(attributes.get("small_caps", False))
+            blackletter = bool(attributes.get("blackletter", False))
+
+            setattr(target_word, "italic", italic)
+            if hasattr(target_word, "is_italic"):
+                setattr(target_word, "is_italic", italic)
+
+            setattr(target_word, "small_caps", small_caps)
+            if hasattr(target_word, "is_small_caps"):
+                setattr(target_word, "is_small_caps", small_caps)
+
+            setattr(target_word, "blackletter", blackletter)
+            if hasattr(target_word, "is_blackletter"):
+                setattr(target_word, "is_blackletter", blackletter)
 
     def _resolve_ocr_provenance_for_save(
         self,

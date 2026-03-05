@@ -153,6 +153,17 @@ class ProjectState:
             duration_ms,
         )
 
+    def _resolve_workspace_save_directory(self, save_directory: str) -> str:
+        """Resolve local-data save directories against workspace CWD.
+
+        Labeled and cache artifacts must live under the app workspace, not the
+        source project root.
+        """
+        directory_path = Path(str(save_directory or "").strip())
+        if directory_path.is_absolute():
+            return str(directory_path)
+        return str((Path.cwd() / directory_path).resolve())
+
     def get_page_state(self, page_index: int) -> PageState:
         """Get or create PageState for the specified page index.
         Each page gets its own state management instance.
@@ -447,20 +458,7 @@ class ProjectState:
                 pass
 
         def _user_saved_directories() -> list[str]:
-            primary_save_dir = "local-data/labeled-ocr"
-            save_dirs = [primary_save_dir]
-
-            # Backward compatibility: older sessions may have saved labeled pages
-            # under the workspace's local-data directory instead of project_root.
-            workspace_save_dir = (Path.cwd() / primary_save_dir).resolve()
-            if self.project_root is not None:
-                primary_abs = (self.project_root / primary_save_dir).resolve()
-                if workspace_save_dir != primary_abs:
-                    save_dirs.append(str(workspace_save_dir))
-            else:
-                save_dirs.append(str(workspace_save_dir))
-
-            return save_dirs
+            return [self._resolve_workspace_save_directory("local-data/labeled-ocr")]
 
         def _try_load_user_saved_page(
             page_index: int, img_path: Path
@@ -605,10 +603,13 @@ class ProjectState:
                 if loaded_page_model is None:
                     try:
                         cache_can_load_started = perf_counter()
+                        cache_save_directory = self._resolve_workspace_save_directory(
+                            "local-data/labeled-ocr/cache"
+                        )
                         cache_load_info = self.page_ops.can_load_page(
                             page_number=index + 1,
                             project_root=self.project_root,
-                            save_directory="local-data/labeled-ocr/cache",
+                            save_directory=cache_save_directory,
                             project_id=None,
                         )
                         cache_can_load_duration_ms = (
@@ -625,7 +626,7 @@ class ProjectState:
                             loaded_result = self.page_ops.load_page_model(
                                 page_number=index + 1,  # Convert to 1-based
                                 project_root=self.project_root,
-                                save_directory="local-data/labeled-ocr/cache",
+                                save_directory=cache_save_directory,
                                 project_id=None,  # Will be derived from project_root.name
                             )
                             cache_load_duration_ms = (
@@ -726,7 +727,9 @@ class ProjectState:
                             cache_saved = self.page_ops.save_page(
                                 page=page_model if page_model is not None else page_obj,
                                 project_root=self.project_root,
-                                save_directory="local-data/labeled-ocr/cache",
+                                save_directory=self._resolve_workspace_save_directory(
+                                    "local-data/labeled-ocr/cache"
+                                ),
                                 project_id=None,  # Will be derived from project_root.name
                                 source_lib="doctr-pgdp-cached",
                             )
@@ -982,13 +985,14 @@ class ProjectState:
             save_directory,
             project_id,
         )
+        resolved_save_directory = self._resolve_workspace_save_directory(save_directory)
         page_state = self.get_page_state(self.current_page_index)
 
         # Try PageState first if page is available
         if page_state.get_page_model(self.current_page_index) is not None:
             result = page_state.persist_page_to_file(
                 page_index=self.current_page_index,
-                save_directory=save_directory,
+                save_directory=resolved_save_directory,
                 project_id=project_id,
             )
         else:
@@ -1002,7 +1006,7 @@ class ProjectState:
                 result = operations.save_page(
                     page=page_model,
                     project_root=self.project_root,
-                    save_directory=save_directory,
+                    save_directory=resolved_save_directory,
                     project_id=project_id,
                     source_lib=self.project.source_lib,
                 )
@@ -1033,10 +1037,11 @@ class ProjectState:
             save_directory,
             project_id,
         )
+        resolved_save_directory = self._resolve_workspace_save_directory(save_directory)
         page_state = self.get_page_state(self.current_page_index)
         success = page_state.load_page_from_file(
             page_index=self.current_page_index,
-            save_directory=save_directory,
+            save_directory=resolved_save_directory,
             project_id=project_id,
         )
         if success:

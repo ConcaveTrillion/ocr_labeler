@@ -440,6 +440,36 @@ class TextTabs:
                 logger.debug("Update word GT operation result: %s", result)
                 return result
 
+        set_word_attributes_callback = None
+        if page_state and hasattr(page_state, "update_word_attributes"):
+
+            def set_word_attributes_callback(
+                line_index: int,
+                word_index: int,
+                italic: bool,
+                small_caps: bool,
+                blackletter: bool,
+            ) -> bool:
+                logger.debug(
+                    "Updating word attributes at (%s, %s) on page %d: italic=%s small_caps=%s blackletter=%s",
+                    line_index,
+                    word_index,
+                    page_index,
+                    italic,
+                    small_caps,
+                    blackletter,
+                )
+                result = page_state.update_word_attributes(
+                    page_index,
+                    line_index,
+                    word_index,
+                    italic,
+                    small_caps,
+                    blackletter,
+                )
+                logger.debug("Update word attributes operation result: %s", result)
+                return result
+
         notify_callback = None
         if (
             page_state
@@ -470,6 +500,7 @@ class TextTabs:
             refine_lines_callback=refine_lines_callback,
             refine_paragraphs_callback=refine_paragraphs_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
+            set_word_attributes_callback=set_word_attributes_callback,
             notify_callback=notify_callback,
         )
         self.container = None
@@ -718,7 +749,8 @@ class TextTabs:
                     (
                         f"{getattr(word, 'text', '')}\x1d"
                         f"{getattr(word, 'ground_truth_text', '')}\x1d"
-                        f"{self._word_bbox_signature(word)}"
+                        f"{self._word_bbox_signature(word)}\x1d"
+                        f"{self._word_style_signature(word)}"
                     )
                     for word in words
                 )
@@ -790,3 +822,17 @@ class TextTabs:
         max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
         is_normalized = bool(getattr(bbox, "is_normalized", False))
         return f"{min_x:.6f}:{min_y:.6f}:{max_x:.6f}:{max_y:.6f}:{int(is_normalized)}"
+
+    def _word_style_signature(self, word: object) -> str:
+        """Return stable style signature for dedupe checks."""
+        italic = bool(
+            getattr(word, "italic", False) or getattr(word, "is_italic", False)
+        )
+        small_caps = bool(
+            getattr(word, "small_caps", False) or getattr(word, "is_small_caps", False)
+        )
+        blackletter = bool(
+            getattr(word, "blackletter", False)
+            or getattr(word, "is_blackletter", False)
+        )
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}"

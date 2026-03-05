@@ -52,6 +52,13 @@ class PageState:
         for listener in self.on_change:
             listener()
 
+    def _resolve_workspace_save_directory(self, save_directory: str) -> str:
+        """Resolve local-data save directories against workspace CWD."""
+        directory_path = Path(str(save_directory or "").strip())
+        if directory_path.is_absolute():
+            return str(directory_path)
+        return str((Path.cwd() / directory_path).resolve())
+
     def _on_project_state_change(self):
         """Handle project state changes to sync page index."""
         if self._project_state:
@@ -278,6 +285,64 @@ class PageState:
             )
             return False
 
+    def update_word_attributes(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> bool:
+        """Update style attributes for a single word on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            italic: Whether word is italic.
+            small_caps: Whether word is small caps.
+            blackletter: Whether word is blackletter.
+
+        Returns:
+            bool: True if update succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical(
+                "No page available at index %s for word attribute update.",
+                page_index,
+            )
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.update_word_attributes(
+                page,
+                line_index,
+                word_index,
+                italic,
+                small_caps,
+                blackletter,
+            )
+
+            if result:
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error updating word attributes line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     @notify_on_completion
     def persist_page_to_file(
         self,
@@ -299,15 +364,53 @@ class PageState:
             logger.error("PageState.save_page: no project root set")
             return False
 
-        page_model = self.get_page_model(page_index)
+        page_model: Optional[PageModel] = None
+
+        # Prefer the actively edited in-memory page when saving the current page.
+        # This avoids re-loading an older filesystem copy just before save.
+        if page_index == self._current_page_index and self.current_page is not None:
+            page_model = self.current_page_model
+            if page_model is None or page_model.page is not self.current_page:
+                current_source = (
+                    str(getattr(self.current_page, "page_source", "ocr")) or "ocr"
+                )
+                page_model = PageModel(
+                    page=self.current_page,
+                    page_source=current_source,
+                    image_path=getattr(self.current_page, "image_path", None),
+                    name=getattr(self.current_page, "name", None),
+                    index=page_index,
+                    ocr_provenance=getattr(self.current_page, "ocr_provenance", None),
+                    saved_provenance=(
+                        self.current_page_model.saved_provenance
+                        if self.current_page_model is not None
+                        else None
+                    ),
+                )
+                self.current_page_model = page_model
+
+                if self._project_state is not None:
+                    self._project_state.upsert_page_model(
+                        page_index=page_index,
+                        page=self.current_page,
+                        source=current_source,
+                    )
+                    synced_model = self._project_state.get_page_model(page_index)
+                    if synced_model is not None:
+                        page_model = synced_model
+
+        if page_model is None:
+            page_model = self.get_page_model(page_index)
         if page_model is None:
             logger.error("No page available at index %s to save", page_index)
             return False
 
+        resolved_save_directory = self._resolve_workspace_save_directory(save_directory)
+
         success = self.page_ops.save_page(
             page=page_model,
             project_root=self._project_root,
-            save_directory=save_directory,
+            save_directory=resolved_save_directory,
             project_id=project_id,
             source_lib=self._project.source_lib
             if self._project
@@ -342,10 +445,12 @@ class PageState:
             logger.error("PageState.load_page: project context not set")
             return False
 
+        resolved_save_directory = self._resolve_workspace_save_directory(save_directory)
+
         loaded_result = self.page_ops.load_page_model(
             page_number=page_index + 1,  # Convert to 1-based
             project_root=self._project_root,
-            save_directory=save_directory,
+            save_directory=resolved_save_directory,
             project_id=project_id,
         )
 

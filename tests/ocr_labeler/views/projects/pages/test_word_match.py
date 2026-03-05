@@ -950,6 +950,53 @@ def test_word_gt_edit_warns_on_failure(monkeypatch):
     assert "Failed to update word ground truth" in seen["message"]
 
 
+def test_word_attribute_edit_invokes_callback(monkeypatch):
+    seen = {}
+
+    def update_callback(
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            italic,
+            small_caps,
+            blackletter,
+        )
+        return True
+
+    view = WordMatchView(set_word_attributes_callback=update_callback)
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view._handle_set_word_attributes(1, 3, True, False, True)
+
+    assert seen["args"] == (1, 3, True, False, True)
+
+
+def test_word_attribute_tooltip_includes_active_flags():
+    view = WordMatchView()
+    word_match = SimpleNamespace(
+        match_status=SimpleNamespace(value="mismatch"),
+        fuzz_score=0.5,
+        ocr_text="ocr",
+        ground_truth_text="gt",
+        word_object=SimpleNamespace(
+            italic=True,
+            small_caps=False,
+            blackletter=True,
+        ),
+    )
+
+    tooltip = view._create_word_tooltip(word_match)
+
+    assert tooltip is not None
+    assert "Attributes: italic, blackletter" in tooltip
+
+
 def test_word_gt_input_width_prefers_current_value():
     view = WordMatchView()
 

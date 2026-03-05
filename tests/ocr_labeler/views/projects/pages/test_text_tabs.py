@@ -175,6 +175,48 @@ def test_text_tabs_updates_when_ground_truth_changes_even_if_ocr_text_unchanged(
     assert text_tabs.word_match_view.update_from_page.call_count == 2
 
 
+def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
+    """Style-only edits should invalidate dedupe and refresh word matches."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+    )
+
+    text_tabs = TextTabs(page_state=page_state)
+    text_tabs.word_match_view = MagicMock()
+
+    word = SimpleNamespace(
+        text="alpha",
+        ground_truth_text="alpha",
+        italic=False,
+        small_caps=False,
+        blackletter=False,
+    )
+    line = SimpleNamespace(
+        text="alpha",
+        ground_truth_text="alpha",
+        words=[word],
+        unmatched_ground_truth_words=[],
+    )
+    page = SimpleNamespace(name="p001.png", index=0, lines=[line])
+
+    text_tabs.update_word_matches(page)
+    word.italic = True
+    text_tabs.update_word_matches(page)
+
+    assert text_tabs.word_match_view.update_from_page.call_count == 2
+
+
 def test_text_tabs_updates_when_paragraph_structure_changes_even_if_lines_same():
     """Paragraph-only edits should invalidate dedupe and refresh word matches."""
     project_state = SimpleNamespace(
@@ -370,6 +412,50 @@ def test_text_tabs_edit_word_gt_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(2, 4, 1, "edited-gt")]
+
+
+def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
+    """TextTabs should wire per-word attribute callback to PageState."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_attributes=lambda page_index, line_index, word_index, italic, small_caps, blackletter: (
+            calls.append(
+                (
+                    page_index,
+                    line_index,
+                    word_index,
+                    italic,
+                    small_caps,
+                    blackletter,
+                )
+            )
+            or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=3)
+    result = text_tabs.word_match_view.set_word_attributes_callback(
+        4,
+        1,
+        True,
+        False,
+        True,
+    )
+
+    assert result is True
+    assert calls == [(3, 4, 1, True, False, True)]
 
 
 def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():

@@ -217,6 +217,7 @@ def test_ensure_page_replaces_cached_page_with_disk_page(tmp_path):
     ):
         result = state.ensure_page_model(0)
 
+    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
     assert result is not None
     assert result.page is disk_page
     assert state.project.pages[0] is disk_page
@@ -224,13 +225,13 @@ def test_ensure_page_replaces_cached_page_with_disk_page(tmp_path):
     mock_can_load.assert_called_once_with(
         page_number=1,
         project_root=tmp_path,
-        save_directory="local-data/labeled-ocr",
+        save_directory=workspace_save_dir,
         project_id=None,
     )
     mock_load.assert_called_once_with(
         page_number=1,
         project_root=tmp_path,
-        save_directory="local-data/labeled-ocr",
+        save_directory=workspace_save_dir,
         project_id=None,
     )
     mock_notify.assert_called_once()
@@ -258,7 +259,6 @@ def test_ensure_page_checks_disk_before_cache(tmp_path):
             "can_load_page",
             side_effect=[
                 Mock(can_load=False),
-                Mock(can_load=False),
                 Mock(can_load=True),
             ],
         ) as mock_can_load,
@@ -274,19 +274,17 @@ def test_ensure_page_checks_disk_before_cache(tmp_path):
     assert result is not None
     assert result.page is cached_page
     assert state.project.pages[0] is cached_page
-    assert mock_can_load.call_count == 3
+    assert mock_can_load.call_count == 2
+    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
+    cache_save_dir = str((Path.cwd() / "local-data/labeled-ocr/cache").resolve())
     assert (
-        mock_can_load.call_args_list[0].kwargs["save_directory"]
-        == "local-data/labeled-ocr"
+        mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     )
-    assert (
-        mock_can_load.call_args_list[2].kwargs["save_directory"]
-        == "local-data/labeled-ocr/cache"
-    )
+    assert mock_can_load.call_args_list[1].kwargs["save_directory"] == cache_save_dir
     mock_load.assert_called_once_with(
         page_number=1,
         project_root=tmp_path,
-        save_directory="local-data/labeled-ocr/cache",
+        save_directory=cache_save_dir,
         project_id=None,
     )
 
@@ -311,7 +309,7 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
         patch.object(
             state.page_ops,
             "can_load_page",
-            side_effect=[Mock(can_load=False), Mock(can_load=True)],
+            side_effect=[Mock(can_load=True)],
         ) as mock_can_load,
         patch.object(
             state.page_ops,
@@ -326,14 +324,10 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
     assert result.page is labeled_page
     assert state.project.pages[0] is labeled_page
     assert labeled_page.page_source == "filesystem"
-    assert mock_can_load.call_count == 2
+    assert mock_can_load.call_count == 1
     workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
     assert (
-        mock_can_load.call_args_list[0].kwargs["save_directory"]
-        == "local-data/labeled-ocr"
-    )
-    assert (
-        mock_can_load.call_args_list[1].kwargs["save_directory"] == workspace_save_dir
+        mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     )
     mock_load.assert_called_once_with(
         page_number=1,
@@ -365,7 +359,6 @@ def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
             state.page_ops,
             "can_load_page",
             side_effect=[
-                Mock(can_load=False),
                 Mock(can_load=False),
                 Mock(can_load=True),
             ],

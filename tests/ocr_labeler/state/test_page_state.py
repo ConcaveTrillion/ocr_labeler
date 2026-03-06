@@ -7,7 +7,7 @@ from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
-from ocr_labeler.state.page_state import PageState
+from ocr_labeler.state.page_state import PageState, WordStyleChangedEvent
 
 
 def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
@@ -865,6 +865,40 @@ def test_update_word_attributes_notifies_on_success(monkeypatch):
 
     assert result is True
     assert notified == ["changed"]
+
+
+def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
+    """Successful word attribute edits should emit a targeted style change event."""
+    page_state = PageState()
+
+    class PageStub:
+        pass
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "update_word_attributes",
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter: True,
+    )
+
+    page_state.current_page = PageStub()
+    seen: list[WordStyleChangedEvent] = []
+    page_state.on_word_style_change = [lambda event: seen.append(event)]
+
+    result = page_state.update_word_attributes(3, 1, 2, True, False, True)
+
+    assert result is True
+    assert seen == [
+        WordStyleChangedEvent(
+            page_index=3,
+            line_index=1,
+            word_index=2,
+            italic=True,
+            small_caps=False,
+            blackletter=True,
+        )
+    ]
 
 
 def test_split_paragraph_after_line_splits_containing_paragraph_at_line():

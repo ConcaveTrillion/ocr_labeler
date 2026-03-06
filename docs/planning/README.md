@@ -27,3 +27,7 @@ Status: planning snapshots that may not fully match current implementation.
 - [User Persistence Metadata Schema Plan](user-persistence-metadata-schema.md)
 - [Word/Line Derived Cache Planning](persistence-word-line-derived-cache.md)
 - [pd-book-tools Page Provenance Copilot Brief](pd-book-tools-page-provenance-copilot-brief.md)
+
+## Immediate Next Step
+
+- [Next Step: Event-Scoped UI Updates](next-step.md)

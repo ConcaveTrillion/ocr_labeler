@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Protocol, runtime_checkable
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
@@ -40,6 +40,17 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _ReorganizablePage(Protocol):
+    def reorganize_page(self) -> None: ...
+
+
+WORD_LABEL_ITALIC = "italic"
+WORD_LABEL_SMALL_CAPS = "small_caps"
+WORD_LABEL_BLACKLETTER = "blackletter"
+
 
 # Constants for ground truth operations
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
@@ -69,7 +80,7 @@ class PageOperations:
     to avoid tight coupling with state management classes.
     """
 
-    def __init__(self, docTR_predictor=None):
+    def __init__(self, docTR_predictor: object | None = None):
         """Initialize PageOperations with its own page parser.
 
         Args:
@@ -98,13 +109,18 @@ class PageOperations:
     def _reorganize_page_if_available(self, page_obj: Page) -> None:
         """Run page reorganization when the page object supports it."""
         try:
-            reorganize_page = getattr(page_obj, "reorganize_page", None)
-            if callable(reorganize_page):
-                reorganize_page()
+            if isinstance(page_obj, _ReorganizablePage):
+                page_obj.reorganize_page()
         except Exception as e:
             logger.debug(
                 "Page reorganization failed, continuing with raw OCR layout: %s", e
             )
+
+    @staticmethod
+    def _is_geometry_normalization_error(error: Exception) -> bool:
+        """Return True when bbox recompute fails due to malformed normalization metadata."""
+        message = str(error)
+        return "NoneType" in message and "is_normalized" in message
 
     def build_initial_page_parser(self):
         """Return an initial page parser that performs OCR via DocTR when invoked.
@@ -450,6 +466,13 @@ class PageOperations:
             logger.info("Successfully refined bboxes for page")
             return True
         except Exception as e:
+            if self._is_geometry_normalization_error(e):
+                logger.warning(
+                    "refine_all_bboxes hit malformed geometry (%s); "
+                    "falling back to expand_and_refine_all_bboxes",
+                    e,
+                )
+                return self.expand_and_refine_all_bboxes(page, padding_px=padding_px)
             logger.exception(f"Failed to refine bboxes for page: {e}")
             return False
 
@@ -902,9 +925,16 @@ class PageOperations:
         return word_attributes or None
 
     def _word_style_attr(self, word: object, *attribute_names: str) -> bool:
-        """Return True if any given attribute name is truthy on the word."""
+        """Return True if any style label mapped from attribute names is present."""
+        try:
+            labels = {str(label) for label in word.word_labels}
+        except AttributeError:
+            return False
+        except TypeError:
+            return False
         for attribute_name in attribute_names:
-            if bool(getattr(word, attribute_name, False)):
+            normalized = str(attribute_name).removeprefix("is_")
+            if normalized in labels:
                 return True
         return False
 
@@ -934,21 +964,38 @@ class PageOperations:
                 continue
 
             target_word = words[word_index]
+            try:
+                labels = [str(label) for label in target_word.word_labels]
+            except AttributeError:
+                continue
+            except TypeError:
+                continue
+
             italic = bool(attributes.get("italic", False))
             small_caps = bool(attributes.get("small_caps", False))
             blackletter = bool(attributes.get("blackletter", False))
+            labels_set = set(labels)
 
-            setattr(target_word, "italic", italic)
-            if hasattr(target_word, "is_italic"):
-                setattr(target_word, "is_italic", italic)
+            if italic:
+                labels_set.add(WORD_LABEL_ITALIC)
+            else:
+                labels_set.discard(WORD_LABEL_ITALIC)
 
-            setattr(target_word, "small_caps", small_caps)
-            if hasattr(target_word, "is_small_caps"):
-                setattr(target_word, "is_small_caps", small_caps)
+            if small_caps:
+                labels_set.add(WORD_LABEL_SMALL_CAPS)
+            else:
+                labels_set.discard(WORD_LABEL_SMALL_CAPS)
 
-            setattr(target_word, "blackletter", blackletter)
-            if hasattr(target_word, "is_blackletter"):
-                setattr(target_word, "is_blackletter", blackletter)
+            if blackletter:
+                labels_set.add(WORD_LABEL_BLACKLETTER)
+            else:
+                labels_set.discard(WORD_LABEL_BLACKLETTER)
+
+            ordered = [label for label in labels if label in labels_set]
+            ordered.extend(
+                sorted(label for label in labels_set if label not in set(ordered))
+            )
+            target_word.word_labels = ordered
 
     def _resolve_ocr_provenance_for_save(
         self,

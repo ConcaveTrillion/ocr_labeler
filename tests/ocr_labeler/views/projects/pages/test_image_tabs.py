@@ -388,6 +388,25 @@ def test_image_tabs_apply_box_selection_on_paragraphs_invokes_callback():
     assert image_tabs._selected_paragraph_indices == {0}
 
 
+def test_set_selected_paragraphs_uses_paragraph_bbox_source():
+    line1 = _line([_word("alpha", 0)], 0)
+    line2 = _line([_word("beta", 40)], 40)
+    paragraph = _paragraph([line1, line2], 0)
+    paragraph.bounding_box = _bbox(0, 0, 20, 10)
+    page = Page(width=200, height=100, page_index=0, items=[paragraph])
+
+    vm = SimpleNamespace(_page_state=SimpleNamespace(current_page=page))
+    vm.set_image_update_callback = lambda _cb: None
+    image_tabs = ImageTabs(vm)
+
+    image_tabs.set_selected_paragraphs({0})
+
+    assert image_tabs._selected_paragraph_indices == {0}
+    assert len(image_tabs._selected_paragraph_boxes) == 1
+    x1, y1, x2, y2 = image_tabs._selected_paragraph_boxes[0]
+    assert (x1, y1, x2, y2) == (0.0, 0.0, 20.0, 10.0)
+
+
 def test_image_tabs_ctrl_drag_on_lines_adds_line_words():
     page = Page(
         width=200,

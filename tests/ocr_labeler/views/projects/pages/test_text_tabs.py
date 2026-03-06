@@ -10,7 +10,7 @@ from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
-from ocr_labeler.state.page_state import PageState
+from ocr_labeler.state.page_state import PageState, WordStyleChangedEvent
 from ocr_labeler.views.projects.pages.text_tabs import TextTabs
 
 
@@ -51,6 +51,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     )
     page_state = SimpleNamespace(
         on_change=[],
+        on_word_style_change=[],
         _project_state=project_state,
         current_gt_text="",
         current_ocr_text="",
@@ -62,6 +63,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     text_tabs = TextTabs(page_state=page_state)
 
     assert text_tabs.model._on_page_state_change in page_state.on_change
+    assert text_tabs._on_word_style_changed in page_state.on_word_style_change
     assert text_tabs._on_project_state_changed in project_state.on_change
 
     text_tabs.container = _DeletedContainer()
@@ -69,6 +71,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
 
     assert text_tabs._disposed is True
     assert text_tabs.model._on_page_state_change not in page_state.on_change
+    assert text_tabs._on_word_style_changed not in page_state.on_word_style_change
     assert text_tabs._on_project_state_changed not in project_state.on_change
 
 
@@ -198,9 +201,7 @@ def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
     word = SimpleNamespace(
         text="alpha",
         ground_truth_text="alpha",
-        italic=False,
-        small_caps=False,
-        blackletter=False,
+        word_labels=[],
     )
     line = SimpleNamespace(
         text="alpha",
@@ -211,7 +212,7 @@ def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
     page = SimpleNamespace(name="p001.png", index=0, lines=[line])
 
     text_tabs.update_word_matches(page)
-    word.italic = True
+    word.word_labels = ["italic"]
     text_tabs.update_word_matches(page)
 
     assert text_tabs.word_match_view.update_from_page.call_count == 2
@@ -456,6 +457,66 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
 
     assert result is True
     assert calls == [(3, 4, 1, True, False, True)]
+
+
+def test_text_tabs_word_style_event_routes_to_targeted_view_update():
+    """Word style events should update only targeted word style controls in WordMatchView."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    page = SimpleNamespace(name="p001.png", index=0, lines=[], blocks=[])
+
+    page_state = None
+
+    def update_word_attributes(_page_index, _line_index, _word_index, *_flags):
+        event = WordStyleChangedEvent(
+            page_index=0,
+            line_index=4,
+            word_index=1,
+            italic=False,
+            small_caps=False,
+            blackletter=True,
+        )
+        for listener in page_state.on_word_style_change:
+            listener(event)
+        for listener in page_state.on_change:
+            listener()
+        return True
+
+    page_state = SimpleNamespace(
+        on_change=[],
+        on_word_style_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=page,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_attributes=update_word_attributes,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
+    text_tabs.word_match_view.apply_word_style_change = MagicMock()
+    text_tabs.word_match_view.update_from_page = MagicMock()
+
+    result = text_tabs.word_match_view.set_word_attributes_callback(
+        0,
+        0,
+        False,
+        False,
+        True,
+    )
+    assert result is True
+    text_tabs.word_match_view.apply_word_style_change.assert_called_once_with(
+        4,
+        1,
+        False,
+        False,
+        True,
+    )
+    text_tabs.word_match_view.update_from_page.assert_not_called()
 
 
 def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():

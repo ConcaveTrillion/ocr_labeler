@@ -9,12 +9,34 @@ maintain clear architectural boundaries.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from pd_book_tools.ocr.page import Page
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _ParagraphLike(Protocol):
+    def recompute_bounding_box(self) -> None: ...
+
+
+@runtime_checkable
+class _PageWithParagraphs(Protocol):
+    @property
+    def paragraphs(self) -> Sequence[object]: ...
+
+
+STYLE_LABEL_BY_ATTR = {
+    "italic": "italic",
+    "is_italic": "italic",
+    "small_caps": "small_caps",
+    "is_small_caps": "small_caps",
+    "blackletter": "blackletter",
+    "is_blackletter": "blackletter",
+}
 
 
 class LineOperations:
@@ -541,6 +563,8 @@ class LineOperations:
                     "Merged lines but skipped final bbox recompute due to malformed geometry: %s",
                     finalize_error,
                 )
+                self._remove_empty_items_safely(page)
+                self._recompute_paragraph_bboxes_with_block_api(page)
 
             lines_after = len(list(page.lines))
             logger.info(
@@ -1906,12 +1930,23 @@ class LineOperations:
         aliases: tuple[str, ...] = (),
     ) -> bool:
         """Read bool style attribute from word using fallback aliases."""
-        if bool(getattr(word, primary_name, False)):
-            return True
-        for alias in aliases:
-            if bool(getattr(word, alias, False)):
-                return True
-        return False
+        try:
+            labels = [str(label) for label in word.word_labels]
+        except AttributeError:
+            return False
+        except TypeError:
+            return False
+
+        style_label = STYLE_LABEL_BY_ATTR.get(primary_name)
+        if style_label is None:
+            for alias in aliases:
+                style_label = STYLE_LABEL_BY_ATTR.get(alias)
+                if style_label is not None:
+                    break
+        if style_label is None:
+            return False
+
+        return style_label in set(labels)
 
     def _write_word_attribute(
         self,
@@ -1921,10 +1956,33 @@ class LineOperations:
         aliases: tuple[str, ...] = (),
     ) -> None:
         """Write bool style attribute to primary name and compatible aliases."""
-        setattr(word, primary_name, bool(value))
-        for alias in aliases:
-            if hasattr(word, alias):
-                setattr(word, alias, bool(value))
+        try:
+            labels = [str(label) for label in word.word_labels]
+        except AttributeError:
+            return
+        except TypeError:
+            return
+
+        style_label = STYLE_LABEL_BY_ATTR.get(primary_name)
+        if style_label is None:
+            for alias in aliases:
+                style_label = STYLE_LABEL_BY_ATTR.get(alias)
+                if style_label is not None:
+                    break
+        if style_label is None:
+            return
+
+        labels_set = set(labels)
+        if value:
+            labels_set.add(style_label)
+        else:
+            labels_set.discard(style_label)
+
+        ordered = [label for label in labels if label in labels_set]
+        ordered.extend(
+            sorted(label for label in labels_set if label not in set(ordered))
+        )
+        word.word_labels = ordered
 
     def _refine_block_words(self, page: object, block: object) -> bool:
         """Refine all words in a line-like block and recompute block bbox."""
@@ -2167,14 +2225,55 @@ class LineOperations:
         if target in (getattr(container, "items", []) or []):
             remove_item = getattr(container, "remove_item", None)
             if callable(remove_item):
-                remove_item(target)
-                return True
+                try:
+                    remove_item(target)
+                    return True
+                except Exception as removal_error:
+                    if not self._is_geometry_normalization_error(removal_error):
+                        raise
+                    logger.warning(
+                        "remove_item fallback for malformed geometry on %s: %s",
+                        type(container).__name__,
+                        removal_error,
+                    )
+                    return self._remove_item_without_recompute(container, target)
             return False
 
         for child in list(getattr(container, "items", []) or []):
             if hasattr(child, "items") and self._remove_nested_block(child, target):
                 return True
         return False
+
+    def _remove_item_without_recompute(self, container: object, target: object) -> bool:
+        """Best-effort item removal when remove_item triggers malformed bbox recompute errors."""
+        items = list(getattr(container, "items", []) or [])
+        if target not in items:
+            return False
+
+        updated_items = [item for item in items if item is not target]
+        if hasattr(container, "_items"):
+            container._items = updated_items
+            return True
+        if hasattr(container, "items"):
+            container.items = updated_items
+            return True
+        return False
+
+    def _remove_empty_items_safely(self, container: object) -> None:
+        """Best-effort empty-item pruning that tolerates malformed geometry recompute errors."""
+        remove_empty_items = getattr(container, "remove_empty_items", None)
+        if not callable(remove_empty_items):
+            return
+
+        try:
+            remove_empty_items()
+        except Exception as error:
+            if not self._is_geometry_normalization_error(error):
+                raise
+            logger.warning(
+                "Skipped remove_empty_items due to malformed geometry: %s",
+                error,
+            )
 
     def _replace_block_with_split_paragraphs(
         self,
@@ -2198,3 +2297,31 @@ class LineOperations:
             )
             add_item(new_paragraph)
         return True
+
+    def _recompute_paragraph_bboxes_with_block_api(self, page: object) -> None:
+        """Best-effort paragraph bbox recompute using paragraph Block APIs only."""
+        if not isinstance(page, _PageWithParagraphs):
+            return
+
+        try:
+            paragraphs = list(page.paragraphs or [])
+        except AttributeError:
+            return
+        except Exception:
+            logger.debug(
+                "Paragraph collection unavailable during bbox fallback", exc_info=True
+            )
+            return
+
+        for paragraph in paragraphs:
+            if not isinstance(paragraph, _ParagraphLike):
+                continue
+
+            try:
+                paragraph.recompute_bounding_box()
+            except Exception:
+                logger.debug(
+                    "Paragraph bbox recompute fallback skipped for %s",
+                    type(paragraph).__name__,
+                    exc_info=True,
+                )

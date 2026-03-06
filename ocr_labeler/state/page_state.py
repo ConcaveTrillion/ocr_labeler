@@ -19,6 +19,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class WordStyleChangedEvent:
+    """Typed event emitted when a single word's style flags are updated."""
+
+    page_index: int
+    line_index: int
+    word_index: int
+    italic: bool
+    small_caps: bool
+    blackletter: bool
+
+
 @dataclass
 class PageState:
     """Page-specific state management. Oversees page loading, caching, and operations.
@@ -31,6 +43,9 @@ class PageState:
 
     page_ops: PageOperations = field(default_factory=PageOperations)
     on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
+    on_word_style_change: Optional[List[Callable[[WordStyleChangedEvent], None]]] = (
+        field(default_factory=list)
+    )
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
@@ -51,6 +66,13 @@ class PageState:
         """Notify listeners of state changes."""
         for listener in self.on_change:
             listener()
+
+    def _emit_word_style_changed(self, event: WordStyleChangedEvent) -> None:
+        """Notify listeners of a targeted word-style mutation."""
+        if self.on_word_style_change is None:
+            return
+        for listener in self.on_word_style_change:
+            listener(event)
 
     def _resolve_workspace_save_directory(self, save_directory: str) -> str:
         """Resolve local-data save directories against workspace CWD."""
@@ -331,6 +353,16 @@ class PageState:
 
             if result:
                 self._invalidate_text_cache()
+                self._emit_word_style_changed(
+                    WordStyleChangedEvent(
+                        page_index=page_index,
+                        line_index=line_index,
+                        word_index=word_index,
+                        italic=bool(italic),
+                        small_caps=bool(small_caps),
+                        blackletter=bool(blackletter),
+                    )
+                )
                 self.notify()
 
             return result

@@ -3,16 +3,44 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Callable, Optional, Protocol, TypeAlias, runtime_checkable
 
 from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
 
 from ....models.line_match_model import LineMatch
-from ....models.word_match_model import MatchStatus
+from ....models.word_match_model import MatchStatus, WordMatch
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _UiElementLike(Protocol):
+    is_deleted: bool
+    client: object | None
+
+
+WordKey: TypeAlias = tuple[int, int]
+NotifyCallback: TypeAlias = Callable[[str, str], None]
+SelectionChangeCallback: TypeAlias = Callable[[set[WordKey]], None]
+ParagraphSelectionCallback: TypeAlias = Callable[[set[int]], None]
+ReboxRequestCallback: TypeAlias = Callable[[int, int], None]
+
+SingleLineAction: TypeAlias = Callable[[int], bool]
+LineIndicesAction: TypeAlias = Callable[[list[int]], bool]
+ParagraphIndicesAction: TypeAlias = Callable[[list[int]], bool]
+WordKeysAction: TypeAlias = Callable[[list[WordKey]], bool]
+LineWordAction: TypeAlias = Callable[[int, int], bool]
+SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
+ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
+NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
+EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
+SetWordAttributesAction: TypeAlias = Callable[[int, int, bool, bool, bool], bool]
+
+WORD_LABEL_ITALIC = "italic"
+WORD_LABEL_SMALL_CAPS = "small_caps"
+WORD_LABEL_BLACKLETTER = "blackletter"
 
 
 class WordMatchView:
@@ -20,27 +48,27 @@ class WordMatchView:
 
     def __init__(
         self,
-        copy_gt_to_ocr_callback=None,
-        copy_ocr_to_gt_callback=None,
-        merge_lines_callback=None,
-        delete_lines_callback=None,
-        merge_paragraphs_callback=None,
-        delete_paragraphs_callback=None,
-        split_paragraph_after_line_callback=None,
-        split_paragraph_with_selected_lines_callback=None,
-        delete_words_callback=None,
-        merge_word_left_callback=None,
-        merge_word_right_callback=None,
-        split_word_callback=None,
-        rebox_word_callback=None,
-        nudge_word_bbox_callback=None,
-        refine_words_callback=None,
-        expand_then_refine_words_callback=None,
-        refine_lines_callback=None,
-        refine_paragraphs_callback=None,
-        edit_word_ground_truth_callback=None,
-        set_word_attributes_callback=None,
-        notify_callback=None,
+        copy_gt_to_ocr_callback: SingleLineAction | None = None,
+        copy_ocr_to_gt_callback: SingleLineAction | None = None,
+        merge_lines_callback: LineIndicesAction | None = None,
+        delete_lines_callback: LineIndicesAction | None = None,
+        merge_paragraphs_callback: ParagraphIndicesAction | None = None,
+        delete_paragraphs_callback: ParagraphIndicesAction | None = None,
+        split_paragraph_after_line_callback: SingleLineAction | None = None,
+        split_paragraph_with_selected_lines_callback: LineIndicesAction | None = None,
+        delete_words_callback: WordKeysAction | None = None,
+        merge_word_left_callback: LineWordAction | None = None,
+        merge_word_right_callback: LineWordAction | None = None,
+        split_word_callback: SplitWordAction | None = None,
+        rebox_word_callback: ReboxAction | None = None,
+        nudge_word_bbox_callback: NudgeAction | None = None,
+        refine_words_callback: WordKeysAction | None = None,
+        expand_then_refine_words_callback: WordKeysAction | None = None,
+        refine_lines_callback: LineIndicesAction | None = None,
+        refine_paragraphs_callback: ParagraphIndicesAction | None = None,
+        edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
+        set_word_attributes_callback: SetWordAttributesAction | None = None,
+        notify_callback: NotifyCallback | None = None,
     ):
         logger.debug(
             "Initializing WordMatchView with copy_gt_to_ocr_callback=%s, copy_ocr_to_gt_callback=%s",
@@ -76,23 +104,30 @@ class WordMatchView:
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.set_word_attributes_callback = set_word_attributes_callback
         self.selected_line_indices: set[int] = set()
-        self.selected_word_indices: set[tuple[int, int]] = set()
+        self.selected_word_indices: set[WordKey] = set()
         self.selected_paragraph_indices: set[int] = set()
-        self._word_split_fractions: dict[tuple[int, int], float] = {}
-        self._word_split_marker_x: dict[tuple[int, int], float] = {}
-        self._word_split_image_refs: dict[tuple[int, int], object] = {}
-        self._word_split_image_sizes: dict[tuple[int, int], tuple[float, float]] = {}
-        self._word_split_button_refs: dict[tuple[int, int], object] = {}
-        self._word_gt_input_refs: dict[tuple[int, int], object] = {}
-        self._bbox_editor_open_keys: set[tuple[int, int]] = set()
-        self._bbox_pending_deltas: dict[
-            tuple[int, int], tuple[float, float, float, float]
-        ] = {}
+        self._word_split_fractions: dict[WordKey, float] = {}
+        self._word_split_marker_x: dict[WordKey, float] = {}
+        self._word_split_image_refs: dict[WordKey, object] = {}
+        self._word_split_image_sizes: dict[WordKey, tuple[float, float]] = {}
+        self._word_split_button_refs: dict[WordKey, object] = {}
+        self._word_checkbox_refs: dict[WordKey, object] = {}
+        self._word_style_button_refs: dict[WordKey, tuple[object, object, object]] = {}
+        self._word_column_refs: dict[WordKey, object] = {}
+        self._line_card_refs: dict[int, object] = {}
+        self._line_checkbox_refs: dict[int, object] = {}
+        self._paragraph_checkbox_refs: dict[int, object] = {}
+        self._word_gt_input_refs: dict[WordKey, object] = {}
+        self._bbox_editor_open_keys: set[WordKey] = set()
+        self._bbox_pending_deltas: dict[WordKey, tuple[float, float, float, float]] = {}
         self._bbox_nudge_step_px: int = 5
-        self._selection_change_callback = None
-        self._paragraph_selection_change_callback = None
-        self._rebox_request_callback = None
-        self._pending_rebox_word_key: tuple[int, int] | None = None
+        self._selection_change_callback: SelectionChangeCallback | None = None
+        self._paragraph_selection_change_callback: ParagraphSelectionCallback | None = (
+            None
+        )
+        self._rebox_request_callback: ReboxRequestCallback | None = None
+        self._pending_rebox_word_key: WordKey | None = None
+        self._paragraph_expanded: dict[Optional[int], bool] = {}
         self.merge_lines_button = None
         self.delete_lines_button = None
         self.refine_lines_button = None
@@ -138,6 +173,14 @@ class WordMatchView:
         return "client this element belongs to has been deleted" in message or (
             "parent element" in message and "deleted" in message
         )
+
+    def _has_active_ui_context(self, element: object | None) -> bool:
+        """Return True when a NiceGUI element is still attached to an active client."""
+        if not isinstance(element, _UiElementLike):
+            return False
+        if element.is_deleted:
+            return False
+        return element.client is not None
 
     def build(self):
         """Build the UI components."""
@@ -316,7 +359,7 @@ class WordMatchView:
     def _update_summary(self):
         """Update the summary statistics display."""
         logger.debug("Updating summary statistics")
-        if not self.summary_label:
+        if not self._has_active_ui_context(self.summary_label):
             logger.debug("No summary_label available, skipping update")
             return
 
@@ -348,7 +391,7 @@ class WordMatchView:
             self._display_update_render_count,
             self._display_update_skip_count,
         )
-        if not self.lines_container:
+        if not self._has_active_ui_context(self.lines_container):
             logger.info("No lines_container, returning")
             return
 
@@ -393,6 +436,15 @@ class WordMatchView:
             if getattr(line_match, "paragraph_index", None) is not None
         }
         self.selected_paragraph_indices.intersection_update(available_paragraph_indices)
+        available_paragraph_keys = {
+            getattr(line_match, "paragraph_index", None)
+            for line_match in self.view_model.line_matches
+        }
+        self._paragraph_expanded = {
+            paragraph_index: expanded
+            for paragraph_index, expanded in self._paragraph_expanded.items()
+            if paragraph_index in available_paragraph_keys
+        }
         self._update_action_button_state()
 
         display_signature = self._compute_display_signature()
@@ -413,6 +465,12 @@ class WordMatchView:
         self._word_split_image_refs = {}
         self._word_split_image_sizes = {}
         self._word_split_button_refs = {}
+        self._word_checkbox_refs = {}
+        self._word_style_button_refs = {}
+        self._word_column_refs = {}
+        self._line_card_refs = {}
+        self._line_checkbox_refs = {}
+        self._paragraph_checkbox_refs = {}
         self._word_gt_input_refs = {}
 
         if not self.view_model.line_matches:
@@ -454,29 +512,62 @@ class WordMatchView:
                 paragraph_index,
                 paragraph_line_matches,
             ) in self._group_lines_by_paragraph(lines_to_display):
-                with ui.expansion(
-                    self._format_paragraph_label(paragraph_index),
-                    value=True,
-                    icon="subject",
-                ).classes("full-width"):
-                    if paragraph_index is not None:
-                        with ui.row().classes("items-center"):
-                            ui.checkbox(
-                                text="",
-                                value=paragraph_index
-                                in self.selected_paragraph_indices,
-                            ).props("size=sm").on_value_change(
-                                lambda event, index=paragraph_index: (
-                                    self._on_paragraph_selection_change(
-                                        index,
-                                        bool(event.value),
+                paragraph_is_expanded = self._paragraph_expanded.get(
+                    paragraph_index,
+                    True,
+                )
+                with ui.column().classes("full-width"):
+                    with ui.row().classes("items-center full-width no-wrap gap-1"):
+                        if paragraph_index is not None:
+                            paragraph_checkbox = (
+                                ui.checkbox(
+                                    text="",
+                                    value=paragraph_index
+                                    in self.selected_paragraph_indices,
+                                )
+                                .props("size=sm dense")
+                                .classes("shrink-0 self-center")
+                                .style("margin-right: 0.125rem;")
+                                .on_value_change(
+                                    lambda event, index=paragraph_index: (
+                                        self._on_paragraph_selection_change(
+                                            index,
+                                            bool(event.value),
+                                        )
                                     )
                                 )
                             )
-                            ui.label("Select paragraph")
-                    with ui.column().classes("full-width"):
-                        for line_match in paragraph_line_matches:
-                            self._create_line_card(line_match)
+                            self._paragraph_checkbox_refs[paragraph_index] = (
+                                paragraph_checkbox
+                            )
+
+                        toggle_icon = (
+                            "expand_more" if paragraph_is_expanded else "chevron_right"
+                        )
+                        ui.button(
+                            icon=toggle_icon,
+                            on_click=lambda _event=None, index=paragraph_index: (
+                                self._toggle_paragraph_expanded(index)
+                            ),
+                        ).props("flat round dense size=sm").classes("shrink-0")
+
+                        ui.button(
+                            self._format_paragraph_label(paragraph_index),
+                            on_click=lambda _event=None, index=paragraph_index: (
+                                self._toggle_paragraph_expanded(index)
+                            ),
+                        ).props("flat dense no-caps align=left").classes(
+                            "grow justify-start text-left"
+                        )
+
+                    if paragraph_is_expanded:
+                        with ui.column().classes("full-width"):
+                            for line_match in paragraph_line_matches:
+                                with ui.column().classes("full-width") as line_slot:
+                                    self._line_card_refs[line_match.line_index] = (
+                                        line_slot
+                                    )
+                                    self._create_line_card(line_match)
 
         self._display_update_render_count += 1
         self._last_display_signature = display_signature
@@ -518,6 +609,12 @@ class WordMatchView:
             tuple(sorted(self.selected_line_indices)),
             tuple(sorted(self.selected_word_indices)),
             tuple(sorted(self.selected_paragraph_indices)),
+            tuple(
+                sorted(
+                    (paragraph_index, expanded)
+                    for paragraph_index, expanded in self._paragraph_expanded.items()
+                )
+            ),
             tuple(sorted(self._bbox_editor_open_keys)),
             tuple(sorted(self._bbox_pending_deltas.items())),
             tuple(line_signatures),
@@ -568,15 +665,24 @@ class WordMatchView:
             return "Paragraph Unassigned"
         return f"Paragraph {paragraph_index + 1}"
 
-    def set_selection_change_callback(self, callback) -> None:
+    def set_selection_change_callback(
+        self,
+        callback: SelectionChangeCallback | None,
+    ) -> None:
         """Register callback invoked when selected words change."""
         self._selection_change_callback = callback
 
-    def set_paragraph_selection_change_callback(self, callback) -> None:
+    def set_paragraph_selection_change_callback(
+        self,
+        callback: ParagraphSelectionCallback | None,
+    ) -> None:
         """Register callback invoked when selected paragraphs change."""
         self._paragraph_selection_change_callback = callback
 
-    def set_rebox_request_callback(self, callback) -> None:
+    def set_rebox_request_callback(
+        self,
+        callback: ReboxRequestCallback | None,
+    ) -> None:
         """Register callback invoked when user starts a word rebox request."""
         self._rebox_request_callback = callback
 
@@ -600,7 +706,7 @@ class WordMatchView:
         except Exception:
             logger.debug("Paragraph selection callback failed", exc_info=True)
 
-    def _line_match_by_index(self, line_index: int):
+    def _line_match_by_index(self, line_index: int) -> LineMatch | None:
         for line_match in self.view_model.line_matches:
             if line_match.line_index == line_index:
                 return line_match
@@ -615,9 +721,38 @@ class WordMatchView:
             for word_index, _ in enumerate(line_match.word_matches)
         }
 
+    def _line_paragraph_index(self, line_index: int) -> int | None:
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return None
+        paragraph_index = getattr(line_match, "paragraph_index", None)
+        return paragraph_index if isinstance(paragraph_index, int) else None
+
+    def _toggle_paragraph_expanded(self, paragraph_index: Optional[int]) -> None:
+        is_expanded = self._paragraph_expanded.get(paragraph_index, True)
+        self._paragraph_expanded[paragraph_index] = not is_expanded
+        self._update_lines_display()
+
+    def _paragraph_line_indices(self, paragraph_index: int) -> set[int]:
+        return {
+            line_match.line_index
+            for line_match in self.view_model.line_matches
+            if getattr(line_match, "paragraph_index", None) == paragraph_index
+        }
+
+    def _paragraph_word_keys(self, paragraph_index: int) -> set[tuple[int, int]]:
+        word_keys: set[tuple[int, int]] = set()
+        for line_index in self._paragraph_line_indices(paragraph_index):
+            word_keys.update(self._line_word_keys(line_index))
+        return word_keys
+
     def _is_line_fully_word_selected(self, line_index: int) -> bool:
         keys = self._line_word_keys(line_index)
         return bool(keys) and keys.issubset(self.selected_word_indices)
+
+    def _is_paragraph_fully_line_selected(self, paragraph_index: int) -> bool:
+        line_indices = self._paragraph_line_indices(paragraph_index)
+        return bool(line_indices) and line_indices.issubset(self.selected_line_indices)
 
     def _is_line_checked(self, line_index: int) -> bool:
         return (
@@ -630,6 +765,109 @@ class WordMatchView:
             self.selected_line_indices.add(line_index)
         else:
             self.selected_line_indices.discard(line_index)
+
+    def _sync_paragraph_selection_from_lines(self, paragraph_index: int) -> None:
+        if self._is_paragraph_fully_line_selected(paragraph_index):
+            self.selected_paragraph_indices.add(paragraph_index)
+        else:
+            self.selected_paragraph_indices.discard(paragraph_index)
+
+    def _sync_all_paragraph_selection_from_lines(self) -> None:
+        available_paragraph_indices = {
+            paragraph_index
+            for paragraph_index in (
+                getattr(line_match, "paragraph_index", None)
+                for line_match in self.view_model.line_matches
+            )
+            if isinstance(paragraph_index, int)
+        }
+        self.selected_paragraph_indices.intersection_update(available_paragraph_indices)
+        for paragraph_index in available_paragraph_indices:
+            self._sync_paragraph_selection_from_lines(paragraph_index)
+
+    def _set_checkbox_value(self, checkbox: object, value: bool) -> None:
+        """Best-effort checkbox update without triggering full UI rebuild."""
+        setter = getattr(checkbox, "set_value", None)
+        if callable(setter):
+            setter(value)
+            return
+
+        setattr(checkbox, "value", value)
+        updater = getattr(checkbox, "update", None)
+        if callable(updater):
+            updater()
+
+    def _refresh_line_checkbox_states(self) -> None:
+        """Update rendered line-checkbox values from current selection state."""
+        for line_index, checkbox in list(self._line_checkbox_refs.items()):
+            if not self._has_active_ui_context(checkbox):
+                self._line_checkbox_refs.pop(line_index, None)
+                continue
+
+            try:
+                self._set_checkbox_value(
+                    checkbox,
+                    self._is_line_checked(line_index),
+                )
+            except RuntimeError as error:
+                if self._is_disposed_ui_error(error):
+                    self._line_checkbox_refs.pop(line_index, None)
+                    continue
+                raise
+            except Exception:
+                logger.debug(
+                    "Failed to refresh line checkbox for line %s",
+                    line_index,
+                    exc_info=True,
+                )
+
+    def _refresh_paragraph_checkbox_states(self) -> None:
+        """Update rendered paragraph-checkbox values from current selection state."""
+        for paragraph_index, checkbox in list(self._paragraph_checkbox_refs.items()):
+            if not self._has_active_ui_context(checkbox):
+                self._paragraph_checkbox_refs.pop(paragraph_index, None)
+                continue
+
+            try:
+                self._set_checkbox_value(
+                    checkbox,
+                    paragraph_index in self.selected_paragraph_indices,
+                )
+            except RuntimeError as error:
+                if self._is_disposed_ui_error(error):
+                    self._paragraph_checkbox_refs.pop(paragraph_index, None)
+                    continue
+                raise
+            except Exception:
+                logger.debug(
+                    "Failed to refresh paragraph checkbox for paragraph %s",
+                    paragraph_index,
+                    exc_info=True,
+                )
+
+    def _refresh_word_checkbox_states(self) -> None:
+        """Update rendered word-checkbox values from current selection state."""
+        for selection_key, checkbox in list(self._word_checkbox_refs.items()):
+            if not self._has_active_ui_context(checkbox):
+                self._word_checkbox_refs.pop(selection_key, None)
+                continue
+
+            try:
+                self._set_checkbox_value(
+                    checkbox,
+                    selection_key in self.selected_word_indices,
+                )
+            except RuntimeError as error:
+                if self._is_disposed_ui_error(error):
+                    self._word_checkbox_refs.pop(selection_key, None)
+                    continue
+                raise
+            except Exception:
+                logger.debug(
+                    "Failed to refresh word checkbox for key %s",
+                    selection_key,
+                    exc_info=True,
+                )
 
     def _create_line_card(self, line_match):
         """Create a card display for a single line match."""
@@ -648,17 +886,22 @@ class WordMatchView:
                 with ui.row().classes("items-center justify-between"):
                     # Left side: Line info and stats
                     with ui.row().classes("items-center"):
-                        ui.checkbox(
-                            text="",
-                            value=self._is_line_checked(line_match.line_index),
-                        ).props("size=sm").on_value_change(
-                            lambda event, index=line_match.line_index: (
-                                self._on_line_selection_change(
-                                    index,
-                                    bool(event.value),
+                        line_checkbox = (
+                            ui.checkbox(
+                                text="",
+                                value=self._is_line_checked(line_match.line_index),
+                            )
+                            .props("size=sm")
+                            .on_value_change(
+                                lambda event, index=line_match.line_index: (
+                                    self._on_line_selection_change(
+                                        index,
+                                        bool(event.value),
+                                    )
                                 )
                             )
                         )
+                        self._line_checkbox_refs[line_match.line_index] = line_checkbox
                         ui.label(f"Line {line_match.line_index + 1}")
                         ui.label(
                             self._format_paragraph_label(
@@ -741,6 +984,230 @@ class WordMatchView:
                     self._create_word_comparison_table(line_match)
         logger.debug("Line card creation complete for line %d", line_match.line_index)
 
+    def _rerender_line_card(self, line_index: int) -> None:
+        """Rerender a single line card in-place when only that line changed."""
+        line_slot = self._line_card_refs.get(line_index)
+        line_match = self._line_match_by_index(line_index)
+        if line_slot is None or line_match is None:
+            return
+        if not self._has_active_ui_context(line_slot):
+            self._line_card_refs.pop(line_index, None)
+            return
+
+        self._line_checkbox_refs.pop(line_index, None)
+        for key in [key for key in self._word_checkbox_refs if key[0] == line_index]:
+            self._word_checkbox_refs.pop(key, None)
+            self._word_style_button_refs.pop(key, None)
+            self._word_column_refs.pop(key, None)
+            self._word_gt_input_refs.pop(key, None)
+            self._word_split_button_refs.pop(key, None)
+            self._word_split_image_refs.pop(key, None)
+            self._word_split_image_sizes.pop(key, None)
+
+        line_slot.clear()
+        with line_slot:
+            self._create_line_card(line_match)
+
+    def _rerender_word_column(self, line_index: int, word_index: int) -> None:
+        """Rerender a single OCR word column in-place when only that word changed."""
+        word_key = (line_index, word_index)
+        word_slot = self._word_column_refs.get(word_key)
+        if word_slot is None:
+            return
+        if not self._has_active_ui_context(word_slot):
+            self._word_column_refs.pop(word_key, None)
+            return
+
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return
+
+        display_word_index = -1
+        target_word_match = None
+        for idx, word_match in enumerate(line_match.word_matches):
+            if word_match.word_index == word_index:
+                display_word_index = idx
+                target_word_match = word_match
+                break
+
+        if target_word_match is None:
+            return
+
+        self._word_checkbox_refs.pop(word_key, None)
+        self._word_style_button_refs.pop(word_key, None)
+        self._word_gt_input_refs.pop(word_key, None)
+        self._word_split_button_refs.pop(word_key, None)
+        self._word_split_image_refs.pop(word_key, None)
+        self._word_split_image_sizes.pop(word_key, None)
+
+        word_slot.clear()
+        with word_slot:
+            self._create_word_selection_cell(
+                line_index,
+                display_word_index,
+                word_index,
+                len(line_match.word_matches),
+            )
+            self._create_image_cell(
+                line_index,
+                word_index,
+                target_word_match,
+            )
+            self._create_ocr_cell(target_word_match)
+            self._create_gt_cell(
+                line_index,
+                word_index,
+                target_word_match,
+            )
+            self._create_status_cell(target_word_match)
+            self._create_word_actions_cell(
+                line_index,
+                word_index,
+                target_word_match,
+            )
+
+    def _apply_local_word_gt_update(
+        self,
+        line_index: int,
+        word_index: int,
+        ground_truth_text: str,
+    ) -> None:
+        """Apply GT text update to in-memory line matches for incremental UI refresh."""
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return
+
+        target_word_match = None
+        for word_match in line_match.word_matches:
+            if word_match.word_index == word_index:
+                target_word_match = word_match
+                break
+        if target_word_match is None:
+            return
+
+        normalized_gt = str(ground_truth_text or "")
+        target_word_match.ground_truth_text = normalized_gt
+        ocr_text = str(target_word_match.ocr_text or "")
+
+        if not normalized_gt:
+            target_word_match.match_status = MatchStatus.UNMATCHED_OCR
+            target_word_match.fuzz_score = None
+            return
+
+        if ocr_text.strip() == normalized_gt.strip():
+            target_word_match.match_status = MatchStatus.EXACT
+            target_word_match.fuzz_score = 1.0
+            return
+
+        fuzz_score = None
+        word_object = getattr(target_word_match, "word_object", None)
+        if (
+            word_object is not None
+            and hasattr(word_object, "fuzz_score_against")
+            and callable(getattr(word_object, "fuzz_score_against"))
+        ):
+            try:
+                fuzz_score = word_object.fuzz_score_against(normalized_gt)
+            except Exception:
+                logger.debug(
+                    "Failed to compute fuzz score for line=%s word=%s",
+                    line_index,
+                    word_index,
+                    exc_info=True,
+                )
+
+        if fuzz_score is not None and fuzz_score >= self.view_model.fuzz_threshold:
+            target_word_match.match_status = MatchStatus.FUZZY
+            target_word_match.fuzz_score = fuzz_score
+        else:
+            target_word_match.match_status = MatchStatus.MISMATCH
+            target_word_match.fuzz_score = 0.0 if fuzz_score is None else fuzz_score
+
+    def _build_word_match_from_word_object(
+        self,
+        word_index: int,
+        word_object: object,
+    ) -> WordMatch:
+        """Build a WordMatch from a line word object using current fuzz settings."""
+        ocr_text = str(getattr(word_object, "text", "") or "")
+        ground_truth_text = str(getattr(word_object, "ground_truth_text", "") or "")
+
+        if not ground_truth_text:
+            return WordMatch(
+                ocr_text=ocr_text,
+                ground_truth_text="",
+                match_status=MatchStatus.UNMATCHED_OCR,
+                fuzz_score=None,
+                word_index=word_index,
+                word_object=word_object,
+            )
+
+        if ocr_text.strip() == ground_truth_text.strip():
+            return WordMatch(
+                ocr_text=ocr_text,
+                ground_truth_text=ground_truth_text,
+                match_status=MatchStatus.EXACT,
+                fuzz_score=1.0,
+                word_index=word_index,
+                word_object=word_object,
+            )
+
+        fuzz_score = None
+        if hasattr(word_object, "fuzz_score_against") and callable(
+            getattr(word_object, "fuzz_score_against")
+        ):
+            try:
+                fuzz_score = word_object.fuzz_score_against(ground_truth_text)
+            except Exception:
+                logger.debug(
+                    "Failed to compute fuzz score for local word match rebuild line=%s word=%s",
+                    getattr(word_object, "line_index", None),
+                    word_index,
+                    exc_info=True,
+                )
+
+        if fuzz_score is not None and fuzz_score >= self.view_model.fuzz_threshold:
+            return WordMatch(
+                ocr_text=ocr_text,
+                ground_truth_text=ground_truth_text,
+                match_status=MatchStatus.FUZZY,
+                fuzz_score=fuzz_score,
+                word_index=word_index,
+                word_object=word_object,
+            )
+
+        return WordMatch(
+            ocr_text=ocr_text,
+            ground_truth_text=ground_truth_text,
+            match_status=MatchStatus.MISMATCH,
+            fuzz_score=0.0 if fuzz_score is None else fuzz_score,
+            word_index=word_index,
+            word_object=word_object,
+        )
+
+    def _refresh_local_line_match_from_line_object(self, line_index: int) -> bool:
+        """Refresh one LineMatch from its line object for targeted line rerender."""
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return False
+
+        line_object = getattr(line_match, "line_object", None)
+        if line_object is None:
+            return False
+
+        words = list(getattr(line_object, "words", []) or [])
+        line_match.word_matches = [
+            self._build_word_match_from_word_object(word_index, word_object)
+            for word_index, word_object in enumerate(words)
+        ]
+        line_match.ocr_line_text = str(getattr(line_object, "text", "") or "")
+        line_match.ground_truth_line_text = str(
+            getattr(line_object, "ground_truth_text", "") or ""
+        )
+
+        self.view_model._update_statistics()
+        return True
+
     def _create_word_comparison_table(self, line_match):
         """Create a table layout with each column representing one complete word item."""
         logger.debug(
@@ -768,13 +1235,17 @@ class WordMatchView:
                     f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}"
                 )
 
-                with ui.column():
+                with ui.column() as word_column:
                     # Image cell
                     split_word_index = (
                         word_match.word_index
                         if word_match.word_index is not None
                         else -1
                     )
+                    if split_word_index >= 0:
+                        self._word_column_refs[
+                            (line_match.line_index, split_word_index)
+                        ] = word_column
                     self._create_word_selection_cell(
                         line_match.line_index,
                         word_idx,
@@ -816,15 +1287,21 @@ class WordMatchView:
         """Create a selection checkbox for a word column."""
         selection_key = (line_index, word_index)
         with ui.row().classes("items-center"):
-            ui.checkbox(
-                text="",
-                value=selection_key in self.selected_word_indices,
-            ).props("size=xs dense").tooltip("Select word").on_value_change(
-                lambda event, key=selection_key: self._on_word_selection_change(
-                    key,
-                    bool(event.value),
+            word_checkbox = (
+                ui.checkbox(
+                    text="",
+                    value=selection_key in self.selected_word_indices,
+                )
+                .props("size=xs dense")
+                .tooltip("Select word")
+                .on_value_change(
+                    lambda event, key=selection_key: self._on_word_selection_change(
+                        key,
+                        bool(event.value),
+                    )
                 )
             )
+            self._word_checkbox_refs[selection_key] = word_checkbox
 
             merge_button = (
                 ui.button(
@@ -1138,6 +1615,19 @@ class WordMatchView:
             )
             if not success:
                 self._safe_notify("Failed to update word ground truth", type_="warning")
+                return
+
+            self._apply_local_word_gt_update(
+                line_index=line_index,
+                word_index=word_index,
+                ground_truth_text=ground_truth_text,
+            )
+            self._update_summary()
+            self._rerender_line_card(line_index)
+            self._update_action_button_state()
+            self._refresh_word_checkbox_states()
+            self._refresh_line_checkbox_states()
+            self._refresh_paragraph_checkbox_states()
         except Exception as e:
             logger.exception(
                 "Error updating word ground truth (%s, %s): %s",
@@ -1155,18 +1645,16 @@ class WordMatchView:
         if word_object is None:
             return False, False, False
 
-        italic = bool(
-            getattr(word_object, "italic", False)
-            or getattr(word_object, "is_italic", False)
-        )
-        small_caps = bool(
-            getattr(word_object, "small_caps", False)
-            or getattr(word_object, "is_small_caps", False)
-        )
-        blackletter = bool(
-            getattr(word_object, "blackletter", False)
-            or getattr(word_object, "is_blackletter", False)
-        )
+        try:
+            word_labels = {str(label) for label in word_object.word_labels}
+        except AttributeError:
+            return False, False, False
+        except TypeError:
+            return False, False, False
+
+        italic = WORD_LABEL_ITALIC in word_labels
+        small_caps = WORD_LABEL_SMALL_CAPS in word_labels
+        blackletter = WORD_LABEL_BLACKLETTER in word_labels
         return italic, small_caps, blackletter
 
     def _handle_set_word_attributes(
@@ -1200,6 +1688,21 @@ class WordMatchView:
             )
             if not success:
                 self._safe_notify("Failed to update word attributes", type_="warning")
+                return
+            self._apply_local_word_style_update(
+                line_index=line_index,
+                word_index=word_index,
+                italic=bool(italic),
+                small_caps=bool(small_caps),
+                blackletter=bool(blackletter),
+            )
+            self._set_word_style_button_states(
+                line_index=line_index,
+                word_index=word_index,
+                italic=bool(italic),
+                small_caps=bool(small_caps),
+                blackletter=bool(blackletter),
+            )
         except Exception as e:
             logger.exception(
                 "Error updating word attributes (%s, %s): %s",
@@ -1208,6 +1711,146 @@ class WordMatchView:
                 e,
             )
             self._safe_notify(f"Error updating word attributes: {e}", type_="negative")
+
+    def apply_word_style_change(
+        self,
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> None:
+        """Apply a targeted style-only update from state event routing."""
+        self._apply_local_word_style_update(
+            line_index=line_index,
+            word_index=word_index,
+            italic=bool(italic),
+            small_caps=bool(small_caps),
+            blackletter=bool(blackletter),
+        )
+        self._set_word_style_button_states(
+            line_index=line_index,
+            word_index=word_index,
+            italic=bool(italic),
+            small_caps=bool(small_caps),
+            blackletter=bool(blackletter),
+        )
+
+    def _set_word_style_button_states(
+        self,
+        *,
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> None:
+        """Update only I/SC/BL button colors for a word without rerendering the column."""
+        key = (line_index, word_index)
+        button_refs = self._word_style_button_refs.get(key)
+        if button_refs is None:
+            return
+
+        if any(not self._has_active_ui_context(button) for button in button_refs):
+            self._word_style_button_refs.pop(key, None)
+            return
+
+        states = (italic, small_caps, blackletter)
+        for button, enabled in zip(button_refs, states, strict=False):
+            try:
+                if enabled:
+                    button.props("color=primary")
+                else:
+                    button.props("color=grey-5 text-color=black")
+                button.update()
+            except RuntimeError as error:
+                if self._is_disposed_ui_error(error):
+                    self._word_style_button_refs.pop(key, None)
+                    return
+                raise
+            except Exception:
+                logger.debug(
+                    "Failed to update style button state for key=%s",
+                    key,
+                    exc_info=True,
+                )
+
+    def _apply_local_word_style_update(
+        self,
+        *,
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+    ) -> None:
+        """Apply style labels locally for stable subsequent toggle computations."""
+        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if word_match is None:
+            return
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return
+        try:
+            labels = [str(label) for label in word_object.word_labels]
+        except AttributeError:
+            return
+        except TypeError:
+            return
+
+        labels_set = set(labels)
+        if italic:
+            labels_set.add(WORD_LABEL_ITALIC)
+        else:
+            labels_set.discard(WORD_LABEL_ITALIC)
+
+        if small_caps:
+            labels_set.add(WORD_LABEL_SMALL_CAPS)
+        else:
+            labels_set.discard(WORD_LABEL_SMALL_CAPS)
+
+        if blackletter:
+            labels_set.add(WORD_LABEL_BLACKLETTER)
+        else:
+            labels_set.discard(WORD_LABEL_BLACKLETTER)
+
+        ordered = [label for label in labels if label in labels_set]
+        ordered.extend(
+            sorted(label for label in labels_set if label not in set(ordered))
+        )
+        word_object.word_labels = ordered
+
+    def _handle_toggle_word_attribute(
+        self,
+        line_index: int,
+        word_index: int,
+        attribute: str,
+    ) -> None:
+        """Toggle one style attribute using current runtime flags (no stale closure values)."""
+        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if word_match is None:
+            self._safe_notify(
+                "Cannot set attributes for unmatched word", type_="warning"
+            )
+            return
+
+        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        if attribute == WORD_LABEL_ITALIC:
+            italic = not italic
+        elif attribute == WORD_LABEL_SMALL_CAPS:
+            small_caps = not small_caps
+        elif attribute == WORD_LABEL_BLACKLETTER:
+            blackletter = not blackletter
+        else:
+            return
+
+        self._handle_set_word_attributes(
+            line_index,
+            word_index,
+            italic,
+            small_caps,
+            blackletter,
+        )
 
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""
@@ -1236,12 +1879,10 @@ class WordMatchView:
             italic_button = (
                 ui.button(
                     "I",
-                    on_click=lambda: self._handle_set_word_attributes(
+                    on_click=lambda: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
-                        not italic,
-                        small_caps,
-                        blackletter,
+                        WORD_LABEL_ITALIC,
                     ),
                 )
                 .props("size=xs dense")
@@ -1259,12 +1900,10 @@ class WordMatchView:
             small_caps_button = (
                 ui.button(
                     "SC",
-                    on_click=lambda: self._handle_set_word_attributes(
+                    on_click=lambda: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
-                        italic,
-                        not small_caps,
-                        blackletter,
+                        WORD_LABEL_SMALL_CAPS,
                     ),
                 )
                 .props("size=xs dense")
@@ -1282,12 +1921,10 @@ class WordMatchView:
             blackletter_button = (
                 ui.button(
                     "BL",
-                    on_click=lambda: self._handle_set_word_attributes(
+                    on_click=lambda: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
-                        italic,
-                        small_caps,
-                        not blackletter,
+                        WORD_LABEL_BLACKLETTER,
                     ),
                 )
                 .props("size=xs dense")
@@ -1301,6 +1938,13 @@ class WordMatchView:
                 blackletter_button.props("color=primary")
             else:
                 blackletter_button.props("color=grey-5 text-color=black")
+
+            if split_word_index >= 0:
+                self._word_style_button_refs[(line_index, split_word_index)] = (
+                    italic_button,
+                    small_caps_button,
+                    blackletter_button,
+                )
 
         with ui.row().classes("items-center gap-1"):
             rebox_button = (
@@ -1904,6 +2548,9 @@ class WordMatchView:
             self.selected_word_indices.difference_update(
                 self._line_word_keys(line_index)
             )
+        paragraph_index = self._line_paragraph_index(line_index)
+        if paragraph_index is not None:
+            self._sync_paragraph_selection_from_lines(paragraph_index)
         logger.debug(
             "Line selection changed: line_index=%d selected=%s current_selection=%s",
             line_index,
@@ -1912,7 +2559,10 @@ class WordMatchView:
         )
         self._update_action_button_state()
         self._emit_selection_changed()
-        self._update_lines_display()
+        self._emit_paragraph_selection_changed()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
 
     def _on_word_selection_change(
         self, selection_key: tuple[int, int], selected: bool
@@ -1923,6 +2573,9 @@ class WordMatchView:
         else:
             self.selected_word_indices.discard(selection_key)
         self._sync_line_selection_from_words(selection_key[0])
+        paragraph_index = self._line_paragraph_index(selection_key[0])
+        if paragraph_index is not None:
+            self._sync_paragraph_selection_from_lines(paragraph_index)
         logger.debug(
             "Word selection changed: key=%s selected=%s current_words=%s",
             selection_key,
@@ -1931,16 +2584,26 @@ class WordMatchView:
         )
         self._update_action_button_state()
         self._emit_selection_changed()
-        self._update_lines_display()
+        self._emit_paragraph_selection_changed()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
 
     def _on_paragraph_selection_change(
         self, paragraph_index: int, selected: bool
     ) -> None:
         """Track selected paragraphs for paragraph actions."""
+        paragraph_line_indices = self._paragraph_line_indices(paragraph_index)
+        paragraph_word_keys = self._paragraph_word_keys(paragraph_index)
+
         if selected:
             self.selected_paragraph_indices.add(paragraph_index)
+            self.selected_line_indices.update(paragraph_line_indices)
+            self.selected_word_indices.update(paragraph_word_keys)
         else:
             self.selected_paragraph_indices.discard(paragraph_index)
+            self.selected_line_indices.difference_update(paragraph_line_indices)
+            self.selected_word_indices.difference_update(paragraph_word_keys)
         logger.debug(
             "Paragraph selection changed: paragraph_index=%d selected=%s current_selection=%s",
             paragraph_index,
@@ -1948,8 +2611,11 @@ class WordMatchView:
             sorted(self.selected_paragraph_indices),
         )
         self._update_action_button_state()
+        self._emit_selection_changed()
         self._emit_paragraph_selection_changed()
-        self._update_lines_display()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
 
     def _get_effective_selected_lines(self) -> list[int]:
         """Return selected lines from both line and word selections."""
@@ -1970,9 +2636,13 @@ class WordMatchView:
             for line_index in available_line_indices
             if self._is_line_fully_word_selected(line_index)
         }
+        self._sync_all_paragraph_selection_from_lines()
         self._update_action_button_state()
         self._emit_selection_changed()
-        self._update_lines_display()
+        self._emit_paragraph_selection_changed()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
 
     def set_selected_paragraphs(self, selection: set[int]) -> None:
         """Set selected paragraphs externally (e.g., image box selection)."""
@@ -1986,9 +2656,22 @@ class WordMatchView:
             for paragraph_index in selection
             if paragraph_index in available_paragraph_indices
         }
+        selected_line_indices: set[int] = set()
+        selected_word_indices: set[tuple[int, int]] = set()
+        for paragraph_index in self.selected_paragraph_indices:
+            paragraph_lines = self._paragraph_line_indices(paragraph_index)
+            selected_line_indices.update(paragraph_lines)
+            for line_index in paragraph_lines:
+                selected_word_indices.update(self._line_word_keys(line_index))
+
+        self.selected_line_indices = selected_line_indices
+        self.selected_word_indices = selected_word_indices
         self._update_action_button_state()
+        self._emit_selection_changed()
         self._emit_paragraph_selection_changed()
-        self._update_lines_display()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
 
     def _update_action_button_state(self) -> None:
         """Enable/disable line and paragraph action buttons based on selection."""
@@ -2065,14 +2748,17 @@ class WordMatchView:
 
         previous_line_selection = set(self.selected_line_indices)
         previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
         # Clear selection before invoking merge callback because merge can trigger
         # synchronous page-state notifications and UI refreshes before callback
         # returns; stale indices may otherwise map to different visible mismatch
         # lines after reindexing.
         self.selected_line_indices.clear()
         self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
         self._update_action_button_state()
         self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
         logger.info("Merge requested for selected lines: %s", selected_indices)
         try:
             success = self.merge_lines_callback(selected_indices)
@@ -2088,14 +2774,18 @@ class WordMatchView:
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
                 self._update_action_button_state()
                 self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
                 self._safe_notify("Failed to merge selected lines", type_="warning")
         except Exception as e:
             self.selected_line_indices = previous_line_selection
             self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
             self._update_action_button_state()
             self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
 
@@ -2537,6 +3227,7 @@ class WordMatchView:
         try:
             success = self.refine_words_callback([(line_index, word_index)])
             if success:
+                self._rerender_word_column(line_index, word_index)
                 self._safe_notify(
                     f"Refined word {word_index + 1} on line {line_index + 1}",
                     type_="positive",
@@ -2585,6 +3276,7 @@ class WordMatchView:
         try:
             success = self.expand_then_refine_words_callback([(line_index, word_index)])
             if success:
+                self._rerender_word_column(line_index, word_index)
                 self._safe_notify(
                     (
                         f"Expanded then refined word {word_index + 1} "
@@ -2630,6 +3322,9 @@ class WordMatchView:
         try:
             success = self.delete_words_callback([word_key])
             if success:
+                self._refresh_local_line_match_from_line_object(line_index)
+                self._update_summary()
+                self._rerender_line_card(line_index)
                 self._safe_notify(
                     f"Deleted word {word_index + 1} from line {line_index + 1}",
                     type_="positive",
@@ -2671,6 +3366,9 @@ class WordMatchView:
         try:
             success = self.merge_word_left_callback(line_index, word_index)
             if success:
+                self._refresh_local_line_match_from_line_object(line_index)
+                self._update_summary()
+                self._rerender_line_card(line_index)
                 self._safe_notify(
                     f"Merged word {word_index + 1} into word {word_index}",
                     type_="positive",
@@ -2709,6 +3407,9 @@ class WordMatchView:
         try:
             success = self.merge_word_right_callback(line_index, word_index)
             if success:
+                self._refresh_local_line_match_from_line_object(line_index)
+                self._update_summary()
+                self._rerender_line_card(line_index)
                 self._safe_notify(
                     f"Merged word {word_index + 2} into word {word_index + 1}",
                     type_="positive",
@@ -2759,6 +3460,9 @@ class WordMatchView:
         try:
             success = self.split_word_callback(line_index, word_index, split_fraction)
             if success:
+                self._refresh_local_line_match_from_line_object(line_index)
+                self._update_summary()
+                self._rerender_line_card(line_index)
                 self._word_split_fractions.pop(split_key, None)
                 self._word_split_marker_x.pop(split_key, None)
                 self._render_word_split_marker(split_key)
@@ -2828,7 +3532,7 @@ class WordMatchView:
             else:
                 self._bbox_editor_open_keys.add(key)
                 logger.debug("Opened bbox fine-tune controls for key=%s", key)
-            self._update_lines_display()
+            self._rerender_word_column(line_index, word_index)
         except Exception as e:
             logger.exception("Error toggling bbox fine-tune controls for key=%s", key)
             self._safe_notify(
@@ -2854,7 +3558,8 @@ class WordMatchView:
                 step,
             )
             self._bbox_nudge_step_px = step
-            self._update_lines_display()
+            for line_index, word_index in sorted(self._bbox_editor_open_keys):
+                self._rerender_word_column(line_index, word_index)
         except Exception as e:
             logger.exception("Error updating bbox nudge step from value=%s", value)
             self._safe_notify(f"Error updating nudge step: {e}", type_="negative")
@@ -2896,7 +3601,7 @@ class WordMatchView:
                 current_top + top_delta,
                 current_bottom + bottom_delta,
             )
-            self._update_lines_display()
+            self._rerender_word_column(line_index, word_index)
         except Exception as e:
             logger.exception(
                 "Error accumulating nudge for word bbox (%s, %s): %s",
@@ -2917,7 +3622,7 @@ class WordMatchView:
         """Reset pending bbox deltas for a single word."""
         key = (line_index, word_index)
         self._bbox_pending_deltas.pop(key, None)
-        self._update_lines_display()
+        self._rerender_word_column(line_index, word_index)
 
     def _apply_pending_single_word_bbox_nudge(
         self,
@@ -2966,6 +3671,7 @@ class WordMatchView:
             )
             if success:
                 self._bbox_pending_deltas.pop(key, None)
+                self._rerender_word_column(line_index, word_index)
                 self._safe_notify("Applied bbox fine-tune edits", type_="positive")
             else:
                 self.selected_line_indices = previous_line_selection
@@ -3017,6 +3723,7 @@ class WordMatchView:
             )
             if success:
                 self._pending_rebox_word_key = None
+                self._rerender_word_column(line_index, word_index)
                 self._safe_notify(
                     f"Reboxed word {word_index + 1} on line {line_index + 1}",
                     type_="positive",
@@ -3200,6 +3907,8 @@ class WordMatchView:
         self.selected_paragraph_indices.clear()
         self._bbox_editor_open_keys.clear()
         self._bbox_pending_deltas.clear()
+        self._word_style_button_refs = {}
+        self._word_column_refs = {}
         self._pending_rebox_word_key = None
         self._update_action_button_state()
         self._emit_selection_changed()

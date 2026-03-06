@@ -153,6 +153,41 @@ def test_merge_uses_word_selection_when_no_line_checkboxes(monkeypatch):
     assert seen["word_selection_during_callback"] == []
 
 
+def test_merge_lines_clears_paragraph_selection_before_callback(monkeypatch):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1, 2}
+    view.selected_paragraph_indices = {0, 1}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def merge_callback(indices: list[int]) -> bool:
+        seen["indices"] = indices
+        seen["paragraph_selection_during_callback"] = sorted(
+            view.selected_paragraph_indices
+        )
+        return True
+
+    view.merge_lines_callback = merge_callback
+    view._handle_merge_selected_lines()
+
+    assert seen["indices"] == [1, 2]
+    assert seen["paragraph_selection_during_callback"] == []
+    assert view.selected_paragraph_indices == set()
+
+
+def test_merge_lines_restores_paragraph_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {4, 5}
+    view.selected_paragraph_indices = {1}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.merge_lines_callback = lambda _indices: False
+    view._handle_merge_selected_lines()
+
+    assert view.selected_paragraph_indices == {1}
+
+
 def test_delete_restores_word_selection_on_failure(monkeypatch):
     view = WordMatchView()
     view.selected_word_indices = {(2, 1), (4, 0)}
@@ -236,6 +271,63 @@ def test_set_selected_paragraphs_emits_selection_callback():
 
     assert seen["p"] == {0}
     assert view.selected_paragraph_indices == {0}
+
+
+def test_set_selected_paragraphs_selects_all_lines_and_words():
+    view = WordMatchView()
+    view.view_model.line_matches = [
+        SimpleNamespace(
+            line_index=0,
+            paragraph_index=0,
+            word_matches=[object(), object()],
+        ),
+        SimpleNamespace(
+            line_index=1,
+            paragraph_index=0,
+            word_matches=[object()],
+        ),
+        SimpleNamespace(
+            line_index=2,
+            paragraph_index=1,
+            word_matches=[object()],
+        ),
+    ]
+
+    view.set_selected_paragraphs({0})
+
+    assert view.selected_paragraph_indices == {0}
+    assert view.selected_line_indices == {0, 1}
+    assert view.selected_word_indices == {(0, 0), (0, 1), (1, 0)}
+
+
+def test_on_paragraph_selection_change_clears_paragraph_lines_and_words_when_unchecked():
+    view = WordMatchView()
+    view.view_model.line_matches = [
+        SimpleNamespace(
+            line_index=0,
+            paragraph_index=0,
+            word_matches=[object(), object()],
+        ),
+        SimpleNamespace(
+            line_index=1,
+            paragraph_index=0,
+            word_matches=[object()],
+        ),
+        SimpleNamespace(
+            line_index=2,
+            paragraph_index=1,
+            word_matches=[object()],
+        ),
+    ]
+    view.selected_paragraph_indices = {0}
+    view.selected_line_indices = {0, 1, 2}
+    view.selected_word_indices = {(0, 0), (0, 1), (1, 0), (2, 0)}
+
+    view._on_paragraph_selection_change(0, False)
+
+    assert view.selected_paragraph_indices == set()
+    assert view.selected_line_indices == {2}
+    assert view.selected_word_indices == {(2, 0)}
 
 
 def test_merge_paragraphs_clears_selection_before_callback(monkeypatch):
@@ -412,6 +504,27 @@ def test_merge_word_left_clears_selection_before_callback(monkeypatch):
     assert seen["word_selection_during_callback"] == []
 
 
+def test_merge_word_left_success_rerenders_target_line(monkeypatch):
+    view = WordMatchView(merge_word_left_callback=lambda _line_index, _word_index: True)
+    seen = {"refreshed": [], "rerendered": []}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda line_index: seen["refreshed"].append(line_index) or True,
+    )
+    monkeypatch.setattr(
+        view,
+        "_rerender_line_card",
+        lambda line_index: seen["rerendered"].append(line_index),
+    )
+
+    view._handle_merge_word_left(1, 1)
+
+    assert seen["refreshed"] == [1]
+    assert seen["rerendered"] == [1]
+
+
 def test_merge_word_left_restores_selection_on_failure(monkeypatch):
     view = WordMatchView()
     view.selected_line_indices = {2}
@@ -445,6 +558,29 @@ def test_merge_word_right_clears_selection_before_callback(monkeypatch):
     assert seen["args"] == (1, 0)
     assert seen["line_selection_during_callback"] == []
     assert seen["word_selection_during_callback"] == []
+
+
+def test_merge_word_right_success_rerenders_target_line(monkeypatch):
+    view = WordMatchView(
+        merge_word_right_callback=lambda _line_index, _word_index: True
+    )
+    seen = {"refreshed": [], "rerendered": []}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda line_index: seen["refreshed"].append(line_index) or True,
+    )
+    monkeypatch.setattr(
+        view,
+        "_rerender_line_card",
+        lambda line_index: seen["rerendered"].append(line_index),
+    )
+
+    view._handle_merge_word_right(1, 0)
+
+    assert seen["refreshed"] == [1]
+    assert seen["rerendered"] == [1]
 
 
 def test_merge_word_right_restores_selection_on_failure(monkeypatch):
@@ -482,6 +618,27 @@ def test_delete_single_word_clears_selection_before_callback(monkeypatch):
     assert seen["word_selection_during_callback"] == []
 
 
+def test_delete_single_word_success_rerenders_target_line(monkeypatch):
+    view = WordMatchView(delete_words_callback=lambda _word_keys: True)
+    seen = {"refreshed": [], "rerendered": []}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda line_index: seen["refreshed"].append(line_index) or True,
+    )
+    monkeypatch.setattr(
+        view,
+        "_rerender_line_card",
+        lambda line_index: seen["rerendered"].append(line_index),
+    )
+
+    view._handle_delete_single_word(2, 1)
+
+    assert seen["refreshed"] == [2]
+    assert seen["rerendered"] == [2]
+
+
 def test_delete_single_word_restores_selection_on_failure(monkeypatch):
     view = WordMatchView()
     view.selected_line_indices = {5}
@@ -516,6 +673,30 @@ def test_split_word_clears_selection_before_callback(monkeypatch):
     assert seen["args"] == (1, 2, 0.5)
     assert seen["line_selection_during_callback"] == []
     assert seen["word_selection_during_callback"] == []
+
+
+def test_split_word_success_rerenders_target_line(monkeypatch):
+    view = WordMatchView(
+        split_word_callback=lambda _line_index, _word_index, _split_fraction: True
+    )
+    seen = {"refreshed": [], "rerendered": []}
+    view._word_split_fractions[(3, 1)] = 0.4
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda line_index: seen["refreshed"].append(line_index) or True,
+    )
+    monkeypatch.setattr(
+        view,
+        "_rerender_line_card",
+        lambda line_index: seen["rerendered"].append(line_index),
+    )
+
+    view._handle_split_word(3, 1)
+
+    assert seen["refreshed"] == [3]
+    assert seen["rerendered"] == [3]
 
 
 def test_split_word_restores_selection_on_failure(monkeypatch):
@@ -697,13 +878,19 @@ def test_refine_single_word_clears_selection_before_callback(monkeypatch):
 def test_toggle_bbox_fine_tune_opens_and_closes_editor(monkeypatch):
     view = WordMatchView(nudge_word_bbox_callback=lambda *_args: True)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
-    monkeypatch.setattr(view, "_update_lines_display", lambda: None)
+    rerendered: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        view,
+        "_rerender_word_column",
+        lambda line_index, word_index: rerendered.append((line_index, word_index)),
+    )
 
     view._toggle_bbox_fine_tune(1, 2)
     assert (1, 2) in view._bbox_editor_open_keys
 
     view._toggle_bbox_fine_tune(1, 2)
     assert (1, 2) not in view._bbox_editor_open_keys
+    assert rerendered == [(1, 2), (1, 2)]
 
 
 def test_nudge_single_word_bbox_accumulates_pending_without_callback(monkeypatch):
@@ -816,17 +1003,18 @@ def test_expand_then_refine_single_word_clears_selection_before_callback(monkeyp
 
 def test_set_bbox_nudge_step_updates_step_and_refreshes(monkeypatch):
     view = WordMatchView()
-    seen = {"refresh": 0}
+    seen: list[tuple[int, int]] = []
+    view._bbox_editor_open_keys = {(2, 1), (3, 0)}
     monkeypatch.setattr(
         view,
-        "_update_lines_display",
-        lambda: seen.__setitem__("refresh", seen["refresh"] + 1),
+        "_rerender_word_column",
+        lambda line_index, word_index: seen.append((line_index, word_index)),
     )
 
     view._set_bbox_nudge_step("10")
 
     assert view._bbox_nudge_step_px == 10
-    assert seen["refresh"] == 1
+    assert seen == [(2, 1), (3, 0)]
 
 
 def test_bbox_nudge_step_defaults_to_five_px():
@@ -977,6 +1165,56 @@ def test_word_attribute_edit_invokes_callback(monkeypatch):
     assert seen["args"] == (1, 3, True, False, True)
 
 
+def test_word_attribute_edit_does_not_rerender_word_column(monkeypatch):
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    seen = {"rerendered": 0}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_rerender_word_column",
+        lambda *_args, **_kwargs: seen.__setitem__(
+            "rerendered", seen["rerendered"] + 1
+        ),
+    )
+    monkeypatch.setattr(
+        view,
+        "_set_word_style_button_states",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        view,
+        "_apply_local_word_style_update",
+        lambda **_kwargs: None,
+    )
+
+    view._handle_set_word_attributes(1, 3, True, False, True)
+
+    assert seen["rerendered"] == 0
+
+
+def test_toggle_word_attribute_uses_current_flags(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+    word_match = SimpleNamespace(
+        word_object=SimpleNamespace(word_labels=["small_caps"])
+    )
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view, "_line_word_match_by_ocr_index", lambda *_args: word_match
+    )
+    monkeypatch.setattr(
+        view,
+        "_handle_set_word_attributes",
+        lambda line_index, word_index, italic, small_caps, blackletter: seen.setdefault(
+            "args", (line_index, word_index, italic, small_caps, blackletter)
+        ),
+    )
+
+    view._handle_toggle_word_attribute(2, 5, "small_caps")
+
+    assert seen["args"] == (2, 5, False, False, False)
+
+
 def test_word_attribute_tooltip_includes_active_flags():
     view = WordMatchView()
     word_match = SimpleNamespace(
@@ -984,11 +1222,7 @@ def test_word_attribute_tooltip_includes_active_flags():
         fuzz_score=0.5,
         ocr_text="ocr",
         ground_truth_text="gt",
-        word_object=SimpleNamespace(
-            italic=True,
-            small_caps=False,
-            blackletter=True,
-        ),
+        word_object=SimpleNamespace(word_labels=["italic", "blackletter"]),
     )
 
     tooltip = view._create_word_tooltip(word_match)

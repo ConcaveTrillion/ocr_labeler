@@ -196,9 +196,9 @@ class TestLineOperations:
 
         assert result is True
         line1 = mock_page_with_lines.lines[0]
-        assert bool(line1.words[1].italic) is True
-        assert bool(line1.words[1].small_caps) is True
-        assert bool(line1.words[1].blackletter) is False
+        assert "italic" in line1.words[1].word_labels
+        assert "small_caps" in line1.words[1].word_labels
+        assert "blackletter" not in line1.words[1].word_labels
 
     def test_update_word_attributes_invalid_word_index(
         self,
@@ -502,6 +502,70 @@ class TestLineOperations:
         assert result is True
         assert len(page.lines) == 1
         assert [word.text for word in page.lines[0].words] == ["alpha", "beta"]
+
+    def test_merge_lines_removes_empty_paragraphs_when_finalize_is_malformed(
+        self,
+        operations,
+        monkeypatch,
+    ):
+        """Even when finalize path hits malformed geometry, empty paragraphs should be removed."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        para1 = _paragraph([line1], 0)
+        para2 = _paragraph([line2], 30)
+        page = Page(width=100, height=100, page_index=0, items=[para1, para2])
+
+        monkeypatch.setattr(
+            operations,
+            "_finalize_page_structure",
+            lambda _page: (_ for _ in ()).throw(
+                AttributeError("'NoneType' object has no attribute 'is_normalized'")
+            ),
+        )
+
+        result = operations.merge_lines(page, [0, 1])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert len(page.paragraphs) == 1
+        assert [line.text for line in page.paragraphs[0].lines] == ["alpha beta"]
+
+    def test_merge_paragraphs_handles_malformed_bbox_during_remove_item(
+        self,
+        operations,
+    ):
+        """Paragraph merge should succeed when remove_item recompute hits malformed geometry."""
+        para1 = _paragraph([_line([_word("a", "A", 0)], 0)], 0)
+        para2 = _paragraph([_line([_word("b", "B", 20)], 20)], 30)
+        malformed_para = _paragraph([_line([_word("c", "C", 40)], 40)], 60)
+        page = Page(
+            width=100,
+            height=100,
+            page_index=0,
+            items=[para1, para2, malformed_para],
+        )
+        malformed_para.bounding_box = None
+
+        paragraphs = list(page.paragraphs)
+        index_a = next(
+            i
+            for i, paragraph in enumerate(paragraphs)
+            if paragraph.lines[0].text == "a"
+        )
+        index_b = next(
+            i
+            for i, paragraph in enumerate(paragraphs)
+            if paragraph.lines[0].text == "b"
+        )
+
+        result = operations.merge_paragraphs(page, [index_a, index_b])
+
+        assert result is True
+        assert len(page.paragraphs) == 2
+        line_texts_by_paragraph = [
+            [line.text for line in para.lines] for para in page.paragraphs
+        ]
+        assert ["a", "b"] in line_texts_by_paragraph
 
     def test_delete_lines_success(self, operations):
         """Test deleting selected lines."""

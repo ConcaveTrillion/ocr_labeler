@@ -6,6 +6,7 @@ from nicegui import binding, ui
 from pd_book_tools.ocr.page import Page
 
 from ....state import PageState
+from ....state.page_state import WordStyleChangedEvent
 from .word_match import WordMatchView
 
 logger = logging.getLogger(__name__)
@@ -506,9 +507,15 @@ class TextTabs:
         self.container = None
         self._tabs = None
         self._last_word_match_page_key = None
+        self._handled_word_style_event_since_last_state_change = False
 
     def _register_state_listeners(self) -> None:
         """Register state listeners once per TextTabs instance."""
+        if self.page_state and hasattr(self.page_state, "on_word_style_change"):
+            listeners = self.page_state.on_word_style_change
+            if listeners is not None and self._on_word_style_changed not in listeners:
+                listeners.append(self._on_word_style_changed)
+
         project_state = (
             self.page_state._project_state
             if self.page_state and hasattr(self.page_state, "_project_state")
@@ -524,6 +531,12 @@ class TextTabs:
         if self.page_state and self.page_state.on_change is not None:
             with contextlib.suppress(ValueError):
                 self.page_state.on_change.remove(self.model._on_page_state_change)
+
+        if self.page_state and hasattr(self.page_state, "on_word_style_change"):
+            listeners = self.page_state.on_word_style_change
+            if listeners is not None:
+                with contextlib.suppress(ValueError):
+                    listeners.remove(self._on_word_style_changed)
 
         project_state = (
             self.page_state._project_state
@@ -641,6 +654,12 @@ class TextTabs:
         logger.debug("TextTabs received page state change notification")
         # Update text editors directly instead of relying on bindings
         self._update_text_editors()
+        if self._handled_word_style_event_since_last_state_change:
+            self._handled_word_style_event_since_last_state_change = False
+            logger.debug(
+                "[word_match_refresh] state_change.skip full refresh after handled word_style_changed event"
+            )
+            return
         if self.page_state and hasattr(self.page_state, "current_page"):
             page = self.page_state.current_page
             logger.debug(f"Current page available: {page is not None}")
@@ -648,6 +667,29 @@ class TextTabs:
         else:
             logger.debug("No page state or current_page available")
             self.update_word_matches(None)
+
+    def _on_word_style_changed(self, event: WordStyleChangedEvent) -> None:
+        """Apply targeted style updates to WordMatchView."""
+        if not self._ensure_attached():
+            return
+        if event.page_index != self.page_index:
+            return
+        if not getattr(self, "word_match_view", None):
+            return
+
+        self._handled_word_style_event_since_last_state_change = True
+        logger.debug(
+            "[word_match_refresh] targeted.word_style_changed line=%s word=%s",
+            event.line_index,
+            event.word_index,
+        )
+        self.word_match_view.apply_word_style_change(
+            event.line_index,
+            event.word_index,
+            event.italic,
+            event.small_caps,
+            event.blackletter,
+        )
 
     def _on_project_state_changed(self):
         """Called when project state changes (e.g., navigation); update word matches."""
@@ -825,14 +867,14 @@ class TextTabs:
 
     def _word_style_signature(self, word: object) -> str:
         """Return stable style signature for dedupe checks."""
-        italic = bool(
-            getattr(word, "italic", False) or getattr(word, "is_italic", False)
-        )
-        small_caps = bool(
-            getattr(word, "small_caps", False) or getattr(word, "is_small_caps", False)
-        )
-        blackletter = bool(
-            getattr(word, "blackletter", False)
-            or getattr(word, "is_blackletter", False)
-        )
+        try:
+            labels = {str(label) for label in word.word_labels}
+        except AttributeError:
+            labels = set()
+        except TypeError:
+            labels = set()
+
+        italic = "italic" in labels
+        small_caps = "small_caps" in labels
+        blackletter = "blackletter" in labels
         return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}"

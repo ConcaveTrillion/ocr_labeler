@@ -1736,6 +1736,30 @@ class WordMatchView:
             blackletter=bool(blackletter),
         )
 
+    def apply_word_ground_truth_change(
+        self,
+        line_index: int,
+        word_index: int,
+        ground_truth_text: str,
+    ) -> None:
+        """Apply a targeted GT-only update from state event routing."""
+        logger.debug(
+            "[word_match_refresh] targeted.word_gt_changed.apply line=%s word=%s",
+            line_index,
+            word_index,
+        )
+        self._apply_local_word_gt_update(
+            line_index=line_index,
+            word_index=word_index,
+            ground_truth_text=ground_truth_text,
+        )
+        self._update_summary()
+        self._rerender_line_card(line_index)
+        self._update_action_button_state()
+        self._refresh_word_checkbox_states()
+        self._refresh_line_checkbox_states()
+        self._refresh_paragraph_checkbox_states()
+
     def _set_word_style_button_states(
         self,
         *,

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
 from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
@@ -183,3 +185,37 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
 
     assert refresh_calls["count"] >= 1
     assert content.image_tabs.images["Lines"].source == "encoded:130"
+
+
+@pytest.mark.asyncio
+async def test_reload_ocr_async_forces_text_and_image_sync(monkeypatch):
+    """Reload OCR should force text/image refresh even when staying on same page."""
+
+    page = SimpleNamespace(name="page_001.png")
+    project_state = SimpleNamespace(
+        current_page_index=0,
+        project=SimpleNamespace(pages=[page]),
+    )
+    project_view_model = SimpleNamespace(
+        is_project_loading=False,
+        current_page_index=0,
+        command_reload_page_with_ocr=Mock(return_value=True),
+        _project_state=project_state,
+    )
+    page_state_view_model = SimpleNamespace(command_refresh_images=Mock())
+
+    page_view = PageView(project_view_model, page_state_view_model)
+    page_view._sync_text_tabs = Mock()
+    page_view._notify = Mock()
+
+    @asynccontextmanager
+    async def _noop_action_context(*_args, **_kwargs):
+        yield
+
+    page_view._action_context = _noop_action_context
+
+    await page_view._reload_ocr_async()
+
+    project_view_model.command_reload_page_with_ocr.assert_called_once()
+    page_view._sync_text_tabs.assert_called_once_with(page)
+    page_state_view_model.command_refresh_images.assert_called_once()

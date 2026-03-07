@@ -7,7 +7,11 @@ from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
-from ocr_labeler.state.page_state import PageState, WordStyleChangedEvent
+from ocr_labeler.state.page_state import (
+    PageState,
+    WordGroundTruthChangedEvent,
+    WordStyleChangedEvent,
+)
 
 
 def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
@@ -842,6 +846,38 @@ def test_update_word_ground_truth_notifies_on_success(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_update_word_ground_truth_emits_typed_event_on_success(monkeypatch):
+    """Successful per-word GT edit should emit a targeted GT change event."""
+    page_state = PageState()
+
+    class PageStub:
+        pass
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "update_word_ground_truth",
+        lambda _self, _page, _line_index, _word_index, _text: True,
+    )
+
+    page_state.current_page = PageStub()
+    seen: list[WordGroundTruthChangedEvent] = []
+    page_state.on_word_ground_truth_change.subscribe(lambda event: seen.append(event))
+
+    result = page_state.update_word_ground_truth(4, 3, 2, "edited")
+
+    assert result is True
+    assert seen == [
+        WordGroundTruthChangedEvent(
+            page_index=4,
+            line_index=3,
+            word_index=2,
+            ground_truth_text="edited",
+        )
+    ]
+
+
 def test_update_word_attributes_notifies_on_success(monkeypatch):
     """Successful per-word attribute edit should notify listeners for UI refresh."""
     page_state = PageState()
@@ -884,7 +920,7 @@ def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
 
     page_state.current_page = PageStub()
     seen: list[WordStyleChangedEvent] = []
-    page_state.on_word_style_change = [lambda event: seen.append(event)]
+    page_state.on_word_style_change.subscribe(lambda event: seen.append(event))
 
     result = page_state.update_word_attributes(3, 1, 2, True, False, True)
 

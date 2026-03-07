@@ -68,6 +68,7 @@ class ProjectState:
     _notification_lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+    _force_ocr_page_overrides: set[int] = field(default_factory=set, init=False)
 
     def queue_notification(self, message: str, kind: str = "info"):
         """Queue a user-facing notification from any thread.
@@ -288,6 +289,7 @@ class ProjectState:
             # Clear page states for the new project
             self.page_states.clear()
             self.page_models.clear()
+            self._force_ocr_page_overrides.clear()
         finally:
             self.is_project_loading = False
             self.notify()
@@ -537,6 +539,7 @@ class ProjectState:
             and not force_ocr
             and self.project_root is not None
             and current_page_source in {"ocr", "cached_ocr"}
+            and index not in self._force_ocr_page_overrides
         ):
             img_path = Path(self.project.image_paths[index])
             loaded_page_model = _try_load_user_saved_page(index, img_path)
@@ -549,6 +552,15 @@ class ProjectState:
                 self.notify()
                 _log_page_timing(source="filesystem", status="loaded")
                 return self.get_page_model(index)
+
+        if force_ocr:
+            logger.debug(
+                "ensure_page_model: force_ocr requested for index=%s; invalidating in-memory page and metadata",
+                index,
+            )
+            self.project.pages[index] = None
+            self.clear_page_model(index)
+            self._force_ocr_page_overrides.add(index)
 
         if self.project.pages[index] is None:
             img_path = Path(
@@ -853,6 +865,10 @@ class ProjectState:
         page_state.reload_page_with_ocr(self.current_page_index)
         # Invalidate cache since page content may have changed
         self._invalidate_text_cache()
+        # Recompute cache and notify listeners so same-page OCR reloads are
+        # reflected immediately without requiring navigation.
+        self._update_text_cache(force=True)
+        self.notify()
         logger.debug("reload_current_page_with_ocr: completed")
 
     def _navigate(self):

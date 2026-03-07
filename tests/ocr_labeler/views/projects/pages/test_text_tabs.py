@@ -4,13 +4,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from nicegui import Event
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
 from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
-from ocr_labeler.state.page_state import PageState, WordStyleChangedEvent
+from ocr_labeler.state.page_state import (
+    PageState,
+    WordGroundTruthChangedEvent,
+    WordStyleChangedEvent,
+)
 from ocr_labeler.views.projects.pages.text_tabs import TextTabs
 
 
@@ -51,7 +56,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     )
     page_state = SimpleNamespace(
         on_change=[],
-        on_word_style_change=[],
+        on_word_style_change=Event(),
         _project_state=project_state,
         current_gt_text="",
         current_ocr_text="",
@@ -61,9 +66,20 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     )
 
     text_tabs = TextTabs(page_state=page_state)
+    text_tabs.word_match_view.apply_word_style_change = MagicMock()
 
     assert text_tabs.model._on_page_state_change in page_state.on_change
-    assert text_tabs._on_word_style_changed in page_state.on_word_style_change
+    page_state.on_word_style_change.emit(
+        WordStyleChangedEvent(
+            page_index=0,
+            line_index=0,
+            word_index=0,
+            italic=True,
+            small_caps=False,
+            blackletter=False,
+        )
+    )
+    text_tabs.word_match_view.apply_word_style_change.assert_called_once()
     assert text_tabs._on_project_state_changed in project_state.on_change
 
     text_tabs.container = _DeletedContainer()
@@ -71,8 +87,20 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
 
     assert text_tabs._disposed is True
     assert text_tabs.model._on_page_state_change not in page_state.on_change
-    assert text_tabs._on_word_style_changed not in page_state.on_word_style_change
     assert text_tabs._on_project_state_changed not in project_state.on_change
+
+    text_tabs.word_match_view.apply_word_style_change.reset_mock()
+    page_state.on_word_style_change.emit(
+        WordStyleChangedEvent(
+            page_index=0,
+            line_index=0,
+            word_index=0,
+            italic=False,
+            small_caps=False,
+            blackletter=False,
+        )
+    )
+    text_tabs.word_match_view.apply_word_style_change.assert_not_called()
 
 
 def test_text_tabs_skips_duplicate_word_match_update_for_same_page_payload():
@@ -479,15 +507,14 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
             small_caps=False,
             blackletter=True,
         )
-        for listener in page_state.on_word_style_change:
-            listener(event)
+        page_state.on_word_style_change.emit(event)
         for listener in page_state.on_change:
             listener()
         return True
 
     page_state = SimpleNamespace(
         on_change=[],
-        on_word_style_change=[],
+        on_word_style_change=Event(),
         _project_state=project_state,
         current_gt_text="",
         current_ocr_text="",
@@ -517,6 +544,219 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
         True,
     )
     text_tabs.word_match_view.update_from_page.assert_not_called()
+
+
+def test_text_tabs_word_gt_event_routes_to_targeted_view_update():
+    """Word GT events should update only targeted GT controls in WordMatchView."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    page = SimpleNamespace(name="p001.png", index=0, lines=[], blocks=[])
+
+    page_state = None
+
+    def update_word_ground_truth(_page_index, _line_index, _word_index, _text):
+        event = WordGroundTruthChangedEvent(
+            page_index=0,
+            line_index=2,
+            word_index=3,
+            ground_truth_text="edited",
+        )
+        page_state.on_word_ground_truth_change.emit(event)
+        for listener in page_state.on_change:
+            listener()
+        return True
+
+    page_state = SimpleNamespace(
+        on_change=[],
+        on_word_ground_truth_change=Event(),
+        on_word_style_change=Event(),
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=page,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_ground_truth=update_word_ground_truth,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
+    text_tabs.word_match_view.apply_word_ground_truth_change = MagicMock()
+    text_tabs.word_match_view.update_from_page = MagicMock()
+
+    result = text_tabs.word_match_view.edit_word_ground_truth_callback(0, 0, "edited")
+
+    assert result is True
+    text_tabs.word_match_view.apply_word_ground_truth_change.assert_called_once_with(
+        2,
+        3,
+        "edited",
+    )
+    text_tabs.word_match_view.update_from_page.assert_not_called()
+
+
+def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
+    """Style event coalescing should not suppress later full refreshes for changed page data."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+
+    word = SimpleNamespace(
+        text="alpha",
+        ground_truth_text="alpha",
+        word_labels=[],
+    )
+    line = SimpleNamespace(
+        text="alpha",
+        ground_truth_text="alpha",
+        words=[word],
+        unmatched_ground_truth_words=[],
+    )
+    page_one = SimpleNamespace(name="p001.png", index=0, lines=[line], blocks=[])
+    page_two = SimpleNamespace(
+        name="p001.png",
+        index=0,
+        lines=[
+            SimpleNamespace(
+                text="beta",
+                ground_truth_text="beta",
+                words=[
+                    SimpleNamespace(
+                        text="beta",
+                        ground_truth_text="beta",
+                        word_labels=[],
+                    )
+                ],
+                unmatched_ground_truth_words=[],
+            )
+        ],
+        blocks=[],
+    )
+
+    page_state = None
+
+    def update_word_attributes(_page_index, _line_index, _word_index, *_flags):
+        event = WordStyleChangedEvent(
+            page_index=0,
+            line_index=0,
+            word_index=0,
+            italic=True,
+            small_caps=False,
+            blackletter=False,
+        )
+        page_state.on_word_style_change.emit(event)
+        for listener in page_state.on_change:
+            listener()
+        return True
+
+    page_state = SimpleNamespace(
+        on_change=[],
+        on_word_style_change=Event(),
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=page_one,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_attributes=update_word_attributes,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
+    text_tabs.word_match_view.apply_word_style_change = MagicMock()
+    text_tabs.word_match_view.update_from_page = MagicMock()
+
+    text_tabs.update_word_matches(page_one)
+
+    result = text_tabs.word_match_view.set_word_attributes_callback(
+        0,
+        0,
+        True,
+        False,
+        False,
+    )
+    assert result is True
+    assert text_tabs.word_match_view.update_from_page.call_count == 1
+
+    page_state.current_page = page_two
+    for listener in page_state.on_change:
+        listener()
+
+    assert text_tabs.word_match_view.update_from_page.call_count == 2
+    text_tabs.word_match_view.update_from_page.assert_called_with(page_two)
+
+
+def test_text_tabs_word_gt_event_coalesces_only_same_page_refresh():
+    """GT event coalescing should not suppress later full refreshes for changed page data."""
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+
+    line_one = SimpleNamespace(
+        text="alpha",
+        ground_truth_text="alpha",
+        words=[
+            SimpleNamespace(text="alpha", ground_truth_text="alpha", word_labels=[])
+        ],
+        unmatched_ground_truth_words=[],
+    )
+    line_two = SimpleNamespace(
+        text="beta",
+        ground_truth_text="beta",
+        words=[SimpleNamespace(text="beta", ground_truth_text="beta", word_labels=[])],
+        unmatched_ground_truth_words=[],
+    )
+    page_one = SimpleNamespace(name="p001.png", index=0, lines=[line_one], blocks=[])
+    page_two = SimpleNamespace(name="p001.png", index=0, lines=[line_two], blocks=[])
+
+    page_state = None
+
+    def update_word_ground_truth(_page_index, _line_index, _word_index, _text):
+        event = WordGroundTruthChangedEvent(
+            page_index=0,
+            line_index=0,
+            word_index=0,
+            ground_truth_text="edited",
+        )
+        page_state.on_word_ground_truth_change.emit(event)
+        for listener in page_state.on_change:
+            listener()
+        return True
+
+    page_state = SimpleNamespace(
+        on_change=[],
+        on_word_ground_truth_change=Event(),
+        on_word_style_change=Event(),
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=page_one,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        update_word_ground_truth=update_word_ground_truth,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=0)
+    text_tabs.word_match_view.apply_word_ground_truth_change = MagicMock()
+    text_tabs.word_match_view.update_from_page = MagicMock()
+
+    text_tabs.update_word_matches(page_one)
+
+    result = text_tabs.word_match_view.edit_word_ground_truth_callback(0, 0, "edited")
+    assert result is True
+    assert text_tabs.word_match_view.update_from_page.call_count == 1
+
+    page_state.current_page = page_two
+    for listener in page_state.on_change:
+        listener()
+
+    assert text_tabs.word_match_view.update_from_page.call_count == 2
+    text_tabs.word_match_view.update_from_page.assert_called_with(page_two)
 
 
 def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():

@@ -7,6 +7,7 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional
 
+from nicegui import Event
 from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ..models.page_model import PageModel
@@ -31,6 +32,16 @@ class WordStyleChangedEvent:
     blackletter: bool
 
 
+@dataclass(frozen=True)
+class WordGroundTruthChangedEvent:
+    """Typed event emitted when a single word's GT text is updated."""
+
+    page_index: int
+    line_index: int
+    word_index: int
+    ground_truth_text: str
+
+
 @dataclass
 class PageState:
     """Page-specific state management. Oversees page loading, caching, and operations.
@@ -43,9 +54,10 @@ class PageState:
 
     page_ops: PageOperations = field(default_factory=PageOperations)
     on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
-    on_word_style_change: Optional[List[Callable[[WordStyleChangedEvent], None]]] = (
-        field(default_factory=list)
+    on_word_ground_truth_change: Event[WordGroundTruthChangedEvent] = field(
+        default_factory=Event
     )
+    on_word_style_change: Event[WordStyleChangedEvent] = field(default_factory=Event)
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
@@ -69,10 +81,30 @@ class PageState:
 
     def _emit_word_style_changed(self, event: WordStyleChangedEvent) -> None:
         """Notify listeners of a targeted word-style mutation."""
-        if self.on_word_style_change is None:
-            return
-        for listener in self.on_word_style_change:
-            listener(event)
+        logger.debug(
+            "[word_style_event] emitted page=%s line=%s word=%s italic=%s small_caps=%s blackletter=%s",
+            event.page_index,
+            event.line_index,
+            event.word_index,
+            event.italic,
+            event.small_caps,
+            event.blackletter,
+        )
+        self.on_word_style_change.emit(event)
+
+    def _emit_word_ground_truth_changed(
+        self,
+        event: WordGroundTruthChangedEvent,
+    ) -> None:
+        """Notify listeners of a targeted word GT mutation."""
+        logger.debug(
+            "[word_gt_event] emitted page=%s line=%s word=%s text=%r",
+            event.page_index,
+            event.line_index,
+            event.word_index,
+            event.ground_truth_text,
+        )
+        self.on_word_ground_truth_change.emit(event)
 
     def _resolve_workspace_save_directory(self, save_directory: str) -> str:
         """Resolve local-data save directories against workspace CWD."""
@@ -295,6 +327,14 @@ class PageState:
 
             if result:
                 self._invalidate_text_cache()
+                self._emit_word_ground_truth_changed(
+                    WordGroundTruthChangedEvent(
+                        page_index=page_index,
+                        line_index=line_index,
+                        word_index=word_index,
+                        ground_truth_text=str(ground_truth_text or ""),
+                    )
+                )
                 self.notify()
 
             return result

@@ -337,6 +337,81 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
     )
 
 
+def test_ensure_page_model_force_ocr_ignores_loaded_labeled_page(tmp_path):
+    """force_ocr should bypass loaded labeled page and run OCR parser."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    labeled_page = MagicMock()
+    labeled_page.page_source = "filesystem"
+
+    project = Mock()
+    project.pages = [labeled_page]
+    project.image_paths = [image_path]
+    project.ground_truth_map = {}
+    state.project = project
+
+    ocr_page = MagicMock()
+    ocr_page.name = "001.png"
+    ocr_page.index = 0
+    ocr_page.image_path = str(image_path)
+
+    with (
+        patch.object(state, "notify"),
+        patch.object(state.page_ops, "can_load_page") as mock_can_load,
+        patch.object(state.page_ops, "load_page_model") as mock_load,
+        patch.object(state.page_ops, "save_page", return_value=False),
+    ):
+        state.page_ops.page_parser = Mock(return_value=ocr_page)
+
+        page_model = state.ensure_page_model(0, force_ocr=True)
+
+    assert page_model is not None
+    assert state.page_ops.page_parser.call_count == 1
+    mock_can_load.assert_not_called()
+    mock_load.assert_not_called()
+    assert state.project.pages[0] is ocr_page
+    assert page_model.page is ocr_page
+    assert page_model.page_source in {"ocr", "cached_ocr"}
+
+
+def test_ensure_page_model_skips_disk_replace_after_force_ocr_override(tmp_path):
+    """After force OCR, normal ensure calls should not auto-replace with labeled disk page."""
+    state = ProjectState()
+    state.project_root = tmp_path
+
+    image_path = tmp_path / "001.png"
+    image_path.write_bytes(b"img")
+
+    raw_page = MagicMock()
+    raw_page.page_source = "cached_ocr"
+
+    state.project = Mock(
+        pages=[raw_page],
+        image_paths=[image_path],
+        ground_truth_map={},
+    )
+    state.page_models[0] = PageModel(page=raw_page, page_source="cached_ocr")
+    state._force_ocr_page_overrides.add(0)
+
+    with (
+        patch.object(state, "notify") as mock_notify,
+        patch.object(state.page_ops, "can_load_page") as mock_can_load,
+        patch.object(state.page_ops, "load_page_model") as mock_load,
+    ):
+        page_model = state.ensure_page_model(0, force_ocr=False)
+
+    assert page_model is not None
+    assert page_model.page is raw_page
+    assert page_model.page_source == "cached_ocr"
+    mock_can_load.assert_not_called()
+    mock_load.assert_not_called()
+    mock_notify.assert_not_called()
+
+
 def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
     """Ensure cached OCR loads emit structured page load timing logs."""
     state = ProjectState()
@@ -666,6 +741,27 @@ def test_refine_all_bboxes_success(tmp_path):
         assert result is True
         mock_refine.assert_called_once_with(page=mock_page, padding_px=3)
         mock_page_state.notify.assert_called_once()
+
+
+def test_reload_current_page_with_ocr_notifies_and_refreshes_cache():
+    """Reload OCR should force cache refresh and notify listeners for same-page updates."""
+    state = ProjectState()
+    state.current_page_index = 0
+
+    mock_page_state = MagicMock()
+
+    with (
+        patch.object(state, "get_page_state", return_value=mock_page_state),
+        patch.object(state, "_invalidate_text_cache") as mock_invalidate,
+        patch.object(state, "_update_text_cache") as mock_update_cache,
+        patch.object(state, "notify") as mock_notify,
+    ):
+        state.reload_current_page_with_ocr()
+
+    mock_page_state.reload_page_with_ocr.assert_called_once_with(0)
+    mock_invalidate.assert_called_once()
+    mock_update_cache.assert_called_once_with(force=True)
+    mock_notify.assert_called_once()
 
 
 def test_refine_all_bboxes_no_page(tmp_path):

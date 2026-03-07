@@ -347,6 +347,36 @@ class PageView:  # pragma: no cover - UI wrapper file
             try:
                 success = self.project_view_model.command_reload_page_with_ocr()
                 if success:
+                    project_state = getattr(
+                        self.project_view_model, "_project_state", None
+                    )
+                    current_page = None
+                    try:
+                        if project_state is not None:
+                            project = getattr(project_state, "project", None)
+                            page_index = getattr(
+                                project_state,
+                                "current_page_index",
+                                self.project_view_model.current_page_index,
+                            )
+                            if (
+                                project is not None
+                                and hasattr(project, "pages")
+                                and 0 <= page_index < len(project.pages)
+                            ):
+                                current_page = project.pages[page_index]
+                    except Exception:
+                        logger.debug(
+                            "Unable to resolve current page after OCR reload",
+                            exc_info=True,
+                        )
+
+                    if current_page is not None:
+                        self._sync_text_tabs(current_page)
+
+                    # Ensure image tabs refresh even when page index does not change.
+                    self.page_state_view_model.command_refresh_images()
+
                     logger.info("OCR reloaded successfully")
                     self._notify("Page reloaded with OCR", "positive")
                 else:

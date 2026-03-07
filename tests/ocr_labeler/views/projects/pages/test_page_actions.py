@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
+import ocr_labeler.views.projects.pages.page_actions as page_actions_module
 from ocr_labeler.views.projects.pages.page_actions import PageActions
 
 
@@ -53,3 +54,91 @@ class TestPageActions:
         assert controls.page_name_box is None
         assert controls.page_source_label is None
         assert controls.page_source_tooltip is None
+
+    def test_bind_from_safe_does_not_raise_and_notifies_once(self, monkeypatch):
+        """Binding setup failures are handled without raising and notify once."""
+        controls = PageActions(project_viewmodel=Mock(), page_viewmodel=Mock())
+
+        def failing_bind_from(*_args, **_kwargs):
+            raise RuntimeError("bind failed")
+
+        monkeypatch.setattr(
+            page_actions_module.binding,
+            "bind_from",
+            failing_bind_from,
+        )
+        notify_mock = MagicMock()
+        monkeypatch.setattr(controls, "_notify", notify_mock)
+
+        controls._bind_from_safe(
+            object(),
+            "text",
+            object(),
+            "value",
+            key="bind-key",
+            message="binding failed",
+        )
+        controls._bind_from_safe(
+            object(),
+            "text",
+            object(),
+            "value",
+            key="bind-key",
+            message="binding failed",
+        )
+
+        notify_mock.assert_called_once_with("binding failed", "warning")
+
+    def test_bind_from_safe_success_emits_no_notification(self, monkeypatch):
+        """Successful binding setup should not emit warning notifications."""
+        controls = PageActions(project_viewmodel=Mock(), page_viewmodel=Mock())
+        notify_mock = MagicMock()
+        monkeypatch.setattr(controls, "_notify", notify_mock)
+        monkeypatch.setattr(
+            page_actions_module.binding, "bind_from", lambda *_args, **_kwargs: None
+        )
+
+        controls._bind_from_safe(
+            object(),
+            "text",
+            object(),
+            "value",
+            key="bind-key-success",
+            message="should not notify",
+        )
+
+        notify_mock.assert_not_called()
+
+    def test_bind_from_safe_failure_queues_expected_notification(self, monkeypatch):
+        """Binding failure should emit expected notification content via queue path."""
+        app_state = Mock()
+        app_state.queue_notification = MagicMock()
+        app_state_model = Mock()
+        app_state_model._app_state = app_state
+
+        project_viewmodel = Mock()
+        project_viewmodel._app_state_model = app_state_model
+
+        controls = PageActions(
+            project_viewmodel=project_viewmodel,
+            page_viewmodel=Mock(),
+        )
+
+        def failing_bind_from(*_args, **_kwargs):
+            raise RuntimeError("bind failed")
+
+        monkeypatch.setattr(page_actions_module.binding, "bind_from", failing_bind_from)
+
+        controls._bind_from_safe(
+            object(),
+            "text",
+            object(),
+            "value",
+            key="queue-bind-key",
+            message="Page source label may not update automatically",
+        )
+
+        app_state.queue_notification.assert_called_once_with(
+            "Page source label may not update automatically",
+            "warning",
+        )

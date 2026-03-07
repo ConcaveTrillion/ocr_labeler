@@ -36,9 +36,27 @@ class ImageTabs:
         self._selected_word_boxes: list[tuple[float, float, float, float]] = []
         self._selected_line_boxes: list[tuple[float, float, float, float]] = []
         self._selected_paragraph_boxes: list[tuple[float, float, float, float]] = []
+        self._notified_error_keys: set[str] = set()
         # Register callback for direct image updates (bypasses data binding)
         self.page_state_view_model.set_image_update_callback(self._on_images_updated)
         logger.debug("ImageTabs initialization complete with callback registered")
+
+    def _notify(self, message: str, type_: str = "warning") -> None:
+        """Send UI notification through app-state queue with direct UI fallback."""
+        project_state = getattr(self.page_state_view_model, "_project_state", None)
+        app_state_model = getattr(project_state, "_app_state_model", None)
+        app_state = getattr(app_state_model, "_app_state", None)
+        if app_state is not None:
+            app_state.queue_notification(message, type_)
+            return
+        ui.notify(message, type=type_)
+
+    def _notify_once(self, key: str, message: str, type_: str = "warning") -> None:
+        """Emit a notification once per key to avoid repeated toasts."""
+        if key in self._notified_error_keys:
+            return
+        self._notified_error_keys.add(key)
+        self._notify(message, type_)
 
     def build(self):
         logger.debug("Building ImageTabs UI components")
@@ -273,6 +291,11 @@ class ImageTabs:
             interactive_image.content = "".join(overlay_parts)
         except Exception:
             logger.debug("Failed to render drag overlay", exc_info=True)
+            self._notify_once(
+                "image-tabs-drag-overlay-render",
+                "Failed to render selection overlay",
+                type_="warning",
+            )
 
     def _clear_drag_overlay(self, tab_name: str = "Words") -> None:
         """Remove drag rectangle overlay."""
@@ -283,6 +306,11 @@ class ImageTabs:
             interactive_image.content = ""
         except Exception:
             logger.debug("Failed to clear drag overlay", exc_info=True)
+            self._notify_once(
+                "image-tabs-drag-overlay-clear",
+                "Failed to clear selection overlay",
+                type_="warning",
+            )
 
     def _clear_drag_state(self) -> None:
         """Clear in-progress drag state and remove dashed drag overlays."""
@@ -683,6 +711,11 @@ class ImageTabs:
                 "Failed to update interactive image geometry for %s",
                 tab_name,
                 exc_info=True,
+            )
+            self._notify_once(
+                f"image-tabs-geometry-{tab_name.lower()}",
+                "Failed to update image geometry",
+                type_="warning",
             )
 
     def _line_indices_from_selected_words(self) -> set[int]:

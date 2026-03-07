@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from ocr_labeler.views.projects.pages.word_match import WordMatchView
 
 
@@ -298,6 +300,48 @@ def test_set_selected_paragraphs_selects_all_lines_and_words():
     assert view.selected_paragraph_indices == {0}
     assert view.selected_line_indices == {0, 1}
     assert view.selected_word_indices == {(0, 0), (0, 1), (1, 0)}
+
+
+def test_refresh_line_checkbox_states_does_not_raise_on_attribute_error(monkeypatch):
+    """Attribute errors during checkbox updates are treated as benign UI edge cases."""
+    view = WordMatchView()
+    checkbox = object()
+    view._line_checkbox_refs = {1: checkbox}
+
+    monkeypatch.setattr(view, "_has_active_ui_context", lambda _checkbox: True)
+    monkeypatch.setattr(view, "_is_line_checked", lambda _line_index: True)
+
+    def raise_attribute_error(*_args, **_kwargs):
+        raise AttributeError("missing internal checkbox attr")
+
+    monkeypatch.setattr(view, "_set_checkbox_value", raise_attribute_error)
+
+    view._refresh_line_checkbox_states()
+
+
+def test_refresh_line_checkbox_states_raises_on_real_runtime_error(monkeypatch):
+    """Unexpected runtime failures should still propagate to avoid hidden corruption."""
+    view = WordMatchView()
+    checkbox = object()
+    view._line_checkbox_refs = {1: checkbox}
+
+    monkeypatch.setattr(view, "_has_active_ui_context", lambda _checkbox: True)
+    monkeypatch.setattr(view, "_is_line_checked", lambda _line_index: True)
+    monkeypatch.setattr(view, "_is_disposed_ui_error", lambda _error: False)
+
+    def raise_runtime_error(*_args, **_kwargs):
+        raise RuntimeError("real runtime error")
+
+    monkeypatch.setattr(view, "_set_checkbox_value", raise_runtime_error)
+
+    with pytest.raises(RuntimeError, match="real runtime error"):
+        view._refresh_line_checkbox_states()
+
+
+def test_set_checkbox_value_without_setter_does_not_raise():
+    """Checkbox objects without set_value support should be skipped without errors."""
+    view = WordMatchView()
+    view._set_checkbox_value(object(), True)
 
 
 def test_on_paragraph_selection_change_clears_paragraph_lines_and_words_when_unchecked():

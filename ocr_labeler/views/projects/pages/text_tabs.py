@@ -746,18 +746,15 @@ class TextTabs:
         ):
             project_state = self.page_state._project_state
             page = None
-            try:
-                project = getattr(project_state, "project", None)
-                index = getattr(project_state, "current_page_index", None)
-                if (
-                    project is not None
-                    and hasattr(project, "pages")
-                    and index is not None
-                    and 0 <= index < len(project.pages)
-                ):
-                    page = project.pages[index]
-            except Exception:
-                page = None
+            project = getattr(project_state, "project", None)
+            index = getattr(project_state, "current_page_index", None)
+            if (
+                project is not None
+                and hasattr(project, "pages")
+                and index is not None
+                and 0 <= index < len(project.pages)
+            ):
+                page = project.pages[index]
             logger.debug(f"Current page from ProjectState: {page is not None}")
             # Update the PageState's current_page reference so both are in sync
             if page is not None:

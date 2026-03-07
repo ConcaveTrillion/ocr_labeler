@@ -26,6 +26,7 @@ NotifyCallback: TypeAlias = Callable[[str, str], None]
 SelectionChangeCallback: TypeAlias = Callable[[set[WordKey]], None]
 ParagraphSelectionCallback: TypeAlias = Callable[[set[int]], None]
 ReboxRequestCallback: TypeAlias = Callable[[int, int], None]
+ClickEvent: TypeAlias = events.ClickEventArguments | None
 
 SingleLineAction: TypeAlias = Callable[[int], bool]
 LineIndicesAction: TypeAlias = Callable[[list[int]], bool]
@@ -143,29 +144,32 @@ class WordMatchView:
         self._display_update_call_count = 0
         self._display_update_render_count = 0
         self._display_update_skip_count = 0
+        self._notified_error_keys: set[str] = set()
         logger.debug("WordMatchView initialization complete")
 
     def _safe_notify(self, message: str, type_: str = "info"):
-        """Safely call ui.notify, catching context errors during navigation."""
+        """Notify through callback when available, with direct UI fallback."""
         if self.notify_callback is not None:
             try:
                 self.notify_callback(message, type_)
                 return
             except Exception:
-                logger.debug(
-                    "Notify callback failed; falling back to ui.notify", exc_info=True
-                )
+                logger.debug("Notify callback failed", exc_info=True)
 
         try:
             ui.notify(message, type=type_)
-        except RuntimeError as e:
-            # Parent element deleted during navigation - this is expected
-            if "parent element" in str(e) and "deleted" in str(e):
-                logger.debug(
-                    f"Skipping notification during navigation cleanup: {message}"
-                )
-            else:
-                raise
+        except RuntimeError as error:
+            if self._is_disposed_ui_error(error):
+                logger.debug("Skipping notification during UI disposal: %s", message)
+                return
+            raise
+
+    def _safe_notify_once(self, key: str, message: str, type_: str = "warning") -> None:
+        """Emit a UI notification once per key to avoid repetitive toast spam."""
+        if key in self._notified_error_keys:
+            return
+        self._notified_error_keys.add(key)
+        self._safe_notify(message, type_=type_)
 
     def _is_disposed_ui_error(self, error: RuntimeError) -> bool:
         """Return True when runtime error indicates expected UI teardown race."""
@@ -353,8 +357,10 @@ class WordMatchView:
                 logger.debug("Skipping word match update during UI disposal: %s", e)
                 return
             logger.exception(f"Error updating word match view: {e}")
+            self._safe_notify("Failed to update word matches", type_="negative")
         except Exception as e:
             logger.exception(f"Error updating word match view: {e}")
+            self._safe_notify("Failed to update word matches", type_="negative")
 
     def _update_summary(self):
         """Update the summary statistics display."""
@@ -546,14 +552,14 @@ class WordMatchView:
                         )
                         ui.button(
                             icon=toggle_icon,
-                            on_click=lambda _event=None, index=paragraph_index: (
+                            on_click=lambda _event, index=paragraph_index: (
                                 self._toggle_paragraph_expanded(index)
                             ),
                         ).props("flat round dense size=sm").classes("shrink-0")
 
                         ui.button(
                             self._format_paragraph_label(paragraph_index),
-                            on_click=lambda _event=None, index=paragraph_index: (
+                            on_click=lambda _event, index=paragraph_index: (
                                 self._toggle_paragraph_expanded(index)
                             ),
                         ).props("flat dense no-caps align=left").classes(
@@ -690,21 +696,13 @@ class WordMatchView:
         """Emit selected words to listener (for image overlay sync)."""
         if self._selection_change_callback is None:
             return
-        try:
-            self._selection_change_callback(set(self.selected_word_indices))
-        except Exception:
-            logger.debug("Selection change callback failed", exc_info=True)
+        self._selection_change_callback(set(self.selected_word_indices))
 
     def _emit_paragraph_selection_changed(self) -> None:
         """Emit selected paragraphs to listener (for image overlay sync)."""
         if self._paragraph_selection_change_callback is None:
             return
-        try:
-            self._paragraph_selection_change_callback(
-                set(self.selected_paragraph_indices)
-            )
-        except Exception:
-            logger.debug("Paragraph selection callback failed", exc_info=True)
+        self._paragraph_selection_change_callback(set(self.selected_paragraph_indices))
 
     def _line_match_by_index(self, line_index: int) -> LineMatch | None:
         for line_match in self.view_model.line_matches:
@@ -792,10 +790,10 @@ class WordMatchView:
             setter(value)
             return
 
-        setattr(checkbox, "value", value)
-        updater = getattr(checkbox, "update", None)
-        if callable(updater):
-            updater()
+        logger.debug(
+            "Skipping checkbox value update; set_value is unavailable for %s",
+            type(checkbox).__name__,
+        )
 
     def _refresh_line_checkbox_states(self) -> None:
         """Update rendered line-checkbox values from current selection state."""
@@ -814,7 +812,7 @@ class WordMatchView:
                     self._line_checkbox_refs.pop(line_index, None)
                     continue
                 raise
-            except Exception:
+            except AttributeError:
                 logger.debug(
                     "Failed to refresh line checkbox for line %s",
                     line_index,
@@ -838,7 +836,7 @@ class WordMatchView:
                     self._paragraph_checkbox_refs.pop(paragraph_index, None)
                     continue
                 raise
-            except Exception:
+            except AttributeError:
                 logger.debug(
                     "Failed to refresh paragraph checkbox for paragraph %s",
                     paragraph_index,
@@ -862,7 +860,7 @@ class WordMatchView:
                     self._word_checkbox_refs.pop(selection_key, None)
                     continue
                 raise
-            except Exception:
+            except AttributeError:
                 logger.debug(
                     "Failed to refresh word checkbox for key %s",
                     selection_key,
@@ -1115,6 +1113,11 @@ class WordMatchView:
                     word_index,
                     exc_info=True,
                 )
+                self._safe_notify_once(
+                    "word-fuzz-compute",
+                    "Unable to compute some fuzzy scores; using fallback matching",
+                    type_="warning",
+                )
 
         if fuzz_score is not None and fuzz_score >= self.view_model.fuzz_threshold:
             target_word_match.match_status = MatchStatus.FUZZY
@@ -1164,6 +1167,11 @@ class WordMatchView:
                     getattr(word_object, "line_index", None),
                     word_index,
                     exc_info=True,
+                )
+                self._safe_notify_once(
+                    "word-local-fuzz-rebuild",
+                    "Unable to compute some fuzzy scores during refresh",
+                    type_="warning",
                 )
 
         if fuzz_score is not None and fuzz_score >= self.view_model.fuzz_threshold:
@@ -1306,9 +1314,10 @@ class WordMatchView:
             merge_button = (
                 ui.button(
                     icon="call_merge",
-                    on_click=lambda: self._handle_merge_word_right(
+                    on_click=lambda event: self._handle_merge_word_right(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -1323,9 +1332,10 @@ class WordMatchView:
             split_button = (
                 ui.button(
                     icon="call_split",
-                    on_click=lambda: self._handle_split_word(
+                    on_click=lambda event: self._handle_split_word(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -1343,9 +1353,10 @@ class WordMatchView:
                 ui.button(
                     icon="delete",
                     color="negative",
-                    on_click=lambda: self._handle_delete_single_word(
+                    on_click=lambda event: self._handle_delete_single_word(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -1377,6 +1388,11 @@ class WordMatchView:
                     logger.error(f"Error getting word image: {e}")
                     word_image = None
                     ui.icon("error").classes("text-red-600").style("height: 2.25em")
+                    self._safe_notify_once(
+                        "word-image-render",
+                        "Unable to render one or more word images",
+                        type_="warning",
+                    )
                 if word_image:
                     image_source: str | None = None
                     image_width: float | None = None
@@ -1539,10 +1555,7 @@ class WordMatchView:
         input_element = self._word_gt_input_refs.get(key)
         if input_element is None:
             return
-        try:
-            input_element.focus()
-        except Exception:
-            logger.debug("Failed to focus GT input for key %s", key, exc_info=True)
+        input_element.focus()
 
     def _handle_word_gt_keydown(self, event, current_key: tuple[int, int]) -> None:
         """Handle GT input keyboard navigation keys."""
@@ -1582,12 +1595,7 @@ class WordMatchView:
     ) -> None:
         """Apply monospace width based on current/fallback text length."""
         width_chars = self._word_gt_input_width_chars(value, fallback_text)
-        try:
-            input_element.style(
-                f"width: {width_chars}ch; min-width: 4ch; max-width: 100%;"
-            )
-        except Exception:
-            logger.debug("Failed to apply GT input width", exc_info=True)
+        input_element.style(f"width: {width_chars}ch; min-width: 4ch; max-width: 100%;")
 
     def _word_gt_input_width_chars(self, value: str, fallback_text: str) -> int:
         """Compute desired GT input width in monospace character units."""
@@ -1798,6 +1806,11 @@ class WordMatchView:
                     key,
                     exc_info=True,
                 )
+                self._safe_notify_once(
+                    "word-style-button-refresh",
+                    "Failed to refresh word style controls",
+                    type_="warning",
+                )
 
     def _apply_local_word_style_update(
         self,
@@ -1849,6 +1862,7 @@ class WordMatchView:
         line_index: int,
         word_index: int,
         attribute: str,
+        _event: ClickEvent = None,
     ) -> None:
         """Toggle one style attribute using current runtime flags (no stale closure values)."""
         word_match = self._line_word_match_by_ocr_index(line_index, word_index)
@@ -1903,10 +1917,11 @@ class WordMatchView:
             italic_button = (
                 ui.button(
                     "I",
-                    on_click=lambda: self._handle_toggle_word_attribute(
+                    on_click=lambda event: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
                         WORD_LABEL_ITALIC,
+                        event,
                     ),
                 )
                 .props("size=xs dense")
@@ -1924,10 +1939,11 @@ class WordMatchView:
             small_caps_button = (
                 ui.button(
                     "SC",
-                    on_click=lambda: self._handle_toggle_word_attribute(
+                    on_click=lambda event: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
                         WORD_LABEL_SMALL_CAPS,
+                        event,
                     ),
                 )
                 .props("size=xs dense")
@@ -1945,10 +1961,11 @@ class WordMatchView:
             blackletter_button = (
                 ui.button(
                     "BL",
-                    on_click=lambda: self._handle_toggle_word_attribute(
+                    on_click=lambda event: self._handle_toggle_word_attribute(
                         line_index,
                         split_word_index,
                         WORD_LABEL_BLACKLETTER,
+                        event,
                     ),
                 )
                 .props("size=xs dense")
@@ -1974,9 +1991,10 @@ class WordMatchView:
             rebox_button = (
                 ui.button(
                     icon="crop_free",
-                    on_click=lambda: self._handle_start_rebox_word(
+                    on_click=lambda event: self._handle_start_rebox_word(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -1989,9 +2007,10 @@ class WordMatchView:
             refine_button = (
                 ui.button(
                     icon="auto_fix_high",
-                    on_click=lambda: self._handle_refine_single_word(
+                    on_click=lambda event: self._handle_refine_single_word(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -2004,9 +2023,10 @@ class WordMatchView:
             expand_then_refine_button = (
                 ui.button(
                     icon="unfold_more",
-                    on_click=lambda: self._handle_expand_then_refine_single_word(
+                    on_click=lambda event: self._handle_expand_then_refine_single_word(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -2019,9 +2039,10 @@ class WordMatchView:
             edit_bbox_button = (
                 ui.button(
                     icon="tune",
-                    on_click=lambda: self._toggle_bbox_fine_tune(
+                    on_click=lambda event: self._toggle_bbox_fine_tune(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 )
                 .props("size=xs flat round")
@@ -2059,48 +2080,52 @@ class WordMatchView:
                 ui.label("Left")
                 ui.button(
                     "X-",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=-1.0,
                         right_units=0.0,
                         top_units=0.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
                 ui.button(
                     "X+",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=1.0,
                         right_units=0.0,
                         top_units=0.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
 
                 ui.label("Right")
                 ui.button(
                     "X-",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=-1.0,
                         top_units=0.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
                 ui.button(
                     "X+",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=1.0,
                         top_units=0.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
 
@@ -2108,48 +2133,52 @@ class WordMatchView:
                 ui.label("Top")
                 ui.button(
                     "Y-",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=0.0,
                         top_units=-1.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
                 ui.button(
                     "Y+",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=0.0,
                         top_units=1.0,
                         bottom_units=0.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
 
                 ui.label("Bottom")
                 ui.button(
                     "Y-",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=0.0,
                         top_units=0.0,
                         bottom_units=-1.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
                 ui.button(
                     "Y+",
-                    on_click=lambda: self._handle_nudge_single_word_bbox(
+                    on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
                         split_word_index,
                         left_units=0.0,
                         right_units=0.0,
                         top_units=0.0,
                         bottom_units=1.0,
+                        _event=event,
                     ),
                 ).props("size=xs flat")
 
@@ -2163,16 +2192,18 @@ class WordMatchView:
                 ).classes("text-xs")
                 ui.button(
                     "Reset",
-                    on_click=lambda: self._reset_pending_single_word_bbox_nudge(
+                    on_click=lambda event: self._reset_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 ).props("size=xs flat")
                 ui.button(
                     "Apply",
-                    on_click=lambda: self._apply_pending_single_word_bbox_nudge(
+                    on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
+                        event,
                     ),
                 ).props("size=xs")
 
@@ -2213,6 +2244,11 @@ class WordMatchView:
                 image.content = ""
             except Exception:
                 logger.debug("Failed to clear split marker", exc_info=True)
+                self._safe_notify_once(
+                    "word-split-marker-clear",
+                    "Failed to refresh split marker overlay",
+                    type_="warning",
+                )
             return
 
         try:
@@ -2224,6 +2260,11 @@ class WordMatchView:
             )
         except Exception:
             logger.debug("Failed to render split marker", exc_info=True)
+            self._safe_notify_once(
+                "word-split-marker-render",
+                "Failed to render split marker overlay",
+                type_="warning",
+            )
 
     def _handle_word_image_click(
         self,
@@ -2553,7 +2594,7 @@ class WordMatchView:
         self.view_model.fuzz_threshold = threshold
         # Note: Would need to trigger a refresh of the current page to see changes
 
-    def _on_filter_change(self, event):
+    def _on_filter_change(self, event: events.ValueChangeEventArguments) -> None:
         """Handle filter selection change."""
         logger.debug(f"Filter change event triggered: {event}")
         logger.debug(f"Filter selector value: {self.filter_selector.value}")
@@ -2759,7 +2800,7 @@ class WordMatchView:
                 or len(self.selected_word_indices) < 1
             )
 
-    def _handle_merge_selected_lines(self):
+    def _handle_merge_selected_lines(self, _event: ClickEvent = None) -> None:
         """Merge selected lines into the first selected line."""
         if self.merge_lines_callback is None:
             self._safe_notify("Merge function not available", type_="warning")
@@ -2813,7 +2854,7 @@ class WordMatchView:
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._safe_notify(f"Error merging selected lines: {e}", type_="negative")
 
-    def _handle_merge_selected_paragraphs(self):
+    def _handle_merge_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Merge selected paragraphs into the first selected paragraph."""
         if self.merge_paragraphs_callback is None:
             self._safe_notify("Merge paragraph function not available", type_="warning")
@@ -2863,7 +2904,7 @@ class WordMatchView:
                 type_="negative",
             )
 
-    def _handle_delete_selected_paragraphs(self):
+    def _handle_delete_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Delete selected paragraphs from the current page."""
         if self.delete_paragraphs_callback is None:
             self._safe_notify(
@@ -2916,7 +2957,10 @@ class WordMatchView:
                 type_="negative",
             )
 
-    def _handle_split_paragraph_after_selected_line(self):
+    def _handle_split_paragraph_after_selected_line(
+        self,
+        _event: ClickEvent = None,
+    ) -> None:
         """Split the selected line's paragraph immediately after that line."""
         if self.split_paragraph_after_line_callback is None:
             self._safe_notify("Split paragraph function not available", type_="warning")
@@ -2977,7 +3021,10 @@ class WordMatchView:
                 type_="negative",
             )
 
-    def _handle_split_paragraph_by_selected_lines(self):
+    def _handle_split_paragraph_by_selected_lines(
+        self,
+        _event: ClickEvent = None,
+    ) -> None:
         """Split one paragraph into selected and unselected lines."""
         logger.debug(
             "[split_by_selection] handler.start selected_lines=%s selected_words=%s selected_paragraphs=%s",
@@ -3052,7 +3099,7 @@ class WordMatchView:
                 type_="negative",
             )
 
-    def _handle_delete_selected_lines(self):
+    def _handle_delete_selected_lines(self, _event: ClickEvent = None) -> None:
         """Delete selected lines from the current page."""
         if self.delete_lines_callback is None:
             self._safe_notify("Delete function not available", type_="warning")
@@ -3069,7 +3116,7 @@ class WordMatchView:
             failure_message="Failed to delete selected lines",
         )
 
-    def _handle_delete_selected_words(self):
+    def _handle_delete_selected_words(self, _event: ClickEvent = None) -> None:
         """Delete selected words from the current page."""
         if self.delete_words_callback is None:
             self._safe_notify("Delete word function not available", type_="warning")
@@ -3113,7 +3160,7 @@ class WordMatchView:
             logger.exception("Error deleting words %s: %s", selected_words, e)
             self._safe_notify(f"Error deleting words: {e}", type_="negative")
 
-    def _handle_refine_selected_words(self) -> None:
+    def _handle_refine_selected_words(self, _event: ClickEvent = None) -> None:
         """Refine selected word bounding boxes."""
         if self.refine_words_callback is None:
             self._safe_notify("Refine word function not available", type_="warning")
@@ -3151,7 +3198,7 @@ class WordMatchView:
             logger.exception("Error refining words %s: %s", selected_words, e)
             self._safe_notify(f"Error refining words: {e}", type_="negative")
 
-    def _handle_refine_selected_lines(self) -> None:
+    def _handle_refine_selected_lines(self, _event: ClickEvent = None) -> None:
         """Refine selected lines."""
         if self.refine_lines_callback is None:
             self._safe_notify("Refine line function not available", type_="warning")
@@ -3189,7 +3236,7 @@ class WordMatchView:
             logger.exception("Error refining lines %s: %s", selected_lines, e)
             self._safe_notify(f"Error refining lines: {e}", type_="negative")
 
-    def _handle_refine_selected_paragraphs(self) -> None:
+    def _handle_refine_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Refine selected paragraphs."""
         if self.refine_paragraphs_callback is None:
             self._safe_notify(
@@ -3233,7 +3280,12 @@ class WordMatchView:
             )
             self._safe_notify(f"Error refining paragraphs: {e}", type_="negative")
 
-    def _handle_refine_single_word(self, line_index: int, word_index: int) -> None:
+    def _handle_refine_single_word(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Refine a single word bbox."""
         if self.refine_words_callback is None:
             self._safe_notify("Refine word function not available", type_="warning")
@@ -3279,6 +3331,7 @@ class WordMatchView:
         self,
         line_index: int,
         word_index: int,
+        _event: ClickEvent = None,
     ) -> None:
         """Expand then refine a single word bbox."""
         if self.expand_then_refine_words_callback is None:
@@ -3330,7 +3383,12 @@ class WordMatchView:
                 type_="negative",
             )
 
-    def _handle_delete_single_word(self, line_index: int, word_index: int) -> None:
+    def _handle_delete_single_word(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Delete a single word from a specific line."""
         if self.delete_words_callback is None:
             self._safe_notify("Delete word function not available", type_="warning")
@@ -3372,7 +3430,12 @@ class WordMatchView:
             )
             self._safe_notify(f"Error deleting word: {e}", type_="negative")
 
-    def _handle_merge_word_left(self, line_index: int, word_index: int) -> None:
+    def _handle_merge_word_left(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Merge selected word into its left neighbor."""
         if self.merge_word_left_callback is None:
             self._safe_notify("Merge word function not available", type_="warning")
@@ -3416,7 +3479,12 @@ class WordMatchView:
             )
             self._safe_notify(f"Error merging word: {e}", type_="negative")
 
-    def _handle_merge_word_right(self, line_index: int, word_index: int) -> None:
+    def _handle_merge_word_right(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Merge selected word with its right neighbor."""
         if self.merge_word_right_callback is None:
             self._safe_notify("Merge word function not available", type_="warning")
@@ -3457,7 +3525,12 @@ class WordMatchView:
             )
             self._safe_notify(f"Error merging word: {e}", type_="negative")
 
-    def _handle_split_word(self, line_index: int, word_index: int) -> None:
+    def _handle_split_word(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Split the selected word at the current marker."""
         if self.split_word_callback is None:
             self._safe_notify("Split word function not available", type_="warning")
@@ -3516,7 +3589,12 @@ class WordMatchView:
             )
             self._safe_notify(f"Error splitting word: {e}", type_="negative")
 
-    def _handle_start_rebox_word(self, line_index: int, word_index: int) -> None:
+    def _handle_start_rebox_word(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Start rebox mode for a selected word."""
         if self.rebox_word_callback is None:
             self._safe_notify("Rebox word function not available", type_="warning")
@@ -3539,7 +3617,12 @@ class WordMatchView:
             type_="info",
         )
 
-    def _toggle_bbox_fine_tune(self, line_index: int, word_index: int) -> None:
+    def _toggle_bbox_fine_tune(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
         """Toggle fine-tune controls for a single word bbox."""
         if self.nudge_word_bbox_callback is None:
             self._safe_notify("Edit bbox function not available", type_="warning")
@@ -3598,6 +3681,7 @@ class WordMatchView:
         right_units: float,
         top_units: float,
         bottom_units: float,
+        _event: ClickEvent = None,
     ) -> None:
         """Accumulate a pending bbox nudge for a single word."""
         if self.nudge_word_bbox_callback is None:
@@ -3642,6 +3726,7 @@ class WordMatchView:
         self,
         line_index: int,
         word_index: int,
+        _event: ClickEvent = None,
     ) -> None:
         """Reset pending bbox deltas for a single word."""
         key = (line_index, word_index)
@@ -3652,6 +3737,7 @@ class WordMatchView:
         self,
         line_index: int,
         word_index: int,
+        _event: ClickEvent = None,
     ) -> None:
         """Apply pending bbox deltas for a single word."""
         if self.nudge_word_bbox_callback is None:

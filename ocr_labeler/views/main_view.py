@@ -124,11 +124,8 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             and current_project_root
             and previous_project_root != current_project_root
         ):
-            try:
-                if getattr(self.project_view, "_root", None):
-                    self.project_view._root.delete()
-            except Exception:
-                logger.debug("Failed to delete old ProjectView root", exc_info=True)
+            if getattr(self.project_view, "_root", None):
+                self.project_view._root.delete()
             self.project_view = None
             logger.debug("Project root changed; rebuilding ProjectView")
 
@@ -178,22 +175,16 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         if app_state is None:
             return
 
-        try:
-            for _ in range(10):
-                notification = app_state.pop_notification()
-                if notification is None:
-                    return
+        for _ in range(10):
+            notification = app_state.pop_notification()
+            if notification is None:
+                return
 
-                message, kind = notification
-                notify_type = (
-                    kind
-                    if kind in {"positive", "negative", "warning", "info"}
-                    else "info"
-                )
-                ui.notify(message, type=notify_type)
-        except Exception:
-            logger.debug("Failed to pop queued notification", exc_info=True)
-            return
+            message, kind = notification
+            notify_type = (
+                kind if kind in {"positive", "negative", "warning", "info"} else "info"
+            )
+            ui.notify(message, type=notify_type)
 
     def _on_viewmodel_property_changed(self, property_name: str, value):
         """Handle view model property changes."""

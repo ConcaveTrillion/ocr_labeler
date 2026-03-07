@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from nicegui import ui
+from nicegui import binding, ui
 
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
+from ..callbacks import ProjectGotoCallback, ProjectNavigateCallback
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +16,9 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
     def __init__(
         self,
         viewmodel: ProjectStateViewModel,
-        on_prev,
-        on_next,
-        on_goto,
+        on_prev: ProjectNavigateCallback,
+        on_next: ProjectNavigateCallback,
+        on_goto: ProjectGotoCallback,
     ):
         logger.debug("Initializing ProjectNavigationControls")
         self.viewmodel = viewmodel
@@ -29,6 +30,51 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
         self.dir_input = None
         self.page_input = None
         self.page_total = None
+        self._notified_error_keys: set[str] = set()
+
+    def _notify(self, message: str, type_: str = "warning") -> None:
+        """Route notifications through session queue with UI fallback."""
+        app_state_model = getattr(self.viewmodel, "_app_state_model", None)
+        app_state = getattr(app_state_model, "_app_state", None)
+        if app_state is not None:
+            app_state.queue_notification(message, type_)
+            return
+        ui.notify(message, type=type_)
+
+    def _notify_once(self, key: str, message: str, type_: str = "warning") -> None:
+        """Emit a notification once per key to avoid repeated toasts."""
+        if key in self._notified_error_keys:
+            return
+        self._notified_error_keys.add(key)
+        self._notify(message, type_)
+
+    def _bind_from_safe(
+        self,
+        target: object,
+        target_property: str,
+        source: object,
+        source_property: str,
+        *,
+        key: str,
+        message: str,
+    ) -> None:
+        """Bind with user-visible warning if binding setup fails."""
+        try:
+            binding.bind_from(
+                target,
+                target_property,
+                source,
+                source_property,
+            )
+        except Exception:
+            logger.exception(
+                "Binding failed: %s.%s <- %s.%s",
+                type(target).__name__,
+                target_property,
+                type(source).__name__,
+                source_property,
+            )
+            self._notify_once(key, message, type_="warning")
 
     def build(self) -> ui.element:
         logger.debug("Building ProjectNavigationControls UI")
@@ -37,39 +83,51 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
                 self.prev_button = ui.button("Prev", on_click=self._on_prev)
                 self.next_button = ui.button("Next", on_click=self._on_next)
                 self.goto_button = ui.button(
-                    "Go To:", on_click=lambda: self._on_goto(self.page_input.value)
+                    "Go To:",
+                    on_click=lambda event: self._on_goto(self.page_input.value, event),
                 )
                 self.page_input = (
                     ui.number(label="Page", value=1, min=1, format="%d")
                     .on(
                         "keydown.enter",
-                        lambda e: self._on_goto(self.page_input.value),
+                        lambda event: self._on_goto(self.page_input.value, event),
                     )
                     .props("autocomplete=off")
                 )
                 self.page_total = ui.label("")
-
-                try:
-                    from nicegui import binding
-
-                    binding.bind_from(
-                        self.prev_button, "disabled", self.viewmodel, "prev_disabled"
+                self._bind_from_safe(
+                    self.prev_button,
+                    "disable",
+                    self.viewmodel,
+                    "prev_disabled",
+                    key="nav-prev-disabled-binding",
+                    message="Previous button may not reflect disabled state",
+                )
+                self._bind_from_safe(
+                    self.next_button,
+                    "disable",
+                    self.viewmodel,
+                    "next_disabled",
+                    key="nav-next-disabled-binding",
+                    message="Next button may not reflect disabled state",
+                )
+                self._bind_from_safe(
+                    self.goto_button,
+                    "disable",
+                    self.viewmodel,
+                    "goto_disabled",
+                    key="nav-goto-disabled-binding",
+                    message="Go To button may not reflect disabled state",
+                )
+                if self.page_input:
+                    self._bind_from_safe(
+                        self.page_input,
+                        "disable",
+                        self.viewmodel,
+                        "is_controls_disabled",
+                        key="nav-page-input-disabled-binding",
+                        message="Page input may not reflect disabled state",
                     )
-                    binding.bind_from(
-                        self.next_button, "disabled", self.viewmodel, "next_disabled"
-                    )
-                    binding.bind_from(
-                        self.goto_button, "disabled", self.viewmodel, "goto_disabled"
-                    )
-                    if self.page_input:
-                        binding.bind_from(
-                            self.page_input,
-                            "disabled",
-                            self.viewmodel,
-                            "is_controls_disabled",
-                        )
-                except Exception:
-                    pass
 
         return container
 

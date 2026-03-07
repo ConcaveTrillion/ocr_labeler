@@ -5,7 +5,7 @@ import contextlib
 import logging
 from typing import Any
 
-from nicegui import ui
+from nicegui import events, ui
 
 from ...routing import sync_url_from_project_state
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
@@ -88,13 +88,10 @@ class ProjectView(
         self.mark_as_built()
         # If property changes arrived before the view was built, apply one
         # deferred refresh now that the view is ready.
-        try:
-            if getattr(self, "_pending_refresh", False):
-                logger.debug("Applying pending refresh after build completion")
-                self.refresh()
-                self._pending_refresh = False
-        except Exception:
-            logger.debug("Deferred refresh failed", exc_info=True)
+        if getattr(self, "_pending_refresh", False):
+            logger.debug("Applying pending refresh after build completion")
+            self.refresh()
+            self._pending_refresh = False
         return self._root
 
     def refresh(self):
@@ -129,7 +126,7 @@ class ProjectView(
         try:
             n = int(raw_value)
             logger.debug("Parsed goto page value: %s -> %d", raw_value, n)
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError):
             logger.warning(
                 "Failed to parse goto page value: %s, defaulting to 1", raw_value
             )
@@ -143,14 +140,11 @@ class ProjectView(
 
     def _notify(self, message: str, type_: str = "info"):
         """Route notifications through per-session queue with UI fallback."""
-        try:
-            app_state_model = getattr(self.viewmodel, "_app_state_model", None)
-            app_state = getattr(app_state_model, "_app_state", None)
-            if app_state is not None:
-                app_state.queue_notification(message, type_)
-                return
-        except Exception:
-            logger.debug("Failed to enqueue session notification", exc_info=True)
+        app_state_model = getattr(self.viewmodel, "_app_state_model", None)
+        app_state = getattr(app_state_model, "_app_state", None)
+        if app_state is not None:
+            app_state.queue_notification(message, type_)
+            return
 
         ui.notify(message, type=type_)
 
@@ -185,12 +179,12 @@ class ProjectView(
                 self._show_busy_spinner = old_spinner
             logger.debug("[BLUR] Busy overlay should now be hidden")
             # Ensure UI returns to visible state after action completes
-            try:
-                self.refresh()
-            except Exception:
-                logger.debug("Refresh after action context failed", exc_info=True)
+            self.refresh()
 
-    async def _prev_async(self):  # pragma: no cover - UI side effects
+    async def _prev_async(
+        self,
+        _event: events.ClickEventArguments | None = None,
+    ):  # pragma: no cover - UI side effects
         """Navigate to previous page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
@@ -211,18 +205,15 @@ class ProjectView(
             if not success:
                 # Provide clearer reason to the user where possible
                 reason = "unknown"
-                try:
-                    vm = self.viewmodel
-                    if getattr(vm, "page_total", 0) <= 1:
-                        reason = "only one page available"
-                    elif getattr(vm, "is_first_page", False) or not getattr(
-                        vm, "can_navigate_prev", False
-                    ):
-                        reason = "at first page"
-                    elif getattr(vm, "is_controls_disabled", False):
-                        reason = "controls disabled (loading/override)"
-                except Exception:
-                    reason = "inspection-failed"
+                vm = self.viewmodel
+                if getattr(vm, "page_total", 0) <= 1:
+                    reason = "only one page available"
+                elif getattr(vm, "is_first_page", False) or not getattr(
+                    vm, "can_navigate_prev", False
+                ):
+                    reason = "at first page"
+                elif getattr(vm, "is_controls_disabled", False):
+                    reason = "controls disabled (loading/override)"
                 self._notify(
                     f"Navigation prevented by viewmodel (prev): {reason}",
                     "warning",
@@ -236,7 +227,10 @@ class ProjectView(
                 # (note: actual page load happens asynchronously in background)
                 self._notify("Navigated to previous page", "positive")
 
-    async def _next_async(self):  # pragma: no cover - UI side effects
+    async def _next_async(
+        self,
+        _event: events.ClickEventArguments | None = None,
+    ):  # pragma: no cover - UI side effects
         """Navigate to next page."""
         import threading
 
@@ -268,18 +262,15 @@ class ProjectView(
             if not success:
                 # Provide clearer reason to the user where possible
                 reason = "unknown"
-                try:
-                    vm = self.viewmodel
-                    if getattr(vm, "page_total", 0) <= 1:
-                        reason = "only one page available"
-                    elif getattr(vm, "is_last_page", False) or not getattr(
-                        vm, "can_navigate_next", False
-                    ):
-                        reason = "at last page"
-                    elif getattr(vm, "is_controls_disabled", False):
-                        reason = "controls disabled (loading/override)"
-                except Exception:
-                    reason = "inspection-failed"
+                vm = self.viewmodel
+                if getattr(vm, "page_total", 0) <= 1:
+                    reason = "only one page available"
+                elif getattr(vm, "is_last_page", False) or not getattr(
+                    vm, "can_navigate_next", False
+                ):
+                    reason = "at last page"
+                elif getattr(vm, "is_controls_disabled", False):
+                    reason = "controls disabled (loading/override)"
                 self._notify(
                     f"Navigation prevented by viewmodel (next): {reason}",
                     "warning",
@@ -295,7 +286,11 @@ class ProjectView(
                 self._notify("Navigated to next page", "positive")
         logger.info("[NAV-NEXT] Exit - Thread: %s", threading.current_thread().name)
 
-    async def _goto_async(self, value):  # pragma: no cover - UI side effects
+    async def _goto_async(
+        self,
+        value,
+        _event: events.GenericEventArguments | None = None,
+    ):  # pragma: no cover - UI side effects
         """Navigate to specific page."""
         if self.viewmodel.is_project_loading:
             logger.debug("Navigation blocked - currently loading")
@@ -328,14 +323,13 @@ class ProjectView(
             if not success:
                 # Provide clearer reason to the user where possible
                 reason = "unknown"
-                try:
-                    vm = self.viewmodel
-                    if not (0 <= (int(value) - 1) < getattr(vm, "page_total", 0)):
-                        reason = "page index out of range"
-                    elif getattr(vm, "is_controls_disabled", False):
-                        reason = "controls disabled (loading/override)"
-                except Exception:
-                    reason = "inspection-failed"
+                vm = self.viewmodel
+                if target_page is None or not (
+                    0 <= (target_page - 1) < getattr(vm, "page_total", 0)
+                ):
+                    reason = "page index out of range"
+                elif getattr(vm, "is_controls_disabled", False):
+                    reason = "controls disabled (loading/override)"
 
                 self._notify(
                     f"Navigation prevented by viewmodel (goto): {reason}",
@@ -361,18 +355,15 @@ class ProjectView(
         Uses ui.navigate.history.replace() so users can copy/share deep links
         without adding extra browser history entries on each page navigation.
         """
-        try:
-            if not hasattr(self.viewmodel, "_project_state"):
-                return
-            project_state = self.viewmodel._project_state
-            if not project_state or not project_state.project_root:
-                return
+        if not hasattr(self.viewmodel, "_project_state"):
+            return
+        project_state = self.viewmodel._project_state
+        if not project_state or not project_state.project_root:
+            return
 
-            sync_url_from_project_state(
-                project_state.project_root, project_state.current_page_index
-            )
-        except Exception:
-            logger.debug("Failed to sync browser URL", exc_info=True)
+        sync_url_from_project_state(
+            project_state.project_root, project_state.current_page_index
+        )
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""
@@ -387,10 +378,7 @@ class ProjectView(
             self._pending_refresh = True
             return
 
-        try:
-            self.refresh()
-            # Sync browser URL when page navigation completes
-            if property_name in ["current_page_index", "project_state"]:
-                self._sync_browser_url()
-        except Exception:
-            logger.exception("Error refreshing ProjectView on property change")
+        self.refresh()
+        # Sync browser URL when page navigation completes
+        if property_name in ["current_page_index", "project_state"]:
+            self._sync_browser_url()

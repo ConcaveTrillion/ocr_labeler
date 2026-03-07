@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 
-from nicegui import ui
+from nicegui import events, ui
 
 from ....viewmodels.project.page_state_view_model import PageStateViewModel
 from ....viewmodels.project.project_state_view_model import ProjectStateViewModel
@@ -13,6 +13,8 @@ from .content import ContentArea
 from .page_actions import PageActions
 
 logger = logging.getLogger(__name__)
+
+PageActionEvent = events.ClickEventArguments | None
 
 
 class PageView:  # pragma: no cover - UI wrapper file
@@ -143,55 +145,38 @@ class PageView:  # pragma: no cover - UI wrapper file
     def prepare_navigation_transition(self, busy: bool):
         """Prepare page content for navigation transitions."""
         logger.debug("Preparing page-layer transition state")
-        try:
-            if self.content and self.content.splitter and self.content.page_spinner:
-                if busy:
-                    self.content.page_spinner.classes(add="hidden")
-                    logger.debug(
-                        "Busy overlay active; keeping inline page spinner hidden"
-                    )
-                else:
-                    self.content.splitter.classes(add="hidden")
-                    self.content.page_spinner.classes(remove="hidden")
-                    logger.debug("Hid content splitter and showed page spinner")
-        except Exception:
-            logger.debug("Failed to toggle splitter/spinner immediately", exc_info=True)
+        if self.content and self.content.splitter and self.content.page_spinner:
+            if busy:
+                self.content.page_spinner.classes(add="hidden")
+                logger.debug("Busy overlay active; keeping inline page spinner hidden")
+            else:
+                self.content.splitter.classes(add="hidden")
+                self.content.page_spinner.classes(remove="hidden")
+                logger.debug("Hid content splitter and showed page spinner")
 
         if self.content and hasattr(self.content, "image_tabs"):
             for name, img in self.content.image_tabs.images.items():
                 if img:
-                    try:
-                        img.set_visibility(False)
-                        logger.debug("Hidden image: %s", name)
-                    except Exception:
-                        logger.debug("Failed to hide image: %s", name, exc_info=True)
+                    img.set_visibility(False)
+                    logger.debug("Hidden image: %s", name)
 
-        try:
-            if (
-                self.content
-                and hasattr(self.content, "text_tabs")
-                and getattr(self.content.text_tabs, "word_match_view", None)
-            ):
-                self.content.text_tabs.word_match_view.clear()
-                logger.debug("Cleared word matches for navigation transition")
-        except Exception:
-            logger.debug("Failed to clear word matches", exc_info=True)
+        if (
+            self.content
+            and hasattr(self.content, "text_tabs")
+            and getattr(self.content.text_tabs, "word_match_view", None)
+        ):
+            self.content.text_tabs.word_match_view.clear()
+            logger.debug("Cleared word matches for navigation transition")
 
     def _sync_text_tabs(self, page):
         """Synchronize text tabs with the current page."""
-        try:
-            if self.content and getattr(self.content, "text_tabs", None):
-                text_tabs = self.content.text_tabs
-                if text_tabs.page_state is not None:
-                    text_tabs.page_state.current_page = page
-                text_tabs.model.update()
-                text_tabs._update_text_editors()
-                text_tabs.update_word_matches(page)
-        except Exception:
-            logger.debug(
-                "Failed to synchronize text tabs from project state during refresh",
-                exc_info=True,
-            )
+        if self.content and getattr(self.content, "text_tabs", None):
+            text_tabs = self.content.text_tabs
+            if text_tabs.page_state is not None:
+                text_tabs.page_state.current_page = page
+            text_tabs.model.update()
+            text_tabs._update_text_editors()
+            text_tabs.update_word_matches(page)
 
     def _show_images(self):
         """Show images after navigation completes."""
@@ -204,14 +189,11 @@ class PageView:  # pragma: no cover - UI wrapper file
 
     def _notify(self, message: str, type_: str = "info"):
         """Route notifications through per-session queue with UI fallback."""
-        try:
-            app_state_model = getattr(self.project_view_model, "_app_state_model", None)
-            app_state = getattr(app_state_model, "_app_state", None)
-            if app_state is not None:
-                app_state.queue_notification(message, type_)
-                return
-        except Exception:
-            logger.debug("Failed to enqueue session notification", exc_info=True)
+        app_state_model = getattr(self.project_view_model, "_app_state_model", None)
+        app_state = getattr(app_state_model, "_app_state", None)
+        if app_state is not None:
+            app_state.queue_notification(message, type_)
+            return
 
         ui.notify(message, type=type_)
 
@@ -234,13 +216,13 @@ class PageView:  # pragma: no cover - UI wrapper file
             self.project_view_model.set_action_busy(False)
             if show_spinner:
                 self._show_busy_spinner = old_spinner
-            try:
-                if self._on_request_refresh:
-                    self._on_request_refresh()
-            except Exception:
-                logger.debug("Refresh after page action failed", exc_info=True)
+            if self._on_request_refresh:
+                self._on_request_refresh()
 
-    async def _save_page_async(self):  # pragma: no cover - UI side effects
+    async def _save_page_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
         """Save the current page asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Save blocked - currently loading")
@@ -261,7 +243,10 @@ class PageView:  # pragma: no cover - UI wrapper file
                 logger.error("Save failed: %s", exc)
                 self._notify(f"Save failed: {exc}", "negative")
 
-    async def _load_page_async(self):  # pragma: no cover - UI side effects
+    async def _load_page_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
         """Load the current page from saved files asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Load blocked - currently loading")
@@ -282,7 +267,10 @@ class PageView:  # pragma: no cover - UI wrapper file
                 logger.error("Load failed: %s", exc)
                 self._notify(f"Load failed: {exc}", "negative")
 
-    async def _refine_bboxes_async(self):  # pragma: no cover - UI side effects
+    async def _refine_bboxes_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
         """Refine all bounding boxes in the current page asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Refine bboxes blocked - currently loading")
@@ -305,7 +293,10 @@ class PageView:  # pragma: no cover - UI wrapper file
                 logger.error("Bbox refinement failed: %s", exc)
                 self._notify(f"Bbox refinement failed: {exc}", "negative")
 
-    async def _expand_refine_bboxes_async(self):  # pragma: no cover - UI side effects
+    async def _expand_refine_bboxes_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
         """Expand and refine all bounding boxes in the current page asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Expand & refine bboxes blocked - currently loading")
@@ -333,7 +324,10 @@ class PageView:  # pragma: no cover - UI wrapper file
                 logger.error("Bbox expand & refine failed: %s", exc)
                 self._notify(f"Bbox expand & refine failed: {exc}", "negative")
 
-    async def _reload_ocr_async(self):  # pragma: no cover - UI side effects
+    async def _reload_ocr_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
         """Reload the current page with OCR processing asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Reload OCR blocked - currently loading")
@@ -351,25 +345,19 @@ class PageView:  # pragma: no cover - UI wrapper file
                         self.project_view_model, "_project_state", None
                     )
                     current_page = None
-                    try:
-                        if project_state is not None:
-                            project = getattr(project_state, "project", None)
-                            page_index = getattr(
-                                project_state,
-                                "current_page_index",
-                                self.project_view_model.current_page_index,
-                            )
-                            if (
-                                project is not None
-                                and hasattr(project, "pages")
-                                and 0 <= page_index < len(project.pages)
-                            ):
-                                current_page = project.pages[page_index]
-                    except Exception:
-                        logger.debug(
-                            "Unable to resolve current page after OCR reload",
-                            exc_info=True,
+                    if project_state is not None:
+                        project = getattr(project_state, "project", None)
+                        page_index = getattr(
+                            project_state,
+                            "current_page_index",
+                            self.project_view_model.current_page_index,
                         )
+                        if (
+                            project is not None
+                            and hasattr(project, "pages")
+                            and 0 <= page_index < len(project.pages)
+                        ):
+                            current_page = project.pages[page_index]
 
                     if current_page is not None:
                         self._sync_text_tabs(current_page)

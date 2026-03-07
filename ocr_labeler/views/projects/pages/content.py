@@ -50,33 +50,19 @@ class ContentArea:
 
     def _on_words_selected(self, selection: set[tuple[int, int]]) -> None:
         """Propagate image-driven word selection to the Matches view."""
-        try:
-            self.text_tabs.word_match_view.set_selected_words(selection)
-        except Exception:
-            logger.debug("Failed to propagate words selection", exc_info=True)
+        self.text_tabs.word_match_view.set_selected_words(selection)
 
     def _on_right_panel_words_selected(self, selection: set[tuple[int, int]]) -> None:
         """Propagate right-panel word selection to image overlay."""
-        try:
-            self.image_tabs.set_selected_words(selection)
-        except Exception:
-            logger.debug("Failed to propagate words selection to image", exc_info=True)
+        self.image_tabs.set_selected_words(selection)
 
     def _on_paragraphs_selected(self, selection: set[int]) -> None:
         """Propagate image-driven paragraph selection to the Matches view."""
-        try:
-            self.text_tabs.word_match_view.set_selected_paragraphs(selection)
-        except Exception:
-            logger.debug("Failed to propagate paragraphs selection", exc_info=True)
+        self.text_tabs.word_match_view.set_selected_paragraphs(selection)
 
     def _on_right_panel_paragraphs_selected(self, selection: set[int]) -> None:
         """Propagate right-panel paragraph selection to image overlay."""
-        try:
-            self.image_tabs.set_selected_paragraphs(selection)
-        except Exception:
-            logger.debug(
-                "Failed to propagate paragraphs selection to image", exc_info=True
-            )
+        self.image_tabs.set_selected_paragraphs(selection)
 
     def _on_right_panel_word_rebox_requested(
         self,
@@ -84,11 +70,8 @@ class ContentArea:
         word_index: int,
     ) -> None:
         """Enable image-side rebox drawing after per-word action request."""
-        try:
-            _ = (line_index, word_index)
-            self.image_tabs.enable_word_rebox_mode()
-        except Exception:
-            logger.debug("Failed to enable image rebox mode", exc_info=True)
+        _ = (line_index, word_index)
+        self.image_tabs.enable_word_rebox_mode()
 
     def _on_word_rebox_drawn(
         self,
@@ -98,10 +81,7 @@ class ContentArea:
         y2: float,
     ) -> None:
         """Apply drawn image rectangle to the pending word rebox target."""
-        try:
-            self.text_tabs.word_match_view.apply_rebox_bbox(x1, y1, x2, y2)
-        except Exception:
-            logger.debug("Failed to apply drawn word rebox bbox", exc_info=True)
+        self.text_tabs.word_match_view.apply_rebox_bbox(x1, y1, x2, y2)
 
     def build(self):
         logger.debug("Building ContentArea UI components")

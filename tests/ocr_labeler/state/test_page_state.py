@@ -680,7 +680,7 @@ def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
     monkeypatch.setattr(
         line_ops_module.LineOperations,
         "nudge_word_bbox",
-        lambda _self, _page, _line_index, _word_index, _left, _right, _top, _bottom: (
+        lambda _self, _page, _line_index, _word_index, _left, _right, _top, _bottom, refine_after=True: (
             True
         ),
     )

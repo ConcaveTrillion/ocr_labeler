@@ -1362,6 +1362,7 @@ class LineOperations:
         y1: float,
         x2: float,
         y2: float,
+        refine_after: bool = True,
     ) -> bool:
         """Replace a word bounding box with the provided rectangle.
 
@@ -1373,6 +1374,7 @@ class LineOperations:
             y1: Top y-coordinate in page pixel space.
             x2: Right x-coordinate in page pixel space.
             y2: Bottom y-coordinate in page pixel space.
+            refine_after: Whether to run word-level refine helpers after rebox.
 
         Returns:
             bool: True when rebox succeeds, False otherwise.
@@ -1435,7 +1437,8 @@ class LineOperations:
                 )
 
             word.bounding_box = new_bbox
-            self._refine_word_bbox(page, word)
+            if refine_after:
+                self._refine_word_bbox(page, word)
             self._finalize_page_structure(page)
 
             logger.info(
@@ -1672,6 +1675,7 @@ class LineOperations:
         right_delta: float,
         top_delta: float,
         bottom_delta: float,
+        refine_after: bool = True,
     ) -> bool:
         """Expand/contract a word bounding box by pixel deltas.
 
@@ -1683,6 +1687,7 @@ class LineOperations:
             right_delta: Right-edge size delta in pixels (+ expands right, - contracts).
             top_delta: Top-edge size delta in pixels (+ expands up, - contracts).
             bottom_delta: Bottom-edge size delta in pixels (+ expands down, - contracts).
+            refine_after: Whether to run word-level refine helpers after resize.
 
         Returns:
             bool: True when nudge succeeds, False otherwise.
@@ -1757,7 +1762,16 @@ class LineOperations:
                 )
                 return False
 
-            return self.rebox_word(page, line_index, word_index, nx1, ny1, nx2, ny2)
+            return self.rebox_word(
+                page,
+                line_index,
+                word_index,
+                nx1,
+                ny1,
+                nx2,
+                ny2,
+                refine_after=refine_after,
+            )
         except Exception as e:
             logger.exception(
                 "Error resizing word bbox line=%s index=%s deltas=(l=%s r=%s t=%s b=%s): %s",
@@ -2002,36 +2016,57 @@ class LineOperations:
         refined = False
         page_image = getattr(page, "cv2_numpy_page_image", None)
 
-        crop_bottom = getattr(word, "crop_bottom", None)
-        if callable(crop_bottom):
+        used_bbox_refine = False
+        bbox = getattr(word, "bounding_box", None)
+        bbox_refine = getattr(bbox, "refine", None) if bbox is not None else None
+        if callable(bbox_refine) and page_image is not None:
             try:
-                crop_bottom()
-            except TypeError:
-                if page_image is not None:
-                    crop_bottom(page_image)
-                else:
-                    logger.debug(
-                        "Skipping crop_bottom refine; page image unavailable",
-                        exc_info=True,
-                    )
-            refined = True
+                refined_bbox = bbox_refine(
+                    page_image,
+                    padding_px=1,
+                    expand_beyond_original=False,
+                )
+                if refined_bbox is not None:
+                    setattr(word, "bounding_box", refined_bbox)
+                    refined = True
+                    used_bbox_refine = True
+            except Exception:
+                logger.debug(
+                    "Bounding-box refine failed during word refine; falling back",
+                    exc_info=True,
+                )
 
-        expand_to_content = getattr(word, "expand_to_content", None)
-        if callable(expand_to_content):
-            try:
-                expand_to_content()
-            except TypeError:
-                if page_image is not None:
-                    expand_to_content(page_image)
-                else:
-                    logger.debug(
-                        "Skipping expand_to_content refine; page image unavailable",
-                        exc_info=True,
-                    )
-            refined = True
+        if not used_bbox_refine:
+            crop_bottom = getattr(word, "crop_bottom", None)
+            if callable(crop_bottom):
+                try:
+                    crop_bottom()
+                except TypeError:
+                    if page_image is not None:
+                        crop_bottom(page_image)
+                    else:
+                        logger.debug(
+                            "Skipping crop_bottom refine; page image unavailable",
+                            exc_info=True,
+                        )
+                refined = True
+
+            expand_to_content = getattr(word, "expand_to_content", None)
+            if callable(expand_to_content):
+                try:
+                    expand_to_content()
+                except TypeError:
+                    if page_image is not None:
+                        expand_to_content(page_image)
+                    else:
+                        logger.debug(
+                            "Skipping expand_to_content refine; page image unavailable",
+                            exc_info=True,
+                        )
+                refined = True
 
         recompute_word = getattr(word, "recompute_bounding_box", None)
-        if callable(recompute_word):
+        if not used_bbox_refine and callable(recompute_word):
             recompute_word()
             refined = True
 

@@ -947,6 +947,7 @@ def test_nudge_single_word_bbox_accumulates_pending_without_callback(monkeypatch
         right_delta: float,
         top_delta: float,
         bottom_delta: float,
+        refine_after: bool,
     ) -> bool:
         seen["args"] = (
             line_index,
@@ -955,6 +956,7 @@ def test_nudge_single_word_bbox_accumulates_pending_without_callback(monkeypatch
             right_delta,
             top_delta,
             bottom_delta,
+            refine_after,
         )
         seen["selection_during_callback"] = (
             sorted(view.selected_line_indices),
@@ -993,6 +995,7 @@ def test_apply_pending_single_word_bbox_clears_selection_before_callback(monkeyp
         right_delta: float,
         top_delta: float,
         bottom_delta: float,
+        refine_after: bool,
     ) -> bool:
         seen["args"] = (
             line_index,
@@ -1001,6 +1004,7 @@ def test_apply_pending_single_word_bbox_clears_selection_before_callback(monkeyp
             right_delta,
             top_delta,
             bottom_delta,
+            refine_after,
         )
         seen["selection_during_callback"] = (
             sorted(view.selected_line_indices),
@@ -1016,9 +1020,47 @@ def test_apply_pending_single_word_bbox_clears_selection_before_callback(monkeyp
 
     view._apply_pending_single_word_bbox_nudge(2, 1)
 
-    assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0)
+    assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0, True)
     assert seen["selection_during_callback"] == ([], [])
     assert (2, 1) not in view._bbox_pending_deltas
+
+
+def test_apply_pending_single_word_bbox_without_refine(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+        refine_after: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after,
+        )
+        return True
+
+    notifications: list[tuple[str, str]] = []
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    view._bbox_pending_deltas[(2, 1)] = (-5.0, 5.0, 0.0, 5.0)
+    monkeypatch.setattr(
+        view,
+        "_safe_notify",
+        lambda message, type_="info": notifications.append((message, type_)),
+    )
+
+    view._apply_pending_single_word_bbox_nudge(2, 1, refine_after=False)
+
+    assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0, False)
+    assert notifications[-1] == ("Applied bbox fine-tune edits", "positive")
 
 
 def test_expand_then_refine_single_word_clears_selection_before_callback(monkeypatch):

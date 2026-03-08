@@ -1432,6 +1432,7 @@ class PageState:
         right_delta: float,
         top_delta: float,
         bottom_delta: float,
+        refine_after: bool = True,
     ) -> bool:
         """Resize a word bounding box by per-edge pixel deltas on the current page.
 
@@ -1443,6 +1444,7 @@ class PageState:
             right_delta: Right-edge size delta in pixels (+ expands right, - contracts).
             top_delta: Top-edge size delta in pixels (+ expands up, - contracts).
             bottom_delta: Bottom-edge size delta in pixels (+ expands down, - contracts).
+            refine_after: Whether to run word-level refine after applying nudge.
 
         Returns:
             bool: True if nudge succeeded, False otherwise.
@@ -1465,6 +1467,7 @@ class PageState:
                 right_delta,
                 top_delta,
                 bottom_delta,
+                refine_after=refine_after,
             )
             if result:
                 self._finalize_bbox_edit(page)

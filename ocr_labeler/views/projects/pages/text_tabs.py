@@ -341,15 +341,17 @@ class TextTabs:
                 right_delta: float,
                 top_delta: float,
                 bottom_delta: float,
+                refine_after: bool,
             ) -> bool:
                 logger.debug(
-                    "Resizing word bbox at (%s, %s) with deltas l=%s r=%s t=%s b=%s on page %d",
+                    "Resizing word bbox at (%s, %s) with deltas l=%s r=%s t=%s b=%s refine_after=%s on page %d",
                     line_index,
                     word_index,
                     left_delta,
                     right_delta,
                     top_delta,
                     bottom_delta,
+                    refine_after,
                     page_index,
                 )
                 result = page_state.nudge_word_bbox(
@@ -360,6 +362,7 @@ class TextTabs:
                     right_delta,
                     top_delta,
                     bottom_delta,
+                    refine_after=refine_after,
                 )
                 logger.debug("Nudge word bbox operation result: %s", result)
                 return result

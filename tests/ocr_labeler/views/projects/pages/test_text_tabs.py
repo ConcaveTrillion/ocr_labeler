@@ -1145,7 +1145,7 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        nudge_word_bbox=lambda page_index, line_index, word_index, left_delta, right_delta, top_delta, bottom_delta: (
+        nudge_word_bbox=lambda page_index, line_index, word_index, left_delta, right_delta, top_delta, bottom_delta, refine_after=True: (
             calls.append(
                 (
                     page_index,
@@ -1155,6 +1155,7 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
                     right_delta,
                     top_delta,
                     bottom_delta,
+                    refine_after,
                 )
             )
             or True
@@ -1169,10 +1170,11 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
         -1.0,
         2.0,
         -2.0,
+        True,
     )
 
     assert result is True
-    assert calls == [(17, 2, 3, 1.0, -1.0, 2.0, -2.0)]
+    assert calls == [(17, 2, 3, 1.0, -1.0, 2.0, -2.0, True)]
 
 
 def test_text_tabs_expand_then_refine_words_callback_invokes_page_state_method():

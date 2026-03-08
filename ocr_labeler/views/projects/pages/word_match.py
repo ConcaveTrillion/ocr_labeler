@@ -35,7 +35,7 @@ WordKeysAction: TypeAlias = Callable[[list[WordKey]], bool]
 LineWordAction: TypeAlias = Callable[[int, int], bool]
 SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
 ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
-NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
+NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float, bool], bool]
 EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
 SetWordAttributesAction: TypeAlias = Callable[[int, int, bool, bool, bool], bool]
 
@@ -2203,7 +2203,17 @@ class WordMatchView:
                     on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
-                        event,
+                        refine_after=False,
+                        _event=event,
+                    ),
+                ).props("size=xs")
+                ui.button(
+                    "Apply + Refine",
+                    on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
+                        line_index,
+                        split_word_index,
+                        refine_after=True,
+                        _event=event,
                     ),
                 ).props("size=xs")
 
@@ -3737,9 +3747,17 @@ class WordMatchView:
         self,
         line_index: int,
         word_index: int,
+        refine_after: bool = True,
         _event: ClickEvent = None,
     ) -> None:
-        """Apply pending bbox deltas for a single word."""
+        """Apply pending bbox deltas for a single word.
+
+        Args:
+            line_index: Zero-based line index.
+            word_index: Zero-based word index.
+            refine_after: Whether to run refine after applying nudge.
+            _event: Optional click event.
+        """
         if self.nudge_word_bbox_callback is None:
             self._safe_notify("Edit bbox function not available", type_="warning")
             return
@@ -3778,11 +3796,18 @@ class WordMatchView:
                 right_delta,
                 top_delta,
                 bottom_delta,
+                refine_after,
             )
             if success:
                 self._bbox_pending_deltas.pop(key, None)
                 self._rerender_word_column(line_index, word_index)
-                self._safe_notify("Applied bbox fine-tune edits", type_="positive")
+                if refine_after:
+                    self._safe_notify(
+                        "Applied bbox fine-tune edits and refined",
+                        type_="positive",
+                    )
+                else:
+                    self._safe_notify("Applied bbox fine-tune edits", type_="positive")
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection

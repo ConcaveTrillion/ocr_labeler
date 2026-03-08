@@ -765,6 +765,30 @@ class TestLineOperations:
         assert contracted_bbox.bottom_right.x == 31.0
         assert contracted_bbox.bottom_right.y == 11.0
 
+    def test_nudge_word_bbox_can_skip_refine_helpers(self, operations):
+        """Nudging with refine_after=False should not call word refine helpers."""
+        line = _line([_word("alpha", "A", 20)], 20)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        word = page.lines[0].words[0]
+
+        word.crop_bottom = MagicMock()
+        word.expand_to_content = MagicMock()
+
+        result = operations.nudge_word_bbox(
+            page,
+            0,
+            0,
+            3.0,
+            3.0,
+            2.0,
+            2.0,
+            refine_after=False,
+        )
+
+        assert result is True
+        word.crop_bottom.assert_not_called()
+        word.expand_to_content.assert_not_called()
+
     def test_refine_words_runs_refine_for_selected_words(self, operations):
         """Refining words should run per-word helper methods for selected keys."""
         line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
@@ -780,6 +804,31 @@ class TestLineOperations:
 
         assert result is True
         assert seen == ["second"]
+
+    def test_refine_words_prefers_bbox_refine(self, operations):
+        """Refine should prefer BoundingBox.refine over crop helpers when image exists."""
+        line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+        page.cv2_numpy_page_image = np.zeros((20, 20), dtype=np.uint8)
+        word = page.lines[0].words[1]
+
+        original_bbox = word.bounding_box
+        refined_bbox = _bbox(20, 0, 35, 10)
+        original_bbox.refine = MagicMock(return_value=refined_bbox)
+        word.crop_bottom = MagicMock()
+        word.expand_to_content = MagicMock()
+
+        result = operations.refine_words(page, [(0, 1)])
+
+        assert result is True
+        original_bbox.refine.assert_called_once_with(
+            page.cv2_numpy_page_image,
+            padding_px=1,
+            expand_beyond_original=False,
+        )
+        word.crop_bottom.assert_not_called()
+        word.expand_to_content.assert_not_called()
+        assert word.bounding_box.to_ltrb() == refined_bbox.to_ltrb()
 
     def test_expand_then_refine_words_runs_expand_before_refine(self, operations):
         """Expand-then-refine should run expand_to_content before crop_bottom."""

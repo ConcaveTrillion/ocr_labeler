@@ -458,6 +458,66 @@ def test_split_paragraph_by_selected_lines_restores_selection_on_failure(monkeyp
     assert view.selected_word_indices == {(2, 0)}
 
 
+def test_split_line_after_selected_word_requires_single_word(monkeypatch):
+    view = WordMatchView()
+    view.selected_word_indices = {(1, 0), (1, 1)}
+    seen = {}
+
+    def notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", notify)
+    view.split_line_after_word_callback = lambda _line_index, _word_index: True
+
+    view._handle_split_line_after_selected_word()
+
+    assert seen["type"] == "warning"
+    assert "exactly one word" in seen["message"]
+
+
+def test_split_line_after_selected_word_clears_selection_before_callback(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 2)}
+    view.selected_paragraph_indices = {0}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def split_callback(line_index: int, word_index: int) -> bool:
+        seen["args"] = (line_index, word_index)
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+            sorted(view.selected_paragraph_indices),
+        )
+        return True
+
+    view.split_line_after_word_callback = split_callback
+    view._handle_split_line_after_selected_word()
+
+    assert seen["args"] == (1, 2)
+    assert seen["selection_during_callback"] == ([], [], [])
+    assert view.selected_line_indices == set()
+    assert view.selected_word_indices == set()
+    assert view.selected_paragraph_indices == set()
+
+
+def test_split_line_after_selected_word_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {3}
+    view.selected_word_indices = {(3, 1)}
+    view.selected_paragraph_indices = {1}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.split_line_after_word_callback = lambda _line_index, _word_index: False
+    view._handle_split_line_after_selected_word()
+
+    assert view.selected_line_indices == {3}
+    assert view.selected_word_indices == {(3, 1)}
+    assert view.selected_paragraph_indices == {1}
+
+
 def test_delete_paragraphs_clears_selection_before_callback(monkeypatch):
     seen = {}
 
@@ -638,6 +698,75 @@ def test_merge_word_right_restores_selection_on_failure(monkeypatch):
 
     assert view.selected_line_indices == {4}
     assert view.selected_word_indices == {(4, 0)}
+
+
+def test_merge_selected_words_requires_contiguous_words_single_line(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+    view.selected_word_indices = {(1, 0), (2, 1)}
+    view.merge_word_right_callback = lambda _line_index, _word_index: True
+
+    def capture_notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", capture_notify)
+
+    view._handle_merge_selected_words()
+
+    assert seen["type"] == "warning"
+    assert "single line" in seen["message"]
+
+
+def test_merge_selected_words_uses_repeated_merge_right(monkeypatch):
+    seen = {"calls": []}
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 1), (1, 2), (1, 3)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def merge_callback(line_index: int, word_index: int) -> bool:
+        seen["calls"].append((line_index, word_index))
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+        )
+        return True
+
+    view.merge_word_right_callback = merge_callback
+    view._handle_merge_selected_words()
+
+    assert seen["calls"] == [(1, 1), (1, 1)]
+    assert seen["selection_during_callback"] == ([], [])
+    assert view.selected_line_indices == set()
+    assert view.selected_word_indices == set()
+
+
+def test_merge_selected_words_restores_selection_on_failure(monkeypatch):
+    view = WordMatchView()
+    view.selected_line_indices = {2}
+    view.selected_word_indices = {(2, 0), (2, 1)}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.merge_word_right_callback = lambda _line_index, _word_index: False
+    view._handle_merge_selected_words()
+
+    assert view.selected_line_indices == {2}
+    assert view.selected_word_indices == {(2, 0), (2, 1)}
+
+
+def test_merge_selected_words_button_state(monkeypatch):
+    view = WordMatchView()
+    view.merge_words_button = SimpleNamespace(disabled=None)
+    view.merge_word_right_callback = lambda _line_index, _word_index: True
+
+    view.selected_word_indices = {(0, 0), (0, 1)}
+    view._update_action_button_state()
+    assert view.merge_words_button.disabled is False
+
+    view.selected_word_indices = {(0, 0), (0, 2)}
+    view._update_action_button_state()
+    assert view.merge_words_button.disabled is True
 
 
 def test_delete_single_word_clears_selection_before_callback(monkeypatch):

@@ -987,3 +987,30 @@ class TestLineOperations:
 
         assert result is False
         assert len(page.paragraphs) == 2
+
+    def test_split_line_after_word_success(self, operations):
+        """Splitting a line after a selected word should produce two lines."""
+        line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        para = _paragraph([line], 0)
+        page = Page(width=120, height=100, page_index=0, items=[para])
+
+        result = operations.split_line_after_word(page, 0, 0)
+
+        assert result is True
+        assert len(page.lines) == 2
+        assert [word.text for word in page.lines[0].words] == ["alpha"]
+        assert [word.text for word in page.lines[1].words] == ["beta", "gamma"]
+
+    def test_split_line_after_word_fails_on_last_word(self, operations):
+        """Splitting after the last word should fail because trailing segment is empty."""
+        line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
+        para = _paragraph([line], 0)
+        page = Page(width=120, height=100, page_index=0, items=[para])
+
+        result = operations.split_line_after_word(page, 0, 1)
+
+        assert result is False
+        assert len(page.lines) == 1

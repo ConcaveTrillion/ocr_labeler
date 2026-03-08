@@ -229,6 +229,26 @@ class TextTabs:
                 )
                 return result
 
+        split_line_after_word_callback = None
+        if page_state and hasattr(page_state, "split_line_after_word"):
+
+            def split_line_after_word_callback(
+                line_index: int, word_index: int
+            ) -> bool:
+                logger.debug(
+                    "Splitting line %s after word %s on page %d",
+                    line_index,
+                    word_index,
+                    page_index,
+                )
+                result = page_state.split_line_after_word(
+                    page_index,
+                    line_index,
+                    word_index,
+                )
+                logger.debug("Split line after word operation result: %s", result)
+                return result
+
         delete_words_callback = None
         if page_state:
 
@@ -493,6 +513,7 @@ class TextTabs:
             delete_paragraphs_callback=delete_paragraphs_callback,
             split_paragraph_after_line_callback=split_paragraph_after_line_callback,
             split_paragraph_with_selected_lines_callback=split_paragraph_with_selected_lines_callback,
+            split_line_after_word_callback=split_line_after_word_callback,
             delete_words_callback=delete_words_callback,
             merge_word_left_callback=merge_word_left_callback,
             merge_word_right_callback=merge_word_right_callback,

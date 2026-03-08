@@ -1001,6 +1001,37 @@ def test_split_paragraph_with_selected_lines_splits_selected_vs_unselected():
     assert [line.text for line in page.paragraphs[1].lines] == ["beta"]
 
 
+def test_split_line_after_word_splits_line_into_two_lines():
+    """Splitting after a selected word should produce two lines in one paragraph."""
+    page_state = PageState()
+
+    line = _line([_word("alpha", 0), _word("beta", 20), _word("gamma", 40)], 0)
+    para = _paragraph([line], 0)
+    page = Page(width=120, height=100, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": "alpha beta gamma"},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    assert page_state.split_line_after_word(0, 0, 0) is True
+    assert len(page.lines) == 2
+    assert [word.text for word in page.lines[0].words] == ["alpha"]
+    assert [word.text for word in page.lines[1].words] == ["beta", "gamma"]
+
+
 def test_persist_page_to_file_prefers_current_in_memory_page(tmp_path):
     """Saving current page should use in-memory edited page, not reload stale saved page."""
     page_state = PageState()

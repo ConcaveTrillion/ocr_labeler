@@ -63,6 +63,7 @@ class WordMatchView:
         delete_paragraphs_callback: ParagraphIndicesAction | None = None,
         split_paragraph_after_line_callback: SingleLineAction | None = None,
         split_paragraph_with_selected_lines_callback: LineIndicesAction | None = None,
+        split_line_after_word_callback: LineWordAction | None = None,
         delete_words_callback: WordKeysAction | None = None,
         merge_word_left_callback: LineWordAction | None = None,
         merge_word_right_callback: LineWordAction | None = None,
@@ -98,6 +99,7 @@ class WordMatchView:
         self.split_paragraph_with_selected_lines_callback = (
             split_paragraph_with_selected_lines_callback
         )
+        self.split_line_after_word_callback = split_line_after_word_callback
         self.delete_words_callback = delete_words_callback
         self.merge_word_left_callback = merge_word_left_callback
         self.merge_word_right_callback = merge_word_right_callback
@@ -143,6 +145,8 @@ class WordMatchView:
         self.refine_paragraphs_button = None
         self.split_paragraph_after_line_button = None
         self.split_paragraph_by_selection_button = None
+        self.split_line_after_word_button = None
+        self.merge_words_button = None
         self.delete_words_button = None
         self.refine_words_button = None
         self.notify_callback = notify_callback
@@ -214,9 +218,9 @@ class WordMatchView:
                         self.filter_selector.on_value_change(self._on_filter_change)
 
                     # Paragraph operations row
-                    with ui.row().classes("items-center gap-2"):
+                    with ui.row().classes("items-center gap-2 full-width"):
                         ui.label("Paragraph Operations").classes(
-                            "text-sm font-semibold"
+                            "text-sm font-semibold min-w-44 text-right"
                         )
                         self.merge_paragraphs_button = ui.button(
                             "Merge",
@@ -224,15 +228,6 @@ class WordMatchView:
                             on_click=self._handle_merge_selected_paragraphs,
                         ).tooltip("Merge selected paragraphs")
                         style_action_button(self.merge_paragraphs_button)
-                        self.delete_paragraphs_button = ui.button(
-                            "Delete",
-                            icon="delete",
-                            on_click=self._handle_delete_selected_paragraphs,
-                        ).tooltip("Delete selected paragraphs")
-                        style_action_button(
-                            self.delete_paragraphs_button,
-                            variant=ButtonVariant.DELETE,
-                        )
                         self.refine_paragraphs_button = ui.button(
                             "Refine",
                             icon="auto_fix_high",
@@ -255,50 +250,89 @@ class WordMatchView:
                             "Split one paragraph into selected and unselected lines"
                         )
                         style_action_button(self.split_paragraph_by_selection_button)
+                        self.delete_paragraphs_button = (
+                            ui.button(
+                                "Delete",
+                                icon="delete",
+                                on_click=self._handle_delete_selected_paragraphs,
+                            )
+                            .classes("ml-auto")
+                            .tooltip("Delete selected paragraphs")
+                        )
+                        style_action_button(
+                            self.delete_paragraphs_button,
+                            variant=ButtonVariant.DELETE,
+                        )
 
                     # Line operations row
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label("Line Operations").classes("text-sm font-semibold")
+                    with ui.row().classes("items-center gap-2 full-width"):
+                        ui.label("Line Operations").classes(
+                            "text-sm font-semibold min-w-44 text-right"
+                        )
                         self.merge_lines_button = ui.button(
                             "Merge",
                             icon="call_merge",
                             on_click=self._handle_merge_selected_lines,
                         ).tooltip("Merge selected lines into the first selected line")
                         style_action_button(self.merge_lines_button)
-                        self.delete_lines_button = ui.button(
-                            "Delete",
-                            icon="delete",
-                            on_click=self._handle_delete_selected_lines,
-                        ).tooltip("Delete selected lines")
-                        style_action_button(
-                            self.delete_lines_button,
-                            variant=ButtonVariant.DELETE,
-                        )
                         self.refine_lines_button = ui.button(
                             "Refine",
                             icon="auto_fix_high",
                             on_click=self._handle_refine_selected_lines,
                         ).tooltip("Refine selected lines")
                         style_action_button(self.refine_lines_button)
-
-                    # Word operations row
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label("Word Operations").classes("text-sm font-semibold")
-                        self.delete_words_button = ui.button(
-                            "Delete",
-                            icon="delete",
-                            on_click=self._handle_delete_selected_words,
-                        ).tooltip("Delete selected words")
+                        self.split_line_after_word_button = ui.button(
+                            "Split After Word",
+                            icon="call_split",
+                            on_click=self._handle_split_line_after_selected_word,
+                        ).tooltip(
+                            "Split the selected line immediately after the selected word"
+                        )
+                        style_action_button(self.split_line_after_word_button)
+                        self.delete_lines_button = (
+                            ui.button(
+                                "Delete",
+                                icon="delete",
+                                on_click=self._handle_delete_selected_lines,
+                            )
+                            .classes("ml-auto")
+                            .tooltip("Delete selected lines")
+                        )
                         style_action_button(
-                            self.delete_words_button,
+                            self.delete_lines_button,
                             variant=ButtonVariant.DELETE,
                         )
+
+                    # Word operations row
+                    with ui.row().classes("items-center gap-2 full-width"):
+                        ui.label("Word Operations").classes(
+                            "text-sm font-semibold min-w-44 text-right"
+                        )
+                        self.merge_words_button = ui.button(
+                            "Merge",
+                            icon="call_merge",
+                            on_click=self._handle_merge_selected_words,
+                        ).tooltip("Merge selected words on the same line")
+                        style_action_button(self.merge_words_button)
                         self.refine_words_button = ui.button(
                             "Refine",
                             icon="auto_fix_high",
                             on_click=self._handle_refine_selected_words,
                         ).tooltip("Refine selected words")
                         style_action_button(self.refine_words_button)
+                        self.delete_words_button = (
+                            ui.button(
+                                "Delete",
+                                icon="delete",
+                                on_click=self._handle_delete_selected_words,
+                            )
+                            .classes("ml-auto")
+                            .tooltip("Delete selected words")
+                        )
+                        style_action_button(
+                            self.delete_words_button,
+                            variant=ButtonVariant.DELETE,
+                        )
 
             # Scrollable container for word matches
             with ui.scroll_area().classes("fit"):
@@ -2775,10 +2809,22 @@ class WordMatchView:
                 or len(selected_lines) < 1
             )
 
+        if self.split_line_after_word_button is not None:
+            self.split_line_after_word_button.disabled = (
+                self.split_line_after_word_callback is None
+                or len(self.selected_word_indices) != 1
+            )
+
         if self.delete_words_button is not None:
             self.delete_words_button.disabled = (
                 self.delete_words_callback is None
                 or len(self.selected_word_indices) < 1
+            )
+
+        if self.merge_words_button is not None:
+            self.merge_words_button.disabled = (
+                self.merge_word_right_callback is None
+                or not self._can_merge_selected_words()
             )
 
         if self.refine_words_button is not None:
@@ -3086,6 +3132,73 @@ class WordMatchView:
                 type_="negative",
             )
 
+    def _handle_split_line_after_selected_word(
+        self,
+        _event: ClickEvent = None,
+    ) -> None:
+        """Split the selected line immediately after one selected word."""
+        if self.split_line_after_word_callback is None:
+            self._safe_notify("Split line function not available", type_="warning")
+            return
+
+        if len(self.selected_word_indices) != 1:
+            self._safe_notify(
+                "Select exactly one word to split line",
+                type_="warning",
+            )
+            return
+
+        line_index, word_index = next(iter(self.selected_word_indices))
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+        logger.info(
+            "Split line requested after selected word: line=%s word=%s",
+            line_index,
+            word_index,
+        )
+        try:
+            success = self.split_line_after_word_callback(line_index, word_index)
+            logger.info(
+                "Split line-after-word callback completed: line=%s word=%s success=%s",
+                line_index,
+                word_index,
+                success,
+            )
+            if success:
+                self._safe_notify(
+                    f"Split line {line_index + 1} after word {word_index + 1}",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify("Failed to split line", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error splitting line after word line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            self._safe_notify(f"Error splitting line: {e}", type_="negative")
+
     def _handle_delete_selected_lines(self, _event: ClickEvent = None) -> None:
         """Delete selected lines from the current page."""
         if self.delete_lines_callback is None:
@@ -3146,6 +3259,76 @@ class WordMatchView:
             self._emit_selection_changed()
             logger.exception("Error deleting words %s: %s", selected_words, e)
             self._safe_notify(f"Error deleting words: {e}", type_="negative")
+
+    def _can_merge_selected_words(self) -> bool:
+        """Return True when current selected words can be merged as one block."""
+        selected_words = sorted(self.selected_word_indices)
+        if len(selected_words) < 2:
+            return False
+
+        selected_line_indices = {line_index for line_index, _ in selected_words}
+        if len(selected_line_indices) != 1:
+            return False
+
+        word_indices = [word_index for _, word_index in selected_words]
+        expected_indices = list(range(word_indices[0], word_indices[-1] + 1))
+        return word_indices == expected_indices
+
+    def _handle_merge_selected_words(self, _event: ClickEvent = None) -> None:
+        """Merge selected contiguous words into one word on a single line."""
+        if self.merge_word_right_callback is None:
+            self._safe_notify("Merge word function not available", type_="warning")
+            return
+
+        if len(self.selected_word_indices) < 2:
+            self._safe_notify("Select at least two words to merge", type_="warning")
+            return
+
+        if not self._can_merge_selected_words():
+            self._safe_notify(
+                "Select contiguous words on a single line to merge",
+                type_="warning",
+            )
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        line_index = selected_words[0][0]
+        base_word_index = selected_words[0][1]
+        merge_count = len(selected_words) - 1
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+
+        logger.info("Merge requested for selected words: %s", selected_words)
+        try:
+            success = True
+            for _ in range(merge_count):
+                if not self.merge_word_right_callback(line_index, base_word_index):
+                    success = False
+                    break
+
+            if success:
+                self._safe_notify(
+                    f"Merged {len(selected_words)} words",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to merge selected words", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception("Error merging selected words %s: %s", selected_words, e)
+            self._safe_notify(f"Error merging selected words: {e}", type_="negative")
 
     def _handle_refine_selected_words(self, _event: ClickEvent = None) -> None:
         """Refine selected word bounding boxes."""

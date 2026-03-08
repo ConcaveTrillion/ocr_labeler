@@ -1353,6 +1353,136 @@ class LineOperations:
             )
             return False
 
+    def split_line_after_word(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+    ) -> bool:
+        """Split a line into two lines immediately after the selected word.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based line index to split.
+            word_index: Zero-based word index used as split point.
+
+        Returns:
+            bool: True when split succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for line split-after-word")
+            return False
+
+        try:
+            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+
+            lines = list(getattr(page, "lines", []) or [])
+            if line_index < 0 or line_index >= len(lines):
+                logger.warning(
+                    "Line index %s out of range for line split (0-%s)",
+                    line_index,
+                    len(lines) - 1,
+                )
+                return False
+
+            target_line = lines[line_index]
+            line_words = list(getattr(target_line, "words", []) or [])
+            if len(line_words) < 2:
+                logger.warning(
+                    "Line split requires at least two words (line index %s)",
+                    line_index,
+                )
+                return False
+
+            if word_index < 0 or word_index >= len(line_words) - 1:
+                logger.warning(
+                    "Cannot split line %s after word index %s (valid range: 0-%s)",
+                    line_index,
+                    word_index,
+                    len(line_words) - 2,
+                )
+                return False
+
+            first_words = line_words[: word_index + 1]
+            second_words = line_words[word_index + 1 :]
+            if not first_words or not second_words:
+                logger.warning(
+                    "Line split produced empty segment(s) for line=%s word=%s",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            paragraphs = list(getattr(page, "paragraphs", []) or [])
+            target_paragraph = None
+            for paragraph in paragraphs:
+                paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                if target_line in paragraph_lines:
+                    target_paragraph = paragraph
+                    break
+
+            if target_paragraph is None:
+                logger.warning(
+                    "Unable to find paragraph containing line index %s",
+                    line_index,
+                )
+                return False
+
+            parent = self._find_parent_block(page, target_paragraph)
+            if parent is None:
+                logger.warning(
+                    "Unable to locate parent block for line split after word (%s, %s)",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+            if target_line not in paragraph_items:
+                logger.warning(
+                    "Target line missing in paragraph items for line split (%s, %s)",
+                    line_index,
+                    word_index,
+                )
+                return False
+
+            line_item_index = paragraph_items.index(target_line)
+            target_line.items = first_words
+            target_line.unmatched_ground_truth_words = []
+            target_line.recompute_bounding_box()
+
+            split_line = Block(
+                items=second_words,
+                child_type=BlockChildType.WORDS,
+                block_category=BlockCategory.LINE,
+            )
+
+            target_paragraph.items = (
+                paragraph_items[: line_item_index + 1]
+                + [split_line]
+                + paragraph_items[line_item_index + 1 :]
+            )
+            target_paragraph.recompute_bounding_box()
+            parent.recompute_bounding_box()
+
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Split line %s after word %s",
+                line_index,
+                word_index,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error splitting line after word line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     def rebox_word(
         self,
         page: "Page",

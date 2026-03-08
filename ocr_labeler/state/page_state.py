@@ -1347,6 +1347,62 @@ class PageState:
             )
             return False
 
+    def split_line_after_word(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+    ) -> bool:
+        """Split a selected line into two lines after the selected word.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_index: Zero-based line index.
+            word_index: Zero-based word index used as the split point.
+
+        Returns:
+            bool: True if split succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for line split-after-word")
+            return False
+
+        logger.debug(
+            "PageState.split_line_after_word: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
+            page_index,
+            self._current_page_index,
+            line_index,
+            word_index,
+            type(page).__name__,
+        )
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_line_after_word(page, line_index, word_index)
+            logger.debug(
+                "PageState.split_line_after_word result: line_index=%s word_index=%s success=%s",
+                line_index,
+                word_index,
+                result,
+            )
+
+            if result:
+                self._finalize_structural_edit(page, "line split-after-word")
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting line after word line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
     def rebox_word(
         self,
         page_index: int,

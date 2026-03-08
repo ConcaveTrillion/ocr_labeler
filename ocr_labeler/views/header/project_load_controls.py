@@ -7,6 +7,7 @@ from nicegui import binding, events, ui
 from ...routing import build_project_url
 from ...viewmodels.app.app_state_view_model import AppStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
+from ..shared.button_styles import style_action_button
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ class ProjectLoadControls:
             self.load_project_button = ui.button(
                 "LOAD", on_click=self._load_selected_project
             )
+            style_action_button(self.load_project_button, size="md")
 
             ui.space()
 

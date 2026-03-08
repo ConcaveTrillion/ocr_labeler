@@ -6,6 +6,7 @@ from nicegui import binding, ui
 
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..callbacks import ProjectGotoCallback, ProjectNavigateCallback
+from ..shared.button_styles import style_action_button
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +82,14 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
         with ui.column().classes("gap-2") as container:
             with ui.row().classes("items-center gap-2"):
                 self.prev_button = ui.button("Prev", on_click=self._on_prev)
+                style_action_button(self.prev_button, size="md")
                 self.next_button = ui.button("Next", on_click=self._on_next)
+                style_action_button(self.next_button, size="md")
                 self.goto_button = ui.button(
                     "Go To:",
                     on_click=lambda event: self._on_goto(self.page_input.value, event),
                 )
+                style_action_button(self.goto_button, size="md")
                 self.page_input = (
                     ui.number(label="Page", value=1, min=1, format="%d")
                     .on(

@@ -7,6 +7,7 @@ from nicegui import binding, ui
 from ....viewmodels.project.page_state_view_model import PageStateViewModel
 from ....viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ...callbacks import PageActionCallback
+from ...shared.button_styles import style_action_button
 
 logger = logging.getLogger(__name__)
 
@@ -93,27 +94,28 @@ class PageActions:  # pragma: no cover - UI wrapper file
             if self._on_reload_ocr:
                 self.reload_ocr_button = ui.button(
                     "Reload OCR", on_click=self._on_reload_ocr
-                ).classes("bg-orange-600 hover:bg-orange-700 text-white")
+                )
+                style_action_button(self.reload_ocr_button, size="md")
 
             if self._on_save_page:
-                self.save_button = ui.button(
-                    "Save Page", on_click=self._on_save_page
-                ).classes("bg-green-600 hover:bg-green-700 text-white")
+                self.save_button = ui.button("Save Page", on_click=self._on_save_page)
+                style_action_button(self.save_button, size="md")
 
             if self._on_load_page:
-                self.load_button = ui.button(
-                    "Load Page", on_click=self._on_load_page
-                ).classes("bg-blue-600 hover:bg-blue-700 text-white")
+                self.load_button = ui.button("Load Page", on_click=self._on_load_page)
+                style_action_button(self.load_button, size="md")
 
             if self._on_refine_bboxes:
                 self.refine_bboxes_button = ui.button(
                     "Refine Bboxes", on_click=self._on_refine_bboxes
-                ).classes("bg-purple-600 hover:bg-purple-700 text-white")
+                )
+                style_action_button(self.refine_bboxes_button, size="md")
 
             if self._on_expand_refine_bboxes:
                 self.expand_refine_bboxes_button = ui.button(
                     "Expand & Refine", on_click=self._on_expand_refine_bboxes
-                ).classes("bg-indigo-600 hover:bg-indigo-700 text-white")
+                )
+                style_action_button(self.expand_refine_bboxes_button, size="md")
 
             ui.separator().props("vertical")
             self.page_name_box = ui.button("-", on_click=lambda _event: None).classes(

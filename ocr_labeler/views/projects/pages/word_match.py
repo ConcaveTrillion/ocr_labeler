@@ -11,6 +11,12 @@ from pd_book_tools.ocr.page import Page
 from ....models.line_match_model import LineMatch
 from ....models.word_match_model import MatchStatus, WordMatch
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
+from ...shared.button_styles import (
+    ButtonVariant,
+    style_action_button,
+    style_word_icon_button,
+    style_word_text_button,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -212,113 +218,87 @@ class WordMatchView:
                         ui.label("Paragraph Operations").classes(
                             "text-sm font-semibold"
                         )
-                        self.merge_paragraphs_button = (
-                            ui.button(
-                                "Merge",
-                                icon="call_merge",
-                                on_click=self._handle_merge_selected_paragraphs,
-                            )
-                            .props("size=sm")
-                            .tooltip("Merge selected paragraphs")
+                        self.merge_paragraphs_button = ui.button(
+                            "Merge",
+                            icon="call_merge",
+                            on_click=self._handle_merge_selected_paragraphs,
+                        ).tooltip("Merge selected paragraphs")
+                        style_action_button(self.merge_paragraphs_button)
+                        self.delete_paragraphs_button = ui.button(
+                            "Delete",
+                            icon="delete",
+                            on_click=self._handle_delete_selected_paragraphs,
+                        ).tooltip("Delete selected paragraphs")
+                        style_action_button(
+                            self.delete_paragraphs_button,
+                            variant=ButtonVariant.DELETE,
                         )
-                        self.delete_paragraphs_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                color="negative",
-                                on_click=self._handle_delete_selected_paragraphs,
-                            )
-                            .props("size=sm")
-                            .tooltip("Delete selected paragraphs")
+                        self.refine_paragraphs_button = ui.button(
+                            "Refine",
+                            icon="auto_fix_high",
+                            on_click=self._handle_refine_selected_paragraphs,
+                        ).tooltip("Refine selected paragraphs")
+                        style_action_button(self.refine_paragraphs_button)
+                        self.split_paragraph_after_line_button = ui.button(
+                            "Split After",
+                            icon="call_split",
+                            on_click=self._handle_split_paragraph_after_selected_line,
+                        ).tooltip(
+                            "Split the containing paragraph immediately after the selected line"
                         )
-                        self.refine_paragraphs_button = (
-                            ui.button(
-                                "Refine",
-                                icon="auto_fix_high",
-                                on_click=self._handle_refine_selected_paragraphs,
-                            )
-                            .props("size=sm")
-                            .tooltip("Refine selected paragraphs")
+                        style_action_button(self.split_paragraph_after_line_button)
+                        self.split_paragraph_by_selection_button = ui.button(
+                            "Split Select",
+                            icon="call_split",
+                            on_click=self._handle_split_paragraph_by_selected_lines,
+                        ).tooltip(
+                            "Split one paragraph into selected and unselected lines"
                         )
-                        self.split_paragraph_after_line_button = (
-                            ui.button(
-                                "Split After",
-                                icon="call_split",
-                                on_click=self._handle_split_paragraph_after_selected_line,
-                            )
-                            .props("size=sm")
-                            .tooltip(
-                                "Split the containing paragraph immediately after the selected line"
-                            )
-                        )
-                        self.split_paragraph_by_selection_button = (
-                            ui.button(
-                                "Split Select",
-                                icon="call_split",
-                                on_click=self._handle_split_paragraph_by_selected_lines,
-                            )
-                            .props("size=sm")
-                            .tooltip(
-                                "Split one paragraph into selected and unselected lines"
-                            )
-                        )
+                        style_action_button(self.split_paragraph_by_selection_button)
 
                     # Line operations row
                     with ui.row().classes("items-center gap-2"):
                         ui.label("Line Operations").classes("text-sm font-semibold")
-                        self.merge_lines_button = (
-                            ui.button(
-                                "Merge",
-                                icon="call_merge",
-                                on_click=self._handle_merge_selected_lines,
-                            )
-                            .props("size=sm")
-                            .tooltip(
-                                "Merge selected lines into the first selected line"
-                            )
+                        self.merge_lines_button = ui.button(
+                            "Merge",
+                            icon="call_merge",
+                            on_click=self._handle_merge_selected_lines,
+                        ).tooltip("Merge selected lines into the first selected line")
+                        style_action_button(self.merge_lines_button)
+                        self.delete_lines_button = ui.button(
+                            "Delete",
+                            icon="delete",
+                            on_click=self._handle_delete_selected_lines,
+                        ).tooltip("Delete selected lines")
+                        style_action_button(
+                            self.delete_lines_button,
+                            variant=ButtonVariant.DELETE,
                         )
-                        self.delete_lines_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                color="negative",
-                                on_click=self._handle_delete_selected_lines,
-                            )
-                            .props("size=sm")
-                            .tooltip("Delete selected lines")
-                        )
-                        self.refine_lines_button = (
-                            ui.button(
-                                "Refine",
-                                icon="auto_fix_high",
-                                on_click=self._handle_refine_selected_lines,
-                            )
-                            .props("size=sm")
-                            .tooltip("Refine selected lines")
-                        )
+                        self.refine_lines_button = ui.button(
+                            "Refine",
+                            icon="auto_fix_high",
+                            on_click=self._handle_refine_selected_lines,
+                        ).tooltip("Refine selected lines")
+                        style_action_button(self.refine_lines_button)
 
                     # Word operations row
                     with ui.row().classes("items-center gap-2"):
                         ui.label("Word Operations").classes("text-sm font-semibold")
-                        self.delete_words_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                color="negative",
-                                on_click=self._handle_delete_selected_words,
-                            )
-                            .props("size=sm")
-                            .tooltip("Delete selected words")
+                        self.delete_words_button = ui.button(
+                            "Delete",
+                            icon="delete",
+                            on_click=self._handle_delete_selected_words,
+                        ).tooltip("Delete selected words")
+                        style_action_button(
+                            self.delete_words_button,
+                            variant=ButtonVariant.DELETE,
                         )
-                        self.refine_words_button = (
-                            ui.button(
-                                "Refine",
-                                icon="auto_fix_high",
-                                on_click=self._handle_refine_selected_words,
-                            )
-                            .props("size=sm")
-                            .tooltip("Refine selected words")
-                        )
+                        self.refine_words_button = ui.button(
+                            "Refine",
+                            icon="auto_fix_high",
+                            on_click=self._handle_refine_selected_words,
+                        ).tooltip("Refine selected words")
+                        style_action_button(self.refine_words_button)
 
             # Scrollable container for word matches
             with ui.scroll_area().classes("fit"):
@@ -930,11 +910,14 @@ class WordMatchView:
                             logger.debug(
                                 f"Adding GT→OCR button for line {line_match.line_index}"
                             )
-                            ui.button(
-                                "GT→OCR", icon="content_copy", color="primary"
-                            ).props("size=sm").tooltip(
+                            gt_to_ocr_button = ui.button(
+                                "GT→OCR",
+                                icon="content_copy",
+                            ).tooltip(
                                 "Copy ground truth text to OCR text for all words in this line"
-                            ).on_click(
+                            )
+                            style_action_button(gt_to_ocr_button)
+                            gt_to_ocr_button.on_click(
                                 lambda: self._handle_copy_gt_to_ocr(
                                     line_match.line_index
                                 )
@@ -947,20 +930,25 @@ class WordMatchView:
                             logger.debug(
                                 f"Adding OCR→GT button for line {line_match.line_index}"
                             )
-                            ui.button(
-                                "OCR→GT", icon="content_copy", color="primary"
-                            ).props("size=sm").tooltip(
+                            ocr_to_gt_button = ui.button(
+                                "OCR→GT",
+                                icon="content_copy",
+                            ).tooltip(
                                 "Copy OCR text to ground truth text for all words in this line"
-                            ).on_click(
+                            )
+                            style_action_button(ocr_to_gt_button)
+                            ocr_to_gt_button.on_click(
                                 lambda: self._handle_copy_ocr_to_gt(
                                     line_match.line_index
                                 )
                             )
 
-                        delete_button = (
-                            ui.button(icon="delete", color="negative")
-                            .props("size=sm flat round")
-                            .tooltip("Delete this line")
+                        delete_button = ui.button(icon="delete").tooltip(
+                            "Delete this line"
+                        )
+                        style_word_icon_button(
+                            delete_button,
+                            variant=ButtonVariant.DELETE,
                         )
                         if self.delete_lines_callback:
                             delete_button.on_click(
@@ -1311,36 +1299,30 @@ class WordMatchView:
             )
             self._word_checkbox_refs[selection_key] = word_checkbox
 
-            merge_button = (
-                ui.button(
-                    icon="call_merge",
-                    on_click=lambda event: self._handle_merge_word_right(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Merge with next word")
-            )
+            merge_button = ui.button(
+                icon="call_merge",
+                on_click=lambda event: self._handle_merge_word_right(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Merge with next word")
+            style_word_icon_button(merge_button)
             merge_button.disabled = (
                 self.merge_word_right_callback is None
                 or split_word_index < 0
                 or word_index >= word_count - 1
             )
 
-            split_button = (
-                ui.button(
-                    icon="call_split",
-                    on_click=lambda event: self._handle_split_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Split word at selected marker")
-            )
+            split_button = ui.button(
+                icon="call_split",
+                on_click=lambda event: self._handle_split_word(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Split word at selected marker")
+            style_word_icon_button(split_button)
             if split_word_index >= 0:
                 split_key = (line_index, split_word_index)
                 self._word_split_button_refs[split_key] = split_button
@@ -1349,19 +1331,15 @@ class WordMatchView:
                 split_word_index,
             )
 
-            delete_button = (
-                ui.button(
-                    icon="delete",
-                    color="negative",
-                    on_click=lambda event: self._handle_delete_single_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Delete word")
-            )
+            delete_button = ui.button(
+                icon="delete",
+                on_click=lambda event: self._handle_delete_single_word(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Delete word")
+            style_word_icon_button(delete_button, variant=ButtonVariant.DELETE)
             delete_button.disabled = (
                 self.delete_words_callback is None or split_word_index < 0
             )
@@ -1924,17 +1902,17 @@ class WordMatchView:
                         event,
                     ),
                 )
-                .props("size=xs dense")
                 .style(style_button_width)
                 .tooltip("Toggle italic")
             )
             italic_button.disabled = (
                 self.set_word_attributes_callback is None or split_word_index < 0
             )
-            if italic:
-                italic_button.props("color=primary")
-            else:
-                italic_button.props("color=grey-5 text-color=black")
+            style_word_text_button(
+                italic_button,
+                variant=ButtonVariant.TOGGLE,
+                active=italic,
+            )
 
             small_caps_button = (
                 ui.button(
@@ -1946,17 +1924,17 @@ class WordMatchView:
                         event,
                     ),
                 )
-                .props("size=xs dense")
                 .style(style_button_width)
                 .tooltip("Toggle small caps")
             )
             small_caps_button.disabled = (
                 self.set_word_attributes_callback is None or split_word_index < 0
             )
-            if small_caps:
-                small_caps_button.props("color=primary")
-            else:
-                small_caps_button.props("color=grey-5 text-color=black")
+            style_word_text_button(
+                small_caps_button,
+                variant=ButtonVariant.TOGGLE,
+                active=small_caps,
+            )
 
             blackletter_button = (
                 ui.button(
@@ -1968,17 +1946,17 @@ class WordMatchView:
                         event,
                     ),
                 )
-                .props("size=xs dense")
                 .style(style_button_width)
                 .tooltip("Toggle blackletter")
             )
             blackletter_button.disabled = (
                 self.set_word_attributes_callback is None or split_word_index < 0
             )
-            if blackletter:
-                blackletter_button.props("color=primary")
-            else:
-                blackletter_button.props("color=grey-5 text-color=black")
+            style_word_text_button(
+                blackletter_button,
+                variant=ButtonVariant.TOGGLE,
+                active=blackletter,
+            )
 
             if split_word_index >= 0:
                 self._word_style_button_refs[(line_index, split_word_index)] = (
@@ -1988,66 +1966,54 @@ class WordMatchView:
                 )
 
         with ui.row().classes("items-center gap-1"):
-            rebox_button = (
-                ui.button(
-                    icon="crop_free",
-                    on_click=lambda event: self._handle_start_rebox_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Redraw word bounding box")
-            )
+            rebox_button = ui.button(
+                icon="crop_free",
+                on_click=lambda event: self._handle_start_rebox_word(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Redraw word bounding box")
+            style_word_icon_button(rebox_button)
             rebox_button.disabled = (
                 self.rebox_word_callback is None or split_word_index < 0
             )
 
-            refine_button = (
-                ui.button(
-                    icon="auto_fix_high",
-                    on_click=lambda event: self._handle_refine_single_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Refine word bounding box")
-            )
+            refine_button = ui.button(
+                icon="auto_fix_high",
+                on_click=lambda event: self._handle_refine_single_word(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Refine word bounding box")
+            style_word_icon_button(refine_button)
             refine_button.disabled = (
                 self.refine_words_callback is None or split_word_index < 0
             )
 
-            expand_then_refine_button = (
-                ui.button(
-                    icon="unfold_more",
-                    on_click=lambda event: self._handle_expand_then_refine_single_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Expand then refine word bounding box")
-            )
+            expand_then_refine_button = ui.button(
+                icon="unfold_more",
+                on_click=lambda event: self._handle_expand_then_refine_single_word(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Expand then refine word bounding box")
+            style_word_icon_button(expand_then_refine_button)
             expand_then_refine_button.disabled = (
                 self.expand_then_refine_words_callback is None or split_word_index < 0
             )
 
-            edit_bbox_button = (
-                ui.button(
-                    icon="tune",
-                    on_click=lambda event: self._toggle_bbox_fine_tune(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                )
-                .props("size=xs flat round")
-                .tooltip("Fine-tune word bbox by pixels")
-            )
+            edit_bbox_button = ui.button(
+                icon="tune",
+                on_click=lambda event: self._toggle_bbox_fine_tune(
+                    line_index,
+                    split_word_index,
+                    event,
+                ),
+            ).tooltip("Fine-tune word bbox by pixels")
+            style_word_icon_button(edit_bbox_button)
             edit_bbox_button.disabled = (
                 self.nudge_word_bbox_callback is None or split_word_index < 0
             )
@@ -2078,7 +2044,7 @@ class WordMatchView:
                 ).props("inline dense")
             with ui.row().classes("items-center gap-1"):
                 ui.label("Left")
-                ui.button(
+                left_minus_button = ui.button(
                     "X-",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2089,8 +2055,9 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
-                ui.button(
+                )
+                style_word_text_button(left_minus_button, compact=True)
+                left_plus_button = ui.button(
                     "X+",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2101,10 +2068,11 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
+                )
+                style_word_text_button(left_plus_button, compact=True)
 
                 ui.label("Right")
-                ui.button(
+                right_minus_button = ui.button(
                     "X-",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2115,8 +2083,9 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
-                ui.button(
+                )
+                style_word_text_button(right_minus_button, compact=True)
+                right_plus_button = ui.button(
                     "X+",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2127,11 +2096,12 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
+                )
+                style_word_text_button(right_plus_button, compact=True)
 
             with ui.row().classes("items-center gap-1"):
                 ui.label("Top")
-                ui.button(
+                top_minus_button = ui.button(
                     "Y-",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2142,8 +2112,9 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
-                ui.button(
+                )
+                style_word_text_button(top_minus_button, compact=True)
+                top_plus_button = ui.button(
                     "Y+",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2154,10 +2125,11 @@ class WordMatchView:
                         bottom_units=0.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
+                )
+                style_word_text_button(top_plus_button, compact=True)
 
                 ui.label("Bottom")
-                ui.button(
+                bottom_minus_button = ui.button(
                     "Y-",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2168,8 +2140,9 @@ class WordMatchView:
                         bottom_units=-1.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
-                ui.button(
+                )
+                style_word_text_button(bottom_minus_button, compact=True)
+                bottom_plus_button = ui.button(
                     "Y+",
                     on_click=lambda event: self._handle_nudge_single_word_bbox(
                         line_index,
@@ -2180,7 +2153,8 @@ class WordMatchView:
                         bottom_units=1.0,
                         _event=event,
                     ),
-                ).props("size=xs flat")
+                )
+                style_word_text_button(bottom_plus_button, compact=True)
 
             with ui.row().classes("items-center gap-2"):
                 ui.label(
@@ -2190,32 +2164,35 @@ class WordMatchView:
                     f"T:{pending_top:.0f} "
                     f"B:{pending_bottom:.0f} px"
                 ).classes("text-xs")
-                ui.button(
-                    "Reset",
+                reset_button = ui.button(
+                    "↺",
                     on_click=lambda event: self._reset_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
                         event,
                     ),
-                ).props("size=xs flat")
-                ui.button(
-                    "Apply",
+                ).tooltip("Reset pending bbox edits")
+                style_word_text_button(reset_button, compact=True)
+                apply_button = ui.button(
+                    "✓",
                     on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
                         refine_after=False,
                         _event=event,
                     ),
-                ).props("size=xs")
-                ui.button(
-                    "Apply + Refine",
+                ).tooltip("Apply pending bbox edits")
+                style_word_text_button(apply_button, compact=True)
+                apply_refine_button = ui.button(
+                    "✓✨",
                     on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
                         line_index,
                         split_word_index,
                         refine_after=True,
                         _event=event,
                     ),
-                ).props("size=xs")
+                ).tooltip("Apply pending bbox edits and refine")
+                style_word_text_button(apply_refine_button, compact=True)
 
     def _line_word_match_by_ocr_index(
         self,

@@ -173,6 +173,12 @@ class ProjectOperations:
             if project_id is None:
                 project_id = project_root.name
 
+            # Sanitize project_id: strip any directory separators so it cannot
+            # escape the save_directory (e.g. "../../etc" → "etc").
+            project_id = Path(project_id).name
+            if not project_id:
+                raise ValueError("project_id must be a non-empty single path component")
+
             # Create project directory structure
             project_dir = Path(save_directory) / project_id
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -409,6 +415,14 @@ class ProjectOperations:
             if backup_name is None:
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_name = f"{source_directory.name}_{timestamp}"
+
+            # Sanitize backup_name: strip any directory separators so it cannot
+            # escape the backup_directory.
+            backup_name = Path(backup_name).name
+            if not backup_name:
+                raise ValueError(
+                    "backup_name must be a non-empty single path component"
+                )
 
             backup_dir = Path(backup_directory)
             backup_dir.mkdir(parents=True, exist_ok=True)

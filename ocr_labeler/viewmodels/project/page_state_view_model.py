@@ -22,6 +22,18 @@ _image_encoding_executor = ThreadPoolExecutor(
     max_workers=4, thread_name_prefix="img_encode"
 )
 
+# Maximum total byte size of encoded images held in the per-viewmodel cache.
+# len() of a base64 data-URL string is a close proxy for encoded byte count.
+# Short label inserted into cached filenames for each numpy image attribute.
+# Format: {project_id}_{page:03d}_{image_type}_{content_hash}{ext}
+_IMAGE_TYPE_LABELS: dict[str, str] = {
+    "cv2_numpy_page_image": "original",
+    "cv2_numpy_page_image_paragraph_with_bboxes": "paragraphs",
+    "cv2_numpy_page_image_line_with_bboxes": "lines",
+    "cv2_numpy_page_image_word_with_bboxes": "words",
+    "cv2_numpy_page_image_matched_word_with_colors": "mismatches",
+}
+
 
 @binding.bindable_dataclass
 class PageStateViewModel(BaseViewModel):
@@ -80,7 +92,7 @@ class PageStateViewModel(BaseViewModel):
         self._update_in_progress: bool = False
         self._update_scheduled: bool = False
         self._update_reschedule_requested: bool = False
-        self._encoded_image_cache: dict[str, str] = {}
+        self._encoded_image_cache: dict[str, str] = {}  # kept for test monkeypatching
         self._image_update_callback: Optional[callable] = None
         self._word_view_image_ready_callback: Optional[callable] = None
         self._last_image_callback_signature: tuple | None = None
@@ -326,8 +338,58 @@ class PageStateViewModel(BaseViewModel):
                 )
                 return
 
-            # Refresh page images using NiceGUI's io_bound for IO operations
             image_mappings = self._image_mappings()
+
+            # Resolve page context once — needed for both the fast and slow paths.
+            try:
+                page_index = int(getattr(current_page, "index", -1) or -1)
+            except (TypeError, ValueError):
+                page_index = -1
+            project_id = self._resolve_project_id_for_cache()
+            image_extension = self._resolve_cache_image_extension(
+                current_page, page_index
+            )
+
+            # Fast path: all images were cached in a previous session and the
+            # files still exist on disk.  Skip refresh_page_images() entirely.
+            current_page_model = self._get_current_page_model()
+            cached_filenames = (
+                getattr(current_page_model, "cached_image_filenames", None) or {}
+            )
+            expected_types = {
+                _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings
+            }
+            cache_dir = self._word_image_cache_dir
+            if (
+                cached_filenames
+                and expected_types.issubset(cached_filenames.keys())
+                and all(
+                    (cache_dir / fname).exists()
+                    for fname in cached_filenames.values()
+                    if fname
+                )
+            ):
+                logger.debug(
+                    "_update_image_sources_async: all images found in disk cache "
+                    "for page %d; skipping refresh_page_images",
+                    page_index,
+                )
+                encoded_results = []
+                original_image_source = ""
+                for prop_name, attr_name in image_mappings:
+                    image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
+                    url = self._url_from_cached_filename(cached_filenames[image_type])
+                    encoded_results.append((prop_name, url))
+                    if attr_name == "cv2_numpy_page_image":
+                        original_image_source = url
+                encoded_results.append(
+                    ("word_view_original_image_source", original_image_source)
+                )
+                encoded_results.append(("word_view_image_page_index", page_index))
+                self._apply_encoded_results(encoded_results, current_page)
+                return
+
+            # Slow path: generate / cache images, then persist filenames.
             needs_refresh = any(
                 getattr(current_page, attr_name, None) is None
                 for _, attr_name in image_mappings
@@ -341,37 +403,51 @@ class PageStateViewModel(BaseViewModel):
                         e,
                     )
 
-            # Encode images using NiceGUI's io_bound API
-            # Use caching to avoid re-encoding unchanged images
+            # Write all images to the shared disk cache; return static URLs.
             encoded_results = []
+            original_image_source = ""
+            new_cached_filenames: dict[str, str] = {}
             for prop_name, attr_name in image_mappings:
                 np_img = getattr(current_page, attr_name, None)
-                encoded = await run.io_bound(
-                    self._encode_image_cached,
+                # Use the source image extension for the original page image;
+                # PNG for generated overlays (they have no natural source format).
+                ext = image_extension if attr_name == "cv2_numpy_page_image" else ".png"
+                image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
+                source = await run.io_bound(
+                    self._cache_image_to_disk,
                     np_img,
-                    attr_name,
+                    image_type,
+                    page_index,
+                    project_id,
+                    ext,
                 )
-                encoded_results.append((prop_name, encoded))
+                encoded_results.append((prop_name, source))
+                if attr_name == "cv2_numpy_page_image":
+                    original_image_source = source
+                if source:
+                    # filename = last path component before the query string
+                    new_cached_filenames[image_type] = source.split("?")[0].rsplit(
+                        "/", 1
+                    )[-1]
 
-            original_np_img = getattr(current_page, "cv2_numpy_page_image", None)
-            try:
-                page_index = int(getattr(current_page, "index", -1) or -1)
-            except (TypeError, ValueError):
-                page_index = -1
-            project_id = self._resolve_project_id_for_cache()
-            image_extension = self._resolve_cache_image_extension(
-                current_page,
-                page_index,
-            )
-            word_view_source = await run.io_bound(
-                self._cache_word_view_image,
-                original_np_img,
-                page_index,
-                project_id,
-                image_extension,
-            )
+            # Store filenames on PageModel (enables in-session fast path on revisit).
+            if new_cached_filenames and current_page_model is not None:
+                current_page_model.cached_image_filenames = new_cached_filenames
+                # Persist to the page JSON immediately so the next session also
+                # benefits — this is a lightweight atomic update, not a full save.
+                page_ops = getattr(self._page_state, "page_ops", None)
+                project_root = getattr(self._project_state, "project_root", None)
+                if page_ops is not None and project_root is not None:
+                    await run.io_bound(
+                        page_ops.update_cached_images_in_json,
+                        current_page_model,
+                        project_root,
+                        project_id=project_id,
+                    )
+
+            # Word-view reuses the already-cached original image URL.
             encoded_results.append(
-                ("word_view_original_image_source", word_view_source)
+                ("word_view_original_image_source", original_image_source)
             )
             encoded_results.append(("word_view_image_page_index", page_index))
 
@@ -420,6 +496,50 @@ class PageStateViewModel(BaseViewModel):
                 return
 
             image_mappings = self._image_mappings()
+
+            try:
+                page_index = int(getattr(current_page, "index", -1) or -1)
+            except (TypeError, ValueError):
+                page_index = -1
+            project_id = self._resolve_project_id_for_cache()
+            image_extension = self._resolve_cache_image_extension(
+                current_page, page_index
+            )
+
+            # Fast path: use pre-cached files if available.
+            current_page_model = self._get_current_page_model()
+            cached_filenames = (
+                getattr(current_page_model, "cached_image_filenames", None) or {}
+            )
+            expected_types = {
+                _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings
+            }
+            cache_dir = self._word_image_cache_dir
+            if (
+                cached_filenames
+                and expected_types.issubset(cached_filenames.keys())
+                and all(
+                    (cache_dir / fname).exists()
+                    for fname in cached_filenames.values()
+                    if fname
+                )
+            ):
+                encoded_results = []
+                original_image_source = ""
+                for prop_name, attr_name in image_mappings:
+                    image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
+                    url = self._url_from_cached_filename(cached_filenames[image_type])
+                    encoded_results.append((prop_name, url))
+                    if attr_name == "cv2_numpy_page_image":
+                        original_image_source = url
+                encoded_results.append(
+                    ("word_view_original_image_source", original_image_source)
+                )
+                encoded_results.append(("word_view_image_page_index", page_index))
+                self._apply_encoded_results(encoded_results, current_page)
+                return
+
+            # Slow path: generate images.
             needs_refresh = any(
                 getattr(current_page, attr_name, None) is None
                 for _, attr_name in image_mappings
@@ -434,29 +554,36 @@ class PageStateViewModel(BaseViewModel):
                     )
 
             encoded_results = []
+            original_image_source = ""
+            new_cached_filenames: dict[str, str] = {}
             for prop_name, attr_name in image_mappings:
                 np_img = getattr(current_page, attr_name, None)
-                encoded = self._encode_image(np_img)
-                encoded_results.append((prop_name, encoded))
+                ext = image_extension if attr_name == "cv2_numpy_page_image" else ".png"
+                image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
+                source = self._cache_image_to_disk(
+                    np_img, image_type, page_index, project_id, ext
+                )
+                encoded_results.append((prop_name, source))
+                if attr_name == "cv2_numpy_page_image":
+                    original_image_source = source
+                if source:
+                    new_cached_filenames[image_type] = source.split("?")[0].rsplit(
+                        "/", 1
+                    )[-1]
 
-            original_np_img = getattr(current_page, "cv2_numpy_page_image", None)
-            try:
-                page_index = int(getattr(current_page, "index", -1) or -1)
-            except (TypeError, ValueError):
-                page_index = -1
-            project_id = self._resolve_project_id_for_cache()
-            image_extension = self._resolve_cache_image_extension(
-                current_page,
-                page_index,
-            )
-            word_view_source = self._cache_word_view_image(
-                original_np_img,
-                page_index,
-                project_id,
-                image_extension,
-            )
+            if new_cached_filenames and current_page_model is not None:
+                current_page_model.cached_image_filenames = new_cached_filenames
+                page_ops = getattr(self._page_state, "page_ops", None)
+                project_root = getattr(self._project_state, "project_root", None)
+                if page_ops is not None and project_root is not None:
+                    page_ops.update_cached_images_in_json(
+                        current_page_model,
+                        project_root,
+                        project_id=project_id,
+                    )
+
             encoded_results.append(
-                ("word_view_original_image_source", word_view_source)
+                ("word_view_original_image_source", original_image_source)
             )
             encoded_results.append(("word_view_image_page_index", page_index))
 
@@ -742,38 +869,82 @@ class PageStateViewModel(BaseViewModel):
 
             return f"fallback_{time.time()}"
 
-    def _encode_image_cached(self, np_img, cache_key: str) -> str:
-        """Encode image with caching to avoid re-encoding unchanged images."""
+    def _cache_image_to_disk(
+        self,
+        np_img,
+        image_type: str,
+        page_index: int,
+        project_id: str,
+        image_extension: str,
+    ) -> str:
+        """Write a processed page image to the shared on-disk cache and return its static URL.
+
+        The cache is shared across server sessions and keyed by project, page, image
+        type, and a content hash of the (resized) image.  Because overlay images
+        (paragraphs/lines/words/mismatches) are content-hashed after OCR bounding
+        boxes are applied, any change to OCR output automatically produces a new
+        cache entry without touching existing files for other pages.
+
+        Returns a /_word_image_cache/ static URL, or "" on failure.
+        """
         if np_img is None:
             return ""
 
-        # Overlay images (line/word/paragraph/mismatch bboxes) can change in ways
-        # that evade lightweight hashing and lead to stale UI redraws. Keep cache
-        # for the immutable original page image only.
-        if cache_key != "cv2_numpy_page_image":
-            return self._encode_image_sync(np_img)
+        shape = getattr(np_img, "shape", None)
+        if not isinstance(shape, tuple):
+            return ""
 
-        # Compute hash of the image
-        img_hash = self._compute_image_hash(np_img)
-        full_cache_key = f"{cache_key}_{img_hash}"
+        cache_dir = self._word_image_cache_dir or (
+            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        )
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Check cache first
-        if full_cache_key in self._encoded_image_cache:
-            logger.debug(f"Using cached encoding for {cache_key}")
-            return self._encoded_image_cache[full_cache_key]
+        try:
+            import cv2
 
-        # Encode the image
-        encoded = self._encode_image_sync(np_img)
+            # Normalise colour space so all cached files are consistent.
+            if len(shape) == 2:
+                np_img = cv2.cvtColor(np_img, cv2.COLOR_GRAY2RGB)
+            elif len(shape) > 2 and shape[2] == 4:
+                np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
 
-        # Cache the result (limit cache size to prevent memory issues)
-        if len(self._encoded_image_cache) > 50:
-            # Remove oldest entries (simple FIFO)
-            keys_to_remove = list(self._encoded_image_cache.keys())[:10]
-            for key in keys_to_remove:
-                del self._encoded_image_cache[key]
+            height, width = np_img.shape[:2]
+            max_dimension = 1200
+            if width > max_dimension or height > max_dimension:
+                if width > height:
+                    new_width = max_dimension
+                    new_height = max(1, int(height * max_dimension / width))
+                else:
+                    new_height = max_dimension
+                    new_width = max(1, int(width * max_dimension / height))
+                np_img = cv2.resize(
+                    np_img, (new_width, new_height), interpolation=cv2.INTER_AREA
+                )
 
-        self._encoded_image_cache[full_cache_key] = encoded
-        return encoded
+            img_hash = self._compute_image_hash(np_img)
+            safe_page_index = max(-1, int(page_index))
+            safe_project_id = (project_id or "project").strip() or "project"
+            safe_image_type = (image_type or "image").strip() or "image"
+            page_number = max(1, safe_page_index + 1)
+            normalized_extension = self._normalize_cache_extension(image_extension)
+            file_name = f"{safe_project_id}_{page_number:03d}_{safe_image_type}_{img_hash}{normalized_extension}"
+            output_path = cache_dir / file_name
+
+            if not output_path.exists():
+                encode_options: list[int] = []
+                if normalized_extension in {".jpg", ".jpeg"}:
+                    encode_options = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                success, buffer = cv2.imencode(
+                    normalized_extension, np_img, encode_options
+                )
+                if not success:
+                    return ""
+                output_path.write_bytes(buffer.tobytes())
+
+            return f"/_word_image_cache/{file_name}?v={img_hash[:8]}"
+        except Exception:
+            logger.debug("Failed caching image to disk", exc_info=True)
+            return ""
 
     def _encode_image_sync(self, np_img) -> str:
         """Encode a numpy image to a base64 data URL (synchronous)."""
@@ -834,79 +1005,29 @@ class PageStateViewModel(BaseViewModel):
             logger.exception(f"Failed to encode image: {e}")
             return ""
 
-        # Backward compatibility for tests monkeypatching _encode_image
-        # (legacy name before async refactor)
+    def _get_current_page_model(self):
+        """Return the current PageModel from the bound state, or None."""
+        state = self._page_state
+        if state is None:
+            return None
+        maybe = getattr(state, "current_page_model", None)
+        if callable(maybe):
+            try:
+                return maybe()
+            except Exception:
+                return None
+        return maybe
 
-    def _cache_word_view_image(
-        self,
-        np_img,
-        page_index: int,
-        project_id: str,
-        image_extension: str,
-    ) -> str:
-        """Persist a resized original page image for word-view slicing and return static URL."""
-        if np_img is None:
-            return ""
+    @staticmethod
+    def _url_from_cached_filename(filename: str) -> str:
+        """Reconstruct a /_word_image_cache/ static URL from a bare filename.
 
-        shape = getattr(np_img, "shape", None)
-        if not isinstance(shape, tuple):
-            return ""
-
-        cache_dir = self._word_image_cache_dir or (
-            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
-        )
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            import cv2
-
-            # Mirror _encode_image_sync preprocessing for exact geometry alignment.
-            if len(shape) == 2:
-                np_img = cv2.cvtColor(np_img, cv2.COLOR_GRAY2RGB)
-            elif len(shape) > 2 and shape[2] == 4:
-                np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
-
-            height, width = np_img.shape[:2]
-            max_dimension = 1200
-            if width > max_dimension or height > max_dimension:
-                if width > height:
-                    new_width = max_dimension
-                    new_height = max(1, int(height * max_dimension / width))
-                else:
-                    new_height = max_dimension
-                    new_width = max(1, int(width * max_dimension / height))
-                np_img = cv2.resize(
-                    np_img, (new_width, new_height), interpolation=cv2.INTER_AREA
-                )
-
-            img_hash = self._compute_image_hash(np_img)
-            safe_page_index = max(-1, int(page_index))
-            safe_project_id = (project_id or "project").strip() or "project"
-            page_number = max(1, safe_page_index + 1)
-            normalized_extension = self._normalize_cache_extension(image_extension)
-            file_name = (
-                f"{safe_project_id}_{page_number:03d}_{img_hash}{normalized_extension}"
-            )
-            output_path = cache_dir / file_name
-
-            if not output_path.exists():
-                encode_format = normalized_extension
-                encode_options: list[int] = []
-                if encode_format in {".jpg", ".jpeg"}:
-                    encode_options = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
-                success, buffer = cv2.imencode(
-                    encode_format,
-                    np_img,
-                    encode_options,
-                )
-                if not success:
-                    return ""
-                output_path.write_bytes(buffer.tobytes())
-
-            return f"/_word_image_cache/{file_name}?v={img_hash[:8]}"
-        except Exception:
-            logger.debug("Failed caching word-view image", exc_info=True)
-            return ""
+        The filename format is ``{project}_{page:03d}_{type}_{hash}{ext}``.
+        The hash embedded in the stem is reused as the cache-busting query param.
+        """
+        stem = Path(filename).stem  # e.g. "proj_001_original_abc123def456"
+        hash_part = stem.rsplit("_", 1)[-1]  # "abc123def456"
+        return f"/_word_image_cache/{filename}?v={hash_part[:8]}"
 
     def _resolve_project_id_for_cache(self) -> str:
         """Return project_id for cache filenames, matching saved page file conventions."""
@@ -962,9 +1083,6 @@ class PageStateViewModel(BaseViewModel):
             return value
         return ".jpg"
 
-    def _encode_image(self, np_img):  # pragma: no cover - legacy alias
-        return self._encode_image_sync(np_img)
-
     def _clear_image_sources(self, keep_metadata: bool = False):
         """Clear all image sources.
 
@@ -973,9 +1091,6 @@ class PageStateViewModel(BaseViewModel):
                 navigation UI stays consistent while images are hidden.
         """
         self._initialize_bindable_defaults(keep_metadata=keep_metadata)
-        # Clear the cache when clearing image sources
-        if hasattr(self, "_encoded_image_cache"):
-            self._encoded_image_cache.clear()
 
     # Command methods for UI actions
 

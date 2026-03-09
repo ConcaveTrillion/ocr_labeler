@@ -284,6 +284,78 @@ class PageOperations:
             logger.exception(f"Failed to save page: {e}")
             return False
 
+    def update_cached_images_in_json(
+        self,
+        page_model: PageModel,
+        project_root: Path,
+        save_directory: str = "local-data/labeled-ocr",
+        project_id: Optional[str] = None,
+    ) -> bool:
+        """Write cached_images filenames into the page's JSON file and bump schema to 2.1.
+
+        Called automatically after images are rendered to disk so that subsequent
+        sessions (and same-session page revisits that lose the in-memory PageModel)
+        can skip refresh_page_images() entirely.
+
+        If the page JSON does not yet exist (page never explicitly saved) this is
+        a no-op — the cached filenames are already in memory and will be written
+        on the next explicit save.
+
+        Uses an atomic temp-then-rename write to avoid partial-write corruption.
+        """
+        try:
+            if project_id is None:
+                project_id = project_root.name
+
+            page_index = getattr(page_model, "index", None)
+            if page_index is None:
+                logger.debug(
+                    "update_cached_images_in_json: no page index on model, skipping"
+                )
+                return False
+            page_number = int(page_index) + 1
+
+            save_dir = project_root / save_directory
+            json_path = save_dir / f"{project_id}_{page_number:03d}.json"
+
+            if not json_path.exists():
+                logger.debug(
+                    "update_cached_images_in_json: %s not found (page not yet saved), "
+                    "skipping",
+                    json_path,
+                )
+                return False
+
+            cached_filenames = page_model.cached_image_filenames or {}
+            if not cached_filenames:
+                return False
+
+            with open(json_path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+
+            json_data["cached_images"] = dict(cached_filenames)
+
+            # Bring forward old schema pages to 2.1.
+            schema = json_data.get("schema")
+            if isinstance(schema, dict):
+                schema["version"] = USER_PAGE_SCHEMA_VERSION
+
+            tmp_path = json_path.with_name(json_path.name + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            tmp_path.replace(json_path)
+
+            logger.debug(
+                "update_cached_images_in_json: persisted %d cached image filenames to %s",
+                len(cached_filenames),
+                json_path,
+            )
+            return True
+
+        except Exception as e:
+            logger.warning("Failed to update cached_images in JSON: %s", e)
+            return False
+
     def load_page_model(
         self,
         page_number: int,
@@ -421,16 +493,26 @@ class PageOperations:
                     page_model.index = source_index
                 image_path = source_data.get("image_path")
                 if isinstance(image_path, str) and image_path:
-                    page_model.image_path = str(project_root / image_path)
+                    candidate = (project_root / image_path).resolve()
+                    try:
+                        candidate.relative_to(project_root.resolve())
+                        page_model.image_path = str(candidate)
+                    except ValueError:
+                        logger.warning(
+                            "Ignoring image_path from saved JSON that escapes project root: %r",
+                            image_path,
+                        )
 
             page_model.name = str(getattr(page, "name", page_model.name) or "") or None
             page_model.page_source = "filesystem"
 
-            # Extract original page if saved
+            # Extract original page and cached image filenames if saved
             original_page_dict = None
             if is_user_page_envelope(json_data):
                 envelope = UserPageEnvelope.from_dict(json_data)
                 original_page_dict = envelope.payload.original_page
+                if envelope.cached_images:
+                    page_model.cached_image_filenames = envelope.cached_images
 
             return page_model, original_page_dict
 
@@ -858,6 +940,8 @@ class PageOperations:
             getattr(page_obj, "image_path", None)
         )
 
+        cached_images = dict(getattr(page_model, "cached_image_filenames", None) or {})
+
         return UserPageEnvelope(
             schema=UserPageSchema(version=USER_PAGE_SCHEMA_VERSION),
             provenance=UserPageProvenance(
@@ -883,6 +967,7 @@ class PageOperations:
                 original_page=original_page.to_dict() if original_page else None,
                 word_attributes=self._collect_word_attributes(page_obj),
             ),
+            cached_images=cached_images,
         )
 
     def _collect_word_attributes(

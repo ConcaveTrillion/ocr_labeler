@@ -19,11 +19,16 @@ class PageModel:
         ocr_failed: bool = False,
         ocr_provenance: Any | None = None,
         saved_provenance: dict[str, Any] | None = None,
+        cached_image_filenames: dict[str, str] | None = None,
     ) -> None:
         self.page = page
         self.page_source = page_source
         self.ocr_failed = ocr_failed
         self.saved_provenance = saved_provenance
+        # Bare filenames (no path, no query string) of pre-rendered images in the
+        # shared image cache directory, keyed by image type label.  Populated from
+        # the page JSON on load and updated by the viewmodel after caching.
+        self.cached_image_filenames: dict[str, str] | None = cached_image_filenames
         self._image_path: str | None = None
         self._name: str | None = None
         self._index: int | None = None

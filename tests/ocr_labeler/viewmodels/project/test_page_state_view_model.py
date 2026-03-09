@@ -127,8 +127,8 @@ def test_image_sources_change_after_rebind_with_mocked_encoder(tmp_path, monkeyp
     ps.current_page_index = 0
     vm = PageStateViewModel(ps)
 
-    # Monkeypatch the _encode_image method to return distinct markers per image object
-    def fake_encode(self, img):
+    # Monkeypatch _cache_image_to_disk to return distinct markers per image object
+    def fake_cache(self, img, image_type, page_index, project_id, ext):
         if getattr(img, "shape", None) == (10, 10, 3):
             return "ENCODED-FIRST"
         if getattr(img, "shape", None) == (20, 20, 3):
@@ -137,8 +137,8 @@ def test_image_sources_change_after_rebind_with_mocked_encoder(tmp_path, monkeyp
 
     monkeypatch.setattr(
         PageStateViewModel,
-        "_encode_image",
-        fake_encode,
+        "_cache_image_to_disk",
+        fake_cache,
     )
 
     # Initial update should set image source from first page
@@ -234,37 +234,48 @@ def test_update_request_during_in_progress_is_coalesced(tmp_path, monkeypatch):
     assert schedule_calls == ["called"]
 
 
-def test_encode_image_cached_skips_overlay_cache(tmp_path, monkeypatch):
+def test_cache_image_to_disk_creates_file_and_deduplicates(tmp_path):
+    """_cache_image_to_disk writes the file once; a second call reuses it."""
+    import numpy as np
+
     project_state = ProjectState()
     project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
     page_state = PageState()
     page_state.set_project_context(project_state.project, tmp_path, project_state)
 
     vm = PageStateViewModel(page_state)
+    vm._word_image_cache_dir = tmp_path / "cache"
+    vm._word_image_cache_dir.mkdir()
 
-    encode_calls = {"count": 0}
+    img = np.zeros((5, 5, 3), dtype=np.uint8)
 
-    def fake_encode(_img):
-        encode_calls["count"] += 1
-        return f"encoded-{encode_calls['count']}"
+    url1 = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
+    url2 = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
 
-    monkeypatch.setattr(vm, "_encode_image_sync", fake_encode)
-    monkeypatch.setattr(vm, "_compute_image_hash", lambda _img: "same-hash")
+    assert url1.startswith("/_word_image_cache/")
+    assert "original" in url1
+    assert url1 == url2
+    assert len(list((tmp_path / "cache").glob("*.png"))) == 1
 
-    marker = object()
 
-    first_overlay = vm._encode_image_cached(
-        marker, "cv2_numpy_page_image_line_with_bboxes"
-    )
-    second_overlay = vm._encode_image_cached(
-        marker, "cv2_numpy_page_image_line_with_bboxes"
-    )
+def test_cache_image_to_disk_separates_image_types(tmp_path):
+    """Different image_type labels produce distinct cache files and URLs."""
+    import numpy as np
 
-    assert first_overlay == "encoded-1"
-    assert second_overlay == "encoded-2"
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
 
-    first_original = vm._encode_image_cached(marker, "cv2_numpy_page_image")
-    second_original = vm._encode_image_cached(marker, "cv2_numpy_page_image")
+    vm = PageStateViewModel(page_state)
+    vm._word_image_cache_dir = tmp_path / "cache"
+    vm._word_image_cache_dir.mkdir()
 
-    assert first_original == "encoded-3"
-    assert second_original == "encoded-3"
+    img = np.zeros((5, 5, 3), dtype=np.uint8)
+
+    url_original = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
+    url_lines = vm._cache_image_to_disk(img, "lines", 0, "proj", ".png")
+
+    assert url_original != url_lines
+    assert "original" in url_original
+    assert "lines" in url_lines

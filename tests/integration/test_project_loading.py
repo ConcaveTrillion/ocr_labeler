@@ -84,16 +84,16 @@ def mock_ocr_processing(monkeypatch):
         mock_document.pages = [mock_page]  # Mock page
         mock_ocr.return_value = mock_document
 
-        # Monkeypatch the _encode_image method to avoid actual image processing
-        def fake_encode_image(self, img):
+        # Monkeypatch _cache_image_to_disk to avoid actual image processing
+        def fake_cache_image(self, img, image_type, page_index, project_id, ext):
             if hasattr(img, "shape"):
-                return f"data:image/png;base64,fake_encoded_image_{img.shape}"
+                return f"/_word_image_cache/fake_{image_type}_{img.shape}{ext}"
             return ""
 
         monkeypatch.setattr(
             PageStateViewModel,
-            "_encode_image",
-            fake_encode_image,
+            "_cache_image_to_disk",
+            fake_cache_image,
         )
 
         yield mock_ocr

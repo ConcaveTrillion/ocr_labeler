@@ -136,8 +136,10 @@ def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         vm,
-        "_encode_image",
-        lambda image: "" if image is None else f"encoded:{image.value}",
+        "_cache_image_to_disk",
+        lambda img, image_type, page_index, project_id, ext: (
+            "" if img is None else f"encoded:{img.value}"
+        ),
     )
 
     image_tabs = ImageTabs(vm)

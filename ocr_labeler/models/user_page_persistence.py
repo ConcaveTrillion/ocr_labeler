@@ -81,7 +81,9 @@ except ImportError:
 
 
 USER_PAGE_SCHEMA_NAME = "ocr_labeler.user_page"
-USER_PAGE_SCHEMA_VERSION = "2.0"
+USER_PAGE_SCHEMA_VERSION = (
+    "2.1"  # 2.1 adds cached_images for pre-rendered image filenames
+)
 
 USER_PAGE_SOURCE_LANE_LABELED = "labeled"
 USER_PAGE_SAVED_BY_SAVE_PAGE = "Save Page"
@@ -313,22 +315,38 @@ class UserPageEnvelope:
     provenance: UserPageProvenance
     source: UserPageSource
     payload: UserPagePayload
+    # Filenames of pre-rendered images stored in the shared image cache directory.
+    # Keys are image type labels (e.g. "original", "lines"); values are bare
+    # filenames (no path, no query string).  Omitted when empty.
+    cached_images: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result: dict[str, Any] = {
             "schema": self.schema.to_dict(),
             "provenance": self.provenance.to_dict(),
             "source": self.source.to_dict(),
             "payload": self.payload.to_dict(),
         }
+        if self.cached_images:
+            result["cached_images"] = dict(self.cached_images)
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "UserPageEnvelope":
+        raw_cached = data.get("cached_images", {})
+        cached_images: dict[str, str] = {}
+        if isinstance(raw_cached, dict):
+            cached_images = {
+                str(k): str(v)
+                for k, v in raw_cached.items()
+                if isinstance(k, str) and isinstance(v, str) and k and v
+            }
         return cls(
             schema=UserPageSchema.from_dict(data.get("schema", {})),
             provenance=UserPageProvenance.from_dict(data.get("provenance", {})),
             source=UserPageSource.from_dict(data.get("source", {})),
             payload=UserPagePayload.from_dict(data.get("payload", {})),
+            cached_images=cached_images,
         )
 
 

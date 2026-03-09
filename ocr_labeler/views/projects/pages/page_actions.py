@@ -21,8 +21,6 @@ class PageActions:  # pragma: no cover - UI wrapper file
         page_viewmodel: PageStateViewModel,
         on_save_page: PageActionCallback | None = None,
         on_load_page: PageActionCallback | None = None,
-        on_refine_bboxes: PageActionCallback | None = None,
-        on_expand_refine_bboxes: PageActionCallback | None = None,
         on_reload_ocr: PageActionCallback | None = None,
     ):
         logger.debug("Initializing PageActions")
@@ -30,15 +28,11 @@ class PageActions:  # pragma: no cover - UI wrapper file
         self.page_viewmodel = page_viewmodel
         self._on_save_page = on_save_page
         self._on_load_page = on_load_page
-        self._on_refine_bboxes = on_refine_bboxes
-        self._on_expand_refine_bboxes = on_expand_refine_bboxes
         self._on_reload_ocr = on_reload_ocr
 
         self.save_button = None
         self.load_button = None
         self.reload_ocr_button = None
-        self.refine_bboxes_button = None
-        self.expand_refine_bboxes_button = None
         self.page_name_box = None
         self.page_source_label = None
         self.page_source_tooltip = None
@@ -105,18 +99,6 @@ class PageActions:  # pragma: no cover - UI wrapper file
                 self.load_button = ui.button("Load Page", on_click=self._on_load_page)
                 style_action_button(self.load_button, size="md")
 
-            if self._on_refine_bboxes:
-                self.refine_bboxes_button = ui.button(
-                    "Refine Bboxes", on_click=self._on_refine_bboxes
-                )
-                style_action_button(self.refine_bboxes_button, size="md")
-
-            if self._on_expand_refine_bboxes:
-                self.expand_refine_bboxes_button = ui.button(
-                    "Expand & Refine", on_click=self._on_expand_refine_bboxes
-                )
-                style_action_button(self.expand_refine_bboxes_button, size="md")
-
             ui.separator().props("vertical")
             self.page_name_box = ui.button("-", on_click=lambda _event: None).classes(
                 "pointer-events-none"
@@ -159,8 +141,6 @@ class PageActions:  # pragma: no cover - UI wrapper file
             self.reload_ocr_button,
             self.save_button,
             self.load_button,
-            self.refine_bboxes_button,
-            self.expand_refine_bboxes_button,
         ]
 
         for button in buttons:

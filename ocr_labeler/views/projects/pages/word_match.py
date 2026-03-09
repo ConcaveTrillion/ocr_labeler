@@ -90,6 +90,7 @@ class WordMatchView:
         self.view_model = WordMatchViewModel()
         self.container = None
         self.summary_label = None
+        self._summary_callback: Callable[[str], None] | None = None
         self.lines_container = None
         self.filter_selector = None
         self.show_only_mismatches = True  # Default to showing only mismatched lines
@@ -114,6 +115,8 @@ class WordMatchView:
         self.expand_then_refine_words_callback = expand_then_refine_words_callback
         self.refine_lines_callback = refine_lines_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
+        self._on_refine_bboxes: Callable | None = None
+        self._on_expand_refine_bboxes: Callable | None = None
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.set_word_attributes_callback = set_word_attributes_callback
         self.selected_line_indices: set[int] = set()
@@ -207,14 +210,9 @@ class WordMatchView:
         logger.debug("Building WordMatchView UI components")
         self._ensure_word_slice_css_registered()
         with ui.column().classes("full-width full-height") as container:
-            # Header card with summary stats and filter controls
+            # Header card with filter and operation controls
             with ui.card():
                 with ui.column():
-                    # Summary stats row
-                    with ui.row().classes("items-center"):
-                        ui.icon("analytics")
-                        self.summary_label = ui.label("No matches to display")
-
                     # Filter controls row
                     with ui.row().classes("items-center"):
                         ui.icon("filter_list")
@@ -223,6 +221,28 @@ class WordMatchView:
                             value="Mismatched Lines",
                         )
                         self.filter_selector.on_value_change(self._on_filter_change)
+
+                    # Page operations row
+                    with ui.row().classes("items-center gap-2 full-width"):
+                        ui.label("Page Operations").classes(
+                            "text-sm font-semibold min-w-44 text-right"
+                        )
+                        if self._on_refine_bboxes:
+                            self.refine_bboxes_button = ui.button(
+                                "Refine Bboxes",
+                                icon="auto_fix_high",
+                                on_click=self._on_refine_bboxes,
+                            ).tooltip("Refine all bounding boxes on this page")
+                            style_action_button(self.refine_bboxes_button)
+                        if self._on_expand_refine_bboxes:
+                            self.expand_refine_bboxes_button = ui.button(
+                                "Expand & Refine",
+                                icon="zoom_out_map",
+                                on_click=self._on_expand_refine_bboxes,
+                            ).tooltip(
+                                "Expand then refine all bounding boxes on this page"
+                            )
+                            style_action_button(self.expand_refine_bboxes_button)
 
                     # Paragraph operations row
                     with ui.row().classes("items-center gap-2 full-width"):
@@ -386,28 +406,30 @@ class WordMatchView:
     def _update_summary(self):
         """Update the summary statistics display."""
         logger.debug("Updating summary statistics")
-        if not self._has_active_ui_context(self.summary_label):
-            logger.debug("No summary_label available, skipping update")
-            return
 
         stats = self.view_model.get_summary_stats()
         logger.debug("Retrieved summary stats: %s", stats)
         if stats["total_words"] == 0:
-            self.summary_label.set_text("Ready to analyze word matches")
-            logger.debug("Set summary to 'Ready to analyze' (no words)")
-            return
+            text = "Ready to analyze word matches"
+        else:
+            text = (
+                f"📊 {stats['total_words']} words • "
+                f"✅ {stats['exact_matches']} exact ({stats['exact_percentage']:.1f}%) • "
+                f"⚠️ {stats['fuzzy_matches']} fuzzy • "
+                f"❌ {stats['mismatches']} mismatches • "
+                f"🔵 {stats['unmatched_gt']} unmatched GT • "
+                f"⚫ {stats['unmatched_ocr']} unmatched OCR • "
+                f"🎯 {stats['match_percentage']:.1f}% match rate"
+            )
 
-        summary_text = (
-            f"📊 {stats['total_words']} words • "
-            f"✅ {stats['exact_matches']} exact ({stats['exact_percentage']:.1f}%) • "
-            f"⚠️ {stats['fuzzy_matches']} fuzzy • "
-            f"❌ {stats['mismatches']} mismatches • "
-            f"🔵 {stats['unmatched_gt']} unmatched GT • "
-            f"⚫ {stats['unmatched_ocr']} unmatched OCR • "
-            f"🎯 {stats['match_percentage']:.1f}% match rate"
-        )
-        self.summary_label.set_text(summary_text)
-        logger.debug("Updated summary text: %s", summary_text)
+        if self._summary_callback is not None:
+            self._summary_callback(text)
+        elif self._has_active_ui_context(self.summary_label):
+            self.summary_label.set_text(text)
+        else:
+            logger.debug("No summary_label or callback available, skipping update")
+            return
+        logger.debug("Updated summary text: %s", text)
 
     def _update_lines_display(self):
         """Update the lines display with word matches."""
@@ -713,6 +735,21 @@ class WordMatchView:
     ) -> None:
         """Register callback invoked when user starts a word rebox request."""
         self._rebox_request_callback = callback
+
+    def set_summary_callback(
+        self,
+        callback: Callable[[str], None] | None,
+    ) -> None:
+        """Register callback to receive summary stats text for display outside the matches tab."""
+        self._summary_callback = callback
+
+    def set_refine_bboxes_callback(self, callback: Callable | None) -> None:
+        """Register callback for the page-level Refine Bboxes action."""
+        self._on_refine_bboxes = callback
+
+    def set_expand_refine_bboxes_callback(self, callback: Callable | None) -> None:
+        """Register callback for the page-level Expand & Refine Bboxes action."""
+        self._on_expand_refine_bboxes = callback
 
     def _emit_selection_changed(self) -> None:
         """Emit selected words to listener (for image overlay sync)."""
@@ -4331,9 +4368,11 @@ class WordMatchView:
         if self.lines_container:
             self.lines_container.clear()
             logger.debug("Cleared lines container")
-        if self.summary_label:
+        if self._summary_callback is not None:
+            self._summary_callback("No matches to display")
+        elif self.summary_label:
             self.summary_label.set_text("No matches to display")
-            logger.debug("Reset summary label text")
+        logger.debug("Reset summary label text")
         self._last_display_signature = None
         self._display_update_call_count = 0
         self._display_update_render_count = 0

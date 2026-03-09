@@ -52,11 +52,25 @@ class ContentArea:
         self.text_tabs.word_match_view.set_rebox_request_callback(
             self._on_right_panel_word_rebox_requested
         )
+        self.text_tabs.word_match_view.set_summary_callback(self._update_stats_label)
+        if callbacks.refine_bboxes:
+            self.text_tabs.word_match_view.set_refine_bboxes_callback(
+                callbacks.refine_bboxes
+            )
+        if callbacks.expand_refine_bboxes:
+            self.text_tabs.word_match_view.set_expand_refine_bboxes_callback(
+                callbacks.expand_refine_bboxes
+            )
         self.page_state_view_model.set_image_update_callback(self._on_images_updated)
+        self._stats_label = None
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
         self.root = None
         logger.debug("ContentArea initialization complete")
+
+    def _update_stats_label(self, text: str) -> None:
+        if self._stats_label:
+            self._stats_label.set_text(text)
 
     def _on_images_updated(self, image_dict: dict[str, str]) -> None:
         """Fan out image updates to left image tabs and right word-match slices."""
@@ -106,6 +120,13 @@ class ContentArea:
         logger.debug("Building ContentArea UI components")
         with ui.column().classes("w-full h-full gap-2") as root:
             self.root = root
+            logger.debug("Adding stats label row")
+            with ui.row().classes("items-center gap-2"):
+                ui.icon("analytics").classes("text-base text-gray-400")
+                self._stats_label = ui.label("No matches to display").classes(
+                    "text-sm text-gray-600"
+                )
+
             logger.debug("Adding page-level navigation spinner")
             # Page-level navigation spinner (smaller, inline)
             self.page_spinner = (

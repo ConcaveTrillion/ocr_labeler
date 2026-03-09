@@ -71,12 +71,6 @@ class PageView:  # pragma: no cover - UI wrapper file
             on_load_page=self.page_action_callbacks.load_page
             if self.page_action_callbacks
             else None,
-            on_refine_bboxes=self.page_action_callbacks.refine_bboxes
-            if self.page_action_callbacks
-            else None,
-            on_expand_refine_bboxes=self.page_action_callbacks.expand_refine_bboxes
-            if self.page_action_callbacks
-            else None,
             on_reload_ocr=self.page_action_callbacks.reload_ocr
             if self.page_action_callbacks
             else None,

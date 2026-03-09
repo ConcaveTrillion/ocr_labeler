@@ -83,6 +83,8 @@ class TextTabs:
         self,
         page_state: PageState | None = None,
         page_index=0,
+        original_image_source_provider=None,
+        word_image_page_index_provider=None,
         on_save_page=None,
         on_load_page=None,
     ):
@@ -91,6 +93,9 @@ class TextTabs:
         self.page_state = page_state
         self.page_index = page_index
         self._disposed = False
+        self._original_image_source_provider = original_image_source_provider
+        self._word_image_page_index_provider = word_image_page_index_provider
+        self._pending_word_match_page: Page | None = None
 
         # Instantiate the model as the intermediary
         self.model = TextTabsModel(page_state)
@@ -527,6 +532,7 @@ class TextTabs:
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             set_word_attributes_callback=set_word_attributes_callback,
             notify_callback=notify_callback,
+            original_image_source_provider=original_image_source_provider,
         )
         self.container = None
         self._tabs = None
@@ -802,7 +808,20 @@ class TextTabs:
             logger.debug("No page available for word matches; clearing view")
             self.word_match_view.clear()
             self._last_word_match_page_key = None
+            self._pending_word_match_page = None
             return
+
+        expected_page_index = self._safe_page_index(getattr(page, "index", -1))
+        source_ready = self._word_image_source_ready_for_page(expected_page_index)
+        if not source_ready:
+            logger.debug(
+                "Deferring word match render until word image source is ready for page_index=%s",
+                expected_page_index,
+            )
+            self._pending_word_match_page = page
+            return
+
+        self._pending_word_match_page = None
 
         page_key = self._build_word_match_page_key(page)
         logger.debug(
@@ -825,6 +844,43 @@ class TextTabs:
         )
         self.word_match_view.update_from_page(page)
         self._last_word_match_page_key = page_key
+
+    def on_word_image_source_ready(self, page_index: int) -> None:
+        """Render deferred word matches once the correct page image source is ready."""
+        pending_page = self._pending_word_match_page
+        if pending_page is None:
+            return
+
+        pending_index = self._safe_page_index(getattr(pending_page, "index", -1))
+        ready_index = self._safe_page_index(page_index)
+        if pending_index != ready_index:
+            return
+
+        self.update_word_matches(pending_page)
+
+    def _word_image_source_ready_for_page(self, expected_page_index: int) -> bool:
+        """Return True when a non-empty source exists for the requested page index."""
+        provider = self._original_image_source_provider
+        if not callable(provider):
+            return True
+
+        source = str(provider() or "")
+        if not source:
+            return False
+
+        index_provider = self._word_image_page_index_provider
+        if not callable(index_provider):
+            return True
+
+        source_page_index = self._safe_page_index(index_provider())
+        return source_page_index == expected_page_index
+
+    def _safe_page_index(self, value: object) -> int:
+        """Best-effort integer conversion for page indices."""
+        try:
+            return int(value or -1)
+        except (TypeError, ValueError):
+            return -1
 
     def _build_word_match_page_key(self, page: Page) -> tuple:
         """Build a lightweight key representing word-match-relevant page state."""

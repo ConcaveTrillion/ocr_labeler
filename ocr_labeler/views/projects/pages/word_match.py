@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Callable, Optional, Protocol, TypeAlias, runtime_checkable
 
 from nicegui import events, ui
@@ -53,6 +54,8 @@ WORD_LABEL_BLACKLETTER = "blackletter"
 class WordMatchView:
     """View component for displaying word-level OCR vs Ground Truth matching with color coding."""
 
+    _WORD_SLICE_CSS_REGISTERED = False
+
     def __init__(
         self,
         copy_gt_to_ocr_callback: SingleLineAction | None = None,
@@ -77,6 +80,7 @@ class WordMatchView:
         edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
         set_word_attributes_callback: SetWordAttributesAction | None = None,
         notify_callback: NotifyCallback | None = None,
+        original_image_source_provider: Callable[[], str] | None = None,
     ):
         logger.debug(
             "Initializing WordMatchView with copy_gt_to_ocr_callback=%s, copy_ocr_to_gt_callback=%s",
@@ -150,6 +154,8 @@ class WordMatchView:
         self.delete_words_button = None
         self.refine_words_button = None
         self.notify_callback = notify_callback
+        self._original_image_source_provider = original_image_source_provider
+        self._last_word_view_source: str = ""
         self._last_display_signature = None
         self._display_update_call_count = 0
         self._display_update_render_count = 0
@@ -199,6 +205,7 @@ class WordMatchView:
     def build(self):
         """Build the UI components."""
         logger.debug("Building WordMatchView UI components")
+        self._ensure_word_slice_css_registered()
         with ui.column().classes("full-width full-height") as container:
             # Header card with summary stats and filter controls
             with ui.card():
@@ -482,6 +489,7 @@ class WordMatchView:
 
         # Clear existing content
         self.lines_container.clear()
+        self._refresh_word_slice_source()
         self._word_split_image_refs = {}
         self._word_split_image_sizes = {}
         self._word_split_button_refs = {}
@@ -1391,33 +1399,53 @@ class WordMatchView:
                 ui.icon("text_fields").classes("text-blue-600").style("height: 2.25em")
             else:
                 try:
-                    word_image = self._get_word_image(
+                    word_image_slice = self._get_word_image_slice(
                         word_match,
                         line_index=line_index,
                         word_index=split_word_index,
                     )
                 except Exception as e:
                     logger.error(f"Error getting word image: {e}")
-                    word_image = None
+                    word_image_slice = None
                     ui.icon("error").classes("text-red-600").style("height: 2.25em")
                     self._safe_notify_once(
                         "word-image-render",
                         "Unable to render one or more word images",
                         type_="warning",
                     )
-                if word_image:
-                    image_source: str | None = None
-                    image_width: float | None = None
-                    image_height: float | None = None
-
-                    if isinstance(word_image, tuple) and len(word_image) == 3:
-                        image_source, image_width, image_height = word_image
-                    elif isinstance(word_image, str):
-                        image_source = word_image
-
+                if word_image_slice:
+                    image_source = str(word_image_slice.get("slice_source", "") or "")
                     if not image_source:
                         ui.icon("image_not_supported")
                         return
+
+                    image_width = float(
+                        word_image_slice.get("display_width", 1.0) or 1.0
+                    )
+                    image_height = float(
+                        word_image_slice.get("display_height", 1.0) or 1.0
+                    )
+                    background_source = str(
+                        word_image_slice.get("background_source", "") or ""
+                    )
+                    background_width = float(
+                        word_image_slice.get("background_width", 1.0) or 1.0
+                    )
+                    background_height = float(
+                        word_image_slice.get("background_height", 1.0) or 1.0
+                    )
+                    background_x = float(
+                        word_image_slice.get("background_x", 0.0) or 0.0
+                    )
+                    background_y = float(
+                        word_image_slice.get("background_y", 0.0) or 0.0
+                    )
+
+                    safe_bg = (
+                        background_source.replace("\\", "\\\\")
+                        .replace("'", "\\'")
+                        .replace('"', '\\"')
+                    )
 
                     image = ui.interactive_image(
                         image_source,
@@ -1426,15 +1454,22 @@ class WordMatchView:
                             self._handle_word_image_click(li, wi, event)
                         ),
                         sanitize=False,
-                    ).style("height: 2.25em")
+                    ).classes("word-slice-image")
+                    image.style(
+                        f"width: {image_width:.2f}px; "
+                        f"height: {image_height:.2f}px; "
+                        f"background-image: url('{safe_bg}'); "
+                        f"background-repeat: no-repeat; "
+                        f"background-size: {background_width:.2f}px {background_height:.2f}px; "
+                        f"background-position: -{background_x:.2f}px -{background_y:.2f}px;"
+                    )
                     if split_word_index >= 0:
                         key = (line_index, split_word_index)
                         self._word_split_image_refs[key] = image
-                        if image_width is not None and image_height is not None:
-                            self._word_split_image_sizes[key] = (
-                                float(image_width),
-                                float(image_height),
-                            )
+                        self._word_split_image_sizes[key] = (
+                            float(image_width),
+                            float(image_height),
+                        )
                         self._render_word_split_marker(key)
                 else:
                     ui.icon("image_not_supported")
@@ -2372,18 +2407,23 @@ class WordMatchView:
 
         return "\\n".join(lines) if lines else None
 
-    def _get_word_image(
+    def _get_word_image_slice(
         self,
         word_match,
         *,
         line_index: int,
         word_index: int,
     ):
-        """Get cropped word image as base64 data URL with image dimensions."""
+        """Get client-side slice metadata for a word image from original page image."""
         logger.debug(
             "Getting word image for match with status %s", word_match.match_status.value
         )
         try:
+            image_source = self._get_original_image_source()
+            if not image_source:
+                logger.debug("Original image source unavailable for word slicing")
+                return None
+
             # Get the current page from the view model to access page image
             if not self.view_model.line_matches:
                 logger.debug("No line matches in view model, cannot get word image")
@@ -2406,70 +2446,171 @@ class WordMatchView:
                 logger.debug("No line match found or no page image available")
                 return None
 
-            logger.debug(
-                "Found line match with page image, attempting to crop word image"
-            )
             page_image = line_match.page_image
-            pending_key = (line_index, word_index)
-            pending_deltas = self._bbox_pending_deltas.get(pending_key)
-            cropped_img = None
-
-            if pending_deltas is not None:
-                preview_bbox = self._preview_bbox_for_word(
-                    word_match,
-                    page_image,
-                    line_index=line_index,
-                    word_index=word_index,
+            preview_bbox = self._preview_bbox_for_word(
+                word_match,
+                page_image,
+                line_index=line_index,
+                word_index=word_index,
+            )
+            if preview_bbox is None:
+                logger.debug(
+                    "Preview bbox invalid for key=%s", (line_index, word_index)
                 )
-                if preview_bbox is None:
-                    logger.debug(
-                        "Preview bbox invalid for key=%s; skipping preview crop",
-                        pending_key,
-                    )
-                    return None
+                return None
 
-                px1, py1, px2, py2 = preview_bbox
-                cropped_img = page_image[py1:py2, px1:px2]
-                if cropped_img is None or getattr(cropped_img, "size", 0) == 0:
-                    logger.debug(
-                        "Preview crop produced empty image for key=%s", pending_key
-                    )
-                    return None
-            else:
-                try:
-                    cropped_img = word_match.get_cropped_image(page_image)
-                    if cropped_img is None:
-                        logger.debug("Cropped image is None")
-                        return None
-                except Exception as e:
-                    logger.debug(f"Error cropping word image: {e}")
-                    return None
+            page_shape = getattr(page_image, "shape", None)
+            if page_shape is None or len(page_shape) < 2:
+                return None
+            page_height = int(page_shape[0])
+            page_width = int(page_shape[1])
+            if page_width <= 0 or page_height <= 0:
+                return None
 
-            logger.debug(
-                "Successfully cropped image, shape: %s",
-                cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
+            encoded_width, encoded_height = self._compute_encoded_dimensions(
+                page_width,
+                page_height,
+            )
+            scale_x = float(encoded_width) / float(page_width)
+            scale_y = float(encoded_height) / float(page_height)
+
+            px1, py1, px2, py2 = preview_bbox
+            sx1 = max(0, min(int(math.floor(float(px1) * scale_x)), encoded_width - 1))
+            sy1 = max(0, min(int(math.floor(float(py1) * scale_y)), encoded_height - 1))
+            sx2 = max(sx1 + 1, min(int(math.ceil(float(px2) * scale_x)), encoded_width))
+            sy2 = max(
+                sy1 + 1, min(int(math.ceil(float(py2) * scale_y)), encoded_height)
             )
 
-            # Convert to base64 data URL for display in browser
-            import base64
+            slice_width = max(1, sx2 - sx1)
+            slice_height = max(1, sy2 - sy1)
 
-            import cv2
+            target_height = 36.0
+            display_scale = target_height / float(slice_height)
+            display_width = max(1.0, float(slice_width) * display_scale)
+            display_height = max(1.0, float(slice_height) * display_scale)
 
-            # Encode image as PNG
-            _, buffer = cv2.imencode(".png", cropped_img)
-            img_base64 = base64.b64encode(buffer).decode("utf-8")
-            data_url = f"data:image/png;base64,{img_base64}"
-            logger.debug(
-                "Successfully encoded image as base64 data URL (length: %d)",
-                len(data_url),
-            )
+            max_display_width = 240.0
+            if display_width > max_display_width:
+                display_scale = max_display_width / float(slice_width)
+                display_width = max_display_width
+                display_height = max(1.0, float(slice_height) * display_scale)
 
-            height, width = cropped_img.shape[:2]
-            return data_url, float(width), float(height)
+            bg_width = float(encoded_width) * display_scale
+            bg_height = float(encoded_height) * display_scale
+            bg_x = float(sx1) * display_scale
+            bg_y = float(sy1) * display_scale
+
+            return {
+                "slice_source": self._build_slice_placeholder_source(
+                    int(round(display_width)),
+                    int(round(display_height)),
+                ),
+                "display_width": float(display_width),
+                "display_height": float(display_height),
+                "background_source": image_source,
+                "background_width": float(bg_width),
+                "background_height": float(bg_height),
+                "background_x": float(bg_x),
+                "background_y": float(bg_y),
+            }
 
         except Exception as e:
             logger.debug(f"Error creating word image: {e}")
             return None
+
+    def _get_original_image_source(self) -> str:
+        """Return encoded original image source for client-side slice rendering."""
+        provider = self._original_image_source_provider
+        if provider is None:
+            return ""
+        try:
+            return str(provider() or "")
+        except Exception:
+            logger.debug(
+                "Failed to resolve original image source provider", exc_info=True
+            )
+            return ""
+
+    def on_image_sources_updated(self, image_dict: dict[str, str]) -> None:
+        """React to state image updates and rerender if word-view source changed."""
+        source = str(image_dict.get("word_view_original_image_source", "") or "")
+        if source == self._last_word_view_source:
+            return
+
+        self._last_word_view_source = source
+        if not source:
+            return
+        if not self._has_active_ui_context(self.lines_container):
+            return
+
+        self._last_display_signature = None
+        self._update_lines_display()
+
+    def _refresh_word_slice_source(self) -> None:
+        """Publish original image source once on the lines container as a CSS variable."""
+        if self.lines_container is None:
+            return
+
+        source = self._get_original_image_source()
+        if not source:
+            self.lines_container.style("--wm-page-src: none;")
+            return
+
+        safe_source = source.replace("\\", "\\\\").replace("'", "\\'")
+        self.lines_container.style(f"--wm-page-src: url('{safe_source}');")
+
+    def _compute_encoded_dimensions(
+        self,
+        width: int,
+        height: int,
+        *,
+        max_dimension: int = 1200,
+    ) -> tuple[int, int]:
+        """Mirror page image encoding resize logic for precise client-side slices."""
+        if width <= 0 or height <= 0:
+            return 1, 1
+
+        if width <= max_dimension and height <= max_dimension:
+            return int(width), int(height)
+
+        if width > height:
+            new_width = int(max_dimension)
+            new_height = max(1, int(height * max_dimension / width))
+        else:
+            new_height = int(max_dimension)
+            new_width = max(1, int(width * max_dimension / height))
+        return new_width, new_height
+
+    def _build_slice_placeholder_source(self, width: int, height: int) -> str:
+        """Build tiny transparent SVG source that preserves interactive-image geometry."""
+        safe_width = max(1, int(width))
+        safe_height = max(1, int(height))
+        return (
+            "data:image/svg+xml;utf8,"
+            "<svg xmlns='http://www.w3.org/2000/svg' "
+            f"width='{safe_width}' height='{safe_height}' viewBox='0 0 {safe_width} {safe_height}'></svg>"
+        )
+
+    def _ensure_word_slice_css_registered(self) -> None:
+        """Inject shared CSS for word-slice interactive image rendering once."""
+        if WordMatchView._WORD_SLICE_CSS_REGISTERED:
+            return
+
+        ui.add_head_html(
+            """
+            <style>
+            .word-slice-image {
+                overflow: hidden;
+                background-color: transparent;
+            }
+            .word-slice-image img {
+                opacity: 0 !important;
+            }
+            </style>
+            """
+        )
+        WordMatchView._WORD_SLICE_CSS_REGISTERED = True
 
     def _preview_bbox_for_word(
         self,

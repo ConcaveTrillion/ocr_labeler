@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
+from nicegui import app as nicegui_app
 from nicegui import background_tasks, core, run, ui
 
 from .operations.persistence.project_discovery_operations import (
@@ -84,6 +85,10 @@ class NiceGuiLabeler:
             self.logs_dir.mkdir(exist_ok=True)
         else:
             self.logs_dir = None
+
+        self.word_image_cache_dir = Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        self.word_image_cache_dir.mkdir(parents=True, exist_ok=True)
+        self._word_cache_static_registered = False
 
         logger.debug("NiceGuiLabeler initialization complete")
 
@@ -344,6 +349,7 @@ class NiceGuiLabeler:
 
     def create_routes(self):
         logger.debug("Creating UI routes")
+        self._register_word_image_cache_static_route()
 
         # In test contexts, ui.run() is often not invoked, and older NiceGUI
         # app_config instances may lack reconnect_timeout. Outbox teardown then
@@ -395,6 +401,29 @@ class NiceGuiLabeler:
             )
 
         logger.debug("Routes creation complete")
+
+    def _register_word_image_cache_static_route(self) -> None:
+        """Expose cached word image files through NiceGUI static file serving."""
+        if self._word_cache_static_registered:
+            return
+
+        add_static_files = getattr(nicegui_app, "add_static_files", None)
+        if not callable(add_static_files):
+            add_static_files = getattr(ui, "add_static_files", None)
+        if not callable(add_static_files):
+            logger.warning(
+                "NiceGUI static-file API unavailable; word cache route not registered"
+            )
+            return
+
+        try:
+            add_static_files("/_word_image_cache", str(self.word_image_cache_dir))
+            self._word_cache_static_registered = True
+            logger.info(
+                "Registered word image cache static route at /_word_image_cache"
+            )
+        except Exception:
+            logger.exception("Failed to register word image cache static route")
 
     def _get_request_path(self) -> str | None:
         """Safely retrieve the current request path from NiceGUI context."""

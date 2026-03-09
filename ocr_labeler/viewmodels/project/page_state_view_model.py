@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Optional
 
 from nicegui import background_tasks, binding, run
@@ -28,6 +29,8 @@ class PageStateViewModel(BaseViewModel):
 
     # UI-bound image source properties
     original_image_source: str = ""
+    word_view_original_image_source: str = ""
+    word_view_image_page_index: int = -1
     paragraphs_image_source: str = ""
     lines_image_source: str = ""
     words_image_source: str = ""
@@ -52,11 +55,13 @@ class PageStateViewModel(BaseViewModel):
 
     # Callback for direct image updates (bypasses binding to avoid websocket issues)
     _image_update_callback: Optional[callable] = None
+    _word_view_image_ready_callback: Optional[callable] = None
     _last_image_callback_signature: tuple | None = None
     _image_update_schedule_count: int = 0
     _image_update_schedule_skip_count: int = 0
     _image_update_emit_count: int = 0
     _image_update_emit_skip_count: int = 0
+    _word_image_cache_dir: Path | None = None
 
     def __init__(self, page_state: PageState | None):
         logger.debug("Initializing PageStateViewModel")
@@ -77,11 +82,16 @@ class PageStateViewModel(BaseViewModel):
         self._update_reschedule_requested: bool = False
         self._encoded_image_cache: dict[str, str] = {}
         self._image_update_callback: Optional[callable] = None
+        self._word_view_image_ready_callback: Optional[callable] = None
         self._last_image_callback_signature: tuple | None = None
         self._image_update_schedule_count: int = 0
         self._image_update_schedule_skip_count: int = 0
         self._image_update_emit_count: int = 0
         self._image_update_emit_skip_count: int = 0
+        self._word_image_cache_dir: Path = (
+            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        )
+        self._word_image_cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Accept None here and defer binding until a valid state is provided.
         # This prevents initialization-time errors when UI constructs viewmodels
@@ -125,6 +135,8 @@ class PageStateViewModel(BaseViewModel):
         """Initialize all properties that NiceGUI bindings expect to exist."""
 
         self.original_image_source = ""
+        self.word_view_original_image_source = ""
+        self.word_view_image_page_index = -1
         self.paragraphs_image_source = ""
         self.lines_image_source = ""
         self.words_image_source = ""
@@ -341,6 +353,28 @@ class PageStateViewModel(BaseViewModel):
                 )
                 encoded_results.append((prop_name, encoded))
 
+            original_np_img = getattr(current_page, "cv2_numpy_page_image", None)
+            try:
+                page_index = int(getattr(current_page, "index", -1) or -1)
+            except (TypeError, ValueError):
+                page_index = -1
+            project_id = self._resolve_project_id_for_cache()
+            image_extension = self._resolve_cache_image_extension(
+                current_page,
+                page_index,
+            )
+            word_view_source = await run.io_bound(
+                self._cache_word_view_image,
+                original_np_img,
+                page_index,
+                project_id,
+                image_extension,
+            )
+            encoded_results.append(
+                ("word_view_original_image_source", word_view_source)
+            )
+            encoded_results.append(("word_view_image_page_index", page_index))
+
             self._apply_encoded_results(encoded_results, current_page)
             logger.debug("_update_image_sources_async: completed")
             logger.info(
@@ -404,6 +438,27 @@ class PageStateViewModel(BaseViewModel):
                 np_img = getattr(current_page, attr_name, None)
                 encoded = self._encode_image(np_img)
                 encoded_results.append((prop_name, encoded))
+
+            original_np_img = getattr(current_page, "cv2_numpy_page_image", None)
+            try:
+                page_index = int(getattr(current_page, "index", -1) or -1)
+            except (TypeError, ValueError):
+                page_index = -1
+            project_id = self._resolve_project_id_for_cache()
+            image_extension = self._resolve_cache_image_extension(
+                current_page,
+                page_index,
+            )
+            word_view_source = self._cache_word_view_image(
+                original_np_img,
+                page_index,
+                project_id,
+                image_extension,
+            )
+            encoded_results.append(
+                ("word_view_original_image_source", word_view_source)
+            )
+            encoded_results.append(("word_view_image_page_index", page_index))
 
             self._apply_encoded_results(encoded_results, current_page)
             logger.debug("_update_image_sources_blocking: completed")
@@ -555,6 +610,10 @@ class PageStateViewModel(BaseViewModel):
         self._image_update_emit_skip_count = 0
         logger.debug("Image update callback registered")
 
+    def set_word_view_image_ready_callback(self, callback: callable | None):
+        """Register callback fired when word-view original image source is ready."""
+        self._word_view_image_ready_callback = callback
+
     def _apply_encoded_results(self, results, current_page):
         import threading
 
@@ -570,8 +629,25 @@ class PageStateViewModel(BaseViewModel):
             if new_value != current_value:
                 # Update property silently (for state storage only)
                 object.__setattr__(self, prop_name, new_value)
+                value_size = 0
+                try:
+                    value_size = len(new_value) if new_value else 0
+                except TypeError:
+                    value_size = 1 if new_value is not None else 0
                 logger.debug(
-                    f"_apply_encoded_results: Stored {prop_name} (length: {len(new_value) if new_value else 0})"
+                    f"_apply_encoded_results: Stored {prop_name} (length: {value_size})"
+                )
+
+        if self._word_view_image_ready_callback:
+            try:
+                source = str(getattr(self, "word_view_original_image_source", "") or "")
+                page_index = int(getattr(self, "word_view_image_page_index", -1) or -1)
+                if source:
+                    self._word_view_image_ready_callback(page_index, source)
+            except Exception:
+                logger.debug(
+                    "Word-view image ready callback failed",
+                    exc_info=True,
                 )
 
         # Use callback for UI update instead of triggering data binding
@@ -760,6 +836,131 @@ class PageStateViewModel(BaseViewModel):
 
         # Backward compatibility for tests monkeypatching _encode_image
         # (legacy name before async refactor)
+
+    def _cache_word_view_image(
+        self,
+        np_img,
+        page_index: int,
+        project_id: str,
+        image_extension: str,
+    ) -> str:
+        """Persist a resized original page image for word-view slicing and return static URL."""
+        if np_img is None:
+            return ""
+
+        shape = getattr(np_img, "shape", None)
+        if not isinstance(shape, tuple):
+            return ""
+
+        cache_dir = self._word_image_cache_dir or (
+            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        )
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import cv2
+
+            # Mirror _encode_image_sync preprocessing for exact geometry alignment.
+            if len(shape) == 2:
+                np_img = cv2.cvtColor(np_img, cv2.COLOR_GRAY2RGB)
+            elif len(shape) > 2 and shape[2] == 4:
+                np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
+
+            height, width = np_img.shape[:2]
+            max_dimension = 1200
+            if width > max_dimension or height > max_dimension:
+                if width > height:
+                    new_width = max_dimension
+                    new_height = max(1, int(height * max_dimension / width))
+                else:
+                    new_height = max_dimension
+                    new_width = max(1, int(width * max_dimension / height))
+                np_img = cv2.resize(
+                    np_img, (new_width, new_height), interpolation=cv2.INTER_AREA
+                )
+
+            img_hash = self._compute_image_hash(np_img)
+            safe_page_index = max(-1, int(page_index))
+            safe_project_id = (project_id or "project").strip() or "project"
+            page_number = max(1, safe_page_index + 1)
+            normalized_extension = self._normalize_cache_extension(image_extension)
+            file_name = (
+                f"{safe_project_id}_{page_number:03d}_{img_hash}{normalized_extension}"
+            )
+            output_path = cache_dir / file_name
+
+            if not output_path.exists():
+                encode_format = normalized_extension
+                encode_options: list[int] = []
+                if encode_format in {".jpg", ".jpeg"}:
+                    encode_options = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                success, buffer = cv2.imencode(
+                    encode_format,
+                    np_img,
+                    encode_options,
+                )
+                if not success:
+                    return ""
+                output_path.write_bytes(buffer.tobytes())
+
+            return f"/_word_image_cache/{file_name}?v={img_hash[:8]}"
+        except Exception:
+            logger.debug("Failed caching word-view image", exc_info=True)
+            return ""
+
+    def _resolve_project_id_for_cache(self) -> str:
+        """Return project_id for cache filenames, matching saved page file conventions."""
+        project_state = getattr(self, "_project_state", None)
+        project = getattr(project_state, "project", None) if project_state else None
+        project_id = str(getattr(project, "project_id", "") or "").strip()
+        if project_id:
+            return project_id
+
+        project_root = (
+            getattr(project_state, "project_root", None) if project_state else None
+        )
+        try:
+            root_name = str(getattr(project_root, "name", "") or "").strip()
+            if root_name:
+                return root_name
+        except Exception:
+            pass
+
+        return "project"
+
+    def _resolve_cache_image_extension(self, current_page, page_index: int) -> str:
+        """Resolve extension from the original page image path; fallback to .jpg."""
+        candidates: list[object] = []
+        candidates.append(getattr(current_page, "image_path", None))
+        candidates.append(getattr(current_page, "name", None))
+
+        project_state = getattr(self, "_project_state", None)
+        project = getattr(project_state, "project", None) if project_state else None
+        image_paths = getattr(project, "image_paths", None) if project else None
+        if isinstance(image_paths, list) and 0 <= page_index < len(image_paths):
+            candidates.append(image_paths[page_index])
+
+        for candidate in candidates:
+            try:
+                suffix = Path(str(candidate)).suffix.lower()
+            except Exception:
+                continue
+            normalized = self._normalize_cache_extension(suffix)
+            if normalized:
+                return normalized
+
+        return ".jpg"
+
+    def _normalize_cache_extension(self, suffix: str | None) -> str:
+        """Normalize cache extension to supported formats with sensible fallback."""
+        value = str(suffix or "").strip().lower()
+        if not value:
+            return ".jpg"
+        if not value.startswith("."):
+            value = f".{value}"
+        if value in {".jpg", ".jpeg", ".png"}:
+            return value
+        return ".jpg"
 
     def _encode_image(self, np_img):  # pragma: no cover - legacy alias
         return self._encode_image_sync(np_img)

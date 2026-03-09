@@ -24,8 +24,17 @@ class ContentArea:
         logger.debug("Creating TextTabs component")
         self.text_tabs = TextTabs(
             page_state=self.page_state_view_model._page_state,
+            original_image_source_provider=lambda: str(
+                self.page_state_view_model.word_view_original_image_source or ""
+            ),
+            word_image_page_index_provider=lambda: int(
+                self.page_state_view_model.word_view_image_page_index or -1
+            ),
             on_save_page=None,  # Moved to PageActions
             on_load_page=None,  # Moved to PageActions
+        )
+        self.page_state_view_model.set_word_view_image_ready_callback(
+            self._on_word_view_image_ready
         )
         logger.debug("Creating ImageTabs component")
         self.image_tabs = ImageTabs(
@@ -43,10 +52,16 @@ class ContentArea:
         self.text_tabs.word_match_view.set_rebox_request_callback(
             self._on_right_panel_word_rebox_requested
         )
+        self.page_state_view_model.set_image_update_callback(self._on_images_updated)
         self.splitter = None
         self.page_spinner = None  # spinner shown during page-level navigation/OCR
         self.root = None
         logger.debug("ContentArea initialization complete")
+
+    def _on_images_updated(self, image_dict: dict[str, str]) -> None:
+        """Fan out image updates to left image tabs and right word-match slices."""
+        self.image_tabs._on_images_updated(image_dict)
+        self.text_tabs.word_match_view.on_image_sources_updated(image_dict)
 
     def _on_words_selected(self, selection: set[tuple[int, int]]) -> None:
         """Propagate image-driven word selection to the Matches view."""
@@ -82,6 +97,10 @@ class ContentArea:
     ) -> None:
         """Apply drawn image rectangle to the pending word rebox target."""
         self.text_tabs.word_match_view.apply_rebox_bbox(x1, y1, x2, y2)
+
+    def _on_word_view_image_ready(self, page_index: int, _source: str) -> None:
+        """Notify text tabs when the page-matched word image source becomes available."""
+        self.text_tabs.on_word_image_source_ready(page_index)
 
     def build(self):
         logger.debug("Building ContentArea UI components")

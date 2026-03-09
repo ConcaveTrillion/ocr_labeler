@@ -46,6 +46,11 @@ Common commands:
 - Use `run.io_bound(...)` for blocking I/O.
 - Avoid `asyncio.create_task`, `loop.run_in_executor`, and `asyncio.to_thread` in app code.
 
+## Exception handling guardrails
+
+- Do not silently swallow recoverable exceptions in UI/navigation flows.
+- Log exceptions with sufficient context and surface a user-visible notification when behavior is degraded but the app can continue.
+
 ## Documentation hygiene
 
 - Update relevant docs when implementation changes architecture or roadmap behavior.

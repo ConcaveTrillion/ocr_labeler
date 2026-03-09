@@ -142,3 +142,7 @@ clean-lc-run-verbose:
 	@$(MAKE) --no-print-directory clean-logs
 	@$(MAKE) --no-print-directory clean-image-cache
 	@$(MAKE) --no-print-directory run-verbose
+
+clean-l-run-verbose:
+	@$(MAKE) --no-print-directory clean-logs
+	@$(MAKE) --no-print-directory run-verbose

@@ -60,6 +60,7 @@ class WordMatchView:
         self,
         copy_gt_to_ocr_callback: SingleLineAction | None = None,
         copy_ocr_to_gt_callback: SingleLineAction | None = None,
+        copy_selected_words_ocr_to_gt_callback: WordKeysAction | None = None,
         merge_lines_callback: LineIndicesAction | None = None,
         delete_lines_callback: LineIndicesAction | None = None,
         merge_paragraphs_callback: ParagraphIndicesAction | None = None,
@@ -99,6 +100,9 @@ class WordMatchView:
         self.show_only_mismatches = True  # Default to showing only mismatched lines
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         self.copy_ocr_to_gt_callback = copy_ocr_to_gt_callback
+        self.copy_selected_words_ocr_to_gt_callback = (
+            copy_selected_words_ocr_to_gt_callback
+        )
         self.merge_lines_callback = merge_lines_callback
         self.delete_lines_callback = delete_lines_callback
         self.merge_paragraphs_callback = merge_paragraphs_callback
@@ -156,6 +160,14 @@ class WordMatchView:
         self._paragraph_expanded: dict[Optional[int], bool] = {}
         self.merge_lines_button = None
         self.delete_lines_button = None
+        self.copy_gt_to_ocr_page_button = None
+        self.copy_ocr_to_gt_page_button = None
+        self.copy_gt_to_ocr_paragraphs_button = None
+        self.copy_ocr_to_gt_paragraphs_button = None
+        self.copy_gt_to_ocr_lines_button = None
+        self.copy_ocr_to_gt_lines_button = None
+        self.copy_gt_to_ocr_words_button = None
+        self.copy_ocr_to_gt_words_button = None
         self.refine_lines_button = None
         self.expand_then_refine_lines_button = None
         self.merge_paragraphs_button = None
@@ -244,9 +256,10 @@ class WordMatchView:
 
     def build_actions_toolbar(self):
         """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
-        # Operations grid: columns = scope label | Merge | Refine | Expand+Refine | Split After | Split Select | Delete
+        # Operations grid: columns = scope label | Merge | Refine | Expand+Refine |
+        # Split After | Split Select | GT→OCR | OCR→GT | Delete
         with (
-            ui.grid(columns="auto auto auto auto auto auto auto")
+            ui.grid(columns="auto auto auto auto auto auto auto auto auto")
             .classes("items-center justify-items-center w-auto pl-2")
             .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
         ):
@@ -271,6 +284,17 @@ class WordMatchView:
                 ui.element("div")
             ui.element("div")  # no Split After for page
             ui.element("div")  # no Split Select for page
+            self.copy_gt_to_ocr_page_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_page_gt_to_ocr,
+            ).tooltip("Copy all ground truth text to OCR on this page")
+            self.copy_gt_to_ocr_page_button.classes("copy-icon-flip")
+            style_word_icon_button(self.copy_gt_to_ocr_page_button)
+            self.copy_ocr_to_gt_page_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_page_ocr_to_gt,
+            ).tooltip("Copy all OCR text to ground truth on this page")
+            style_word_icon_button(self.copy_ocr_to_gt_page_button)
             ui.element("div")  # no Delete for page
 
             # Paragraph row
@@ -304,6 +328,17 @@ class WordMatchView:
                 on_click=self._handle_split_paragraph_by_selected_lines,
             ).tooltip("Split one paragraph into selected and unselected lines")
             style_word_icon_button(self.split_paragraph_by_selection_button)
+            self.copy_gt_to_ocr_paragraphs_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_paragraphs_gt_to_ocr,
+            ).tooltip("Copy ground truth text to OCR for selected paragraphs")
+            self.copy_gt_to_ocr_paragraphs_button.classes("copy-icon-flip")
+            style_word_icon_button(self.copy_gt_to_ocr_paragraphs_button)
+            self.copy_ocr_to_gt_paragraphs_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_paragraphs_ocr_to_gt,
+            ).tooltip("Copy OCR text to ground truth for selected paragraphs")
+            style_word_icon_button(self.copy_ocr_to_gt_paragraphs_button)
             self.delete_paragraphs_button = ui.button(
                 icon="delete",
                 on_click=self._handle_delete_selected_paragraphs,
@@ -339,6 +374,17 @@ class WordMatchView:
                 on_click=self._handle_split_line_by_selected_words,
             ).tooltip("Split line(s) into selected and unselected words")
             style_word_icon_button(self.split_line_by_selection_button)
+            self.copy_gt_to_ocr_lines_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_lines_gt_to_ocr,
+            ).tooltip("Copy ground truth text to OCR for selected lines")
+            self.copy_gt_to_ocr_lines_button.classes("copy-icon-flip")
+            style_word_icon_button(self.copy_gt_to_ocr_lines_button)
+            self.copy_ocr_to_gt_lines_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_lines_ocr_to_gt,
+            ).tooltip("Copy OCR text to ground truth for selected lines")
+            style_word_icon_button(self.copy_ocr_to_gt_lines_button)
             self.delete_lines_button = ui.button(
                 icon="delete",
                 on_click=self._handle_delete_selected_lines,
@@ -366,6 +412,17 @@ class WordMatchView:
             style_word_icon_button(self.expand_then_refine_words_button)
             ui.element("div")  # no Split After for word
             ui.element("div")  # no Split Select for word
+            self.copy_gt_to_ocr_words_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_words_gt_to_ocr,
+            ).tooltip("Copy ground truth text to OCR for selected words")
+            self.copy_gt_to_ocr_words_button.classes("copy-icon-flip")
+            style_word_icon_button(self.copy_gt_to_ocr_words_button)
+            self.copy_ocr_to_gt_words_button = ui.button(
+                icon="content_copy",
+                on_click=self._handle_copy_selected_words_ocr_to_gt,
+            ).tooltip("Copy OCR text to ground truth for selected words")
+            style_word_icon_button(self.copy_ocr_to_gt_words_button)
             self.delete_words_button = ui.button(
                 icon="delete",
                 on_click=self._handle_delete_selected_words,
@@ -2649,6 +2706,9 @@ class WordMatchView:
             .word-slice-image img {
                 opacity: 0 !important;
             }
+            .copy-icon-flip .q-icon {
+                transform: scaleX(-1);
+            }
             </style>
             """
         )
@@ -2894,6 +2954,23 @@ class WordMatchView:
         )
         return sorted(line_selection)
 
+    def _get_all_line_indices(self) -> list[int]:
+        """Return all line indices currently displayed in the page model."""
+        return sorted(
+            {line_match.line_index for line_match in self.view_model.line_matches}
+        )
+
+    def _get_selected_paragraph_line_indices(self) -> list[int]:
+        """Return line indices belonging to selected paragraphs."""
+        line_indices: set[int] = set()
+        for paragraph_index in self.selected_paragraph_indices:
+            line_indices.update(self._paragraph_line_indices(paragraph_index))
+        return sorted(line_indices)
+
+    def _get_selected_word_line_indices(self) -> list[int]:
+        """Return distinct line indices containing selected words."""
+        return sorted({line_index for line_index, _ in self.selected_word_indices})
+
     def set_selected_words(self, selection: set[tuple[int, int]]) -> None:
         """Set selected words externally (e.g., box selection integration)."""
         self.selected_word_indices = set(selection)
@@ -3039,6 +3116,221 @@ class WordMatchView:
                 self.expand_then_refine_words_callback is None
                 or len(self.selected_word_indices) < 1
             )
+
+        if self.copy_gt_to_ocr_page_button is not None:
+            self.copy_gt_to_ocr_page_button.disabled = (
+                self.copy_gt_to_ocr_callback is None
+                or len(self._get_all_line_indices()) < 1
+            )
+
+        if self.copy_ocr_to_gt_page_button is not None:
+            self.copy_ocr_to_gt_page_button.disabled = (
+                self.copy_ocr_to_gt_callback is None
+                or len(self._get_all_line_indices()) < 1
+            )
+
+        if self.copy_gt_to_ocr_paragraphs_button is not None:
+            self.copy_gt_to_ocr_paragraphs_button.disabled = (
+                self.copy_gt_to_ocr_callback is None
+                or len(self.selected_paragraph_indices) < 1
+            )
+
+        if self.copy_ocr_to_gt_paragraphs_button is not None:
+            self.copy_ocr_to_gt_paragraphs_button.disabled = (
+                self.copy_ocr_to_gt_callback is None
+                or len(self.selected_paragraph_indices) < 1
+            )
+
+        if self.copy_gt_to_ocr_lines_button is not None:
+            self.copy_gt_to_ocr_lines_button.disabled = (
+                self.copy_gt_to_ocr_callback is None or len(selected_lines) < 1
+            )
+
+        if self.copy_ocr_to_gt_lines_button is not None:
+            self.copy_ocr_to_gt_lines_button.disabled = (
+                self.copy_ocr_to_gt_callback is None or len(selected_lines) < 1
+            )
+
+        if self.copy_gt_to_ocr_words_button is not None:
+            self.copy_gt_to_ocr_words_button.disabled = (
+                self.copy_gt_to_ocr_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+        if self.copy_ocr_to_gt_words_button is not None:
+            self.copy_ocr_to_gt_words_button.disabled = (
+                self.copy_selected_words_ocr_to_gt_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+    def _copy_lines(
+        self,
+        line_indices: list[int],
+        callback: Callable[[int], bool] | None,
+        *,
+        direction_label: str,
+        no_selection_message: str,
+        no_text_message: str,
+    ) -> None:
+        """Copy text for a set of lines, clearing selections like other grid actions."""
+        if callback is None:
+            self._safe_notify("Copy function not available", type_="warning")
+            return
+
+        selected_lines = sorted(set(line_indices))
+        if not selected_lines:
+            self._safe_notify(no_selection_message, type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+
+        success_count = 0
+        for line_index in selected_lines:
+            try:
+                if callback(line_index):
+                    success_count += 1
+            except Exception as e:
+                logger.exception(
+                    "Error copying %s for line %s: %s",
+                    direction_label,
+                    line_index,
+                    e,
+                )
+
+        if success_count > 0:
+            self._safe_notify(
+                f"Copied {direction_label} for {success_count} lines",
+                type_="positive",
+            )
+            return
+
+        self.selected_line_indices = previous_line_selection
+        self.selected_word_indices = previous_word_selection
+        self.selected_paragraph_indices = previous_paragraph_selection
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+        self._safe_notify(no_text_message, type_="warning")
+
+    def _handle_copy_page_gt_to_ocr(self, _event: ClickEvent = None) -> None:
+        self._copy_lines(
+            self._get_all_line_indices(),
+            self.copy_gt_to_ocr_callback,
+            direction_label="ground truth to OCR",
+            no_selection_message="No lines available on this page",
+            no_text_message="No ground truth text found to copy",
+        )
+
+    def _handle_copy_page_ocr_to_gt(self, _event: ClickEvent = None) -> None:
+        self._copy_lines(
+            self._get_all_line_indices(),
+            self.copy_ocr_to_gt_callback,
+            direction_label="OCR to ground truth",
+            no_selection_message="No lines available on this page",
+            no_text_message="No OCR text found to copy",
+        )
+
+    def _handle_copy_selected_paragraphs_gt_to_ocr(
+        self, _event: ClickEvent = None
+    ) -> None:
+        self._copy_lines(
+            self._get_selected_paragraph_line_indices(),
+            self.copy_gt_to_ocr_callback,
+            direction_label="ground truth to OCR",
+            no_selection_message="Select at least one paragraph to copy",
+            no_text_message="No ground truth text found to copy",
+        )
+
+    def _handle_copy_selected_paragraphs_ocr_to_gt(
+        self, _event: ClickEvent = None
+    ) -> None:
+        self._copy_lines(
+            self._get_selected_paragraph_line_indices(),
+            self.copy_ocr_to_gt_callback,
+            direction_label="OCR to ground truth",
+            no_selection_message="Select at least one paragraph to copy",
+            no_text_message="No OCR text found to copy",
+        )
+
+    def _handle_copy_selected_lines_gt_to_ocr(self, _event: ClickEvent = None) -> None:
+        self._copy_lines(
+            self._get_effective_selected_lines(),
+            self.copy_gt_to_ocr_callback,
+            direction_label="ground truth to OCR",
+            no_selection_message="Select at least one line to copy",
+            no_text_message="No ground truth text found to copy",
+        )
+
+    def _handle_copy_selected_lines_ocr_to_gt(self, _event: ClickEvent = None) -> None:
+        self._copy_lines(
+            self._get_effective_selected_lines(),
+            self.copy_ocr_to_gt_callback,
+            direction_label="OCR to ground truth",
+            no_selection_message="Select at least one line to copy",
+            no_text_message="No OCR text found to copy",
+        )
+
+    def _handle_copy_selected_words_gt_to_ocr(self, _event: ClickEvent = None) -> None:
+        self._copy_lines(
+            self._get_selected_word_line_indices(),
+            self.copy_gt_to_ocr_callback,
+            direction_label="ground truth to OCR",
+            no_selection_message="Select at least one word to copy",
+            no_text_message="No ground truth text found to copy",
+        )
+
+    def _handle_copy_selected_words_ocr_to_gt(self, _event: ClickEvent = None) -> None:
+        if self.copy_selected_words_ocr_to_gt_callback is None:
+            self._safe_notify("Copy function not available", type_="warning")
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify("Select at least one word to copy", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+
+        try:
+            success = self.copy_selected_words_ocr_to_gt_callback(selected_words)
+        except Exception as e:
+            logger.exception(
+                "Error copying OCR→GT for selected words %s: %s",
+                selected_words,
+                e,
+            )
+            success = False
+
+        if success:
+            self._safe_notify(
+                "Copied OCR to ground truth for selected words",
+                type_="positive",
+            )
+            return
+
+        self.selected_line_indices = previous_line_selection
+        self.selected_word_indices = previous_word_selection
+        self.selected_paragraph_indices = previous_paragraph_selection
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+        self._safe_notify("No OCR text found to copy", type_="warning")
 
     def _handle_merge_selected_lines(self, _event: ClickEvent = None) -> None:
         """Merge selected lines into the first selected line."""

@@ -114,6 +114,7 @@ class TextTabs:
         # Create callback for GT→OCR copy functionality
         copy_callback = None
         copy_ocr_to_gt_callback = None
+        copy_selected_words_ocr_to_gt_callback = None
         if page_state:
             # Create a wrapper that passes the current page index
             def copy_gt_callback(line_index: int) -> bool:
@@ -139,6 +140,31 @@ class TextTabs:
 
                 copy_ocr_to_gt_callback = copy_ocr_callback
                 logger.debug("Created OCR to GT copy callback")
+
+            if hasattr(page_state, "copy_selected_words_ocr_to_ground_truth"):
+
+                def copy_selected_words_ocr_callback(
+                    word_keys: list[tuple[int, int]],
+                ) -> bool:
+                    logger.debug(
+                        "Copying OCR to GT for selected words %s on page %d",
+                        word_keys,
+                        page_index,
+                    )
+                    result = page_state.copy_selected_words_ocr_to_ground_truth(
+                        page_index,
+                        word_keys,
+                    )
+                    logger.debug(
+                        "Selected-word OCR to GT copy operation result: %s",
+                        result,
+                    )
+                    return result
+
+                copy_selected_words_ocr_to_gt_callback = (
+                    copy_selected_words_ocr_callback
+                )
+                logger.debug("Created selected-words OCR to GT copy callback")
 
         merge_lines_callback = None
         if page_state:
@@ -563,6 +589,7 @@ class TextTabs:
         self.word_match_view = WordMatchView(
             copy_gt_to_ocr_callback=copy_callback,
             copy_ocr_to_gt_callback=copy_ocr_to_gt_callback,
+            copy_selected_words_ocr_to_gt_callback=copy_selected_words_ocr_to_gt_callback,
             merge_lines_callback=merge_lines_callback,
             delete_lines_callback=delete_lines_callback,
             merge_paragraphs_callback=merge_paragraphs_callback,

@@ -156,6 +156,66 @@ class LineOperations:
             logger.exception(f"Error copying OCR→GT for line {line_index}: {e}")
             return False
 
+    def copy_selected_words_ocr_to_ground_truth(
+        self,
+        page: "Page",
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Copy OCR text to GT for only the selected word keys.
+
+        Args:
+            page: Page containing selected words.
+            word_keys: List of (line_index, word_index) pairs.
+
+        Returns:
+            bool: True when at least one selected word was updated.
+        """
+        if not page:
+            logger.warning("No page provided for selected-word OCR→GT copy")
+            return False
+
+        if not word_keys:
+            logger.info("No selected words provided for OCR→GT copy")
+            return False
+
+        updated_count = 0
+        for line_index, word_index in sorted(set(word_keys)):
+            try:
+                line_words = self._validated_line_words(page, line_index)
+                if (
+                    line_words is None
+                    or word_index < 0
+                    or word_index >= len(line_words)
+                ):
+                    continue
+
+                target_word = line_words[word_index]
+                ocr_text = str(getattr(target_word, "text", "") or "")
+                if not ocr_text.strip():
+                    continue
+
+                if self.update_word_ground_truth(
+                    page, line_index, word_index, ocr_text
+                ):
+                    updated_count += 1
+            except Exception:
+                logger.debug(
+                    "Failed selected-word OCR→GT copy for line=%s word=%s",
+                    line_index,
+                    word_index,
+                    exc_info=True,
+                )
+
+        if updated_count > 0:
+            logger.info(
+                "Copied OCR→GT for %d selected words",
+                updated_count,
+            )
+            return True
+
+        logger.info("No OCR text found to copy for selected words")
+        return False
+
     def clear_ground_truth_for_line(self, page: "Page", line_index: int) -> bool:
         """Clear ground truth text for all words in the specified line.
 

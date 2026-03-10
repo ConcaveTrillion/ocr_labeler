@@ -347,6 +347,39 @@ class PageState:
             )
             return False
 
+    def copy_selected_words_ocr_to_ground_truth(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Copy OCR text to GT for only selected words on the current page."""
+        page = self.current_page
+        if not page:
+            logger.critical(
+                "No page available at index %s for selected-word OCR→GT copy.",
+                page_index,
+            )
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.copy_selected_words_ocr_to_ground_truth(page, word_keys)
+
+            if result:
+                self._invalidate_text_cache()
+                self.notify()
+
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error in selected-word OCR→GT copy on page %s: %s",
+                page_index,
+                e,
+            )
+            return False
+
     def update_word_attributes(
         self,
         page_index: int,

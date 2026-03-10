@@ -155,6 +155,43 @@ class TestLineOperations:
 
         assert result is False
 
+    def test_copy_selected_words_ocr_to_ground_truth_selected_only(
+        self, operations, mock_page_with_lines
+    ):
+        """Copy OCR→GT should update only explicitly selected words."""
+        line1 = mock_page_with_lines.lines[0]
+        line2 = mock_page_with_lines.lines[1]
+
+        line1.words[0].ground_truth_text = "keep-gt-0"
+        line1.words[1].ground_truth_text = "keep-gt-1"
+        line2.words[0].ground_truth_text = "keep-gt-2"
+
+        result = operations.copy_selected_words_ocr_to_ground_truth(
+            mock_page_with_lines,
+            [(0, 1), (1, 0)],
+        )
+
+        assert result is True
+        assert line1.words[0].ground_truth_text == "keep-gt-0"
+        assert line1.words[1].ground_truth_text == "world"
+        assert line2.words[0].ground_truth_text == "test"
+
+    def test_copy_selected_words_ocr_to_ground_truth_returns_false_when_no_updates(
+        self, operations, mock_page_with_lines
+    ):
+        """Copy OCR→GT should fail when selected words have no OCR text."""
+        line1 = mock_page_with_lines.lines[0]
+        line1.words[1].text = ""
+        line1.words[1].ground_truth_text = "unchanged"
+
+        result = operations.copy_selected_words_ocr_to_ground_truth(
+            mock_page_with_lines,
+            [(0, 1)],
+        )
+
+        assert result is False
+        assert line1.words[1].ground_truth_text == "unchanged"
+
     def test_update_word_ground_truth_success(self, operations, mock_page_with_lines):
         """Test updating ground truth text for a specific word."""
         result = operations.update_word_ground_truth(

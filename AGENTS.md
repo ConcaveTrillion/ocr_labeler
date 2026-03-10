@@ -35,7 +35,8 @@ Common commands:
 
 ## Validation rules
 
-- Do not run pytest directly when `make test` exists.
+- Always use `uv` to run tests.
+- Prefer `make test` / `make ci` for standard validation, and use `uv run pytest ...` for targeted test execution.
 - After code changes, run CI pipeline (`make ci` or VS Code `Make: CI Pipeline`).
 - Docs-only changes can skip CI.
 - Keep tests aligned with the existing structure in `tests/`.

@@ -1669,6 +1669,113 @@ class PageState:
             )
             return False
 
+    def expand_then_refine_lines(
+        self,
+        page_index: int,
+        line_indices: list[int],
+    ) -> bool:
+        """Expand then refine selected lines on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Selected line indices.
+
+        Returns:
+            bool: True if expand/refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-then-refine lines")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_then_refine_lines(page, line_indices)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error expand-then-refining lines %s: %s", line_indices, e)
+            return False
+
+    def expand_then_refine_paragraphs(
+        self,
+        page_index: int,
+        paragraph_indices: list[int],
+    ) -> bool:
+        """Expand then refine selected paragraphs on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Selected paragraph indices.
+
+        Returns:
+            bool: True if expand/refine succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-then-refine paragraphs")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_then_refine_paragraphs(page, paragraph_indices)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error expand-then-refining paragraphs %s: %s",
+                paragraph_indices,
+                e,
+            )
+            return False
+
+    def split_line_with_selected_words(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Split line(s) by selected/unselected words.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: Selected (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if split succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for split-line-by-selected-words")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_line_with_selected_words(page, word_keys)
+            if result:
+                self._finalize_structural_edit(
+                    page,
+                    "line split-by-selected-words",
+                )
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting lines by selected words %s: %s",
+                word_keys,
+                e,
+            )
+            return False
+
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 

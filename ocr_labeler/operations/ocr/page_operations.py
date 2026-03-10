@@ -941,7 +941,6 @@ class PageOperations:
         )
 
         cached_images = dict(getattr(page_model, "cached_image_filenames", None) or {})
-
         return UserPageEnvelope(
             schema=UserPageSchema(version=USER_PAGE_SCHEMA_VERSION),
             provenance=UserPageProvenance(

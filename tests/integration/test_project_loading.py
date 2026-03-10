@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import pytest
 from nicegui.elements.button import Button
 from nicegui.testing import User
+from nicegui.testing.user_interaction import UserInteraction
 
 from ocr_labeler.app import NiceGuiLabeler
 from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
@@ -390,17 +391,23 @@ class TestNiceGuiIntegration:
             await user.open("/")
             await user.should_see("No Project Loaded")
 
-            # Load first project to render page-level controls.
+            # Load first project to render the word-match page action toolbar.
             user.find("LOAD").click()
             await user.should_see("Loaded projectID629292e7559a8")
-            interaction = user.find("Expand & Refine", kind=Button)
             for _ in range(40):
-                if interaction.elements:
+                expand_buttons = sorted(
+                    [
+                        element
+                        for element in user.find(kind=Button).elements
+                        if element._props.get("icon") == "zoom_out_map"
+                    ],
+                    key=lambda element: element.id,
+                )
+                if expand_buttons:
                     break
                 await asyncio.sleep(0.05)
-                interaction = user.find("Expand & Refine", kind=Button)
-            assert interaction.elements, "Expand & Refine button not found"
-            interaction.trigger("click")
+            assert expand_buttons, "Expand & Refine toolbar button not found"
+            UserInteraction(user, {expand_buttons[0]}, Button).click()
 
             for _ in range(20):
                 if mock_expand_refine.called:

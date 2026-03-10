@@ -121,7 +121,7 @@ class TestPageOperations:
             json_data = json.load(f)
 
         assert json_data["schema"]["name"] == "ocr_labeler.user_page"
-        assert json_data["schema"]["version"] == "2.0"
+        assert json_data["schema"]["version"] == "2.1"
         assert json_data["source"]["image_path"] == "source.png"
         assert json_data["payload"]["page"]["type"] == "page"
 

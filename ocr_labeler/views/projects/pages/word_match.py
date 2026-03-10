@@ -76,7 +76,10 @@ class WordMatchView:
         refine_words_callback: WordKeysAction | None = None,
         expand_then_refine_words_callback: WordKeysAction | None = None,
         refine_lines_callback: LineIndicesAction | None = None,
+        expand_then_refine_lines_callback: LineIndicesAction | None = None,
         refine_paragraphs_callback: ParagraphIndicesAction | None = None,
+        expand_then_refine_paragraphs_callback: ParagraphIndicesAction | None = None,
+        split_line_with_selected_words_callback: WordKeysAction | None = None,
         edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
         set_word_attributes_callback: SetWordAttributesAction | None = None,
         notify_callback: NotifyCallback | None = None,
@@ -114,7 +117,14 @@ class WordMatchView:
         self.refine_words_callback = refine_words_callback
         self.expand_then_refine_words_callback = expand_then_refine_words_callback
         self.refine_lines_callback = refine_lines_callback
+        self.expand_then_refine_lines_callback = expand_then_refine_lines_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
+        self.expand_then_refine_paragraphs_callback = (
+            expand_then_refine_paragraphs_callback
+        )
+        self.split_line_with_selected_words_callback = (
+            split_line_with_selected_words_callback
+        )
         self._on_refine_bboxes: Callable | None = None
         self._on_expand_refine_bboxes: Callable | None = None
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
@@ -147,15 +157,19 @@ class WordMatchView:
         self.merge_lines_button = None
         self.delete_lines_button = None
         self.refine_lines_button = None
+        self.expand_then_refine_lines_button = None
         self.merge_paragraphs_button = None
         self.delete_paragraphs_button = None
         self.refine_paragraphs_button = None
+        self.expand_then_refine_paragraphs_button = None
         self.split_paragraph_after_line_button = None
         self.split_paragraph_by_selection_button = None
         self.split_line_after_word_button = None
+        self.split_line_by_selection_button = None
         self.merge_words_button = None
         self.delete_words_button = None
         self.refine_words_button = None
+        self.expand_then_refine_words_button = None
         self.notify_callback = notify_callback
         self._original_image_source_provider = original_image_source_provider
         self._last_word_view_source: str = ""
@@ -210,156 +224,15 @@ class WordMatchView:
         logger.debug("Building WordMatchView UI components")
         self._ensure_word_slice_css_registered()
         with ui.column().classes("full-width full-height") as container:
-            # Header card with filter and operation controls
+            # Filter card
             with ui.card():
-                with ui.column():
-                    # Filter controls row
-                    with ui.row().classes("items-center"):
-                        ui.icon("filter_list")
-                        self.filter_selector = ui.toggle(
-                            options=["Mismatched Lines", "All Lines"],
-                            value="Mismatched Lines",
-                        )
-                        self.filter_selector.on_value_change(self._on_filter_change)
-
-                    # Page operations row
-                    with ui.row().classes("items-center gap-2 full-width"):
-                        ui.label("Page Operations").classes(
-                            "text-sm font-semibold min-w-44 text-right"
-                        )
-                        if self._on_refine_bboxes:
-                            self.refine_bboxes_button = ui.button(
-                                "Refine Bboxes",
-                                icon="auto_fix_high",
-                                on_click=self._on_refine_bboxes,
-                            ).tooltip("Refine all bounding boxes on this page")
-                            style_action_button(self.refine_bboxes_button)
-                        if self._on_expand_refine_bboxes:
-                            self.expand_refine_bboxes_button = ui.button(
-                                "Expand & Refine",
-                                icon="zoom_out_map",
-                                on_click=self._on_expand_refine_bboxes,
-                            ).tooltip(
-                                "Expand then refine all bounding boxes on this page"
-                            )
-                            style_action_button(self.expand_refine_bboxes_button)
-
-                    # Paragraph operations row
-                    with ui.row().classes("items-center gap-2 full-width"):
-                        ui.label("Paragraph Operations").classes(
-                            "text-sm font-semibold min-w-44 text-right"
-                        )
-                        self.merge_paragraphs_button = ui.button(
-                            "Merge",
-                            icon="call_merge",
-                            on_click=self._handle_merge_selected_paragraphs,
-                        ).tooltip("Merge selected paragraphs")
-                        style_action_button(self.merge_paragraphs_button)
-                        self.refine_paragraphs_button = ui.button(
-                            "Refine",
-                            icon="auto_fix_high",
-                            on_click=self._handle_refine_selected_paragraphs,
-                        ).tooltip("Refine selected paragraphs")
-                        style_action_button(self.refine_paragraphs_button)
-                        self.split_paragraph_after_line_button = ui.button(
-                            "Split After",
-                            icon="call_split",
-                            on_click=self._handle_split_paragraph_after_selected_line,
-                        ).tooltip(
-                            "Split the containing paragraph immediately after the selected line"
-                        )
-                        style_action_button(self.split_paragraph_after_line_button)
-                        self.split_paragraph_by_selection_button = ui.button(
-                            "Split Select",
-                            icon="call_split",
-                            on_click=self._handle_split_paragraph_by_selected_lines,
-                        ).tooltip(
-                            "Split one paragraph into selected and unselected lines"
-                        )
-                        style_action_button(self.split_paragraph_by_selection_button)
-                        self.delete_paragraphs_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                on_click=self._handle_delete_selected_paragraphs,
-                            )
-                            .classes("ml-auto")
-                            .tooltip("Delete selected paragraphs")
-                        )
-                        style_action_button(
-                            self.delete_paragraphs_button,
-                            variant=ButtonVariant.DELETE,
-                        )
-
-                    # Line operations row
-                    with ui.row().classes("items-center gap-2 full-width"):
-                        ui.label("Line Operations").classes(
-                            "text-sm font-semibold min-w-44 text-right"
-                        )
-                        self.merge_lines_button = ui.button(
-                            "Merge",
-                            icon="call_merge",
-                            on_click=self._handle_merge_selected_lines,
-                        ).tooltip("Merge selected lines into the first selected line")
-                        style_action_button(self.merge_lines_button)
-                        self.refine_lines_button = ui.button(
-                            "Refine",
-                            icon="auto_fix_high",
-                            on_click=self._handle_refine_selected_lines,
-                        ).tooltip("Refine selected lines")
-                        style_action_button(self.refine_lines_button)
-                        self.split_line_after_word_button = ui.button(
-                            "Split After Word",
-                            icon="call_split",
-                            on_click=self._handle_split_line_after_selected_word,
-                        ).tooltip(
-                            "Split the selected line immediately after the selected word"
-                        )
-                        style_action_button(self.split_line_after_word_button)
-                        self.delete_lines_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                on_click=self._handle_delete_selected_lines,
-                            )
-                            .classes("ml-auto")
-                            .tooltip("Delete selected lines")
-                        )
-                        style_action_button(
-                            self.delete_lines_button,
-                            variant=ButtonVariant.DELETE,
-                        )
-
-                    # Word operations row
-                    with ui.row().classes("items-center gap-2 full-width"):
-                        ui.label("Word Operations").classes(
-                            "text-sm font-semibold min-w-44 text-right"
-                        )
-                        self.merge_words_button = ui.button(
-                            "Merge",
-                            icon="call_merge",
-                            on_click=self._handle_merge_selected_words,
-                        ).tooltip("Merge selected words on the same line")
-                        style_action_button(self.merge_words_button)
-                        self.refine_words_button = ui.button(
-                            "Refine",
-                            icon="auto_fix_high",
-                            on_click=self._handle_refine_selected_words,
-                        ).tooltip("Refine selected words")
-                        style_action_button(self.refine_words_button)
-                        self.delete_words_button = (
-                            ui.button(
-                                "Delete",
-                                icon="delete",
-                                on_click=self._handle_delete_selected_words,
-                            )
-                            .classes("ml-auto")
-                            .tooltip("Delete selected words")
-                        )
-                        style_action_button(
-                            self.delete_words_button,
-                            variant=ButtonVariant.DELETE,
-                        )
+                with ui.row().classes("items-center"):
+                    ui.icon("filter_list")
+                    self.filter_selector = ui.toggle(
+                        options=["Mismatched Lines", "All Lines"],
+                        value="Mismatched Lines",
+                    )
+                    self.filter_selector.on_value_change(self._on_filter_change)
 
             # Scrollable container for word matches
             with ui.scroll_area().classes("fit"):
@@ -368,6 +241,138 @@ class WordMatchView:
         self.container = container
         logger.debug("WordMatchView UI build complete, container created")
         return container
+
+    def build_actions_toolbar(self):
+        """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
+        # Operations grid: columns = scope label | Merge | Refine | Expand+Refine | Split After | Split Select | Delete
+        with (
+            ui.grid(columns="auto auto auto auto auto auto auto")
+            .classes("items-center justify-items-center w-auto pl-2")
+            .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
+        ):
+            # Page row
+            ui.label("Page").classes("text-sm font-semibold justify-self-start pr-1")
+            ui.element("div")  # no Merge for page
+            if self._on_refine_bboxes:
+                self.refine_bboxes_button = ui.button(
+                    icon="auto_fix_high",
+                    on_click=self._on_refine_bboxes,
+                ).tooltip("Refine all bounding boxes on this page")
+                style_word_icon_button(self.refine_bboxes_button)
+            else:
+                ui.element("div")
+            if self._on_expand_refine_bboxes:
+                self.expand_refine_bboxes_button = ui.button(
+                    icon="zoom_out_map",
+                    on_click=self._on_expand_refine_bboxes,
+                ).tooltip("Expand then refine all bounding boxes on this page")
+                style_word_icon_button(self.expand_refine_bboxes_button)
+            else:
+                ui.element("div")
+            ui.element("div")  # no Split After for page
+            ui.element("div")  # no Split Select for page
+            ui.element("div")  # no Delete for page
+
+            # Paragraph row
+            ui.label("Paragraph").classes(
+                "text-sm font-semibold justify-self-start pr-1"
+            )
+            self.merge_paragraphs_button = ui.button(
+                icon="call_merge",
+                on_click=self._handle_merge_selected_paragraphs,
+            ).tooltip("Merge selected paragraphs")
+            style_word_icon_button(self.merge_paragraphs_button)
+            self.refine_paragraphs_button = ui.button(
+                icon="auto_fix_high",
+                on_click=self._handle_refine_selected_paragraphs,
+            ).tooltip("Refine selected paragraphs")
+            style_word_icon_button(self.refine_paragraphs_button)
+            self.expand_then_refine_paragraphs_button = ui.button(
+                icon="zoom_out_map",
+                on_click=self._handle_expand_then_refine_selected_paragraphs,
+            ).tooltip("Expand then refine selected paragraphs")
+            style_word_icon_button(self.expand_then_refine_paragraphs_button)
+            self.split_paragraph_after_line_button = ui.button(
+                icon="call_split",
+                on_click=self._handle_split_paragraph_after_selected_line,
+            ).tooltip(
+                "Split the containing paragraph immediately after the selected line"
+            )
+            style_word_icon_button(self.split_paragraph_after_line_button)
+            self.split_paragraph_by_selection_button = ui.button(
+                icon="vertical_split",
+                on_click=self._handle_split_paragraph_by_selected_lines,
+            ).tooltip("Split one paragraph into selected and unselected lines")
+            style_word_icon_button(self.split_paragraph_by_selection_button)
+            self.delete_paragraphs_button = ui.button(
+                icon="delete",
+                on_click=self._handle_delete_selected_paragraphs,
+            ).tooltip("Delete selected paragraphs")
+            style_word_icon_button(
+                self.delete_paragraphs_button, variant=ButtonVariant.DELETE
+            )
+
+            # Line row
+            ui.label("Line").classes("text-sm font-semibold justify-self-start pr-1")
+            self.merge_lines_button = ui.button(
+                icon="call_merge",
+                on_click=self._handle_merge_selected_lines,
+            ).tooltip("Merge selected lines into the first selected line")
+            style_word_icon_button(self.merge_lines_button)
+            self.refine_lines_button = ui.button(
+                icon="auto_fix_high",
+                on_click=self._handle_refine_selected_lines,
+            ).tooltip("Refine selected lines")
+            style_word_icon_button(self.refine_lines_button)
+            self.expand_then_refine_lines_button = ui.button(
+                icon="zoom_out_map",
+                on_click=self._handle_expand_then_refine_selected_lines,
+            ).tooltip("Expand then refine selected lines")
+            style_word_icon_button(self.expand_then_refine_lines_button)
+            self.split_line_after_word_button = ui.button(
+                icon="call_split",
+                on_click=self._handle_split_line_after_selected_word,
+            ).tooltip("Split the selected line immediately after the selected word")
+            style_word_icon_button(self.split_line_after_word_button)
+            self.split_line_by_selection_button = ui.button(
+                icon="vertical_split",
+                on_click=self._handle_split_line_by_selected_words,
+            ).tooltip("Split line(s) into selected and unselected words")
+            style_word_icon_button(self.split_line_by_selection_button)
+            self.delete_lines_button = ui.button(
+                icon="delete",
+                on_click=self._handle_delete_selected_lines,
+            ).tooltip("Delete selected lines")
+            style_word_icon_button(
+                self.delete_lines_button, variant=ButtonVariant.DELETE
+            )
+
+            # Word row
+            ui.label("Word").classes("text-sm font-semibold justify-self-start pr-1")
+            self.merge_words_button = ui.button(
+                icon="call_merge",
+                on_click=self._handle_merge_selected_words,
+            ).tooltip("Merge selected words on the same line")
+            style_word_icon_button(self.merge_words_button)
+            self.refine_words_button = ui.button(
+                icon="auto_fix_high",
+                on_click=self._handle_refine_selected_words,
+            ).tooltip("Refine selected words")
+            style_word_icon_button(self.refine_words_button)
+            self.expand_then_refine_words_button = ui.button(
+                icon="zoom_out_map",
+                on_click=self._handle_expand_then_refine_selected_words,
+            ).tooltip("Expand then refine selected words")
+            style_word_icon_button(self.expand_then_refine_words_button)
+            ui.element("div")  # no Split After for word
+            ui.element("div")  # no Split Select for word
+            self.delete_words_button = ui.button(
+                icon="delete",
+                on_click=self._handle_delete_selected_words,
+            ).tooltip("Delete selected words")
+            style_word_icon_button(
+                self.delete_words_button, variant=ButtonVariant.DELETE
+            )
 
     def update_from_page(self, page: Page) -> None:
         """Update the view with matches from a page."""
@@ -2957,6 +2962,12 @@ class WordMatchView:
                 self.refine_lines_callback is None or len(selected_lines) < 1
             )
 
+        if self.expand_then_refine_lines_button is not None:
+            self.expand_then_refine_lines_button.disabled = (
+                self.expand_then_refine_lines_callback is None
+                or len(selected_lines) < 1
+            )
+
         if self.merge_paragraphs_button is not None:
             self.merge_paragraphs_button.disabled = (
                 self.merge_paragraphs_callback is None
@@ -2972,6 +2983,12 @@ class WordMatchView:
         if self.refine_paragraphs_button is not None:
             self.refine_paragraphs_button.disabled = (
                 self.refine_paragraphs_callback is None
+                or len(self.selected_paragraph_indices) < 1
+            )
+
+        if self.expand_then_refine_paragraphs_button is not None:
+            self.expand_then_refine_paragraphs_button.disabled = (
+                self.expand_then_refine_paragraphs_callback is None
                 or len(self.selected_paragraph_indices) < 1
             )
 
@@ -3005,9 +3022,21 @@ class WordMatchView:
                 or not self._can_merge_selected_words()
             )
 
+        if self.split_line_by_selection_button is not None:
+            self.split_line_by_selection_button.disabled = (
+                self.split_line_with_selected_words_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
         if self.refine_words_button is not None:
             self.refine_words_button.disabled = (
                 self.refine_words_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+        if self.expand_then_refine_words_button is not None:
+            self.expand_then_refine_words_button.disabled = (
+                self.expand_then_refine_words_callback is None
                 or len(self.selected_word_indices) < 1
             )
 
@@ -3627,6 +3656,208 @@ class WordMatchView:
                 e,
             )
             self._safe_notify(f"Error refining paragraphs: {e}", type_="negative")
+
+    def _handle_expand_then_refine_selected_words(
+        self, _event: ClickEvent = None
+    ) -> None:
+        """Expand then refine selected word bounding boxes."""
+        if self.expand_then_refine_words_callback is None:
+            self._safe_notify(
+                "Expand-then-refine word function not available", type_="warning"
+            )
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify(
+                "Select at least one word to expand-then-refine", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.expand_then_refine_words_callback(selected_words)
+            if success:
+                self._safe_notify(
+                    f"Expanded then refined {len(selected_words)} words",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify(
+                    "Failed to expand-then-refine selected words", type_="warning"
+                )
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error expand-then-refining words %s: %s", selected_words, e
+            )
+            self._safe_notify(
+                f"Error expand-then-refining words: {e}", type_="negative"
+            )
+
+    def _handle_expand_then_refine_selected_lines(
+        self, _event: ClickEvent = None
+    ) -> None:
+        """Expand then refine selected lines."""
+        if self.expand_then_refine_lines_callback is None:
+            self._safe_notify(
+                "Expand-then-refine line function not available", type_="warning"
+            )
+            return
+
+        selected_lines = self._get_effective_selected_lines()
+        if not selected_lines:
+            self._safe_notify(
+                "Select at least one line to expand-then-refine", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        try:
+            success = self.expand_then_refine_lines_callback(selected_lines)
+            if success:
+                self._safe_notify(
+                    f"Expanded then refined {len(selected_lines)} lines",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify(
+                    "Failed to expand-then-refine selected lines", type_="warning"
+                )
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error expand-then-refining lines %s: %s", selected_lines, e
+            )
+            self._safe_notify(
+                f"Error expand-then-refining lines: {e}", type_="negative"
+            )
+
+    def _handle_expand_then_refine_selected_paragraphs(
+        self, _event: ClickEvent = None
+    ) -> None:
+        """Expand then refine selected paragraphs."""
+        if self.expand_then_refine_paragraphs_callback is None:
+            self._safe_notify(
+                "Expand-then-refine paragraph function not available", type_="warning"
+            )
+            return
+
+        selected_paragraphs = sorted(self.selected_paragraph_indices)
+        if not selected_paragraphs:
+            self._safe_notify(
+                "Select at least one paragraph to expand-then-refine", type_="warning"
+            )
+            return
+
+        previous_selection = set(self.selected_paragraph_indices)
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_paragraph_selection_changed()
+        try:
+            success = self.expand_then_refine_paragraphs_callback(selected_paragraphs)
+            if success:
+                self._safe_notify(
+                    f"Expanded then refined {len(selected_paragraphs)} paragraphs",
+                    type_="positive",
+                )
+            else:
+                self.selected_paragraph_indices = previous_selection
+                self._update_action_button_state()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to expand-then-refine selected paragraphs",
+                    type_="warning",
+                )
+        except Exception as e:
+            self.selected_paragraph_indices = previous_selection
+            self._update_action_button_state()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error expand-then-refining paragraphs %s: %s",
+                selected_paragraphs,
+                e,
+            )
+            self._safe_notify(
+                f"Error expand-then-refining paragraphs: {e}", type_="negative"
+            )
+
+    def _handle_split_line_by_selected_words(self, _event: ClickEvent = None) -> None:
+        """Split line(s) into selected-word and unselected-word groups."""
+        if self.split_line_with_selected_words_callback is None:
+            self._safe_notify(
+                "Split line by words function not available", type_="warning"
+            )
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify(
+                "Select at least one word to split line by selection", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+
+        try:
+            success = self.split_line_with_selected_words_callback(selected_words)
+            if success:
+                self._safe_notify("Split line(s) by selected words", type_="positive")
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to split line by selected words", type_="warning"
+                )
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error splitting lines by selected words %s: %s", selected_words, e
+            )
+            self._safe_notify(
+                f"Error splitting line by selected words: {e}", type_="negative"
+            )
 
     def _handle_refine_single_word(
         self,

@@ -433,6 +433,19 @@ class TextTabs:
                 logger.debug("Refine lines operation result: %s", result)
                 return result
 
+        expand_then_refine_lines_callback = None
+        if page_state and hasattr(page_state, "expand_then_refine_lines"):
+
+            def expand_then_refine_lines_callback(line_indices: list[int]) -> bool:
+                logger.debug(
+                    "Expand-then-refining selected lines %s on page %d",
+                    line_indices,
+                    page_index,
+                )
+                result = page_state.expand_then_refine_lines(page_index, line_indices)
+                logger.debug("Expand-then-refine lines operation result: %s", result)
+                return result
+
         refine_paragraphs_callback = None
         if page_state and hasattr(page_state, "refine_paragraphs"):
 
@@ -444,6 +457,44 @@ class TextTabs:
                 )
                 result = page_state.refine_paragraphs(page_index, paragraph_indices)
                 logger.debug("Refine paragraphs operation result: %s", result)
+                return result
+
+        expand_then_refine_paragraphs_callback = None
+        if page_state and hasattr(page_state, "expand_then_refine_paragraphs"):
+
+            def expand_then_refine_paragraphs_callback(
+                paragraph_indices: list[int],
+            ) -> bool:
+                logger.debug(
+                    "Expand-then-refining selected paragraphs %s on page %d",
+                    paragraph_indices,
+                    page_index,
+                )
+                result = page_state.expand_then_refine_paragraphs(
+                    page_index, paragraph_indices
+                )
+                logger.debug(
+                    "Expand-then-refine paragraphs operation result: %s", result
+                )
+                return result
+
+        split_line_with_selected_words_callback = None
+        if page_state and hasattr(page_state, "split_line_with_selected_words"):
+
+            def split_line_with_selected_words_callback(
+                word_keys: list[tuple[int, int]],
+            ) -> bool:
+                logger.debug(
+                    "Splitting lines by selected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.split_line_with_selected_words(
+                    page_index, word_keys
+                )
+                logger.debug(
+                    "Split line by selected words operation result: %s", result
+                )
                 return result
 
         edit_word_ground_truth_callback = None
@@ -528,7 +579,10 @@ class TextTabs:
             refine_words_callback=refine_words_callback,
             expand_then_refine_words_callback=expand_then_refine_words_callback,
             refine_lines_callback=refine_lines_callback,
+            expand_then_refine_lines_callback=expand_then_refine_lines_callback,
             refine_paragraphs_callback=refine_paragraphs_callback,
+            expand_then_refine_paragraphs_callback=expand_then_refine_paragraphs_callback,
+            split_line_with_selected_words_callback=split_line_with_selected_words_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             set_word_attributes_callback=set_word_attributes_callback,
             notify_callback=notify_callback,
@@ -624,6 +678,9 @@ class TextTabs:
         # Root container uses Quasar growth classes; so flex children can shrink.
         # Root must be flex container with so nested 100% heights can resolve
         with ui.column().classes("full-width full-height") as col:
+            # Actions toolbar row - right-aligned, above the tabs
+            with ui.row().classes("full-width justify-start"):
+                self.word_match_view.build_actions_toolbar()
             logger.debug("Creating tabs container")
             with ui.tabs() as text_tabs:
                 ui.tab("Matches")

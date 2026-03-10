@@ -1949,6 +1949,294 @@ class LineOperations:
             )
             return False
 
+    def expand_then_refine_lines(self, page: "Page", line_indices: list[int]) -> bool:
+        """Expand then refine all words/bboxes in selected lines.
+
+        Args:
+            page: Page containing lines.
+            line_indices: Zero-based selected line indices.
+
+        Returns:
+            bool: True if any selected lines were expanded/refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for expand-then-refine lines")
+            return False
+
+        unique_indices = sorted(set(line_indices or []))
+        if not unique_indices:
+            logger.warning(
+                "Expand-then-refine lines requires selecting at least one line"
+            )
+            return False
+
+        try:
+            lines = list(page.lines)
+            refined_any = False
+            for line_index in unique_indices:
+                if line_index < 0 or line_index >= len(lines):
+                    logger.warning(
+                        "Expand-then-refine line index %s out of range (0-%s)",
+                        line_index,
+                        len(lines) - 1,
+                    )
+                    return False
+                line = lines[line_index]
+                line_words = list(getattr(line, "words", []) or [])
+                for word in line_words:
+                    refined_any = (
+                        self._expand_then_refine_word_bbox(page, word) or refined_any
+                    )
+                recompute_line = getattr(line, "recompute_bounding_box", None)
+                if callable(recompute_line):
+                    recompute_line()
+
+            if not refined_any:
+                logger.warning("Selected lines could not be expanded/refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info("Expand-then-refined %d selected lines", len(unique_indices))
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error expand-then-refining lines %s: %s", unique_indices, e
+            )
+            return False
+
+    def expand_then_refine_paragraphs(
+        self, page: "Page", paragraph_indices: list[int]
+    ) -> bool:
+        """Expand then refine all words/bboxes in selected paragraphs.
+
+        Args:
+            page: Page containing paragraphs.
+            paragraph_indices: Zero-based selected paragraph indices.
+
+        Returns:
+            bool: True if any selected paragraphs were expanded/refined, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for expand-then-refine paragraphs")
+            return False
+
+        unique_indices = sorted(set(paragraph_indices or []))
+        if not unique_indices:
+            logger.warning(
+                "Expand-then-refine paragraphs requires selecting at least one paragraph"
+            )
+            return False
+
+        try:
+            paragraphs = list(getattr(page, "paragraphs", []) or [])
+            if not paragraphs:
+                logger.warning("Page has no paragraphs to expand-then-refine")
+                return False
+
+            refined_any = False
+            for paragraph_index in unique_indices:
+                if paragraph_index < 0 or paragraph_index >= len(paragraphs):
+                    logger.warning(
+                        "Expand-then-refine paragraph index %s out of range (0-%s)",
+                        paragraph_index,
+                        len(paragraphs) - 1,
+                    )
+                    return False
+
+                paragraph = paragraphs[paragraph_index]
+                paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                for line in paragraph_lines:
+                    line_words = list(getattr(line, "words", []) or [])
+                    for word in line_words:
+                        refined_any = (
+                            self._expand_then_refine_word_bbox(page, word)
+                            or refined_any
+                        )
+                    recompute_line = getattr(line, "recompute_bounding_box", None)
+                    if callable(recompute_line):
+                        recompute_line()
+                recompute_paragraph = getattr(paragraph, "recompute_bounding_box", None)
+                if callable(recompute_paragraph):
+                    recompute_paragraph()
+
+            if not refined_any:
+                logger.warning("Selected paragraphs could not be expanded/refined")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info(
+                "Expand-then-refined %d selected paragraphs", len(unique_indices)
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error expand-then-refining paragraphs %s: %s",
+                unique_indices,
+                e,
+            )
+            return False
+
+    def split_line_with_selected_words(
+        self,
+        page: "Page",
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Split line(s) into selected-word and unselected-word groups.
+
+        For each line that has selected words, the line is split into two lines:
+        one containing the selected words (in original order) and one containing
+        the unselected words. If multiple lines are affected, each is split
+        independently.
+
+        Args:
+            page: Page containing lines/words.
+            word_keys: List of (line_index, word_index) tuples for selected words.
+
+        Returns:
+            bool: True when at least one split was applied, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for split-line-by-selected-words")
+            return False
+
+        unique_keys = sorted(set(word_keys or []))
+        if not unique_keys:
+            logger.warning(
+                "Split-line-by-selected-words requires at least one selected word"
+            )
+            return False
+
+        try:
+            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+
+            lines = list(getattr(page, "lines", []) or [])
+
+            # Group selected word indices by line
+            line_to_selected_word_indices: dict[int, set[int]] = {}
+            for line_index, word_index in unique_keys:
+                if line_index < 0 or line_index >= len(lines):
+                    logger.warning(
+                        "Word key (%s, %s) line index out of range (0-%s)",
+                        line_index,
+                        word_index,
+                        len(lines) - 1,
+                    )
+                    return False
+                line_to_selected_word_indices.setdefault(line_index, set()).add(
+                    word_index
+                )
+
+            # Process lines in reverse order so inserts don't shift later indices
+            split_any = False
+            for line_index in sorted(line_to_selected_word_indices, reverse=True):
+                selected_word_indices = line_to_selected_word_indices[line_index]
+                target_line = lines[line_index]
+                line_words = list(getattr(target_line, "words", []) or [])
+
+                if len(line_words) < 2:
+                    logger.warning(
+                        "Line %s has fewer than 2 words; cannot split by selection",
+                        line_index,
+                    )
+                    continue
+
+                # Validate word indices
+                for wi in selected_word_indices:
+                    if wi < 0 or wi >= len(line_words):
+                        logger.warning(
+                            "Word index %s out of range for line %s (0-%s)",
+                            wi,
+                            line_index,
+                            len(line_words) - 1,
+                        )
+                        return False
+
+                selected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi in selected_word_indices
+                ]
+                unselected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi not in selected_word_indices
+                ]
+
+                if not selected_words or not unselected_words:
+                    logger.warning(
+                        "Split-by-selected-words requires a strict subset of words on line %s",
+                        line_index,
+                    )
+                    continue
+
+                # Find parent paragraph
+                paragraphs = list(getattr(page, "paragraphs", []) or [])
+                target_paragraph = None
+                for paragraph in paragraphs:
+                    paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                    if target_line in paragraph_lines:
+                        target_paragraph = paragraph
+                        break
+
+                if target_paragraph is None:
+                    logger.warning(
+                        "Unable to find paragraph containing line %s", line_index
+                    )
+                    return False
+
+                paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+                if target_line not in paragraph_items:
+                    logger.warning(
+                        "Target line missing in paragraph items for line %s",
+                        line_index,
+                    )
+                    return False
+
+                line_item_index = paragraph_items.index(target_line)
+
+                # Keep selected words in original line, put unselected in new line
+                target_line.items = selected_words
+                target_line.unmatched_ground_truth_words = []
+                target_line.recompute_bounding_box()
+
+                new_line = Block(
+                    items=unselected_words,
+                    child_type=BlockChildType.WORDS,
+                    block_category=BlockCategory.LINE,
+                )
+
+                target_paragraph.items = (
+                    paragraph_items[: line_item_index + 1]
+                    + [new_line]
+                    + paragraph_items[line_item_index + 1 :]
+                )
+                target_paragraph.recompute_bounding_box()
+
+                parent = self._find_parent_block(page, target_paragraph)
+                if parent is not None:
+                    parent.recompute_bounding_box()
+
+                split_any = True
+
+            if not split_any:
+                logger.warning("No lines were split by selected words")
+                return False
+
+            self._finalize_page_structure(page)
+            logger.info(
+                "Split %d line(s) by selected words",
+                len(line_to_selected_word_indices),
+            )
+            return True
+
+        except Exception as e:
+            logger.exception(
+                "Error splitting lines by selected words %s: %s",
+                unique_keys,
+                e,
+            )
+            return False
+
     def nudge_word_bbox(
         self,
         page: "Page",

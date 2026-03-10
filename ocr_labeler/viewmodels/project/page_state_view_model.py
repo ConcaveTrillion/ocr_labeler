@@ -164,9 +164,9 @@ class PageStateViewModel(BaseViewModel):
         """Bind the viewmodel to a PageState instance, managing listeners."""
         # Remove previous listener if present
         try:
-            if (
-                self._page_state
-                and self._on_page_state_change in self._page_state.on_change
+            if self._page_state and self._has_change_listener(
+                getattr(self._page_state, "on_change", None),
+                self._on_page_state_change,
             ):
                 self._page_state.on_change.remove(self._on_page_state_change)
         except Exception:
@@ -185,6 +185,23 @@ class PageStateViewModel(BaseViewModel):
                 except Exception:
                     pass
         self._sync_source_badge()
+
+    @staticmethod
+    def _has_change_listener(listeners: object, callback: object) -> bool:
+        """Return whether a change-listener container already includes a callback."""
+        try:
+            return callback in listeners
+        except TypeError:
+            return False
+        except Exception:
+            return False
+
+    @staticmethod
+    def _normalize_cached_filenames(cached_filenames: object) -> dict[str, str]:
+        """Return cached filenames only when they are stored as a plain mapping."""
+        if isinstance(cached_filenames, dict):
+            return cached_filenames
+        return {}
 
     def _on_project_state_change(self):
         """Handle project-level changes by rebinding to the new current PageState."""
@@ -353,8 +370,8 @@ class PageStateViewModel(BaseViewModel):
             # Fast path: all images were cached in a previous session and the
             # files still exist on disk.  Skip refresh_page_images() entirely.
             current_page_model = self._get_current_page_model()
-            cached_filenames = (
-                getattr(current_page_model, "cached_image_filenames", None) or {}
+            cached_filenames = self._normalize_cached_filenames(
+                getattr(current_page_model, "cached_image_filenames", None)
             )
             expected_types = {
                 _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings
@@ -508,8 +525,8 @@ class PageStateViewModel(BaseViewModel):
 
             # Fast path: use pre-cached files if available.
             current_page_model = self._get_current_page_model()
-            cached_filenames = (
-                getattr(current_page_model, "cached_image_filenames", None) or {}
+            cached_filenames = self._normalize_cached_filenames(
+                getattr(current_page_model, "cached_image_filenames", None)
             )
             expected_types = {
                 _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings

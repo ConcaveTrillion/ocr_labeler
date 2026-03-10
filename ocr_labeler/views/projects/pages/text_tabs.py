@@ -704,7 +704,7 @@ class TextTabs:
         logger.info("Building TextTabs UI components")
         # Root container uses Quasar growth classes; so flex children can shrink.
         # Root must be flex container with so nested 100% heights can resolve
-        with ui.column().classes("full-width full-height") as col:
+        with ui.column().classes("full-width full-height gap-0") as col:
             # Actions toolbar row - right-aligned, above the tabs
             with ui.row().classes("full-width justify-start"):
                 self.word_match_view.build_actions_toolbar()
@@ -715,11 +715,17 @@ class TextTabs:
                 ui.tab("OCR")
             # Panels area should expand to fill remaining height (col makes it flex already).
             logger.debug("Creating tab panels")
-            with ui.tab_panels(text_tabs, value="Matches").classes(
-                "full-width full-height column"
+            with (
+                ui.tab_panels(text_tabs, value="Matches")
+                .classes("full-width full-height column gap-0 q-pa-none no-padding")
+                .style("padding: 0; margin: 0;")
             ):
                 # Matches panel with word matching view
-                with ui.tab_panel("Matches").classes("full-width full-height column"):
+                with (
+                    ui.tab_panel("Matches")
+                    .classes("full-width full-height column q-pa-none no-padding")
+                    .style("padding: 0;")
+                ):
                     logger.debug("Building word match view")
                     self.word_match_view.build()
                 # Ground Truth panel

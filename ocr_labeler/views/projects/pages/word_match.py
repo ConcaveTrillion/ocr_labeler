@@ -235,20 +235,30 @@ class WordMatchView:
         """Build the UI components."""
         logger.debug("Building WordMatchView UI components")
         self._ensure_word_slice_css_registered()
-        with ui.column().classes("full-width full-height") as container:
-            # Filter card
-            with ui.card():
-                with ui.row().classes("items-center"):
-                    ui.icon("filter_list")
-                    self.filter_selector = ui.toggle(
-                        options=["Mismatched Lines", "All Lines"],
-                        value="Mismatched Lines",
-                    )
-                    self.filter_selector.on_value_change(self._on_filter_change)
+        with ui.column().classes("full-width full-height gap-0") as container:
+            with (
+                ui.row()
+                .classes("items-center gap-1 q-px-sm q-py-none")
+                .style("margin: 0; padding-top: 2px; padding-bottom: 2px;")
+            ):
+                ui.icon("filter_list")
+                self.filter_selector = ui.toggle(
+                    options=["Mismatched Lines", "All Lines"],
+                    value="Mismatched Lines",
+                )
+                self.filter_selector.on_value_change(self._on_filter_change)
 
             # Scrollable container for word matches
-            with ui.scroll_area().classes("fit"):
-                self.lines_container = ui.column()
+            with (
+                ui.column()
+                .classes("fit overflow-auto q-pa-none")
+                .style("padding: 0; margin: 0;")
+            ):
+                self.lines_container = (
+                    ui.column()
+                    .classes("full-width")
+                    .style("gap: 0; padding: 0; margin: 0;")
+                )
 
         self.container = container
         logger.debug("WordMatchView UI build complete, container created")
@@ -628,8 +638,16 @@ class WordMatchView:
                     paragraph_index,
                     True,
                 )
-                with ui.column().classes("full-width"):
-                    with ui.row().classes("items-center full-width no-wrap gap-1"):
+                with ui.column().classes("full-width").style("gap: 0; margin: 0;"):
+                    with (
+                        ui.row()
+                        .classes(
+                            "items-center full-width no-wrap gap-1 q-my-none q-py-none"
+                        )
+                        .style(
+                            "margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;"
+                        )
+                    ):
                         if paragraph_index is not None:
                             paragraph_checkbox = (
                                 ui.checkbox(
@@ -673,9 +691,19 @@ class WordMatchView:
                         )
 
                     if paragraph_is_expanded:
-                        with ui.column().classes("full-width"):
+                        with (
+                            ui.column()
+                            .classes("full-width")
+                            .style("gap: 0; margin: 0; padding: 0;")
+                        ):
                             for line_match in paragraph_line_matches:
-                                with ui.column().classes("full-width") as line_slot:
+                                with (
+                                    ui.column()
+                                    .classes("full-width")
+                                    .style(
+                                        "gap: 0; margin: 0; padding: 0;"
+                                    ) as line_slot
+                                ):
                                     self._line_card_refs[line_match.line_index] = (
                                         line_slot
                                     )
@@ -995,7 +1023,7 @@ class WordMatchView:
             line_match.line_index,
             line_match.overall_match_status.value,
         )
-        with ui.column():
+        with ui.column().classes("full-width").style("gap: 0; margin: 0; padding: 0;"):
             # Color background bar based on overall match status
             status_classes = self._get_status_classes(
                 line_match.overall_match_status.value

@@ -279,3 +279,69 @@ def test_cache_image_to_disk_separates_image_types(tmp_path):
     assert url_original != url_lines
     assert "original" in url_original
     assert "lines" in url_lines
+
+
+def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
+    tmp_path, monkeypatch
+):
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+    vm._word_image_cache_dir = tmp_path / "cache"
+    vm._word_image_cache_dir.mkdir()
+    page_state.page_ops._page_image_cache_dir = vm._word_image_cache_dir
+
+    class ImgLike:
+        def __init__(self, shape):
+            self.shape = shape
+
+    page = DummyPage("001.png")
+    page.index = 0
+    page.page_source = "ocr"
+    page.cv2_numpy_page_image = ImgLike((10, 10, 3))
+    page.cv2_numpy_page_image_line_with_bboxes = ImgLike((10, 10, 3))
+
+    page_state.current_page = page
+    page_state.current_page_model = SimpleNamespace(
+        index=0,
+        cached_image_filenames={
+            "original": "proj_001_original_oldhash.png",
+        },
+    )
+
+    monkeypatch.setattr(
+        vm,
+        "_image_mappings",
+        lambda: [
+            ("original_image_source", "cv2_numpy_page_image"),
+            ("lines_image_source", "cv2_numpy_page_image_line_with_bboxes"),
+        ],
+    )
+
+    stale_original = vm._word_image_cache_dir / "proj_001_original_oldhash.png"
+    stale_lines = vm._word_image_cache_dir / "proj_001_lines_oldhash.png"
+    other_page = vm._word_image_cache_dir / "proj_002_original_otherhash.png"
+    for path in [stale_original, stale_lines, other_page]:
+        path.write_bytes(b"old")
+
+    def fake_cache(np_img, image_type, page_index, project_id, ext):
+        page_number = max(1, page_index + 1)
+        filename = f"{project_id}_{page_number:03d}_{image_type}_newhash{ext}"
+        (vm._word_image_cache_dir / filename).write_bytes(b"new")
+        return f"/_word_image_cache/{filename}?v=newhash"
+
+    monkeypatch.setattr(vm, "_cache_image_to_disk", fake_cache)
+    monkeypatch.setattr(vm, "_resolve_project_id_for_cache", lambda: "proj")
+
+    vm._update_image_sources_blocking()
+
+    assert not stale_original.exists()
+    assert not stale_lines.exists()
+    assert other_page.exists()
+    cached_filenames = page_state.current_page_model.cached_image_filenames
+    assert set(cached_filenames) == {"original", "lines"}
+    for filename in cached_filenames.values():
+        assert (vm._word_image_cache_dir / filename).exists()

@@ -90,7 +90,67 @@ class PageOperations:
         self._docTR_predictor = docTR_predictor
         self._predictor_initialized = False
         self._saved_provenance_by_page_id: dict[int, dict[str, Any]] = {}
+        self._page_image_cache_dir: Path | None = None
         self.page_parser = self.build_initial_page_parser()
+
+    def _resolve_page_image_cache_dir(self) -> Path:
+        """Return the shared page-image cache directory."""
+        if self._page_image_cache_dir is not None:
+            return self._page_image_cache_dir
+        return Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+
+    @staticmethod
+    def _page_cache_file_prefix(project_id: str, page_number: int) -> str:
+        """Return the filename prefix used by page image cache entries."""
+        safe_project_id = (project_id or "project").strip() or "project"
+        safe_page_number = max(1, int(page_number))
+        return f"{safe_project_id}_{safe_page_number:03d}_"
+
+    def _remove_page_cached_image_files(
+        self,
+        *,
+        project_id: str,
+        page_number: int,
+    ) -> None:
+        """Remove cached image files for a page when JSON no longer references them."""
+        self._remove_unused_page_cached_image_files(
+            project_id=project_id,
+            page_number=page_number,
+            keep_filenames={},
+        )
+
+    def _remove_unused_page_cached_image_files(
+        self,
+        *,
+        project_id: str,
+        page_number: int,
+        keep_filenames: dict[str, str],
+    ) -> None:
+        """Remove stale cached image files for a page while keeping current ones."""
+        cache_dir = self._resolve_page_image_cache_dir()
+        if not cache_dir.exists():
+            return
+
+        keep = {filename for filename in keep_filenames.values() if filename}
+        prefix = self._page_cache_file_prefix(project_id, page_number)
+        try:
+            for candidate in cache_dir.iterdir():
+                if not candidate.is_file() or not candidate.name.startswith(prefix):
+                    continue
+                if candidate.name in keep:
+                    continue
+                try:
+                    candidate.unlink()
+                except FileNotFoundError:
+                    continue
+                except Exception:
+                    logger.debug(
+                        "Failed removing stale cached page image: %s",
+                        candidate,
+                        exc_info=True,
+                    )
+        except FileNotFoundError:
+            return
 
     def _get_or_create_predictor(self):
         """Get or create the DocTR predictor instance.
@@ -318,16 +378,22 @@ class PageOperations:
             save_dir = project_root / save_directory
             json_path = save_dir / f"{project_id}_{page_number:03d}.json"
 
+            cached_filenames = page_model.cached_image_filenames or {}
+            if not cached_filenames:
+                return False
+
+            self._remove_unused_page_cached_image_files(
+                project_id=project_id,
+                page_number=page_number,
+                keep_filenames=dict(cached_filenames),
+            )
+
             if not json_path.exists():
                 logger.debug(
                     "update_cached_images_in_json: %s not found (page not yet saved), "
                     "skipping",
                     json_path,
                 )
-                return False
-
-            cached_filenames = page_model.cached_image_filenames or {}
-            if not cached_filenames:
                 return False
 
             with open(json_path, "r", encoding="utf-8") as f:
@@ -508,11 +574,19 @@ class PageOperations:
 
             # Extract original page and cached image filenames if saved
             original_page_dict = None
+            has_cached_images = False
             if is_user_page_envelope(json_data):
                 envelope = UserPageEnvelope.from_dict(json_data)
                 original_page_dict = envelope.payload.original_page
                 if envelope.cached_images:
                     page_model.cached_image_filenames = envelope.cached_images
+                    has_cached_images = True
+
+            if not has_cached_images:
+                self._remove_page_cached_image_files(
+                    project_id=project_id,
+                    page_number=page_number,
+                )
 
             return page_model, original_page_dict
 

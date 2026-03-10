@@ -203,6 +203,46 @@ class PageStateViewModel(BaseViewModel):
             return cached_filenames
         return {}
 
+    def _resolve_project_root_for_cache_persistence(self) -> Path | None:
+        """Return the best available project root for cache persistence operations."""
+        project_root = getattr(self._project_state, "project_root", None)
+        if project_root is not None:
+            return project_root
+        return getattr(self._page_state, "_project_root", None)
+
+    async def _persist_cached_images_async(
+        self,
+        current_page_model: object,
+        project_id: str,
+    ) -> None:
+        """Delegate cached image bookkeeping to page operations."""
+        page_ops = getattr(self._page_state, "page_ops", None)
+        project_root = self._resolve_project_root_for_cache_persistence()
+        if page_ops is None or project_root is None:
+            return
+        await run.io_bound(
+            page_ops.update_cached_images_in_json,
+            current_page_model,
+            project_root,
+            project_id=project_id,
+        )
+
+    def _persist_cached_images_blocking(
+        self,
+        current_page_model: object,
+        project_id: str,
+    ) -> None:
+        """Blocking wrapper for cached image bookkeeping via page operations."""
+        page_ops = getattr(self._page_state, "page_ops", None)
+        project_root = self._resolve_project_root_for_cache_persistence()
+        if page_ops is None or project_root is None:
+            return
+        page_ops.update_cached_images_in_json(
+            current_page_model,
+            project_root,
+            project_id=project_id,
+        )
+
     def _on_project_state_change(self):
         """Handle project-level changes by rebinding to the new current PageState."""
         if not self._project_state:
@@ -447,20 +487,12 @@ class PageStateViewModel(BaseViewModel):
                         "/", 1
                     )[-1]
 
-            # Store filenames on PageModel (enables in-session fast path on revisit).
             if new_cached_filenames and current_page_model is not None:
                 current_page_model.cached_image_filenames = new_cached_filenames
-                # Persist to the page JSON immediately so the next session also
-                # benefits — this is a lightweight atomic update, not a full save.
-                page_ops = getattr(self._page_state, "page_ops", None)
-                project_root = getattr(self._project_state, "project_root", None)
-                if page_ops is not None and project_root is not None:
-                    await run.io_bound(
-                        page_ops.update_cached_images_in_json,
-                        current_page_model,
-                        project_root,
-                        project_id=project_id,
-                    )
+                await self._persist_cached_images_async(
+                    current_page_model,
+                    project_id,
+                )
 
             # Word-view reuses the already-cached original image URL.
             encoded_results.append(
@@ -590,14 +622,10 @@ class PageStateViewModel(BaseViewModel):
 
             if new_cached_filenames and current_page_model is not None:
                 current_page_model.cached_image_filenames = new_cached_filenames
-                page_ops = getattr(self._page_state, "page_ops", None)
-                project_root = getattr(self._project_state, "project_root", None)
-                if page_ops is not None and project_root is not None:
-                    page_ops.update_cached_images_in_json(
-                        current_page_model,
-                        project_root,
-                        project_id=project_id,
-                    )
+                self._persist_cached_images_blocking(
+                    current_page_model,
+                    project_id,
+                )
 
             encoded_results.append(
                 ("word_view_original_image_source", original_image_source)

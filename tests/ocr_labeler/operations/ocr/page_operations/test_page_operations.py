@@ -333,6 +333,124 @@ class TestPageOperations:
         loaded_page = loaded_page_model.page
         assert loaded_page.page_index == 0
 
+    def test_update_cached_images_in_json_prunes_stale_page_cache_files(
+        self, operations, temp_dir
+    ):
+        """Updating cached_images should remove older cache files for that page only."""
+        project_root = temp_dir / "project"
+        project_root.mkdir()
+
+        output_dir = temp_dir / "output"
+        output_dir.mkdir()
+        cache_dir = temp_dir / "cache"
+        cache_dir.mkdir()
+        operations._page_image_cache_dir = cache_dir
+
+        json_path = output_dir / "test_project_001.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "schema": {
+                        "name": "ocr_labeler.user_page",
+                        "version": "2.1",
+                    },
+                    "cached_images": {
+                        "original": "test_project_001_original_oldhash.png",
+                    },
+                },
+                f,
+            )
+
+        stale_original = cache_dir / "test_project_001_original_oldhash.png"
+        stale_lines = cache_dir / "test_project_001_lines_oldhash.png"
+        keep_original = cache_dir / "test_project_001_original_newhash.png"
+        other_page = cache_dir / "test_project_002_original_otherhash.png"
+        for path in [stale_original, stale_lines, keep_original, other_page]:
+            path.write_bytes(b"x")
+
+        page_model = SimpleNamespace(
+            index=0,
+            cached_image_filenames={"original": keep_original.name},
+        )
+
+        updated = operations.update_cached_images_in_json(
+            page_model,
+            project_root,
+            save_directory=str(output_dir),
+            project_id="test_project",
+        )
+
+        assert updated is True
+        assert not stale_original.exists()
+        assert not stale_lines.exists()
+        assert keep_original.exists()
+        assert other_page.exists()
+
+    def test_load_page_model_removes_stale_cache_files_when_json_lacks_cached_images(
+        self, operations, temp_dir
+    ):
+        """Loading a page without cached_images should prune stale cache files for that page."""
+        project_root = temp_dir / "project"
+        project_root.mkdir()
+
+        output_dir = temp_dir / "output"
+        output_dir.mkdir()
+        cache_dir = temp_dir / "cache"
+        cache_dir.mkdir()
+        operations._page_image_cache_dir = cache_dir
+
+        saved_json = {
+            "schema": {"name": "ocr_labeler.user_page", "version": "2.1"},
+            "provenance": {
+                "saved_at": "2026-02-15T00:00:00Z",
+                "saved_by": "Save Page",
+                "source_lane": "labeled",
+                "app": {"name": "ocr_labeler", "version": "0.1.0"},
+                "toolchain": {"python": "3.13.3", "pd_book_tools": "0.2.0"},
+                "ocr": {"engine": "doctr", "models": []},
+            },
+            "source": {
+                "project_id": "test_project",
+                "page_index": 0,
+                "page_number": 1,
+                "image_path": "source.png",
+            },
+            "payload": {
+                "page": {
+                    "type": "page",
+                    "width": 100,
+                    "height": 100,
+                    "page_index": 0,
+                    "items": [],
+                }
+            },
+        }
+        with open(output_dir / "test_project_001.json", "w", encoding="utf-8") as f:
+            json.dump(saved_json, f)
+
+        (project_root / "source.png").touch()
+        (output_dir / "test_project_001.png").touch()
+
+        stale_original = cache_dir / "test_project_001_original_oldhash.png"
+        stale_lines = cache_dir / "test_project_001_lines_oldhash.png"
+        other_page = cache_dir / "test_project_002_original_otherhash.png"
+        for path in [stale_original, stale_lines, other_page]:
+            path.write_bytes(b"old")
+
+        loaded_result = operations.load_page_model(
+            page_number=1,
+            project_root=project_root,
+            save_directory=str(output_dir),
+            project_id="test_project",
+        )
+
+        assert loaded_result is not None
+        loaded_page_model, _ = loaded_result
+        assert loaded_page_model.cached_image_filenames is None
+        assert not stale_original.exists()
+        assert not stale_lines.exists()
+        assert other_page.exists()
+
     def test_save_page_preserves_loaded_empty_models_without_rerun(
         self,
         operations,

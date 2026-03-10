@@ -1892,12 +1892,41 @@ class PageState:
 
         self._refresh_page_overlay_images(page)
         self._invalidate_text_cache()
+        self._auto_save_to_cache()
         self.notify()
 
     def _finalize_bbox_edit(self, page: object) -> None:
         """Run post-success updates after bbox-only edits."""
         self._refresh_page_overlay_images(page)
+        self._auto_save_to_cache()
         self.notify()
+
+    def _auto_save_to_cache(self) -> None:
+        """Persist the current page to the cache directory after edits.
+
+        This is a best-effort save so work is not lost if the app crashes.
+        Failures are logged but do not propagate.
+        """
+        try:
+            page_index = self._current_page_index
+            if page_index < 0 or self.current_page is None:
+                return
+            if not self._project_root:
+                return
+
+            save_dir = self._resolve_workspace_save_directory(
+                "local-data/labeled-ocr/cache"
+            )
+            success = self.persist_page_to_file(
+                page_index,
+                save_directory=save_dir,
+            )
+            if success:
+                logger.debug("Auto-saved page %d to cache after edit", page_index)
+            else:
+                logger.debug("Auto-save to cache failed for page %d", page_index)
+        except Exception:
+            logger.debug("Auto-save to cache error", exc_info=True)
 
     def _refresh_page_overlay_images(self, page: object) -> None:
         """Refresh page overlay images so bbox layers redraw after line edits."""
@@ -1911,6 +1940,11 @@ class PageState:
         for attr_name in overlay_attrs:
             with contextlib.suppress(Exception):
                 setattr(page, attr_name, None)
+
+        # Invalidate cached image filenames so the view model's fast path
+        # doesn't serve stale overlay images from disk.
+        if self.current_page_model is not None:
+            self.current_page_model.cached_image_filenames = None
 
         refresh_method = getattr(page, "refresh_page_images", None)
         if callable(refresh_method):

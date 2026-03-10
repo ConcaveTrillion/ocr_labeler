@@ -1089,9 +1089,9 @@ class ProjectState:
         )
 
         if result:
-            # Invalidate cache since page content changed
             self._invalidate_text_cache()
-            # Notify UI of changes
+            page_state._refresh_page_overlay_images(page_model.page)
+            page_state._auto_save_to_cache()
             page_state.notify()
 
         logger.debug("refine_all_bboxes: completed, result=%s", result)
@@ -1122,9 +1122,9 @@ class ProjectState:
         )
 
         if result:
-            # Invalidate cache since page content changed
             self._invalidate_text_cache()
-            # Notify UI of changes
+            page_state._refresh_page_overlay_images(page_model.page)
+            page_state._auto_save_to_cache()
             page_state.notify()
 
         logger.debug("expand_and_refine_all_bboxes: completed, result=%s", result)
@@ -1147,7 +1147,9 @@ class ProjectState:
         result = self.page_ops.refresh_page_images(page=page_model)
 
         if result:
-            # Notify UI of changes
+            # Invalidate cached filenames so view model regenerates from fresh overlays
+            if page_state.current_page_model is not None:
+                page_state.current_page_model.cached_image_filenames = None
             page_state.notify()
 
         logger.debug("refresh_page_images: completed, result=%s", result)

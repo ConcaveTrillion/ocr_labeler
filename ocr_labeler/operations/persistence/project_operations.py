@@ -15,6 +15,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from .persistence_paths_operations import PersistencePathsOperations
+
 if TYPE_CHECKING:
     from ...models.project_model import Project
 
@@ -144,7 +146,7 @@ class ProjectOperations:
         self,
         project: "Project",
         project_root: Path,
-        save_directory: str = "local-data/labeled-projects",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
         include_images: bool = True,
         current_page_index: int = 0,
@@ -180,7 +182,12 @@ class ProjectOperations:
                 raise ValueError("project_id must be a non-empty single path component")
 
             # Create project directory structure
-            project_dir = Path(save_directory) / project_id
+            base_save_dir = (
+                Path(save_directory)
+                if save_directory is not None
+                else PersistencePathsOperations.get_saved_projects_root()
+            )
+            project_dir = base_save_dir / project_id
             project_dir.mkdir(parents=True, exist_ok=True)
 
             pages_dir = project_dir / "pages"
@@ -396,7 +403,7 @@ class ProjectOperations:
     def backup_project(
         self,
         source_directory: Path,
-        backup_directory: str = "local-data/project-backups",
+        backup_directory: str | Path | None = None,
         backup_name: Optional[str] = None,
     ) -> bool:
         """Create a backup copy of a project directory.
@@ -424,7 +431,11 @@ class ProjectOperations:
                     "backup_name must be a non-empty single path component"
                 )
 
-            backup_dir = Path(backup_directory)
+            backup_dir = (
+                Path(backup_directory)
+                if backup_directory is not None
+                else PersistencePathsOperations.get_project_backups_root()
+            )
             backup_dir.mkdir(parents=True, exist_ok=True)
 
             backup_path = backup_dir / backup_name
@@ -440,7 +451,7 @@ class ProjectOperations:
             return False
 
     def list_saved_projects(
-        self, save_directory: str = "local-data/labeled-projects"
+        self, save_directory: str | Path | None = None
     ) -> List[Dict]:
         """List all saved projects with their metadata.
 
@@ -453,7 +464,11 @@ class ProjectOperations:
         saved_projects = []
 
         try:
-            save_dir = Path(save_directory)
+            save_dir = (
+                Path(save_directory)
+                if save_directory is not None
+                else PersistencePathsOperations.get_saved_projects_root()
+            )
             if not save_dir.exists():
                 return saved_projects
 

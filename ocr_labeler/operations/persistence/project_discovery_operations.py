@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
+from .config_operations import ConfigOperations
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,8 +22,10 @@ class ProjectDiscoveryOperations:
     ) -> Dict[str, Path]:
         """Return mapping of project name -> path under the canonical data root.
 
-        The dropdown in the view should be populated from the fixed directory:
-            ~/ocr/data/source-pgdp-data/output
+        Root priority order:
+        1. Explicit base_projects_root argument
+        2. YAML config: user config path -> source_projects_root
+        3. Built-in fallback from ConfigOperations
 
         A "project" is any immediate subdirectory containing at least one image file
         (*.png|*.jpg|*.jpeg). If the root doesn't exist, returns an empty dict.
@@ -33,33 +37,29 @@ class ProjectDiscoveryOperations:
         Returns:
             Dictionary mapping project names to their paths.
         """
-        # Determine discovery base: explicit override -> legacy fixed path.
+        # Determine discovery base: explicit override -> YAML config -> fallback default.
         discovery_root: Path
         if base_projects_root is not None:
             try:
                 discovery_root = Path(base_projects_root).expanduser().resolve()
             except Exception:  # pragma: no cover - resolution error
-                logger.critical(
+                logger.warning(
                     "Failed to resolve custom projects root %s",
                     base_projects_root,
                     exc_info=True,
                 )
                 return {}
         else:
+            root_candidate = ConfigOperations.get_source_projects_root()
             try:
-                discovery_root = (
-                    Path("~/ocr/data/source-pgdp-data/output").expanduser().resolve()
-                )
+                discovery_root = root_candidate.expanduser().resolve()
             except Exception:  # pragma: no cover - path resolution errors
-                logger.critical("Project root path resolution failed", exc_info=True)
+                logger.warning("Project root path resolution failed", exc_info=True)
                 return {}
-        try:
-            base_root = discovery_root
-        except Exception:  # pragma: no cover - path resolution errors
-            logger.critical("Project root path resolution failed", exc_info=True)
-            return {}
+
+        base_root = discovery_root
         if not base_root.exists():  # pragma: no cover - environment dependent
-            logger.critical("No project root found", exc_info=True)
+            logger.debug("No project root found at %s", base_root)
             return {}
         projects: Dict[str, Path] = {}
         try:
@@ -72,12 +72,12 @@ class ProjectDiscoveryOperations:
                     ):
                         projects[d.name] = d
                 except Exception:  # noqa: BLE001 - skip unreadable child
-                    logger.critical(
+                    logger.warning(
                         "Failed to read project directory %s", d, exc_info=True
                     )
                     continue
         except Exception:  # pragma: no cover - defensive
-            logger.critical("Project discovery failed", exc_info=True)
+            logger.warning("Project discovery failed", exc_info=True)
             return {}
         return projects
 

@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .persistence_paths_operations import PersistencePathsOperations
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,6 +131,19 @@ class StatePersistenceOperations:
             Path to the state file
         """
         return base_dir / f"{state_name}.json"
+
+    @staticmethod
+    def get_default_state_root() -> Path:
+        """Get OS-aware default root directory for persisted state files."""
+        return PersistencePathsOperations.get_default_state_root()
+
+    @staticmethod
+    def get_default_state_file_path(state_name: str) -> Path:
+        """Get default state file path under the app's local persistence root."""
+        return StatePersistenceOperations.get_state_file_path(
+            StatePersistenceOperations.get_default_state_root(),
+            state_name,
+        )
 
     @staticmethod
     def backup_state_file(file_path: Path) -> Optional[Path]:

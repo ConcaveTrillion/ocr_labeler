@@ -65,3 +65,49 @@ def test_reload_ground_truth_into_project_handles_invalid_json(tmp_path):
     assert state.project.ground_truth_map == {}
     assert state.invalidated is True
     assert state.notified is True
+
+
+def test_backup_project_defaults_to_user_backup_root(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+
+    source_dir = tmp_path / "source_project"
+    source_dir.mkdir(parents=True)
+    (source_dir / "page.png").write_bytes(b"png")
+
+    xdg_data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data_home))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    ops = ProjectOperations()
+    ok = ops.backup_project(source_dir, backup_name="backup_1")
+
+    assert ok is True
+    assert (
+        xdg_data_home / "pgdp-ocr-labeler" / "project-backups" / "backup_1" / "page.png"
+    ).exists()
+
+
+def test_list_saved_projects_defaults_to_user_data_root(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+
+    xdg_data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data_home))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    save_dir = xdg_data_home / "pgdp-ocr-labeler" / "labeled-projects" / "proj1"
+    save_dir.mkdir(parents=True)
+    (save_dir / "project.json").write_text('{"project_id":"proj1"}', encoding="utf-8")
+
+    ops = ProjectOperations()
+    projects = ops.list_saved_projects()
+
+    assert len(projects) == 1
+    assert projects[0]["project_id"] == "proj1"

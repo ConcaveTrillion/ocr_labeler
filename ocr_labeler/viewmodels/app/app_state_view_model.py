@@ -2,8 +2,9 @@ import logging
 from dataclasses import field
 from typing import Optional
 
-from nicegui import binding
+from nicegui import binding, run
 
+from ...operations.persistence.config_operations import ConfigOperations
 from ...state import AppState
 from ..shared.base_viewmodel import BaseViewModel
 
@@ -20,7 +21,7 @@ class AppStateViewModel(BaseViewModel):
     is_loading: bool = False
     is_project_loading: bool = False
     project_keys: list[str] = field(default_factory=list)
-    selected_project_key: str = ""
+    selected_project_key: str | None = None
     selected_project_path: str = ""
     is_project_loaded: bool = False
 
@@ -72,7 +73,7 @@ class AppStateViewModel(BaseViewModel):
                 if self._app_state.project_keys
                 else []
             )
-            self.selected_project_key = self._app_state.selected_project_key or ""
+            self.selected_project_key = self._app_state.selected_project_key
             self.selected_project_path = (
                 str(self._app_state.available_projects.get(self.selected_project_key))
                 if self.selected_project_key
@@ -100,6 +101,15 @@ class AppStateViewModel(BaseViewModel):
         self.update()
 
     # Command methods for UI actions
+
+    @property
+    def source_projects_root_str(self) -> str:
+        """Return the currently effective source projects root path as a string."""
+        if not self._app_state:
+            return ""
+        if self._app_state.base_projects_root is not None:
+            return str(self._app_state.base_projects_root)
+        return str(ConfigOperations.get_source_projects_root())
 
     def command_select_project(self, key: str) -> bool:
         """Command to select a project.
@@ -149,6 +159,31 @@ class AppStateViewModel(BaseViewModel):
             return True
         except Exception as e:
             logger.exception(f"Error loading selected project: {e}")
+            return False
+
+    async def command_set_source_projects_root(self, path_str: str) -> bool:
+        """Update the source projects root, persist to config, and rescan projects.
+
+        Args:
+            path_str: Absolute or user-expandable path string for the new root.
+
+        Returns:
+            True if the root was updated successfully, False otherwise.
+        """
+        from pathlib import Path
+
+        path_str = path_str.strip()
+        if not path_str:
+            return False
+        try:
+            path = Path(path_str).expanduser().resolve()
+            await run.io_bound(self._app_state.set_source_projects_root, path)
+            logger.debug("Source projects root updated to %s", path)
+            return True
+        except Exception:
+            logger.exception(
+                "command_set_source_projects_root failed for path '%s'", path_str
+            )
             return False
 
     def command_get_project_display_name(self, key: Optional[str] = None) -> str:

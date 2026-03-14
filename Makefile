@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs clean-image-cache help run run-verbose run-page-timing
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -125,18 +125,20 @@ clean: ## Clean up cache, temporary files, and logs (keeps venv and UV cache)
 	rm -rf dist/ 2>/dev/null || true
 	rm -rf build/ 2>/dev/null || true
 	@$(MAKE) --no-print-directory clean-logs
-	@$(MAKE) --no-print-directory clean-image-cache
+	@$(MAKE) --no-print-directory clean-cache
 	@echo "✅ Cache cleanup complete!"
 
-clean-logs: ## Remove all session logs from logs/
+clean-logs: ## Remove session logs from OS-aware and legacy local paths
 	@echo "🧹 Cleaning session logs..."
-	find logs -type f -name "*.log" -delete 2>/dev/null || true
+	uv run python -m ocr_labeler.local_state_cleanup --logs
 	@echo "✅ Log cleanup complete!"
 
-clean-image-cache: ## Remove pre-rendered image cache (local-data/labeled-ocr/cache/)
+clean-cache: ## Remove pre-rendered image cache from OS-aware and legacy local paths
 	@echo "🧹 Clearing pre-rendered image cache..."
-	find local-data/labeled-ocr/cache -type f -delete 2>/dev/null || true
+	uv run python -m ocr_labeler.local_state_cleanup --cache
 	@echo "✅ Image cache cleared! Pages will re-render on next load."
+
+clean-image-cache: clean-cache ## Backward-compatible alias for clean-cache
 
 clean-lc-run-verbose:
 	@$(MAKE) --no-print-directory clean-logs

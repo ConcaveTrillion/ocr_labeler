@@ -12,6 +12,9 @@ from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ..models.page_model import PageModel
 from ..operations.ocr.page_operations import PageOperations
+from ..operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 
 if TYPE_CHECKING:
     from ..models.project_model import Project
@@ -106,9 +109,18 @@ class PageState:
         )
         self.on_word_ground_truth_change.emit(event)
 
-    def _resolve_workspace_save_directory(self, save_directory: str) -> str:
-        """Resolve local-data save directories against workspace CWD."""
-        directory_path = Path(str(save_directory or "").strip())
+    def _resolve_workspace_save_directory(
+        self, save_directory: str | Path | None
+    ) -> str:
+        """Resolve save directory using user-local defaults and explicit overrides."""
+        if save_directory is None:
+            return str(PersistencePathsOperations.get_saved_projects_root())
+
+        directory_text = str(save_directory).strip()
+        if not directory_text:
+            return str(PersistencePathsOperations.get_saved_projects_root())
+
+        directory_path = Path(directory_text)
         if directory_path.is_absolute():
             return str(directory_path)
         return str((Path.cwd() / directory_path).resolve())
@@ -452,14 +464,15 @@ class PageState:
     def persist_page_to_file(
         self,
         page_index: int,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Save a specific page using PageOperations.
 
         Args:
             page_index: Zero-based page index to save
-            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            save_directory: Directory to save files. When omitted, uses the
+                default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:
@@ -533,14 +546,15 @@ class PageState:
     def load_page_from_file(
         self,
         page_index: int,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Load a specific page from saved files.
 
         Args:
             page_index: Zero-based page index to load
-            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:
@@ -784,14 +798,15 @@ class PageState:
     def save_current_page(
         self,
         current_page_index: int,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Save the current page.
 
         Args:
             current_page_index: Zero-based index of the current page
-            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            save_directory: Directory to save files. When omitted, uses the
+                default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:
@@ -806,14 +821,15 @@ class PageState:
     def load_current_page(
         self,
         current_page_index: int,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Load the current page from saved files.
 
         Args:
             current_page_index: Zero-based index of the current page
-            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:
@@ -1947,9 +1963,7 @@ class PageState:
             if not self._project_root:
                 return
 
-            save_dir = self._resolve_workspace_save_directory(
-                "local-data/labeled-ocr/cache"
-            )
+            save_dir = str(PersistencePathsOperations.get_page_image_cache_root())
             success = self.persist_page_to_file(
                 page_index,
                 save_directory=save_dir,

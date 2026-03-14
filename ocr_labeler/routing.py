@@ -13,6 +13,8 @@ from urllib.parse import unquote
 
 from nicegui import ui
 
+from .operations.persistence.config_operations import ConfigOperations
+
 if TYPE_CHECKING:
     from .state.app_state import AppState
 
@@ -131,8 +133,7 @@ def resolve_project_path(
     2. Absolute path
     3. Under base_projects_root
     4. Relative to CWD
-    5. Under default discovery root (~/ocr/data/source-pgdp-data/output)
-    6. Fallback common locations
+    5. Under configured default discovery root
 
     This is a synchronous method suitable for run.io_bound().
 
@@ -167,21 +168,13 @@ def resolve_project_path(
     if potential.exists() and potential.is_dir():
         return potential
 
-    # 5. Try default discovery root (same as ProjectDiscoveryOperations)
+    # 5. Try default discovery root (same as config operations)
     try:
-        default_root = Path("~/ocr/data/source-pgdp-data/output").expanduser().resolve()
+        default_root = ConfigOperations.get_default_source_projects_root().resolve()
         potential = default_root / project_id
         if potential.exists() and potential.is_dir():
             return potential
     except Exception:
         logger.debug("Failed to check default discovery root", exc_info=True)
-
-    # 6. Fallback common locations
-    fallback_paths = [
-        Path.cwd().parent / "data" / "source-pgdp-data" / "output" / project_id,
-    ]
-    for path in fallback_paths:
-        if path.exists() and path.is_dir():
-            return path
 
     return None

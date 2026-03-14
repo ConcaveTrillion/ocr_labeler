@@ -10,6 +10,9 @@ from typing import Optional
 
 from nicegui import background_tasks, binding, run
 
+from ...operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 from ...state import PageState
 from ...state.project_state import ProjectState
 from ..shared.base_viewmodel import BaseViewModel
@@ -101,7 +104,7 @@ class PageStateViewModel(BaseViewModel):
         self._image_update_emit_count: int = 0
         self._image_update_emit_skip_count: int = 0
         self._word_image_cache_dir: Path = (
-            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+            PersistencePathsOperations.get_page_image_cache_root()
         )
         self._word_image_cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -940,7 +943,7 @@ class PageStateViewModel(BaseViewModel):
             return ""
 
         cache_dir = self._word_image_cache_dir or (
-            Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+            PersistencePathsOperations.get_page_image_cache_root()
         )
         cache_dir.mkdir(parents=True, exist_ok=True)
 

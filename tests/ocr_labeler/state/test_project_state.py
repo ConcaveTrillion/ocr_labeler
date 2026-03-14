@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from ocr_labeler.models.page_model import PageModel
+from ocr_labeler.operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 from ocr_labeler.state import project_state as project_state_module
 from ocr_labeler.state.project_state import ProjectState
 
@@ -217,7 +220,7 @@ def test_ensure_page_replaces_cached_page_with_disk_page(tmp_path):
     ):
         result = state.ensure_page_model(0)
 
-    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
+    workspace_save_dir = str(PersistencePathsOperations.get_saved_projects_root())
     assert result is not None
     assert result.page is disk_page
     assert state.project.pages[0] is disk_page
@@ -275,8 +278,8 @@ def test_ensure_page_checks_disk_before_cache(tmp_path):
     assert result.page is cached_page
     assert state.project.pages[0] is cached_page
     assert mock_can_load.call_count == 2
-    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
-    cache_save_dir = str((Path.cwd() / "local-data/labeled-ocr/cache").resolve())
+    workspace_save_dir = str(PersistencePathsOperations.get_saved_projects_root())
+    cache_save_dir = str(PersistencePathsOperations.get_page_image_cache_root())
     assert (
         mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     )
@@ -325,7 +328,7 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
     assert state.project.pages[0] is labeled_page
     assert labeled_page.page_source == "filesystem"
     assert mock_can_load.call_count == 1
-    workspace_save_dir = str((Path.cwd() / "local-data/labeled-ocr").resolve())
+    workspace_save_dir = str(PersistencePathsOperations.get_saved_projects_root())
     assert (
         mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     )

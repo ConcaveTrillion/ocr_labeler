@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 from nicegui import run
 
+from ..operations.persistence.config_operations import ConfigOperations
 from ..operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
 )
@@ -30,7 +31,7 @@ class AppState:
 
     # Application-level settings
     # Optional override for the root under which project subdirectories are discovered.
-    # If None, falls back to the original fixed path (~/ocr/data/source-pgdp-data/output).
+    # If None, uses the configured default source projects root.
     base_projects_root: Path | None = None
     monospace_font_name: str = "monospace"
     monospace_font_path: Optional[Path] = None
@@ -211,8 +212,7 @@ class AppState:
     def list_available_projects(self) -> dict[str, Path]:
         """Return mapping of project name -> path under the canonical data root.
 
-        The dropdown in the view should be populated from the fixed directory:
-            ~/ocr/data/source-pgdp-data/output
+        The dropdown in the view is populated from the configured discovery root.
 
         A "project" is any immediate subdirectory containing at least one image file
         (*.png|*.jpg|*.jpeg). If the root doesn't exist, returns an empty dict.
@@ -260,6 +260,16 @@ class AppState:
             self.selected_project_key = None
         finally:
             self.notify()
+
+    def set_source_projects_root(self, path: Path) -> None:
+        """Persist and apply a new source projects root, then rescan projects.
+
+        Writes the new path to the config file, updates base_projects_root, and
+        refreshes the project list. Designed for use with run.io_bound().
+        """
+        ConfigOperations.set_source_projects_root(path)
+        self.base_projects_root = path
+        self.refresh_projects()
 
     async def load_selected_project(self):
         """Load the currently selected project.

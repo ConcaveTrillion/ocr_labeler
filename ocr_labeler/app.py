@@ -11,6 +11,9 @@ from urllib.parse import urlparse
 from nicegui import app as nicegui_app
 from nicegui import background_tasks, core, run, ui
 
+from .operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 from .operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
 )
@@ -81,12 +84,14 @@ class NiceGuiLabeler:
 
         # Ensure logs directory exists if session logging is enabled
         if self.enable_session_logging:
-            self.logs_dir = Path.cwd() / "logs"
-            self.logs_dir.mkdir(exist_ok=True)
+            self.logs_dir = PersistencePathsOperations.get_logs_root()
+            self.logs_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.logs_dir = None
 
-        self.word_image_cache_dir = Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        self.word_image_cache_dir = (
+            PersistencePathsOperations.get_page_image_cache_root()
+        )
         self.word_image_cache_dir.mkdir(parents=True, exist_ok=True)
         self._word_cache_static_registered = False
 

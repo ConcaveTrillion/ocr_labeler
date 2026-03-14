@@ -35,6 +35,9 @@ from ocr_labeler.models import (
     UserPageSource,
     is_user_page_envelope,
 )
+from ocr_labeler.operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 
 if TYPE_CHECKING:
     pass
@@ -97,7 +100,24 @@ class PageOperations:
         """Return the shared page-image cache directory."""
         if self._page_image_cache_dir is not None:
             return self._page_image_cache_dir
-        return Path.cwd() / "local-data" / "labeled-ocr" / "cache"
+        return PersistencePathsOperations.get_page_image_cache_root()
+
+    @staticmethod
+    def _resolve_save_directory(
+        project_root: Path, save_directory: str | Path | None
+    ) -> Path:
+        """Resolve save directory with user-local default and compatibility fallbacks."""
+        if save_directory is None:
+            return PersistencePathsOperations.get_saved_projects_root()
+
+        directory_text = str(save_directory).strip()
+        if not directory_text:
+            return PersistencePathsOperations.get_saved_projects_root()
+
+        save_dir = Path(directory_text)
+        if save_dir.is_absolute():
+            return save_dir
+        return project_root / save_dir
 
     @staticmethod
     def _page_cache_file_prefix(project_id: str, page_number: int) -> str:
@@ -238,7 +258,7 @@ class PageOperations:
         self,
         page: PageModel | Page,
         project_root: Path,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
         source_lib: str = "doctr-pgdp-labeled",
         original_page: Optional[PageModel | Page] = None,
@@ -252,7 +272,8 @@ class PageOperations:
         Args:
             page: Page object to save (required).
             project_root: Root directory of the project for relative path calculation.
-            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            save_directory: Directory to save files. When omitted, uses the
+                default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project_root name.
             source_lib: Source library identifier (default: "doctr-pgdp-labeled").
             original_page: Original Page object before modifications (optional).
@@ -286,7 +307,7 @@ class PageOperations:
                 project_id = project_root.name
 
             # Create save directory
-            save_dir = project_root / save_directory
+            save_dir = self._resolve_save_directory(project_root, save_directory)
             save_dir.mkdir(parents=True, exist_ok=True)
 
             # Get page number (1-based for filenames)
@@ -348,7 +369,7 @@ class PageOperations:
         self,
         page_model: PageModel,
         project_root: Path,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Write cached_images filenames into the page's JSON file and bump schema to 2.1.
@@ -375,7 +396,7 @@ class PageOperations:
                 return False
             page_number = int(page_index) + 1
 
-            save_dir = project_root / save_directory
+            save_dir = self._resolve_save_directory(project_root, save_directory)
             json_path = save_dir / f"{project_id}_{page_number:03d}.json"
 
             cached_filenames = page_model.cached_image_filenames or {}
@@ -426,7 +447,7 @@ class PageOperations:
         self,
         page_number: int,
         project_root: Path,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> Optional[tuple[PageModel, Optional[dict[str, Any]]]]:
         """Load a previously saved page from disk with metadata and image.
@@ -438,7 +459,8 @@ class PageOperations:
         Args:
             page_number: Page number to load (1-based indexing to match save_page).
             project_root: Root directory of the project.
-            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project_root name.
 
         Returns:
@@ -465,7 +487,7 @@ class PageOperations:
             if project_id is None:
                 project_id = project_root.name
 
-            save_dir = project_root / save_directory
+            save_dir = self._resolve_save_directory(project_root, save_directory)
             if not save_dir.exists():
                 logger.info(f"Save directory does not exist: {save_dir}")
                 return None
@@ -740,7 +762,7 @@ class PageOperations:
         self,
         page_number: int,
         project_root: Path,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> PageLoadInfo:
         """Check if a page can be loaded and return validation information.
@@ -751,7 +773,8 @@ class PageOperations:
         Args:
             page_number: Page number to check (1-based indexing to match save_page).
             project_root: Root directory of the project.
-            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project_root name.
 
         Returns:
@@ -780,9 +803,7 @@ class PageOperations:
                 project_id = project_root.name
 
             # Create save directory path
-            save_dir = Path(save_directory)
-            if not save_dir.is_absolute():
-                save_dir = project_root / save_dir
+            save_dir = self._resolve_save_directory(project_root, save_directory)
 
             # Create file names (matching save_page format)
             file_prefix = f"{project_id}_{page_number:03d}"

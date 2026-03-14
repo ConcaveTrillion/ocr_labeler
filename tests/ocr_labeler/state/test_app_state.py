@@ -259,7 +259,14 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
 
 def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
-    base = tmp_path / "ocr" / "data" / "source-pgdp-data" / "output"
+    base = (
+        tmp_path
+        / ".local"
+        / "share"
+        / "pgdp-ocr-labeler"
+        / "source-pgdp-data"
+        / "output"
+    )
     base.mkdir(parents=True)
 
     projA = base / "projA"
@@ -285,6 +292,148 @@ def test_list_available_projects_missing_base_returns_empty(monkeypatch, tmp_pat
     monkeypatch.setenv("HOME", str(tmp_path))
     state = AppState()
     assert state.list_available_projects() == {}
+
+
+def test_get_source_projects_root_creates_default_config_file(tmp_path):
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    config_path = tmp_path / "config" / "config.yaml"
+    root = ConfigOperations.get_source_projects_root(config_path=config_path)
+
+    assert config_path.exists()
+    assert root == ConfigOperations.get_default_source_projects_root()
+    contents = config_path.read_text(encoding="utf-8")
+    assert "source_projects_root:" in contents
+
+
+def test_get_source_projects_root_uses_monkeypatched_config_path(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    config_path = tmp_path / "monkeypatched" / "config.yaml"
+    monkeypatch.setattr(ConfigOperations, "CONFIG_PATH", config_path)
+
+    root = ConfigOperations.get_source_projects_root()
+
+    assert config_path.exists()
+    assert root == ConfigOperations.get_default_source_projects_root()
+    contents = config_path.read_text(encoding="utf-8")
+    assert "source_projects_root:" in contents
+
+
+def test_get_default_source_projects_root_linux_uses_xdg_data_home(
+    monkeypatch, tmp_path
+):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    xdg_data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data_home))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    root = ConfigOperations.get_default_source_projects_root()
+
+    assert root == xdg_data_home / "pgdp-ocr-labeler" / "source-pgdp-data" / "output"
+
+
+def test_get_default_config_path_linux_uses_xdg_config_home(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    xdg_config_home = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    config_path = ConfigOperations.get_default_config_path()
+
+    assert config_path == xdg_config_home / "pgdp-ocr-labeler" / "config.yaml"
+
+
+def test_get_default_source_projects_root_macos(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Darwin",
+    )
+
+    root = ConfigOperations.get_default_source_projects_root()
+
+    assert root == (
+        tmp_path
+        / "Library"
+        / "Application Support"
+        / "pgdp-ocr-labeler"
+        / "source-pgdp-data"
+        / "output"
+    )
+
+
+def test_get_default_config_path_macos(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Darwin",
+    )
+
+    config_path = ConfigOperations.get_default_config_path()
+
+    assert config_path == (
+        tmp_path
+        / "Library"
+        / "Application Support"
+        / "pgdp-ocr-labeler"
+        / "config.yaml"
+    )
+
+
+def test_get_default_source_projects_root_windows(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    appdata = tmp_path / "AppData" / "Roaming"
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Windows",
+    )
+
+    root = ConfigOperations.get_default_source_projects_root()
+
+    assert root == appdata / "pgdp-ocr-labeler" / "source-pgdp-data" / "output"
+
+
+def test_get_default_config_path_windows(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence import persistence_paths_operations
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
+    appdata = tmp_path / "AppData" / "Roaming"
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.setattr(
+        persistence_paths_operations.platform,
+        "system",
+        lambda: "Windows",
+    )
+
+    config_path = ConfigOperations.get_default_config_path()
+
+    assert config_path == appdata / "pgdp-ocr-labeler" / "config.yaml"
 
 
 def test_notify_invokes_on_change_callback(tmp_path):

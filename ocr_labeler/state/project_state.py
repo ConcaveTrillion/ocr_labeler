@@ -17,6 +17,9 @@ from ..models.project_model import Project
 from ..operations.ocr.navigation_operations import NavigationOperations
 from ..operations.ocr.page_operations import PageOperations
 from ..operations.ocr.text_operations import TextOperations
+from ..operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
 
@@ -154,16 +157,26 @@ class ProjectState:
             duration_ms,
         )
 
-    def _resolve_workspace_save_directory(self, save_directory: str) -> str:
-        """Resolve local-data save directories against workspace CWD.
+    def _resolve_workspace_save_directory(
+        self, save_directory: str | Path | None
+    ) -> str:
+        """Resolve save directory using user-local defaults and explicit overrides."""
+        if save_directory is None:
+            return str(PersistencePathsOperations.get_saved_projects_root())
 
-        Labeled and cache artifacts must live under the app workspace, not the
-        source project root.
-        """
-        directory_path = Path(str(save_directory or "").strip())
+        directory_text = str(save_directory).strip()
+        if not directory_text:
+            return str(PersistencePathsOperations.get_saved_projects_root())
+
+        directory_path = Path(directory_text)
         if directory_path.is_absolute():
             return str(directory_path)
         return str((Path.cwd() / directory_path).resolve())
+
+    @staticmethod
+    def _resolve_workspace_cache_directory() -> str:
+        """Return default absolute cache directory for OCR page artifacts."""
+        return str(PersistencePathsOperations.get_page_image_cache_root())
 
     def get_page_state(self, page_index: int) -> PageState:
         """Get or create PageState for the specified page index.
@@ -460,7 +473,7 @@ class ProjectState:
                 pass
 
         def _user_saved_directories() -> list[str]:
-            return [self._resolve_workspace_save_directory("local-data/labeled-ocr")]
+            return [self._resolve_workspace_save_directory(None)]
 
         def _try_load_user_saved_page(
             page_index: int, img_path: Path
@@ -615,9 +628,7 @@ class ProjectState:
                 if loaded_page_model is None:
                     try:
                         cache_can_load_started = perf_counter()
-                        cache_save_directory = self._resolve_workspace_save_directory(
-                            "local-data/labeled-ocr/cache"
-                        )
+                        cache_save_directory = self._resolve_workspace_cache_directory()
                         cache_load_info = self.page_ops.can_load_page(
                             page_number=index + 1,
                             project_root=self.project_root,
@@ -740,7 +751,7 @@ class ProjectState:
                                 page=page_model if page_model is not None else page_obj,
                                 project_root=self.project_root,
                                 save_directory=self._resolve_workspace_save_directory(
-                                    "local-data/labeled-ocr/cache"
+                                    self._resolve_workspace_cache_directory()
                                 ),
                                 project_id=None,  # Will be derived from project_root.name
                                 source_lib="doctr-pgdp-cached",
@@ -982,7 +993,7 @@ class ProjectState:
 
     def save_current_page(
         self,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Save the current page using its PageState.
@@ -990,7 +1001,8 @@ class ProjectState:
         This is a convenience method that delegates to the PageState for the current page.
 
         Args:
-            save_directory: Directory to save files (default: "local-data/labeled-ocr")
+            save_directory: Directory to save files. When omitted, uses the
+                default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:
@@ -1034,7 +1046,7 @@ class ProjectState:
 
     def load_current_page(
         self,
-        save_directory: str = "local-data/labeled-ocr",
+        save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
     ) -> bool:
         """Load the current page from saved files.
@@ -1042,7 +1054,8 @@ class ProjectState:
         This is a convenience method that delegates to the PageState for the current page.
 
         Args:
-            save_directory: Directory where files were saved (default: "local-data/labeled-ocr")
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
 
         Returns:

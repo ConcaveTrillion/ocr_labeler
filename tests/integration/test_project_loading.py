@@ -48,6 +48,10 @@ def mock_ocr_processing(monkeypatch):
         mock_page.name = "001.png"  # Mock page name
         mock_page.index = 0
         mock_page.page_source = "ocr"
+        # Ensure UI code paths that iterate paragraph/line collections
+        # receive concrete iterables instead of implicit Mock placeholders.
+        mock_page.paragraphs = []
+        mock_page.lines = []
 
         # Create mock images with shape attribute like numpy arrays
         class ImgLike:

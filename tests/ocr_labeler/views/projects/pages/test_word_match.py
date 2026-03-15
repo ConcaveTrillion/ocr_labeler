@@ -522,9 +522,10 @@ def test_split_paragraph_after_line_requires_single_selected_line(monkeypatch):
     assert "exactly one line" in seen["message"]
 
 
-def test_split_paragraph_by_selected_lines_uses_effective_line_selection(monkeypatch):
+def test_split_paragraph_by_selected_lines_uses_selected_line_checkboxes(monkeypatch):
     seen = {}
     view = WordMatchView()
+    view.selected_line_indices = {1, 3}
     view.selected_word_indices = {(1, 0), (3, 2)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
@@ -540,6 +541,24 @@ def test_split_paragraph_by_selected_lines_uses_effective_line_selection(monkeyp
     assert seen["indices"] == [1, 3]
     assert seen["line_selection_during_callback"] == []
     assert seen["word_selection_during_callback"] == []
+
+
+def test_split_paragraph_by_selected_lines_requires_line_selection(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+    view.selected_word_indices = {(1, 0), (3, 2)}
+
+    def notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", notify)
+    view.split_paragraph_with_selected_lines_callback = lambda _indices: True
+
+    view._handle_split_paragraph_by_selected_lines()
+
+    assert seen["type"] == "warning"
+    assert "Select one or more lines" in seen["message"]
 
 
 def test_split_paragraph_by_selected_lines_restores_selection_on_failure(monkeypatch):
@@ -613,6 +632,53 @@ def test_split_line_after_selected_word_restores_selection_on_failure(monkeypatc
     assert view.selected_line_indices == {3}
     assert view.selected_word_indices == {(3, 1)}
     assert view.selected_paragraph_indices == {1}
+
+
+def test_group_selected_words_into_new_paragraph_clears_selection_before_callback(
+    monkeypatch,
+):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1, 2}
+    view.selected_word_indices = {(1, 1), (2, 0)}
+    view.selected_paragraph_indices = {0}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    def group_callback(word_keys: list[tuple[int, int]]) -> bool:
+        seen["word_keys"] = word_keys
+        seen["selection_during_callback"] = (
+            sorted(view.selected_line_indices),
+            sorted(view.selected_word_indices),
+            sorted(view.selected_paragraph_indices),
+        )
+        return True
+
+    view.group_selected_words_into_paragraph_callback = group_callback
+    view._handle_group_selected_words_into_new_paragraph()
+
+    assert seen["word_keys"] == [(1, 1), (2, 0)]
+    assert seen["selection_during_callback"] == ([], [], [])
+    assert view.selected_line_indices == set()
+    assert view.selected_word_indices == set()
+    assert view.selected_paragraph_indices == set()
+
+
+def test_group_selected_words_into_new_paragraph_restores_selection_on_failure(
+    monkeypatch,
+):
+    view = WordMatchView()
+    view.selected_line_indices = {4}
+    view.selected_word_indices = {(4, 0)}
+    view.selected_paragraph_indices = {2}
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+
+    view.group_selected_words_into_paragraph_callback = lambda _word_keys: False
+    view._handle_group_selected_words_into_new_paragraph()
+
+    assert view.selected_line_indices == {4}
+    assert view.selected_word_indices == {(4, 0)}
+    assert view.selected_paragraph_indices == {2}
 
 
 def test_delete_paragraphs_clears_selection_before_callback(monkeypatch):

@@ -511,7 +511,7 @@ class TextTabs:
                 word_keys: list[tuple[int, int]],
             ) -> bool:
                 logger.debug(
-                    "Splitting lines by selected words %s on page %d",
+                    "Forming one new line from selected words %s on page %d",
                     word_keys,
                     page_index,
                 )
@@ -519,7 +519,56 @@ class TextTabs:
                     page_index, word_keys
                 )
                 logger.debug(
-                    "Split line by selected words operation result: %s", result
+                    "Create line from selected words operation result: %s",
+                    result,
+                )
+                return result
+
+        split_lines_into_selected_unselected_callback = None
+        if page_state and hasattr(
+            page_state,
+            "split_lines_into_selected_and_unselected_words",
+        ):
+
+            def split_lines_into_selected_unselected_callback(
+                word_keys: list[tuple[int, int]],
+            ) -> bool:
+                logger.debug(
+                    "Splitting lines into selected/unselected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.split_lines_into_selected_and_unselected_words(
+                    page_index,
+                    word_keys,
+                )
+                logger.debug(
+                    "Split lines into selected/unselected words operation result: %s",
+                    result,
+                )
+                return result
+
+        group_selected_words_into_paragraph_callback = None
+        if page_state and hasattr(
+            page_state,
+            "group_selected_words_into_new_paragraph",
+        ):
+
+            def group_selected_words_into_paragraph_callback(
+                word_keys: list[tuple[int, int]],
+            ) -> bool:
+                logger.debug(
+                    "Grouping selected words %s into new paragraph on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.group_selected_words_into_new_paragraph(
+                    page_index,
+                    word_keys,
+                )
+                logger.debug(
+                    "Group selected words into paragraph operation result: %s",
+                    result,
                 )
                 return result
 
@@ -610,6 +659,8 @@ class TextTabs:
             refine_paragraphs_callback=refine_paragraphs_callback,
             expand_then_refine_paragraphs_callback=expand_then_refine_paragraphs_callback,
             split_line_with_selected_words_callback=split_line_with_selected_words_callback,
+            split_lines_into_selected_unselected_callback=split_lines_into_selected_unselected_callback,
+            group_selected_words_into_paragraph_callback=group_selected_words_into_paragraph_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             set_word_attributes_callback=set_word_attributes_callback,
             notify_callback=notify_callback,

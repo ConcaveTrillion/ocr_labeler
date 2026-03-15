@@ -76,11 +76,15 @@ class PageState:
     _cached_page_index: int = field(default=-1, init=False)
     _cached_ocr_text: str = field(default="", init=False)
     _cached_gt_text: str = field(default="", init=False)
+    _overlay_refresh_nonce_counter: int = field(default=0, init=False)
 
     def notify(self):
         """Notify listeners of state changes."""
-        for listener in self.on_change:
-            listener()
+        for listener in list(self.on_change or []):
+            try:
+                listener()
+            except Exception:
+                logger.exception("PageState.notify: listener callback failed")
 
     def _emit_word_style_changed(self, event: WordStyleChangedEvent) -> None:
         """Notify listeners of a targeted word-style mutation."""
@@ -466,6 +470,7 @@ class PageState:
         page_index: int,
         save_directory: str | Path | None = None,
         project_id: Optional[str] = None,
+        update_page_source: bool = True,
     ) -> bool:
         """Save a specific page using PageOperations.
 
@@ -474,6 +479,7 @@ class PageState:
             save_directory: Directory to save files. When omitted, uses the
                 default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project root directory name.
+            update_page_source: Whether to mark page source as `filesystem` after save.
 
         Returns:
             bool: True if save was successful, False otherwise.
@@ -537,7 +543,7 @@ class PageState:
         )
 
         if success:
-            if self._project_state:
+            if update_page_source and self._project_state:
                 self._project_state.set_page_source(page_index, "filesystem")
 
         return success
@@ -732,22 +738,6 @@ class PageState:
         if page is None:
             return ""
 
-        page_source = "ocr"
-        if self._project_state and hasattr(self._project_state, "get_page_model"):
-            page_model = self._project_state.get_page_model(self._current_page_index)
-            if page_model is not None:
-                page_source = page_model.page_source
-            else:
-                page_source = str(getattr(page, "page_source", "ocr"))
-
-        if page_source not in (
-            "LABELED",
-            "CACHED OCR",
-            "filesystem",
-            "cached_ocr",
-        ):
-            return ""
-
         if not self._project_state:
             return ""
 
@@ -771,6 +761,10 @@ class PageState:
             return
 
         if 0 <= page_index < len(self._project.pages):
+            # Force-remove on-disk page image cache artifacts for this page so
+            # reload always rebuilds fresh overlay images.
+            self._invalidate_page_image_cache(page_index)
+
             # Clear the cached page to force reload
             self._project.pages[page_index] = None
             if self.current_page_model and self.current_page_model.index == page_index:
@@ -780,11 +774,40 @@ class PageState:
             # Reload with force_ocr=True
             page_model = self.get_page_model(page_index, force_ocr=True)
             if page_model is not None:
+                self._refresh_page_overlay_images(page_model.page)
                 # Invalidate cache since page content changed
                 self._invalidate_text_cache()
         else:
             logger.warning(
                 "PageState.reload_page_with_ocr: page_index %s out of range", page_index
+            )
+
+    def _invalidate_page_image_cache(self, page_index: int) -> None:
+        """Remove all cached overlay image files for a single page."""
+        if self._project_root is None:
+            return
+
+        project_id = self._project_root.name
+        if not project_id:
+            return
+
+        page_number = page_index + 1
+        cache_root = PersistencePathsOperations.get_page_image_cache_root()
+        cache_pattern = f"{project_id}_{page_number:03d}_*"
+        deleted_files = 0
+
+        for cache_file in cache_root.glob(cache_pattern):
+            if not cache_file.is_file():
+                continue
+            with contextlib.suppress(Exception):
+                cache_file.unlink()
+                deleted_files += 1
+
+        if deleted_files:
+            logger.debug(
+                "PageState._invalidate_page_image_cache: removed %s files for page %s",
+                deleted_files,
+                page_number,
             )
 
     def reload_current_page_with_ocr(self, current_page_index: int) -> None:
@@ -1791,14 +1814,14 @@ class PageState:
         page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
-        """Split line(s) by selected/unselected words.
+        """Extract selected words into one new line.
 
         Args:
             page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
 
         Returns:
-            bool: True if split succeeded, False otherwise.
+            bool: True if extraction succeeded, False otherwise.
         """
         _ = page_index
         page = self.current_page
@@ -1814,12 +1837,85 @@ class PageState:
             if result:
                 self._finalize_structural_edit(
                     page,
-                    "line split-by-selected-words",
+                    "selected-word single-line extraction",
                 )
             return result
         except Exception as e:
             logger.exception(
-                "Error splitting lines by selected words %s: %s",
+                "Error extracting selected words into one line %s: %s",
+                word_keys,
+                e,
+            )
+            return False
+
+    def split_lines_into_selected_and_unselected_words(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Split each affected line into selected/unselected word lines."""
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for selected/unselected per-line split")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.split_lines_into_selected_and_unselected_words(
+                page,
+                word_keys,
+            )
+            if result:
+                self._finalize_structural_edit(
+                    page,
+                    "selected/unselected per-line split",
+                )
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error splitting lines into selected/unselected words %s: %s",
+                word_keys,
+                e,
+            )
+            return False
+
+    def group_selected_words_into_new_paragraph(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Move selected words into a newly created paragraph.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: Selected (line_index, word_index) tuples.
+
+        Returns:
+            bool: True if grouping succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for selected-word paragraph grouping")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.group_selected_words_into_new_paragraph(page, word_keys)
+            if result:
+                self._finalize_structural_edit(
+                    page,
+                    "selected-word paragraph grouping",
+                )
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error grouping selected words into new paragraph %s: %s",
                 word_keys,
                 e,
             )
@@ -1967,6 +2063,7 @@ class PageState:
             success = self.persist_page_to_file(
                 page_index,
                 save_directory=save_dir,
+                update_page_source=False,
             )
             if success:
                 logger.debug("Auto-saved page %d to cache after edit", page_index)
@@ -1993,6 +2090,14 @@ class PageState:
         if self.current_page_model is not None:
             self.current_page_model.cached_image_filenames = None
 
+        # Force downstream image URL cache-busting for this edit cycle.
+        with contextlib.suppress(Exception):
+            setattr(
+                page,
+                "_ocr_labeler_overlay_refresh_nonce",
+                self._next_overlay_refresh_nonce(),
+            )
+
         refresh_method = getattr(page, "refresh_page_images", None)
         if callable(refresh_method):
             with contextlib.suppress(Exception):
@@ -2001,6 +2106,11 @@ class PageState:
 
         # If page has no refresh method, cleared overlay attrs ensure downstream
         # viewmodel refresh path regenerates overlays lazily.
+
+    def _next_overlay_refresh_nonce(self) -> str:
+        """Return a strictly increasing nonce used to bust overlay-image URL caches."""
+        self._overlay_refresh_nonce_counter += 1
+        return str(self._overlay_refresh_nonce_counter)
 
     def _has_loading_placeholder(self) -> bool:
         """Check whether cached texts are currently in loading-placeholder state."""

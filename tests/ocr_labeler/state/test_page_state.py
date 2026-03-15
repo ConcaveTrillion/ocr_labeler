@@ -7,6 +7,9 @@ from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
 from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
+from ocr_labeler.operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
 from ocr_labeler.state.page_state import (
     PageState,
     WordGroundTruthChangedEvent,
@@ -1032,6 +1035,170 @@ def test_split_line_after_word_splits_line_into_two_lines():
     assert [word.text for word in page.lines[1].words] == ["beta", "gamma"]
 
 
+def test_notify_continues_after_listener_exception():
+    """A failing listener should not prevent later listeners from running."""
+    page_state = PageState()
+    seen: list[str] = []
+
+    def failing_listener() -> None:
+        seen.append("failing")
+        raise RuntimeError("listener failure")
+
+    def succeeding_listener() -> None:
+        seen.append("succeeding")
+
+    page_state.on_change = [failing_listener, succeeding_listener]
+
+    page_state.notify()
+
+    assert seen == ["failing", "succeeding"]
+
+
+def test_split_line_with_selected_words_creates_one_new_line_from_selection():
+    """Selected words should be extracted into one new line, not one-per-source-line."""
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0), _word("beta", 20), _word("gamma", 40)], 0)
+    line2 = _line([_word("delta", 0), _word("epsilon", 20), _word("zeta", 40)], 20)
+    para = _paragraph([line1, line2], 0)
+    page = Page(width=160, height=120, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {
+                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
+            },
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    assert (
+        page_state.split_line_with_selected_words(0, [(0, 1), (1, 0), (1, 2)]) is True
+    )
+    assert len(page.lines) == 3
+    line_signatures = [tuple(word.text for word in line.words) for line in page.lines]
+    assert ("alpha", "gamma") in line_signatures
+    assert ("epsilon",) in line_signatures
+    assert tuple(sorted(("beta", "delta", "zeta"))) in [
+        tuple(sorted(words)) for words in line_signatures
+    ]
+
+
+def test_group_selected_words_into_new_paragraph_moves_selected_words():
+    """Grouping selected words should create a new paragraph with selected-word lines."""
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0), _word("beta", 20), _word("gamma", 40)], 0)
+    line2 = _line([_word("delta", 0), _word("epsilon", 20), _word("zeta", 40)], 20)
+    para = _paragraph([line1, line2], 0)
+    page = Page(width=160, height=100, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {
+                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
+            },
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    assert (
+        page_state.group_selected_words_into_new_paragraph(0, [(0, 1), (1, 0)]) is True
+    )
+    assert len(page.paragraphs) == 2
+    assert [word.text for word in page.paragraphs[0].lines[0].words] == [
+        "alpha",
+        "gamma",
+    ]
+    assert [word.text for word in page.paragraphs[0].lines[1].words] == [
+        "epsilon",
+        "zeta",
+    ]
+    new_paragraph_lines = [
+        tuple(word.text for word in line.words) for line in page.paragraphs[1].lines
+    ]
+    assert sorted(new_paragraph_lines) == sorted(
+        [
+            ("beta",),
+            ("delta",),
+        ]
+    )
+
+
+def test_group_selected_words_into_new_paragraph_across_multiple_paragraphs():
+    """Grouping should move selected words from multiple paragraphs into one new paragraph."""
+    page_state = PageState()
+
+    para1_line = _line([_word("alpha", 0), _word("beta", 20), _word("gamma", 40)], 0)
+    para2_line = _line([_word("delta", 0), _word("epsilon", 20), _word("zeta", 40)], 20)
+    para1 = _paragraph([para1_line], 0)
+    para2 = _paragraph([para2_line], 20)
+    page = Page(width=160, height=120, page_index=0, items=[para1, para2])
+    page.name = "page_001.png"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {
+                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
+            },
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    selected_keys: list[tuple[int, int]] = []
+    for line_index, line in enumerate(page.lines):
+        for word_index, word in enumerate(line.words):
+            if word.text in {"beta", "delta"}:
+                selected_keys.append((line_index, word_index))
+
+    assert page_state.group_selected_words_into_new_paragraph(0, selected_keys) is True
+    assert len(page.paragraphs) == 3
+    paragraph_line_signatures = [
+        sorted(tuple(word.text for word in line.words) for line in paragraph.lines)
+        for paragraph in page.paragraphs
+    ]
+    assert [("alpha", "gamma")] in paragraph_line_signatures
+    assert [("epsilon", "zeta")] in paragraph_line_signatures
+    assert (
+        sorted(
+            [
+                ("beta",),
+                ("delta",),
+            ]
+        )
+        in paragraph_line_signatures
+    )
+
+
 def test_persist_page_to_file_prefers_current_in_memory_page(tmp_path):
     """Saving current page should use in-memory edited page, not reload stale saved page."""
     page_state = PageState()
@@ -1075,3 +1242,112 @@ def test_persist_page_to_file_prefers_current_in_memory_page(tmp_path):
     assert get_page_model_calls == []
     assert captured.get("page") is not None
     assert getattr(captured["page"], "page", None) is current_page
+
+
+def test_auto_save_to_cache_does_not_mark_page_as_filesystem(tmp_path):
+    """Auto-save cache writes should not switch source badge to LABELED."""
+    page_state = PageState()
+
+    image_path = tmp_path / "page_001.png"
+    image_path.write_bytes(b"x")
+
+    current_page = SimpleNamespace(
+        image_path=str(image_path),
+        index=0,
+        name="page_001.png",
+        page_source="ocr",
+        ocr_provenance=None,
+        to_dict=lambda: {"type": "page", "items": []},
+    )
+
+    page_state._project_root = tmp_path
+    page_state._project = SimpleNamespace(source_lib="doctr-pgdp-labeled")
+    page_state._current_page_index = 0
+    page_state.current_page = current_page
+    page_state.current_page_model = None
+
+    set_source_calls: list[tuple[int, str]] = []
+
+    class ProjectStateStub:
+        def upsert_page_model(self, page_index, page, source):
+            _ = (page_index, page, source)
+
+        def get_page_model(self, _page_index):
+            return None
+
+        def set_page_source(self, page_index, source):
+            set_source_calls.append((page_index, source))
+
+    page_state._project_state = ProjectStateStub()
+
+    page_state.page_ops.save_page = lambda **_kwargs: True  # type: ignore[method-assign]
+
+    page_state._auto_save_to_cache()
+
+    assert set_source_calls == []
+
+
+def test_reload_page_with_ocr_invalidates_page_image_cache_and_refreshes_overlays(
+    tmp_path, monkeypatch
+):
+    """Reload OCR should remove per-page image cache files and refresh overlays."""
+    page_state = PageState()
+
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        PersistencePathsOperations,
+        "get_page_image_cache_root",
+        staticmethod(lambda: cache_root),
+    )
+
+    project_root = tmp_path / "book_project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    page_state._project_root = project_root
+    page_state._project = SimpleNamespace(pages=[SimpleNamespace()])
+
+    matching_one = cache_root / f"{project_root.name}_001_paragraph_old.png"
+    matching_two = cache_root / f"{project_root.name}_001_line_old.png"
+    non_matching = cache_root / "different_project_001_word_old.png"
+    matching_one.write_bytes(b"old")
+    matching_two.write_bytes(b"old")
+    non_matching.write_bytes(b"keep")
+
+    class ReloadedPage:
+        def __init__(self):
+            self.refresh_calls = 0
+
+        def refresh_page_images(self):
+            self.refresh_calls += 1
+
+    reloaded_page = ReloadedPage()
+    reloaded_model = SimpleNamespace(
+        index=0,
+        page=reloaded_page,
+        page_source="ocr",
+        cached_image_filenames=["stale.png"],
+    )
+
+    class ProjectStateStub:
+        def __init__(self):
+            self.clear_calls = []
+
+        def clear_page_model(self, page_index):
+            self.clear_calls.append(page_index)
+
+        def ensure_page_model(self, page_index, force_ocr=False):
+            assert page_index == 0
+            assert force_ocr is True
+            return reloaded_model
+
+    page_state._project_state = ProjectStateStub()
+
+    page_state.reload_page_with_ocr(0)
+
+    assert matching_one.exists() is False
+    assert matching_two.exists() is False
+    assert non_matching.exists() is True
+    assert reloaded_page.refresh_calls == 1
+    assert page_state.current_page_model is reloaded_model
+    assert page_state.current_page_model.cached_image_filenames is None
+    assert page_state._project_state.clear_calls == [0]

@@ -687,6 +687,19 @@ class TestLineOperations:
         assert result is True
         assert [word.text for word in page.lines[0].words] == ["alpha", "gamma"]
 
+    def test_delete_words_removes_line_when_it_becomes_empty(self, operations):
+        """Deleting the final word from a line should remove that now-empty line."""
+        line1 = _line([_word("alpha", "A", 0)], 0)
+        line2 = _line([_word("beta", "B", 20)], 20)
+        paragraph = _paragraph([line1, line2], 0)
+        page = Page(width=100, height=100, page_index=0, items=[paragraph])
+
+        result = operations.delete_words(page, [(0, 0)])
+
+        assert result is True
+        assert len(page.lines) == 1
+        assert page.lines[0].text == "beta"
+
     def test_merge_word_left_success(self, operations):
         """Merging word left should concatenate with immediate left neighbor."""
         line = _line(
@@ -1050,4 +1063,253 @@ class TestLineOperations:
         result = operations.split_line_after_word(page, 0, 1)
 
         assert result is False
+
+    def test_split_line_with_selected_words_moves_words_into_single_new_line(
+        self,
+        operations,
+    ):
+        """Selected words from multiple lines should move into one new line."""
+        line1 = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        line2 = _line(
+            [_word("delta", "D", 0), _word("epsilon", "E", 20), _word("zeta", "F", 40)],
+            20,
+        )
+        para = _paragraph([line1, line2], 0)
+        page = Page(width=180, height=120, page_index=0, items=[para])
+
+        result = operations.split_line_with_selected_words(
+            page, [(0, 1), (1, 0), (1, 2)]
+        )
+
+        assert result is True
+        assert len(page.lines) == 3
+        line_signatures = [
+            tuple(word.text for word in line.words) for line in page.lines
+        ]
+        assert ("alpha", "gamma") in line_signatures
+        assert ("epsilon",) in line_signatures
+        assert sorted(("beta", "delta", "zeta")) in [
+            sorted(signature) for signature in line_signatures
+        ]
+
+    def test_split_line_with_selected_words_across_paragraphs_creates_single_line_paragraph(
+        self,
+        operations,
+    ):
+        """Cross-paragraph selection should still create one consolidated new line."""
+        para1_line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        para2_line = _line(
+            [_word("delta", "D", 0), _word("epsilon", "E", 20), _word("zeta", "F", 40)],
+            20,
+        )
+        para1 = _paragraph([para1_line], 0)
+        para2 = _paragraph([para2_line], 20)
+        page = Page(width=180, height=120, page_index=0, items=[para1, para2])
+
+        result = operations.split_line_with_selected_words(page, [(0, 1), (1, 0)])
+
+        assert result is True
+        assert len(page.paragraphs) == 3
+        line_signatures = [
+            [tuple(word.text for word in line.words) for line in paragraph.lines]
+            for paragraph in page.paragraphs
+        ]
+        assert [("alpha", "gamma")] in line_signatures
+        assert [("epsilon", "zeta")] in line_signatures
+        flattened = [signature[0] for signature in line_signatures if signature]
+        assert tuple(sorted(("beta", "delta"))) in [
+            tuple(sorted(words)) for words in flattened
+        ]
+        assert len(page.lines) == 3
+
+    def test_split_line_with_selected_words_all_words_from_line_succeeds(
+        self,
+        operations,
+    ):
+        """Selecting all words from a line should remain a valid extraction."""
+        line = _line(
+            [
+                _word("in", "in", 0),
+                _word("the", "the", 20),
+                _word("XVIIIth", "XVIIIth", 40),
+                _word("Century", "Century", 70),
+            ],
+            0,
+        )
+        para = _paragraph([line], 0)
+        page = Page(width=180, height=120, page_index=0, items=[para])
+
+        result = operations.split_line_with_selected_words(
+            page,
+            [(0, 0), (0, 1), (0, 2), (0, 3)],
+        )
+
+        assert result is True
         assert len(page.lines) == 1
+        assert [word.text for word in page.lines[0].words] == [
+            "in",
+            "the",
+            "XVIIIth",
+            "Century",
+        ]
+
+    def test_group_selected_words_into_new_paragraph_success(self, operations):
+        """Selected words should move to a new paragraph with one line per source line."""
+        line1 = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        line2 = _line(
+            [_word("delta", "D", 0), _word("epsilon", "E", 20), _word("zeta", "F", 40)],
+            20,
+        )
+        para = _paragraph([line1, line2], 0)
+        page = Page(width=160, height=100, page_index=0, items=[para])
+
+        result = operations.group_selected_words_into_new_paragraph(
+            page,
+            [(0, 1), (1, 0), (1, 2)],
+        )
+
+        assert result is True
+        assert len(page.paragraphs) == 2
+        assert [word.text for word in page.paragraphs[0].lines[0].words] == [
+            "alpha",
+            "gamma",
+        ]
+        assert [word.text for word in page.paragraphs[0].lines[1].words] == ["epsilon"]
+        new_paragraph_lines = [
+            tuple(word.text for word in line.words) for line in page.paragraphs[1].lines
+        ]
+        assert sorted(new_paragraph_lines) == sorted(
+            [
+                ("beta",),
+                ("delta", "zeta"),
+            ]
+        )
+
+    def test_group_selected_words_into_new_paragraph_allows_full_line_selection(
+        self,
+        operations,
+    ):
+        """Grouping should allow moving all words from a selected line."""
+        line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
+        para = _paragraph([line], 0)
+        page = Page(width=120, height=100, page_index=0, items=[para])
+
+        result = operations.group_selected_words_into_new_paragraph(
+            page, [(0, 0), (0, 1)]
+        )
+
+        assert result is True
+        assert len(page.paragraphs) == 1
+        assert [word.text for word in page.paragraphs[0].lines[0].words] == [
+            "alpha",
+            "beta",
+        ]
+
+    def test_group_selected_words_into_new_paragraph_allows_multi_paragraph_selection(
+        self,
+        operations,
+    ):
+        """Grouping should allow selected words from multiple source paragraphs."""
+        para1_line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        para2_line = _line(
+            [_word("delta", "D", 0), _word("epsilon", "E", 20), _word("zeta", "F", 40)],
+            20,
+        )
+        para1 = _paragraph([para1_line], 0)
+        para2 = _paragraph([para2_line], 20)
+        page = Page(width=160, height=120, page_index=0, items=[para1, para2])
+
+        selected_keys: list[tuple[int, int]] = []
+        for line_index, line in enumerate(page.lines):
+            for word_index, word in enumerate(line.words):
+                if word.text in {"beta", "delta"}:
+                    selected_keys.append((line_index, word_index))
+
+        result = operations.group_selected_words_into_new_paragraph(
+            page,
+            selected_keys,
+        )
+
+        assert result is True
+        assert len(page.paragraphs) == 3
+        paragraph_line_signatures = [
+            sorted(tuple(word.text for word in line.words) for line in paragraph.lines)
+            for paragraph in page.paragraphs
+        ]
+        assert [("alpha", "gamma")] in paragraph_line_signatures
+        assert [("epsilon", "zeta")] in paragraph_line_signatures
+        assert (
+            sorted(
+                [
+                    ("beta",),
+                    ("delta",),
+                ]
+            )
+            in paragraph_line_signatures
+        )
+
+    def test_group_selected_words_into_new_paragraph_allows_cross_container_selection(
+        self,
+        operations,
+    ):
+        """Grouping should allow source paragraphs under different parent containers."""
+        para1_line = _line(
+            [_word("alpha", "A", 0), _word("beta", "B", 20), _word("gamma", "C", 40)],
+            0,
+        )
+        para2_line = _line(
+            [_word("delta", "D", 0), _word("epsilon", "E", 20), _word("zeta", "F", 40)],
+            20,
+        )
+        para1 = _paragraph([para1_line], 0)
+        para2 = _paragraph([para2_line], 20)
+        container1 = Block(
+            items=[para1],
+            bounding_box=_bbox(0, 0, 80, 40),
+            child_type=BlockChildType.BLOCKS,
+            block_category=BlockCategory.BLOCK,
+        )
+        container2 = Block(
+            items=[para2],
+            bounding_box=_bbox(100, 0, 180, 40),
+            child_type=BlockChildType.BLOCKS,
+            block_category=BlockCategory.BLOCK,
+        )
+        page = Page(width=220, height=120, page_index=0, items=[container1, container2])
+
+        selected_keys: list[tuple[int, int]] = []
+        for line_index, line in enumerate(page.lines):
+            for word_index, word in enumerate(line.words):
+                if word.text in {"beta", "delta"}:
+                    selected_keys.append((line_index, word_index))
+
+        result = operations.group_selected_words_into_new_paragraph(page, selected_keys)
+
+        assert result is True
+        paragraph_line_signatures = [
+            sorted(tuple(word.text for word in line.words) for line in paragraph.lines)
+            for paragraph in page.paragraphs
+        ]
+        assert [("alpha", "gamma")] in paragraph_line_signatures
+        assert [("epsilon", "zeta")] in paragraph_line_signatures
+        assert (
+            sorted(
+                [
+                    ("beta",),
+                    ("delta",),
+                ]
+            )
+            in paragraph_line_signatures
+        )

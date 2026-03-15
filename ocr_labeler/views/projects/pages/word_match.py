@@ -81,6 +81,8 @@ class WordMatchView:
         refine_paragraphs_callback: ParagraphIndicesAction | None = None,
         expand_then_refine_paragraphs_callback: ParagraphIndicesAction | None = None,
         split_line_with_selected_words_callback: WordKeysAction | None = None,
+        split_lines_into_selected_unselected_callback: WordKeysAction | None = None,
+        group_selected_words_into_paragraph_callback: WordKeysAction | None = None,
         edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
         set_word_attributes_callback: SetWordAttributesAction | None = None,
         notify_callback: NotifyCallback | None = None,
@@ -128,6 +130,12 @@ class WordMatchView:
         )
         self.split_line_with_selected_words_callback = (
             split_line_with_selected_words_callback
+        )
+        self.split_lines_into_selected_unselected_callback = (
+            split_lines_into_selected_unselected_callback
+        )
+        self.group_selected_words_into_paragraph_callback = (
+            group_selected_words_into_paragraph_callback
         )
         self._on_refine_bboxes: Callable | None = None
         self._on_expand_refine_bboxes: Callable | None = None
@@ -178,10 +186,12 @@ class WordMatchView:
         self.split_paragraph_by_selection_button = None
         self.split_line_after_word_button = None
         self.split_line_by_selection_button = None
+        self.extract_line_from_selection_button = None
         self.merge_words_button = None
         self.delete_words_button = None
         self.refine_words_button = None
         self.expand_then_refine_words_button = None
+        self.group_selected_words_into_paragraph_button = None
         self.notify_callback = notify_callback
         self._original_image_source_provider = original_image_source_provider
         self._last_word_view_source: str = ""
@@ -267,9 +277,9 @@ class WordMatchView:
     def build_actions_toolbar(self):
         """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
         # Operations grid: columns = scope label | Merge | Refine | Expand+Refine |
-        # Split After | Split Select | GT→OCR | OCR→GT | Delete
+        # Split After | Split Select | Word Select | To Paragraph | GT→OCR | OCR→GT | Delete
         with (
-            ui.grid(columns="auto auto auto auto auto auto auto auto auto")
+            ui.grid(columns="auto auto auto auto auto auto auto auto auto auto auto")
             .classes("items-center justify-items-center w-auto pl-2")
             .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
         ):
@@ -294,6 +304,8 @@ class WordMatchView:
                 ui.element("div")
             ui.element("div")  # no Split After for page
             ui.element("div")  # no Split Select for page
+            ui.element("div")  # no Word Select for page
+            ui.element("div")  # no To Paragraph for page
             self.copy_gt_to_ocr_page_button = ui.button(
                 icon="content_copy",
                 on_click=self._handle_copy_page_gt_to_ocr,
@@ -333,11 +345,9 @@ class WordMatchView:
                 "Split the containing paragraph immediately after the selected line"
             )
             style_word_icon_button(self.split_paragraph_after_line_button)
-            self.split_paragraph_by_selection_button = ui.button(
-                icon="vertical_split",
-                on_click=self._handle_split_paragraph_by_selected_lines,
-            ).tooltip("Split one paragraph into selected and unselected lines")
-            style_word_icon_button(self.split_paragraph_by_selection_button)
+            ui.element("div")  # no Split Select for paragraph
+            ui.element("div")  # no Word->Paragraph on paragraph scope
+            ui.element("div")  # no To Paragraph on paragraph scope
             self.copy_gt_to_ocr_paragraphs_button = ui.button(
                 icon="content_copy",
                 on_click=self._handle_copy_selected_paragraphs_gt_to_ocr,
@@ -381,9 +391,19 @@ class WordMatchView:
             style_word_icon_button(self.split_line_after_word_button)
             self.split_line_by_selection_button = ui.button(
                 icon="vertical_split",
-                on_click=self._handle_split_line_by_selected_words,
+                on_click=self._handle_split_lines_into_selected_unselected_words,
             ).tooltip("Split line(s) into selected and unselected words")
             style_word_icon_button(self.split_line_by_selection_button)
+            self.extract_line_from_selection_button = ui.button(
+                icon="short_text",
+                on_click=self._handle_split_line_by_selected_words,
+            ).tooltip("Select words to form one new line")
+            style_word_icon_button(self.extract_line_from_selection_button)
+            self.split_paragraph_by_selection_button = ui.button(
+                icon="subject",
+                on_click=self._handle_split_paragraph_by_selected_lines,
+            ).tooltip("Select lines to form a new paragraph")
+            style_word_icon_button(self.split_paragraph_by_selection_button)
             self.copy_gt_to_ocr_lines_button = ui.button(
                 icon="content_copy",
                 on_click=self._handle_copy_selected_lines_gt_to_ocr,
@@ -422,6 +442,14 @@ class WordMatchView:
             style_word_icon_button(self.expand_then_refine_words_button)
             ui.element("div")  # no Split After for word
             ui.element("div")  # no Split Select for word
+            ui.element("div")  # no Word Select for word
+            self.group_selected_words_into_paragraph_button = ui.button(
+                icon="format_paragraph",
+                on_click=self._handle_group_selected_words_into_new_paragraph,
+            ).tooltip(
+                "Select words to form a new paragraph (one new line per source line)"
+            )
+            style_word_icon_button(self.group_selected_words_into_paragraph_button)
             self.copy_gt_to_ocr_words_button = ui.button(
                 icon="content_copy",
                 on_click=self._handle_copy_selected_words_gt_to_ocr,
@@ -3100,13 +3128,13 @@ class WordMatchView:
         if self.split_paragraph_after_line_button is not None:
             self.split_paragraph_after_line_button.disabled = (
                 self.split_paragraph_after_line_callback is None
-                or len(selected_lines) != 1
+                or len(self.selected_line_indices) != 1
             )
 
         if self.split_paragraph_by_selection_button is not None:
             self.split_paragraph_by_selection_button.disabled = (
                 self.split_paragraph_with_selected_lines_callback is None
-                or len(selected_lines) < 1
+                or len(self.selected_line_indices) < 1
             )
 
         if self.split_line_after_word_button is not None:
@@ -3129,7 +3157,19 @@ class WordMatchView:
 
         if self.split_line_by_selection_button is not None:
             self.split_line_by_selection_button.disabled = (
+                self.split_lines_into_selected_unselected_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+        if self.extract_line_from_selection_button is not None:
+            self.extract_line_from_selection_button.disabled = (
                 self.split_line_with_selected_words_callback is None
+                or len(self.selected_word_indices) < 1
+            )
+
+        if self.group_selected_words_into_paragraph_button is not None:
+            self.group_selected_words_into_paragraph_button.disabled = (
+                self.group_selected_words_into_paragraph_callback is None
                 or len(self.selected_word_indices) < 1
             )
 
@@ -3526,7 +3566,7 @@ class WordMatchView:
             self._safe_notify("Split paragraph function not available", type_="warning")
             return
 
-        selected_line_indices = self._get_effective_selected_lines()
+        selected_line_indices = sorted(self.selected_line_indices)
         if len(selected_line_indices) != 1:
             self._safe_notify(
                 "Select exactly one line to split paragraph", type_="warning"
@@ -3585,7 +3625,7 @@ class WordMatchView:
         self,
         _event: ClickEvent = None,
     ) -> None:
-        """Split one paragraph into selected and unselected lines."""
+        """Move selected lines into a new paragraph."""
         logger.debug(
             "[split_by_selection] handler.start selected_lines=%s selected_words=%s selected_paragraphs=%s",
             sorted(self.selected_line_indices),
@@ -3596,10 +3636,11 @@ class WordMatchView:
             self._safe_notify("Split paragraph function not available", type_="warning")
             return
 
-        selected_line_indices = self._get_effective_selected_lines()
+        selected_line_indices = sorted(self.selected_line_indices)
         if not selected_line_indices:
             self._safe_notify(
-                "Select one or more lines to split paragraph", type_="warning"
+                "Select one or more lines to form a new paragraph",
+                type_="warning",
             )
             return
 
@@ -3633,7 +3674,10 @@ class WordMatchView:
                 logger.debug(
                     "[split_by_selection] handler.success awaiting_page_state_refresh"
                 )
-                self._safe_notify("Split paragraph by selected lines", type_="positive")
+                self._safe_notify(
+                    "Formed new paragraph from selected lines",
+                    type_="positive",
+                )
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
@@ -3641,7 +3685,10 @@ class WordMatchView:
                 self._update_action_button_state()
                 self._emit_selection_changed()
                 self._emit_paragraph_selection_changed()
-                self._safe_notify("Failed to split paragraph", type_="warning")
+                self._safe_notify(
+                    "Failed to form new paragraph from selected lines",
+                    type_="warning",
+                )
         except Exception as e:
             self.selected_line_indices = previous_line_selection
             self.selected_word_indices = previous_word_selection
@@ -3655,7 +3702,7 @@ class WordMatchView:
                 e,
             )
             self._safe_notify(
-                f"Error splitting paragraph: {e}",
+                f"Error forming new paragraph from selected lines: {e}",
                 type_="negative",
             )
 
@@ -4127,17 +4174,19 @@ class WordMatchView:
             )
 
     def _handle_split_line_by_selected_words(self, _event: ClickEvent = None) -> None:
-        """Split line(s) into selected-word and unselected-word groups."""
+        """Move selected words into one newly created line."""
         if self.split_line_with_selected_words_callback is None:
             self._safe_notify(
-                "Split line by words function not available", type_="warning"
+                "Create line from selected words function not available",
+                type_="warning",
             )
             return
 
         selected_words = sorted(self.selected_word_indices)
         if not selected_words:
             self._safe_notify(
-                "Select at least one word to split line by selection", type_="warning"
+                "Select at least one word to form a new line",
+                type_="warning",
             )
             return
 
@@ -4154,7 +4203,10 @@ class WordMatchView:
         try:
             success = self.split_line_with_selected_words_callback(selected_words)
             if success:
-                self._safe_notify("Split line(s) by selected words", type_="positive")
+                self._safe_notify(
+                    "Formed one new line from selected words",
+                    type_="positive",
+                )
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
@@ -4163,7 +4215,8 @@ class WordMatchView:
                 self._emit_selection_changed()
                 self._emit_paragraph_selection_changed()
                 self._safe_notify(
-                    "Failed to split line by selected words", type_="warning"
+                    "Failed to form a new line from selected words",
+                    type_="warning",
                 )
         except Exception as e:
             self.selected_line_indices = previous_line_selection
@@ -4173,10 +4226,143 @@ class WordMatchView:
             self._emit_selection_changed()
             self._emit_paragraph_selection_changed()
             logger.exception(
-                "Error splitting lines by selected words %s: %s", selected_words, e
+                "Error forming new line from selected words %s: %s",
+                selected_words,
+                e,
             )
             self._safe_notify(
-                f"Error splitting line by selected words: {e}", type_="negative"
+                f"Error forming a new line from selected words: {e}",
+                type_="negative",
+            )
+
+    def _handle_split_lines_into_selected_unselected_words(
+        self,
+        _event: ClickEvent = None,
+    ) -> None:
+        """Split each affected line into selected-word and unselected-word lines."""
+        if self.split_lines_into_selected_unselected_callback is None:
+            self._safe_notify(
+                "Split lines into selected/unselected words function not available",
+                type_="warning",
+            )
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify(
+                "Select at least one word to split line(s) by selection",
+                type_="warning",
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+
+        try:
+            success = self.split_lines_into_selected_unselected_callback(selected_words)
+            if success:
+                self._safe_notify(
+                    "Split line(s) into selected and unselected words",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to split line(s) into selected and unselected words",
+                    type_="warning",
+                )
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error splitting lines into selected/unselected words %s: %s",
+                selected_words,
+                e,
+            )
+            self._safe_notify(
+                f"Error splitting lines into selected/unselected words: {e}",
+                type_="negative",
+            )
+
+    def _handle_group_selected_words_into_new_paragraph(
+        self,
+        _event: ClickEvent = None,
+    ) -> None:
+        """Move selected words into a newly created paragraph."""
+        if self.group_selected_words_into_paragraph_callback is None:
+            self._safe_notify(
+                "Group selected words function not available",
+                type_="warning",
+            )
+            return
+
+        selected_words = sorted(self.selected_word_indices)
+        if not selected_words:
+            self._safe_notify(
+                "Select at least one word to group into a new paragraph",
+                type_="warning",
+            )
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        previous_paragraph_selection = set(self.selected_paragraph_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self.selected_paragraph_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+        self._emit_paragraph_selection_changed()
+
+        try:
+            success = self.group_selected_words_into_paragraph_callback(selected_words)
+            if success:
+                self._safe_notify(
+                    "Grouped selected words into new paragraph",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self.selected_paragraph_indices = previous_paragraph_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._emit_paragraph_selection_changed()
+                self._safe_notify(
+                    "Failed to group selected words into paragraph",
+                    type_="warning",
+                )
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self.selected_paragraph_indices = previous_paragraph_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            self._emit_paragraph_selection_changed()
+            logger.exception(
+                "Error grouping selected words %s into paragraph: %s",
+                selected_words,
+                e,
+            )
+            self._safe_notify(
+                f"Error grouping selected words into paragraph: {e}",
+                type_="negative",
             )
 
     def _handle_refine_single_word(

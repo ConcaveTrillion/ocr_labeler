@@ -281,6 +281,30 @@ def test_cache_image_to_disk_separates_image_types(tmp_path):
     assert "lines" in url_lines
 
 
+def test_cache_image_to_disk_changes_url_for_small_pixel_differences(tmp_path):
+    """Small overlay edits must produce a fresh cached file and URL."""
+    import numpy as np
+
+    project_state = ProjectState()
+    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
+    page_state = PageState()
+    page_state.set_project_context(project_state.project, tmp_path, project_state)
+
+    vm = PageStateViewModel(page_state)
+    vm._word_image_cache_dir = tmp_path / "cache"
+    vm._word_image_cache_dir.mkdir()
+
+    before = np.zeros((101, 101, 3), dtype=np.uint8)
+    after = before.copy()
+    after[1, 1] = [255, 255, 255]
+
+    before_url = vm._cache_image_to_disk(before, "words", 0, "proj", ".png")
+    after_url = vm._cache_image_to_disk(after, "words", 0, "proj", ".png")
+
+    assert before_url != after_url
+    assert len(list((tmp_path / "cache").glob("*.png"))) == 2
+
+
 def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
     tmp_path, monkeypatch
 ):

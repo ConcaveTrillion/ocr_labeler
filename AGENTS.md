@@ -20,6 +20,8 @@ Shared instructions for AI coding agents working in this repository (Copilot, Cl
 ## Workflow and tooling
 
 - Use Makefile targets as the canonical workflow.
+- ALWAYS use a Makefile target first when an equivalent target exists.
+- ONLY fall back to `uv run ...` when no Make target covers the needed command (for example, highly targeted `pytest -k` runs).
 - If running in VS Code, tasks are optional wrappers around Make targets.
 - Dependency manager: `uv` (Python `>=3.13`).
 - Local non-editable dependency: sibling repo `../pd-book-tools`.
@@ -36,10 +38,36 @@ Common commands:
 ## Validation rules
 
 - Always use `uv` to run tests.
+- ALWAYS prefer Make targets for validation when they exist (`make test`, `make ci`, `make test-k`, `make test-single`).
 - Prefer `make test` / `make ci` for standard validation, and use `uv run pytest ...` for targeted test execution.
+- NEVER run project Python commands with `.venv/bin/python`.
+- NEVER run project Python commands with `python`.
+- NEVER run project Python commands with `python3`.
+- ALWAYS run project Python commands through `uv run ...` (or Make targets that already use `uv`).
+- NEVER run tests with `.venv/bin/python`.
+- NEVER run tests with `python -m pytest`.
+- NEVER run tests with `python3 -m pytest`.
+- NEVER bypass `uv` for pytest, even for quick one-off checks.
+- NEVER suggest direct interpreter pytest commands in examples.
 - After code changes, run CI pipeline (`make ci` or VS Code `Make: CI Pipeline`).
 - Docs-only changes can skip CI.
 - Keep tests aligned with the existing structure in `tests/`.
+
+### Non-negotiable test command policy
+
+- NEVER use `.venv/bin/python -m pytest ...`.
+- NEVER use `python -m pytest ...`.
+- NEVER use `python3 -m pytest ...`.
+- ALWAYS use `uv run pytest ...` or Makefile targets that already call `uv`.
+- If a direct-python test command appears anywhere, treat it as policy violation and replace it.
+
+### Non-negotiable Python executable policy
+
+- NEVER use `.venv/bin/python ...` for project tasks.
+- NEVER use `python ...` for project tasks.
+- NEVER use `python3 ...` for project tasks.
+- ALWAYS use `uv run ...` for Python-based commands.
+- If a direct Python executable command appears in guidance, replace it with `uv run ...`.
 
 ## NiceGUI async guardrails
 

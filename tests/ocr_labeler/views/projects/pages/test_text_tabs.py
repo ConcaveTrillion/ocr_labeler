@@ -876,6 +876,39 @@ def test_text_tabs_split_line_after_word_callback_invokes_page_state_method():
     assert calls == [(8, 2, 3)]
 
 
+def test_text_tabs_group_selected_words_into_paragraph_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        merge_paragraphs=lambda *_: False,
+        split_paragraph_after_line=lambda *_: False,
+        split_paragraph_with_selected_lines=lambda *_: False,
+        split_line_after_word=lambda *_: False,
+        group_selected_words_into_new_paragraph=lambda page_index, word_keys: (
+            calls.append((page_index, word_keys)) or True
+        ),
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=8)
+    result = text_tabs.word_match_view.group_selected_words_into_paragraph_callback(
+        [(0, 1), (2, 3)]
+    )
+
+    assert result is True
+    assert calls == [(8, [(0, 1), (2, 3)])]
+
+
 def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
     project_state = SimpleNamespace(
         on_change=[],

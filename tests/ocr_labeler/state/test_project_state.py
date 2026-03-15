@@ -679,8 +679,8 @@ def test_current_page_source_tooltip_for_cached_ocr_page(tmp_path):
     mock_summary.assert_called_once_with(page)
 
 
-def test_current_page_source_tooltip_empty_for_raw_ocr_page(tmp_path):
-    """RAW OCR pages should not expose source provenance tooltip."""
+def test_current_page_source_tooltip_for_raw_ocr_page_with_saved_metadata(tmp_path):
+    """RAW OCR pages should expose saved provenance tooltip when available."""
     from ocr_labeler.models.project_model import Project
 
     state = ProjectState()
@@ -696,11 +696,15 @@ def test_current_page_source_tooltip_empty_for_raw_ocr_page(tmp_path):
     state.project = Project(pages=[page], image_paths=[img_path])
     state.current_page_index = 0
 
-    with patch.object(state.page_ops, "get_page_provenance_summary") as mock_summary:
+    with patch.object(
+        state.page_ops,
+        "get_page_provenance_summary",
+        return_value="Saved: 2026-02-15T12:00:00Z",
+    ) as mock_summary:
         tooltip = state.current_page_state.current_page_source_tooltip
 
-    assert tooltip == ""
-    mock_summary.assert_not_called()
+    assert "Saved: 2026-02-15T12:00:00Z" in tooltip
+    mock_summary.assert_called_once_with(page)
 
 
 def test_refine_all_bboxes_success(tmp_path):

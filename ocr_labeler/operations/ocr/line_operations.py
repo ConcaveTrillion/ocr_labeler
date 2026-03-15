@@ -2141,12 +2141,11 @@ class LineOperations:
         page: "Page",
         word_keys: list[tuple[int, int]],
     ) -> bool:
-        """Split line(s) into selected-word and unselected-word groups.
+        """Move selected words into exactly one newly created line.
 
-        For each line that has selected words, the line is split into two lines:
-        one containing the selected words (in original order) and one containing
-        the unselected words. If multiple lines are affected, each is split
-        independently.
+        Selected words are removed from their source lines and inserted into one
+        new line (in source order). If selection spans multiple paragraphs,
+        the new line is placed in a new paragraph at page root.
 
         Args:
             page: Page containing lines/words.
@@ -2186,19 +2185,21 @@ class LineOperations:
                     word_index
                 )
 
-            # Process lines in reverse order so inserts don't shift later indices
-            split_any = False
-            for line_index in sorted(line_to_selected_word_indices, reverse=True):
+            # Process lines in visual order to preserve selected-word ordering.
+            selected_words_for_new_line: list[object] = []
+            source_line_bboxes: list[object] = []
+            containing_paragraphs: list[object] = []
+            line_insertion_points: list[tuple[object, int]] = []
+            emptied_line_ids: set[int] = set()
+            for line_index in sorted(line_to_selected_word_indices):
                 selected_word_indices = line_to_selected_word_indices[line_index]
                 target_line = lines[line_index]
                 line_words = list(getattr(target_line, "words", []) or [])
+                source_line_original_bbox = getattr(target_line, "bounding_box", None)
 
-                if len(line_words) < 2:
-                    logger.warning(
-                        "Line %s has fewer than 2 words; cannot split by selection",
-                        line_index,
-                    )
-                    continue
+                if len(line_words) < 1:
+                    logger.warning("Line %s has no words", line_index)
+                    return False
 
                 # Validate word indices
                 for wi in selected_word_indices:
@@ -2222,12 +2223,13 @@ class LineOperations:
                     if wi not in selected_word_indices
                 ]
 
-                if not selected_words or not unselected_words:
-                    logger.warning(
-                        "Split-by-selected-words requires a strict subset of words on line %s",
-                        line_index,
-                    )
-                    continue
+                if not selected_words:
+                    logger.warning("No selected words found on line %s", line_index)
+                    return False
+
+                selected_words_for_new_line.extend(selected_words)
+                if self._has_usable_bbox(source_line_original_bbox):
+                    source_line_bboxes.append(source_line_original_bbox)
 
                 # Find parent paragraph
                 paragraphs = list(getattr(page, "paragraphs", []) or [])
@@ -2243,6 +2245,232 @@ class LineOperations:
                         "Unable to find paragraph containing line %s", line_index
                     )
                     return False
+                containing_paragraphs.append(target_paragraph)
+
+                paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+                if target_line not in paragraph_items:
+                    logger.warning(
+                        "Target line missing in paragraph items for line %s",
+                        line_index,
+                    )
+                    return False
+
+                line_item_index = paragraph_items.index(target_line)
+                line_insertion_points.append((target_paragraph, line_item_index))
+
+                # Remove selected words from the source line.
+                target_line.items = unselected_words
+                target_line.unmatched_ground_truth_words = []
+                if not unselected_words:
+                    emptied_line_ids.add(id(target_line))
+
+                recompute_target_line = getattr(
+                    target_line, "recompute_bounding_box", None
+                )
+                if unselected_words and callable(recompute_target_line):
+                    try:
+                        recompute_target_line()
+                    except Exception as recompute_error:
+                        if not self._is_geometry_normalization_error(recompute_error):
+                            raise
+                        logger.warning(
+                            "Skipped source line bbox recompute due to malformed geometry on line %s: %s",
+                            line_index,
+                            recompute_error,
+                        )
+
+                if (
+                    unselected_words
+                    and not self._has_usable_bbox(
+                        getattr(target_line, "bounding_box", None)
+                    )
+                    and self._has_usable_bbox(source_line_original_bbox)
+                ):
+                    target_line.bounding_box = source_line_original_bbox
+
+            if not selected_words_for_new_line:
+                logger.warning("No selected words found for single-line extraction")
+                return False
+
+            new_line = Block(
+                items=selected_words_for_new_line,
+                bounding_box=self._first_usable_bbox(source_line_bboxes),
+                child_type=BlockChildType.WORDS,
+                block_category=BlockCategory.LINE,
+            )
+            recompute_new_line = getattr(new_line, "recompute_bounding_box", None)
+            if callable(recompute_new_line):
+                try:
+                    recompute_new_line()
+                except Exception as recompute_error:
+                    if not self._is_geometry_normalization_error(recompute_error):
+                        raise
+                    logger.warning(
+                        "Skipped extracted line bbox recompute due to malformed geometry: %s",
+                        recompute_error,
+                    )
+
+            if (
+                not self._has_usable_bbox(getattr(new_line, "bounding_box", None))
+                and source_line_bboxes
+            ):
+                new_line.bounding_box = self._first_usable_bbox(source_line_bboxes)
+
+            unique_paragraphs = []
+            for paragraph in containing_paragraphs:
+                if paragraph not in unique_paragraphs:
+                    unique_paragraphs.append(paragraph)
+
+            if len(unique_paragraphs) == 1 and line_insertion_points:
+                target_paragraph = unique_paragraphs[0]
+                original_paragraph_items = list(
+                    getattr(target_paragraph, "items", []) or []
+                )
+                paragraph_items = [
+                    item
+                    for item in original_paragraph_items
+                    if id(item) not in emptied_line_ids
+                ]
+                insert_after = max(
+                    item_index
+                    for paragraph, item_index in line_insertion_points
+                    if paragraph is target_paragraph
+                )
+                insert_at = sum(
+                    1
+                    for idx, item in enumerate(original_paragraph_items)
+                    if idx <= insert_after and id(item) not in emptied_line_ids
+                )
+                target_paragraph.items = (
+                    paragraph_items[:insert_at]
+                    + [new_line]
+                    + paragraph_items[insert_at:]
+                )
+            else:
+                new_paragraph = Block(
+                    items=[new_line],
+                    bounding_box=self._first_usable_bbox(
+                        source_line_bboxes
+                        + [
+                            getattr(paragraph, "bounding_box", None)
+                            for paragraph in unique_paragraphs
+                        ]
+                    ),
+                    child_type=BlockChildType.BLOCKS,
+                    block_category=BlockCategory.PARAGRAPH,
+                )
+                page.items = list(getattr(page, "items", []) or []) + [new_paragraph]
+
+            self._finalize_page_structure(page)
+            logger.info(
+                "Moved selected words into one new line from %d source line(s)",
+                len(line_to_selected_word_indices),
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error splitting lines by selected words %s: %s",
+                unique_keys,
+                e,
+            )
+            return False
+
+    def split_lines_into_selected_and_unselected_words(
+        self,
+        page: "Page",
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Split each affected line into selected-word and unselected-word lines.
+
+        This is the per-line split behavior: for every line with selected words,
+        keep selected words in the original line and insert one sibling line with
+        the unselected words.
+        """
+        if not page:
+            logger.warning("No page provided for split-lines-into-selected-unselected")
+            return False
+
+        unique_keys = sorted(set(word_keys or []))
+        if not unique_keys:
+            logger.warning(
+                "Split-lines-into-selected-unselected requires at least one selected word"
+            )
+            return False
+
+        try:
+            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+
+            lines = list(getattr(page, "lines", []) or [])
+
+            line_to_selected_word_indices: dict[int, set[int]] = {}
+            for line_index, word_index in unique_keys:
+                if line_index < 0 or line_index >= len(lines):
+                    logger.warning(
+                        "Word key (%s, %s) line index out of range (0-%s)",
+                        line_index,
+                        word_index,
+                        len(lines) - 1,
+                    )
+                    return False
+                line_to_selected_word_indices.setdefault(line_index, set()).add(
+                    word_index
+                )
+
+            split_any = False
+            for line_index in sorted(line_to_selected_word_indices, reverse=True):
+                selected_word_indices = line_to_selected_word_indices[line_index]
+                target_line = lines[line_index]
+                line_words = list(getattr(target_line, "words", []) or [])
+
+                if len(line_words) < 2:
+                    logger.warning(
+                        "Line %s has fewer than 2 words; cannot split by selection",
+                        line_index,
+                    )
+                    continue
+
+                for wi in selected_word_indices:
+                    if wi < 0 or wi >= len(line_words):
+                        logger.warning(
+                            "Word index %s out of range for line %s (0-%s)",
+                            wi,
+                            line_index,
+                            len(line_words) - 1,
+                        )
+                        return False
+
+                selected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi in selected_word_indices
+                ]
+                unselected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi not in selected_word_indices
+                ]
+
+                if not selected_words or not unselected_words:
+                    logger.warning(
+                        "Split-by-selection requires selected and unselected words on line %s",
+                        line_index,
+                    )
+                    continue
+
+                paragraphs = list(getattr(page, "paragraphs", []) or [])
+                target_paragraph = None
+                for paragraph in paragraphs:
+                    paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                    if target_line in paragraph_lines:
+                        target_paragraph = paragraph
+                        break
+
+                if target_paragraph is None:
+                    logger.warning(
+                        "Unable to find paragraph containing line %s",
+                        line_index,
+                    )
+                    return False
 
                 paragraph_items = list(getattr(target_paragraph, "items", []) or [])
                 if target_line not in paragraph_items:
@@ -2254,7 +2482,6 @@ class LineOperations:
 
                 line_item_index = paragraph_items.index(target_line)
 
-                # Keep selected words in original line, put unselected in new line
                 target_line.items = selected_words
                 target_line.unmatched_ground_truth_words = []
                 target_line.recompute_bounding_box()
@@ -2279,19 +2506,247 @@ class LineOperations:
                 split_any = True
 
             if not split_any:
-                logger.warning("No lines were split by selected words")
+                logger.warning("No lines were split into selected/unselected groups")
                 return False
 
             self._finalize_page_structure(page)
             logger.info(
-                "Split %d line(s) by selected words",
+                "Split %d line(s) into selected/unselected words",
                 len(line_to_selected_word_indices),
             )
             return True
-
         except Exception as e:
             logger.exception(
-                "Error splitting lines by selected words %s: %s",
+                "Error splitting lines into selected/unselected words %s: %s",
+                unique_keys,
+                e,
+            )
+            return False
+
+    def group_selected_words_into_new_paragraph(
+        self,
+        page: "Page",
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        """Move selected words into a newly created paragraph.
+
+        For each affected source line, selected words are moved to one new line in
+        the new paragraph while unselected words remain in the original line.
+
+        Selected words may come from multiple source paragraphs and parent
+        containers.
+
+        Args:
+            page: Page containing lines/words.
+            word_keys: List of (line_index, word_index) tuples for selected words.
+
+        Returns:
+            bool: True when grouping succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for group-selected-words")
+            return False
+
+        unique_keys = sorted(set(word_keys or []))
+        if not unique_keys:
+            logger.warning("Group-selected-words requires at least one selected word")
+            return False
+
+        try:
+            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+
+            lines = list(getattr(page, "lines", []) or [])
+            paragraphs = list(getattr(page, "paragraphs", []) or [])
+
+            line_to_selected_word_indices: dict[int, set[int]] = {}
+            for line_index, word_index in unique_keys:
+                if line_index < 0 or line_index >= len(lines):
+                    logger.warning(
+                        "Word key (%s, %s) line index out of range (0-%s)",
+                        line_index,
+                        word_index,
+                        len(lines) - 1,
+                    )
+                    return False
+                line_to_selected_word_indices.setdefault(line_index, set()).add(
+                    word_index
+                )
+
+            target_lines = [
+                lines[line_index]
+                for line_index in sorted(line_to_selected_word_indices)
+            ]
+
+            paragraph_for_line: dict[object, object] = {}
+            for line in target_lines:
+                containing_paragraph = None
+                for paragraph in paragraphs:
+                    paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                    if line in paragraph_lines:
+                        containing_paragraph = paragraph
+                        break
+                if containing_paragraph is None:
+                    logger.warning(
+                        "Unable to find paragraph containing selected words %s",
+                        unique_keys,
+                    )
+                    return False
+                paragraph_for_line[line] = containing_paragraph
+
+            affected_paragraphs: list[object] = []
+            for paragraph in paragraphs:
+                if any(
+                    paragraph_for_line.get(line) is paragraph for line in target_lines
+                ):
+                    affected_paragraphs.append(paragraph)
+
+            if not affected_paragraphs:
+                logger.warning(
+                    "Unable to determine affected paragraphs for selected words %s",
+                    unique_keys,
+                )
+                return False
+
+            selected_lines_for_new_paragraph: list[object] = []
+            selected_line_bbox_fallbacks: list[object] = []
+            for line_index in sorted(line_to_selected_word_indices):
+                selected_word_indices = line_to_selected_word_indices[line_index]
+                source_line = lines[line_index]
+                line_words = list(getattr(source_line, "words", []) or [])
+                source_line_original_bbox = getattr(source_line, "bounding_box", None)
+
+                for wi in selected_word_indices:
+                    if wi < 0 or wi >= len(line_words):
+                        logger.warning(
+                            "Word index %s out of range for line %s (0-%s)",
+                            wi,
+                            line_index,
+                            len(line_words) - 1,
+                        )
+                        return False
+
+                selected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi in selected_word_indices
+                ]
+                unselected_words = [
+                    line_words[wi]
+                    for wi in range(len(line_words))
+                    if wi not in selected_word_indices
+                ]
+
+                if not selected_words:
+                    logger.warning(
+                        "Grouping requires at least one selected word for line %s",
+                        line_index,
+                    )
+                    return False
+
+                source_line.items = unselected_words
+                source_line.unmatched_ground_truth_words = []
+                recompute_source_line = getattr(
+                    source_line, "recompute_bounding_box", None
+                )
+                if callable(recompute_source_line):
+                    try:
+                        recompute_source_line()
+                    except Exception as recompute_error:
+                        if not self._is_geometry_normalization_error(recompute_error):
+                            raise
+                        logger.warning(
+                            "Skipped source line bbox recompute due to malformed geometry on line %s: %s",
+                            line_index,
+                            recompute_error,
+                        )
+
+                # Preserve the pre-edit line bbox when recompute cannot produce
+                # a valid geometry object from sparse or malformed word bboxes.
+                if (
+                    unselected_words
+                    and not self._has_usable_bbox(
+                        getattr(source_line, "bounding_box", None)
+                    )
+                    and self._has_usable_bbox(source_line_original_bbox)
+                ):
+                    source_line.bounding_box = source_line_original_bbox
+
+                selected_line = Block(
+                    items=selected_words,
+                    bounding_box=source_line_original_bbox,
+                    child_type=BlockChildType.WORDS,
+                    block_category=BlockCategory.LINE,
+                )
+                recompute_selected_line = getattr(
+                    selected_line,
+                    "recompute_bounding_box",
+                    None,
+                )
+                if callable(recompute_selected_line):
+                    try:
+                        recompute_selected_line()
+                    except Exception as recompute_error:
+                        if not self._is_geometry_normalization_error(recompute_error):
+                            raise
+                        logger.warning(
+                            "Skipped selected line bbox recompute due to malformed geometry on line %s: %s",
+                            line_index,
+                            recompute_error,
+                        )
+
+                if self._has_usable_bbox(getattr(selected_line, "bounding_box", None)):
+                    selected_line_bbox_fallbacks.append(selected_line.bounding_box)
+                elif self._has_usable_bbox(source_line_original_bbox):
+                    selected_line.bounding_box = source_line_original_bbox
+                    selected_line_bbox_fallbacks.append(source_line_original_bbox)
+                selected_lines_for_new_paragraph.append(selected_line)
+
+            if not selected_lines_for_new_paragraph:
+                logger.warning("No selected words available to group into paragraph")
+                return False
+
+            new_paragraph = Block(
+                items=selected_lines_for_new_paragraph,
+                bounding_box=self._first_usable_bbox(
+                    selected_line_bbox_fallbacks
+                    + [
+                        getattr(paragraph, "bounding_box", None)
+                        for paragraph in affected_paragraphs
+                    ]
+                ),
+                child_type=BlockChildType.BLOCKS,
+                block_category=BlockCategory.PARAGRAPH,
+            )
+
+            # Always attach grouped output at page root so selections can span
+            # arbitrary source paragraph containers.
+            page_items = list(getattr(page, "items", []) or [])
+            page.items = page_items + [new_paragraph]
+
+            self._finalize_page_structure(page)
+
+            # Keep a non-empty paragraph bbox for overlay rendering when page-level
+            # recompute cannot infer geometry from malformed child coordinates.
+            if not self._has_usable_bbox(getattr(new_paragraph, "bounding_box", None)):
+                fallback_bbox = self._first_usable_bbox(
+                    selected_line_bbox_fallbacks
+                    + [
+                        getattr(paragraph, "bounding_box", None)
+                        for paragraph in affected_paragraphs
+                    ]
+                )
+                if fallback_bbox is not None:
+                    new_paragraph.bounding_box = fallback_bbox
+
+            logger.info(
+                "Grouped selected words %s into new paragraph with %d line(s)",
+                unique_keys,
+                len(selected_lines_for_new_paragraph),
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error grouping selected words %s into paragraph: %s",
                 unique_keys,
                 e,
             )
@@ -2523,6 +2978,29 @@ class LineOperations:
         """Return True for known malformed-bbox normalization failures."""
         message = str(error)
         return "NoneType" in message and "is_normalized" in message
+
+    def _has_usable_bbox(self, bbox: object) -> bool:
+        """Return True when bbox exposes finite corners required for overlay drawing."""
+        if bbox is None:
+            return False
+
+        try:
+            corners = (
+                getattr(bbox, "minX", None),
+                getattr(bbox, "minY", None),
+                getattr(bbox, "maxX", None),
+                getattr(bbox, "maxY", None),
+            )
+            return all(corner is not None for corner in corners)
+        except Exception:
+            return False
+
+    def _first_usable_bbox(self, bbox_candidates: list[object]) -> object | None:
+        """Return first bbox candidate that can be rendered in overlays."""
+        for bbox in bbox_candidates:
+            if self._has_usable_bbox(bbox):
+                return bbox
+        return None
 
     def _merge_line_blocks_fallback(
         self,
@@ -2852,15 +3330,31 @@ class LineOperations:
 
     def _finalize_page_structure(self, page: object) -> None:
         """Run optional page cleanup/recompute hooks after structural edits."""
-        if hasattr(page, "remove_empty_items") and callable(
-            getattr(page, "remove_empty_items")
-        ):
-            page.remove_empty_items()
-        self._recompute_nested_bounding_boxes(page)
+        self._remove_empty_items_safely(page)
+
+        try:
+            self._recompute_nested_bounding_boxes(page)
+        except Exception as recompute_error:
+            if not self._is_geometry_normalization_error(recompute_error):
+                raise
+            logger.warning(
+                "Skipped nested bbox recompute due to malformed geometry: %s",
+                recompute_error,
+            )
+            self._recompute_paragraph_bboxes_with_block_api(page)
+
         if hasattr(page, "recompute_bounding_box") and callable(
             getattr(page, "recompute_bounding_box")
         ):
-            page.recompute_bounding_box()
+            try:
+                page.recompute_bounding_box()
+            except Exception as recompute_error:
+                if not self._is_geometry_normalization_error(recompute_error):
+                    raise
+                logger.warning(
+                    "Skipped page bbox recompute due to malformed geometry: %s",
+                    recompute_error,
+                )
 
     def _recompute_nested_bounding_boxes(self, container: object) -> None:
         """Recursively recompute bounding boxes bottom-up for nested blocks."""
@@ -2929,6 +3423,7 @@ class LineOperations:
         """Best-effort empty-item pruning that tolerates malformed geometry recompute errors."""
         remove_empty_items = getattr(container, "remove_empty_items", None)
         if not callable(remove_empty_items):
+            self._prune_empty_blocks_fallback(container)
             return
 
         try:
@@ -2940,6 +3435,57 @@ class LineOperations:
                 "Skipped remove_empty_items due to malformed geometry: %s",
                 error,
             )
+
+        # Always run deterministic fallback pruning. This guarantees empty lines
+        # created by word deletion/movement are removed even when upstream
+        # remove_empty_items does not catch them.
+        self._prune_empty_blocks_fallback(container)
+
+    def _prune_empty_blocks_fallback(self, container: object) -> None:
+        """Recursively remove empty line/paragraph blocks from nested items lists."""
+        child_items = list(getattr(container, "items", []) or [])
+        if not child_items:
+            return
+
+        kept_items: list[object] = []
+        changed = False
+        for child in child_items:
+            if hasattr(child, "items"):
+                self._prune_empty_blocks_fallback(child)
+
+            if self._is_empty_structural_block(child):
+                changed = True
+                continue
+
+            kept_items.append(child)
+
+        if not changed:
+            return
+
+        if hasattr(container, "_items"):
+            container._items = kept_items
+            return
+        if hasattr(container, "items"):
+            container.items = kept_items
+
+    def _is_empty_structural_block(self, block: object) -> bool:
+        """Return True when a block is structurally empty and should be removed."""
+        if hasattr(block, "words"):
+            words = list(getattr(block, "words", []) or [])
+            if len(words) == 0:
+                return True
+
+        if hasattr(block, "lines"):
+            lines = list(getattr(block, "lines", []) or [])
+            if len(lines) == 0:
+                return True
+
+        if hasattr(block, "items"):
+            items = list(getattr(block, "items", []) or [])
+            if len(items) == 0:
+                return True
+
+        return False
 
     def _replace_block_with_split_paragraphs(
         self,

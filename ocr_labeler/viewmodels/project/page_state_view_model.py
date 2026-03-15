@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from nicegui import background_tasks, binding, run
 
 from ...operations.persistence.persistence_paths_operations import (
@@ -439,6 +440,7 @@ class PageStateViewModel(BaseViewModel):
                 for prop_name, attr_name in image_mappings:
                     image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
                     url = self._url_from_cached_filename(cached_filenames[image_type])
+                    url = self._append_refresh_nonce(url, current_page)
                     encoded_results.append((prop_name, url))
                     if attr_name == "cv2_numpy_page_image":
                         original_image_source = url
@@ -481,6 +483,7 @@ class PageStateViewModel(BaseViewModel):
                     project_id,
                     ext,
                 )
+                source = self._append_refresh_nonce(source, current_page)
                 encoded_results.append((prop_name, source))
                 if attr_name == "cv2_numpy_page_image":
                     original_image_source = source
@@ -581,6 +584,7 @@ class PageStateViewModel(BaseViewModel):
                 for prop_name, attr_name in image_mappings:
                     image_type = _IMAGE_TYPE_LABELS.get(attr_name, attr_name)
                     url = self._url_from_cached_filename(cached_filenames[image_type])
+                    url = self._append_refresh_nonce(url, current_page)
                     encoded_results.append((prop_name, url))
                     if attr_name == "cv2_numpy_page_image":
                         original_image_source = url
@@ -615,6 +619,7 @@ class PageStateViewModel(BaseViewModel):
                 source = self._cache_image_to_disk(
                     np_img, image_type, page_index, project_id, ext
                 )
+                source = self._append_refresh_nonce(source, current_page)
                 encoded_results.append((prop_name, source))
                 if attr_name == "cv2_numpy_page_image":
                     original_image_source = source
@@ -888,29 +893,37 @@ class PageStateViewModel(BaseViewModel):
         """Build stable signature for callback payload deduplication."""
         return tuple(results)
 
+    def _append_refresh_nonce(self, source: str, current_page: object) -> str:
+        """Append structural-edit nonce to image URL to force browser refresh."""
+        if not source:
+            return source
+
+        # Only mutate shared static-cache URLs; synthetic test sources like
+        # "encoded:..." should remain unchanged for deterministic assertions.
+        if not source.startswith("/_word_image_cache/"):
+            return source
+
+        refresh_nonce = getattr(
+            current_page, "_ocr_labeler_overlay_refresh_nonce", None
+        )
+        if not refresh_nonce:
+            return source
+
+        separator = "&" if "?" in source else "?"
+        return f"{source}{separator}r={refresh_nonce}"
+
     def _compute_image_hash(self, np_img) -> str:
         """Compute a hash of the image for caching purposes."""
         if np_img is None:
             return "none"
         try:
-            # Use image shape and a sample of pixels for fast hashing
-            # This avoids hashing the entire image which would be slow
-            h, w = np_img.shape[:2]
-            # Sample 100 evenly distributed pixels
-            sample_indices = [
-                (i * h // 10, j * w // 10) for i in range(10) for j in range(10)
-            ]
-            sample_data = bytes(
-                [
-                    np_img[i, j, 0] if len(np_img.shape) == 3 else np_img[i, j]
-                    for i, j in sample_indices
-                    if i < h and j < w
-                ]
-            )
-            shape_data = (
-                f"{h}x{w}x{np_img.shape[2] if len(np_img.shape) == 3 else 1}".encode()
-            )
-            return hashlib.md5(shape_data + sample_data).hexdigest()
+            contiguous = np.ascontiguousarray(np_img)
+            shape_data = repr(contiguous.shape).encode("utf-8")
+            dtype_data = str(contiguous.dtype).encode("utf-8")
+            image_data = memoryview(contiguous).tobytes()
+            return hashlib.md5(
+                shape_data + b"|" + dtype_data + b"|" + image_data
+            ).hexdigest()
         except Exception:
             # If hashing fails, use a timestamp-based fallback
             import time

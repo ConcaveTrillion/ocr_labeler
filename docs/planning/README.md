@@ -28,6 +28,10 @@ Status: planning snapshots that may not fully match current implementation.
 - [Word/Line Derived Cache Planning](persistence-word-line-derived-cache.md)
 - [pd-book-tools Page Provenance Copilot Brief](pd-book-tools-page-provenance-copilot-brief.md)
 
+## UI Planning
+
+- [Unified Image Overlay Layers and Selection Mode Controls](image-overlay-layer-controls-plan.md)
+
 ## Immediate Next Step
 
 - [Next Step: Event-Scoped UI Updates](next-step.md)

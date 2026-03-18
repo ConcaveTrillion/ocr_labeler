@@ -1566,6 +1566,105 @@ class LineOperations:
             )
             return False
 
+    def split_word_vertically_and_assign_to_closest_line(
+        self,
+        page: "Page",
+        line_index: int,
+        word_index: int,
+        split_fraction: float,
+    ) -> bool:
+        """Split a word, then assign each resulting piece to the closest line by y-midpoint.
+
+        Args:
+            page: Page containing lines/words.
+            line_index: Zero-based source line index.
+            word_index: Zero-based word index to split.
+            split_fraction: Relative split position in range (0, 1).
+
+        Returns:
+            bool: True when split/reassignment succeeds, False otherwise.
+        """
+        lines_before_split = list(getattr(page, "lines", []) or [])
+        if line_index < 0 or line_index >= len(lines_before_split):
+            logger.warning(
+                "Line index %s out of range (0-%s)",
+                line_index,
+                len(lines_before_split) - 1,
+            )
+            return False
+        source_line = lines_before_split[line_index]
+
+        if not self.split_word(page, line_index, word_index, split_fraction):
+            return False
+
+        try:
+            lines = list(getattr(page, "lines", []) or [])
+            source_words = list(getattr(source_line, "words", []) or [])
+            if word_index < 0 or word_index + 1 >= len(source_words):
+                logger.warning(
+                    "Post-split word indices %s/%s unavailable on line %s",
+                    word_index,
+                    word_index + 1,
+                    line_index,
+                )
+                return False
+
+            split_words = [source_words[word_index], source_words[word_index + 1]]
+            line_midpoints = {
+                id(line): self._line_vertical_midpoint(line) for line in lines
+            }
+
+            touched_lines: dict[int, object] = {id(source_line): source_line}
+            for split_piece in split_words:
+                midpoint_y = self._word_vertical_midpoint(split_piece)
+                target_line = self._closest_line_by_midpoint(
+                    lines,
+                    line_midpoints,
+                    midpoint_y,
+                    fallback_line=source_line,
+                )
+                touched_lines[id(target_line)] = target_line
+
+                if target_line is source_line:
+                    continue
+
+                if not self._move_word_between_lines(
+                    source_line, target_line, split_piece
+                ):
+                    logger.warning(
+                        "Failed to move split word piece to closest line (line=%s word=%s)",
+                        line_index,
+                        word_index,
+                    )
+                    return False
+
+            for touched_line in touched_lines.values():
+                touched_words = list(getattr(touched_line, "words", []) or [])
+                for touched_word in touched_words:
+                    touched_word.ground_truth_text = ""
+                recompute_line = getattr(touched_line, "recompute_bounding_box", None)
+                if callable(recompute_line):
+                    recompute_line()
+
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Split word vertically with closest-line assignment line=%d index=%d fraction=%.3f",
+                line_index,
+                word_index,
+                split_fraction,
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error splitting word vertically line=%s index=%s split_fraction=%s: %s",
+                line_index,
+                word_index,
+                split_fraction,
+                e,
+            )
+            return False
+
     def split_line_after_word(
         self,
         page: "Page",
@@ -3327,6 +3426,131 @@ class LineOperations:
             type(line).__name__,
         )
         return False
+
+    def _move_word_between_lines(
+        self,
+        source_line: object,
+        target_line: object,
+        word: object,
+    ) -> bool:
+        """Move a word object from source line to target line."""
+        if source_line is target_line:
+            return True
+
+        if not self._remove_word_object_from_line(source_line, word):
+            return False
+
+        if self._add_word_to_line(target_line, word):
+            return True
+
+        self._add_word_to_line(source_line, word)
+        return False
+
+    def _remove_word_object_from_line(self, line: object, word: object) -> bool:
+        """Remove a specific word object from a line."""
+        remove_item = getattr(line, "remove_item", None)
+        if callable(remove_item):
+            remove_item(word)
+            return True
+
+        items = list(getattr(line, "items", []) or [])
+        updated_items = [item for item in items if item is not word]
+        if len(updated_items) == len(items):
+            return False
+
+        if hasattr(line, "_items"):
+            line._items = updated_items
+            sort_items = getattr(line, "_sort_items", None)
+            if callable(sort_items):
+                sort_items()
+            return True
+
+        if hasattr(line, "items"):
+            line.items = updated_items
+            return True
+
+        return False
+
+    def _add_word_to_line(self, line: object, word: object) -> bool:
+        """Add a word object to a line and preserve ordering when possible."""
+        add_item = getattr(line, "add_item", None)
+        if callable(add_item):
+            add_item(word)
+            return True
+
+        items = list(getattr(line, "items", []) or [])
+        items.append(word)
+
+        if hasattr(line, "_items"):
+            line._items = items
+            sort_items = getattr(line, "_sort_items", None)
+            if callable(sort_items):
+                sort_items()
+            return True
+
+        if hasattr(line, "items"):
+            line.items = items
+            return True
+
+        return False
+
+    def _bbox_vertical_midpoint(self, bbox: object | None) -> float | None:
+        """Return vertical midpoint for a bbox-like object, when available."""
+        if bbox is None:
+            return None
+
+        min_y = getattr(bbox, "minY", None)
+        max_y = getattr(bbox, "maxY", None)
+        if min_y is not None and max_y is not None:
+            return (float(min_y) + float(max_y)) / 2.0
+
+        top_left = getattr(bbox, "top_left", None)
+        bottom_right = getattr(bbox, "bottom_right", None)
+        if top_left is not None and bottom_right is not None:
+            top_y = getattr(top_left, "y", None)
+            bottom_y = getattr(bottom_right, "y", None)
+            if top_y is not None and bottom_y is not None:
+                return (float(top_y) + float(bottom_y)) / 2.0
+
+        min_y = getattr(bbox, "y", None)
+        height = getattr(bbox, "height", None)
+        if min_y is not None and height is not None:
+            return float(min_y) + (float(height) / 2.0)
+
+        return None
+
+    def _line_vertical_midpoint(self, line: object) -> float | None:
+        """Return vertical midpoint for a line bounding box."""
+        return self._bbox_vertical_midpoint(getattr(line, "bounding_box", None))
+
+    def _word_vertical_midpoint(self, word: object) -> float | None:
+        """Return vertical midpoint for a word bounding box."""
+        return self._bbox_vertical_midpoint(getattr(word, "bounding_box", None))
+
+    def _closest_line_by_midpoint(
+        self,
+        lines: list[object],
+        line_midpoints: dict[int, float | None],
+        midpoint_y: float | None,
+        fallback_line: object,
+    ) -> object:
+        """Choose the line whose vertical midpoint is closest to midpoint_y."""
+        if midpoint_y is None:
+            return fallback_line
+
+        closest_line = fallback_line
+        closest_distance = float("inf")
+        for line in lines:
+            line_midpoint = line_midpoints.get(id(line))
+            if line_midpoint is None:
+                continue
+
+            distance = abs(line_midpoint - midpoint_y)
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_line = line
+
+        return closest_line
 
     def _finalize_page_structure(self, page: object) -> None:
         """Run optional page cleanup/recompute hooks after structural edits."""

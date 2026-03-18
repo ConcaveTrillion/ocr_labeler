@@ -27,6 +27,7 @@ Shared instructions for AI coding agents working in this repository (Copilot, Cl
 - Local non-editable dependency: sibling repo `../pd-book-tools`.
 
 Common commands:
+
 - Install: `make install`
 - Test: `make test`
 - Lint: `make lint`
@@ -34,6 +35,10 @@ Common commands:
 - Build: `make build`
 - Run app: `make run`
 - CI pipeline: `make ci`
+
+## Runtime logs (Linux)
+
+- Linux session/runtime logs are stored under `/home/user/.local/share/pgdp-ocr-labeler/logs`.
 
 ## Validation rules
 

@@ -763,6 +763,52 @@ class TestLineOperations:
         assert operations.split_word(page, 0, 0, 0.0) is False
         assert operations.split_word(page, 0, 0, 1.0) is False
 
+    def test_split_word_vertical_assigns_split_pieces_to_closest_line(self, operations):
+        """Vertical split should move both split words to the closest line by midpoint."""
+        source_word = Word(
+            text="alphabet",
+            bounding_box=_bbox(0, 34, 12, 54),
+            ocr_confidence=1.0,
+            ground_truth_text="ALPHABET",
+        )
+        source_line = Block(
+            items=[source_word],
+            bounding_box=_bbox(0, 0, 20, 10),
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
+        lower_line = Block(
+            items=[_word("delta", "DELTA", 20)],
+            bounding_box=_bbox(0, 40, 80, 50),
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
+        page = Page(
+            width=100, height=100, page_index=0, items=[source_line, lower_line]
+        )
+
+        result = operations.split_word_vertically_and_assign_to_closest_line(
+            page,
+            0,
+            0,
+            0.5,
+        )
+
+        assert result is True
+        assert all(
+            word.text != "alphabet" for line in page.lines for word in line.words
+        )
+
+        target_line_words = None
+        for line in page.lines:
+            line_words = [word.text for word in line.words]
+            if line_words[:2] == ["alph", "abet"]:
+                target_line_words = line.words
+                break
+
+        assert target_line_words is not None
+        assert all(word.ground_truth_text == "" for word in target_line_words)
+
     def test_rebox_word_replaces_word_bounding_box(self, operations):
         """Reboxing should replace the target word bounding box coordinates."""
         line = _line([_word("alpha", "A", 0)], 0)

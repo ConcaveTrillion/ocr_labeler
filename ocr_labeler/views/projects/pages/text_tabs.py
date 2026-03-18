@@ -349,6 +349,35 @@ class TextTabs:
                 logger.debug("Split word operation result: %s", result)
                 return result
 
+        split_word_vertical_closest_line_callback = None
+        if page_state and hasattr(
+            page_state,
+            "split_word_vertically_and_assign_to_closest_line",
+        ):
+
+            def split_word_vertical_closest_line_callback(
+                line_index: int,
+                word_index: int,
+                split_fraction: float,
+            ) -> bool:
+                logger.debug(
+                    "Splitting word vertically at (%s, %s) with split_fraction=%s on page %d",
+                    line_index,
+                    word_index,
+                    split_fraction,
+                    page_index,
+                )
+                result = page_state.split_word_vertically_and_assign_to_closest_line(
+                    page_index,
+                    line_index,
+                    word_index,
+                    split_fraction,
+                )
+                logger.debug(
+                    "Split word vertical closest-line operation result: %s", result
+                )
+                return result
+
         rebox_word_callback = None
         if page_state and hasattr(page_state, "rebox_word"):
 
@@ -650,6 +679,7 @@ class TextTabs:
             merge_word_left_callback=merge_word_left_callback,
             merge_word_right_callback=merge_word_right_callback,
             split_word_callback=split_word_callback,
+            split_word_vertical_closest_line_callback=split_word_vertical_closest_line_callback,
             rebox_word_callback=rebox_word_callback,
             nudge_word_bbox_callback=nudge_word_bbox_callback,
             refine_words_callback=refine_words_callback,

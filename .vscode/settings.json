@@ -1,4 +1,7 @@
 {
+    "github.copilot.chat.additionalReadAccessPaths": [
+        "/home/user/.local/share/pgdp-ocr-labeler/logs"
+    ],
     "python.terminal.activateEnvironment": true,
     "python.defaultInterpreterPath": "./.venv/bin/python",
     "python.testing.pytestArgs": [
@@ -10,6 +13,10 @@
         "VIRTUAL_ENV": "${workspaceFolder}/.venv"
     },
     "chat.tools.terminal.autoApprove": {
-        "make": true
+        "make ci": true,
+        "make test": true,
+        "make clean-logs": true,
+        "make clean-cache": true,
+        "make run": true
     }
 }

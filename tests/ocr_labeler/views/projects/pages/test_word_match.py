@@ -1066,6 +1066,108 @@ def test_split_word_requires_selected_marker(monkeypatch):
     assert "choose split position" in seen["message"]
 
 
+def test_split_word_vertical_closest_line_clears_selection_before_callback(
+    monkeypatch,
+):
+    seen = {}
+
+    view = WordMatchView()
+    view.selected_line_indices = {1}
+    view.selected_word_indices = {(1, 2)}
+    view._word_split_fractions[(1, 2)] = 0.5
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(view, "_update_summary", lambda: None)
+    monkeypatch.setattr(view, "_update_lines_display", lambda: None)
+
+    def split_callback(line_index: int, word_index: int, split_fraction: float) -> bool:
+        seen["args"] = (line_index, word_index, split_fraction)
+        seen["line_selection_during_callback"] = sorted(view.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selected_word_indices)
+        return True
+
+    view.split_word_vertical_closest_line_callback = split_callback
+    view._handle_split_word_vertical_closest_line(1, 2)
+
+    assert seen["args"] == (1, 2, 0.5)
+    assert seen["line_selection_during_callback"] == []
+    assert seen["word_selection_during_callback"] == []
+
+
+def test_split_word_vertical_closest_line_requires_selected_marker(monkeypatch):
+    seen = {}
+    view = WordMatchView()
+
+    def notify(message: str, type_: str = "info"):
+        seen["message"] = message
+        seen["type"] = type_
+
+    monkeypatch.setattr(view, "_safe_notify", notify)
+    view.split_word_vertical_closest_line_callback = (
+        lambda _line_index, _word_index, _split_fraction: True
+    )
+
+    view._handle_split_word_vertical_closest_line(0, 0)
+
+    assert seen["type"] == "warning"
+    assert "choose split position" in seen["message"]
+
+
+def test_render_word_split_marker_shows_default_guide_without_selection():
+    view = WordMatchView()
+    split_key = (2, 3)
+    image = SimpleNamespace(content=None)
+    view._word_split_image_refs[split_key] = image
+    view._word_split_image_sizes[split_key] = (40.0, 18.0)
+
+    view._render_word_split_marker(split_key)
+    assert image.content == ""
+
+    view._word_split_hover_keys.add(split_key)
+    view._render_word_split_marker(split_key)
+
+    assert image.content is not None
+    assert "stroke-dasharray" in image.content
+    assert 'x1="20.00"' in image.content
+
+
+def test_render_word_split_marker_keeps_hover_guide_after_selection():
+    view = WordMatchView()
+    split_key = (5, 1)
+    image = SimpleNamespace(content=None)
+    view._word_split_image_refs[split_key] = image
+    view._word_split_image_sizes[split_key] = (80.0, 24.0)
+    view._word_split_marker_x[split_key] = 30.0
+    view._word_split_marker_y[split_key] = 10.0
+    view._word_split_hover_keys.add(split_key)
+    view._word_split_hover_positions[split_key] = (52.0, 14.0)
+
+    view._render_word_split_marker(split_key)
+
+    assert image.content is not None
+    assert 'x1="30.00"' in image.content
+    assert 'y1="10.00"' in image.content
+    assert 'x1="52.00"' in image.content
+    assert 'y1="14.00"' in image.content
+    assert "stroke-dasharray" in image.content
+
+
+def test_handle_word_image_click_falls_back_to_generic_x_coordinate(monkeypatch):
+    view = WordMatchView(split_word_callback=lambda *_args: True)
+    split_key = (1, 2)
+    view._word_split_image_sizes[split_key] = (100.0, 20.0)
+    view._word_split_button_refs[split_key] = SimpleNamespace(disabled=True)
+    view._line_word_match_by_ocr_index = lambda _line_index, _word_index: (
+        SimpleNamespace(ocr_text="alphabet")
+    )
+    monkeypatch.setattr(view, "_render_word_split_marker", lambda _key: None)
+
+    event = SimpleNamespace(x=25.0)
+    view._handle_word_image_click(1, 2, event)
+
+    assert view._word_split_fractions[split_key] == pytest.approx(0.25)
+    assert view._word_split_marker_x[split_key] == pytest.approx(25.0)
+
+
 def test_start_rebox_word_sets_pending_and_requests_image_mode(monkeypatch):
     seen = {}
     view = WordMatchView(rebox_word_callback=lambda *_args: True)

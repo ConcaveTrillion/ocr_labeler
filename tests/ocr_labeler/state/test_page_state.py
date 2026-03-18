@@ -596,6 +596,55 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     assert notified == ["changed"]
 
 
+def test_split_word_vertical_closest_line_reapplies_ground_truth(monkeypatch):
+    """Vertical split should re-run GT matching and refresh overlays."""
+    page_state = PageState()
+
+    class ProjectStub:
+        def __init__(self):
+            self.ground_truth_map = {"page_001.png": "ground truth content"}
+
+    class PageStub:
+        def __init__(self):
+            self.name = "page_001.png"
+            self.removed_gt = False
+            self.added_gt = None
+            self.overlay_refresh_called = False
+
+        def remove_ground_truth(self):
+            self.removed_gt = True
+
+        def add_ground_truth(self, text: str):
+            self.added_gt = text
+
+        def refresh_page_images(self):
+            self.overlay_refresh_called = True
+
+    from ocr_labeler.operations.ocr import line_operations as line_ops_module
+
+    monkeypatch.setattr(
+        line_ops_module.LineOperations,
+        "split_word_vertically_and_assign_to_closest_line",
+        lambda _self, _page, _line_index, _word_index, _split_fraction: True,
+    )
+
+    page = PageStub()
+    page_state.current_page = page
+    page_state._project = ProjectStub()
+    page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
+
+    notified = []
+    page_state.on_change = [lambda: notified.append("changed")]
+
+    result = page_state.split_word_vertically_and_assign_to_closest_line(0, 0, 0, 0.5)
+
+    assert result is True
+    assert page.removed_gt is True
+    assert page.added_gt == "ground truth content"
+    assert page.overlay_refresh_called is True
+    assert notified == ["changed"]
+
+
 def test_rebox_word_refreshes_overlay_and_notifies(monkeypatch):
     """Successful word rebox should refresh overlays and notify listeners."""
     page_state = PageState()

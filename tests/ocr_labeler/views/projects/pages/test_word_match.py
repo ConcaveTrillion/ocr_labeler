@@ -4,6 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from ocr_labeler.views.projects.pages.word_edit_dialog import (
+    handle_word_image_click,
+    render_word_split_marker,
+)
 from ocr_labeler.views.projects.pages.word_match import WordMatchView
 
 
@@ -1119,11 +1123,11 @@ def test_render_word_split_marker_shows_default_guide_without_selection():
     view._word_split_image_refs[split_key] = image
     view._word_split_image_sizes[split_key] = (40.0, 18.0)
 
-    view._render_word_split_marker(split_key)
+    render_word_split_marker(view, split_key)
     assert image.content == ""
 
     view._word_split_hover_keys.add(split_key)
-    view._render_word_split_marker(split_key)
+    render_word_split_marker(view, split_key)
 
     assert image.content is not None
     assert "stroke-dasharray" in image.content
@@ -1141,7 +1145,7 @@ def test_render_word_split_marker_keeps_hover_guide_after_selection():
     view._word_split_hover_keys.add(split_key)
     view._word_split_hover_positions[split_key] = (52.0, 14.0)
 
-    view._render_word_split_marker(split_key)
+    render_word_split_marker(view, split_key)
 
     assert image.content is not None
     assert 'x1="30.00"' in image.content
@@ -1159,13 +1163,239 @@ def test_handle_word_image_click_falls_back_to_generic_x_coordinate(monkeypatch)
     view._line_word_match_by_ocr_index = lambda _line_index, _word_index: (
         SimpleNamespace(ocr_text="alphabet")
     )
-    monkeypatch.setattr(view, "_render_word_split_marker", lambda _key: None)
-
     event = SimpleNamespace(x=25.0)
-    view._handle_word_image_click(1, 2, event)
+    handle_word_image_click(view, 1, 2, event)
 
     assert view._word_split_fractions[split_key] == pytest.approx(0.25)
     assert view._word_split_marker_x[split_key] == pytest.approx(25.0)
+
+
+def test_crop_word_to_marker_prefers_stored_y_fraction(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+        refine_after: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after,
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    split_key = (1, 2)
+    view._word_split_fractions[split_key] = 0.5
+    view._word_split_y_fractions[split_key] = 0.75
+    view._word_split_marker_y[split_key] = 5.0
+    view._word_split_image_sizes[split_key] = (100.0, 20.0)
+    view._line_word_match_by_ocr_index = lambda *_args: SimpleNamespace(
+        word_object=SimpleNamespace(
+            bounding_box=SimpleNamespace(width=80.0, height=40.0),
+        )
+    )
+    view._line_match_by_index = lambda _line_index: None
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda _line_index: None,
+    )
+    monkeypatch.setattr(view, "_update_summary", lambda: None)
+    monkeypatch.setattr(view, "_rerender_line_card", lambda _line_index: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_open_word_dialog_for",
+        lambda _line_index, _word_index: None,
+    )
+    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view, "_emit_selection_changed", lambda: None)
+
+    view._handle_crop_word_to_marker(1, 2, "above")
+
+    assert seen["args"] == (1, 2, 0.0, 0.0, 0.0, -10.0, False)
+
+
+def test_crop_word_to_marker_uses_marker_y_when_fraction_missing(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+        refine_after: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after,
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    split_key = (1, 2)
+    view._word_split_fractions[split_key] = 0.5
+    view._word_split_marker_y[split_key] = 5.0
+    view._word_split_image_sizes[split_key] = (100.0, 20.0)
+    view._line_word_match_by_ocr_index = lambda *_args: SimpleNamespace(
+        word_object=SimpleNamespace(
+            bounding_box=SimpleNamespace(width=80.0, height=40.0),
+        )
+    )
+    view._line_match_by_index = lambda _line_index: None
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_local_line_match_from_line_object",
+        lambda _line_index: None,
+    )
+    monkeypatch.setattr(view, "_update_summary", lambda: None)
+    monkeypatch.setattr(view, "_rerender_line_card", lambda _line_index: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_open_word_dialog_for",
+        lambda _line_index, _word_index: None,
+    )
+    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view, "_emit_selection_changed", lambda: None)
+
+    view._handle_crop_word_to_marker(1, 2, "below")
+
+    assert seen["args"] == (1, 2, 0.0, 0.0, -10.0, 0.0, False)
+
+
+def test_crop_above_works_with_only_y_marker(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+        refine_after: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after,
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    split_key = (2, 3)
+    view._word_split_y_fractions[split_key] = 0.25
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._line_word_match_by_ocr_index = lambda *_args: SimpleNamespace(
+        word_object=SimpleNamespace(
+            bounding_box=SimpleNamespace(width=80.0, height=40.0),
+        )
+    )
+    view._line_match_by_index = lambda _line_index: None
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view, "_refresh_local_line_match_from_line_object", lambda _line_index: None
+    )
+    monkeypatch.setattr(view, "_update_summary", lambda: None)
+    monkeypatch.setattr(view, "_rerender_line_card", lambda _line_index: None)
+    monkeypatch.setattr(
+        view, "_refresh_open_word_dialog_for", lambda _line_index, _word_index: None
+    )
+    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view, "_emit_selection_changed", lambda: None)
+
+    view._handle_crop_word_to_marker(2, 3, "above")
+
+    assert seen["args"] == (2, 3, 0.0, 0.0, 0.0, -30.0, False)
+
+
+def test_crop_left_works_with_only_x_marker(monkeypatch):
+    seen = {}
+
+    def nudge_callback(
+        line_index: int,
+        word_index: int,
+        left_delta: float,
+        right_delta: float,
+        top_delta: float,
+        bottom_delta: float,
+        refine_after: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after,
+        )
+        return True
+
+    view = WordMatchView(nudge_word_bbox_callback=nudge_callback)
+    split_key = (2, 3)
+    view._word_split_fractions[split_key] = 0.25
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._line_word_match_by_ocr_index = lambda *_args: SimpleNamespace(
+        word_object=SimpleNamespace(
+            bounding_box=SimpleNamespace(width=80.0, height=40.0),
+        )
+    )
+    view._line_match_by_index = lambda _line_index: None
+    monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        view, "_refresh_local_line_match_from_line_object", lambda _line_index: None
+    )
+    monkeypatch.setattr(view, "_update_summary", lambda: None)
+    monkeypatch.setattr(view, "_rerender_line_card", lambda _line_index: None)
+    monkeypatch.setattr(
+        view, "_refresh_open_word_dialog_for", lambda _line_index, _word_index: None
+    )
+    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view, "_emit_selection_changed", lambda: None)
+
+    view._handle_crop_word_to_marker(2, 3, "left")
+
+    assert seen["args"] == (2, 3, 0.0, -60.0, 0.0, 0.0, False)
+
+
+def test_render_word_split_marker_uses_fraction_for_scaled_image():
+    view = WordMatchView(split_word_callback=lambda *_args: True)
+    split_key = (1, 2)
+    image = SimpleNamespace(content="")
+    view._word_split_image_refs[split_key] = image
+    view._word_split_image_sizes[split_key] = (200.0, 100.0)
+    view._word_split_fractions[split_key] = 0.25
+    view._word_split_y_fractions[split_key] = 0.4
+    view._word_split_marker_x[split_key] = 30.0
+    view._word_split_marker_y[split_key] = 10.0
+
+    render_word_split_marker(view, split_key)
+
+    assert 'x1="50.00"' in image.content
+    assert 'y1="40.00"' in image.content
 
 
 def test_start_rebox_word_sets_pending_and_requests_image_mode(monkeypatch):

@@ -18,6 +18,11 @@ from ...shared.button_styles import (
     style_word_icon_button,
     style_word_text_button,
 )
+from .word_edit_dialog import (
+    handle_word_image_mouse,
+    open_word_edit_dialog,
+    render_word_split_marker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +154,7 @@ class WordMatchView:
         self.selected_word_indices: set[WordKey] = set()
         self.selected_paragraph_indices: set[int] = set()
         self._word_split_fractions: dict[WordKey, float] = {}
+        self._word_split_y_fractions: dict[WordKey, float] = {}
         self._word_split_marker_x: dict[WordKey, float] = {}
         self._word_split_marker_y: dict[WordKey, float] = {}
         self._word_split_hover_keys: set[WordKey] = set()
@@ -157,6 +163,9 @@ class WordMatchView:
         self._word_split_image_sizes: dict[WordKey, tuple[float, float]] = {}
         self._word_split_button_refs: dict[WordKey, object] = {}
         self._word_vertical_split_button_refs: dict[WordKey, object] = {}
+        self._word_crop_button_refs: dict[
+            WordKey, tuple[object, object, object, object]
+        ] = {}
         self._word_checkbox_refs: dict[WordKey, object] = {}
         self._word_style_button_refs: dict[WordKey, tuple[object, object, object]] = {}
         self._word_column_refs: dict[WordKey, object] = {}
@@ -167,6 +176,8 @@ class WordMatchView:
         self._bbox_editor_open_keys: set[WordKey] = set()
         self._bbox_pending_deltas: dict[WordKey, tuple[float, float, float, float]] = {}
         self._bbox_nudge_step_px: int = 5
+        self._word_dialog_refresh_key: WordKey | None = None
+        self._word_dialog_refresh_callback: Callable[[], None] | None = None
         self._selection_change_callback: SelectionChangeCallback | None = None
         self._paragraph_selection_change_callback: ParagraphSelectionCallback | None = (
             None
@@ -581,6 +592,11 @@ class WordMatchView:
             for key, value in self._word_split_fractions.items()
             if key in valid_split_keys
         }
+        self._word_split_y_fractions = {
+            key: value
+            for key, value in self._word_split_y_fractions.items()
+            if key in valid_split_keys
+        }
         self._word_split_marker_x = {
             key: value
             for key, value in self._word_split_marker_x.items()
@@ -623,12 +639,14 @@ class WordMatchView:
         self._word_split_image_refs = {}
         self._word_split_image_sizes = {}
         self._word_split_fractions = {}
+        self._word_split_y_fractions = {}
         self._word_split_marker_x = {}
         self._word_split_marker_y = {}
         self._word_split_hover_keys = set()
         self._word_split_hover_positions = {}
         self._word_split_button_refs = {}
         self._word_vertical_split_button_refs = {}
+        self._word_crop_button_refs = {}
         self._word_checkbox_refs = {}
         self._word_style_button_refs = {}
         self._word_column_refs = {}
@@ -1199,9 +1217,11 @@ class WordMatchView:
             self._word_gt_input_refs.pop(key, None)
             self._word_split_button_refs.pop(key, None)
             self._word_vertical_split_button_refs.pop(key, None)
+            self._word_crop_button_refs.pop(key, None)
             self._word_split_image_refs.pop(key, None)
             self._word_split_image_sizes.pop(key, None)
             self._word_split_fractions.pop(key, None)
+            self._word_split_y_fractions.pop(key, None)
             self._word_split_marker_x.pop(key, None)
             self._word_split_marker_y.pop(key, None)
             self._word_split_hover_keys.discard(key)
@@ -1241,9 +1261,11 @@ class WordMatchView:
         self._word_gt_input_refs.pop(word_key, None)
         self._word_split_button_refs.pop(word_key, None)
         self._word_vertical_split_button_refs.pop(word_key, None)
+        self._word_crop_button_refs.pop(word_key, None)
         self._word_split_image_refs.pop(word_key, None)
         self._word_split_image_sizes.pop(word_key, None)
         self._word_split_fractions.pop(word_key, None)
+        self._word_split_y_fractions.pop(word_key, None)
         self._word_split_marker_x.pop(word_key, None)
         self._word_split_marker_y.pop(word_key, None)
         self._word_split_hover_keys.discard(word_key)
@@ -1256,11 +1278,13 @@ class WordMatchView:
                 display_word_index,
                 word_index,
                 len(line_match.word_matches),
+                target_word_match,
             )
             self._create_image_cell(
                 line_index,
                 word_index,
                 target_word_match,
+                interactive=False,
             )
             self._create_ocr_cell(target_word_match)
             self._create_gt_cell(
@@ -1269,11 +1293,6 @@ class WordMatchView:
                 target_word_match,
             )
             self._create_status_cell(target_word_match)
-            self._create_word_actions_cell(
-                line_index,
-                word_index,
-                target_word_match,
-            )
 
     def _apply_local_word_gt_update(
         self,
@@ -1470,11 +1489,13 @@ class WordMatchView:
                         word_idx,
                         split_word_index,
                         len(line_match.word_matches),
+                        word_match,
                     )
                     self._create_image_cell(
                         line_match.line_index,
                         split_word_index,
                         word_match,
+                        interactive=False,
                     )
                     # OCR text cell
                     self._create_ocr_cell(word_match)
@@ -1486,12 +1507,6 @@ class WordMatchView:
                     )
                     # Status cell
                     self._create_status_cell(word_match)
-                    # Per-word actions
-                    self._create_word_actions_cell(
-                        line_match.line_index,
-                        split_word_index,
-                        word_match,
-                    )
         logger.debug(
             "Word comparison table creation complete for line %d", line_match.line_index
         )
@@ -1502,8 +1517,9 @@ class WordMatchView:
         word_index: int,
         split_word_index: int,
         word_count: int,
+        word_match,
     ) -> None:
-        """Create a selection checkbox for a word column."""
+        """Create compact per-word controls for fast initial rendering."""
         selection_key = (line_index, word_index)
         with ui.row().classes("items-center"):
             word_checkbox = (
@@ -1522,85 +1538,47 @@ class WordMatchView:
             )
             self._word_checkbox_refs[selection_key] = word_checkbox
 
-            merge_button = ui.button(
-                icon="call_merge",
-                on_click=lambda event: self._handle_merge_word_right(
+            edit_button = ui.button(
+                icon="edit",
+                on_click=lambda _event: self._open_word_edit_dialog(
                     line_index,
+                    word_index,
                     split_word_index,
-                    event,
+                    word_match,
                 ),
-            ).tooltip("Merge with next word")
-            style_word_icon_button(merge_button)
-            merge_button.disabled = (
-                self.merge_word_right_callback is None
-                or split_word_index < 0
-                or word_index >= word_count - 1
-            )
+            ).tooltip("Edit word actions")
+            style_word_icon_button(edit_button)
 
-            split_button = ui.button(
-                "H",
-                icon="call_split",
-                on_click=lambda event: self._handle_split_word(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip("Split horizontally at marker (H-split: vertical line)")
-            style_word_text_button(split_button, compact=True)
-            split_button.style(
-                "min-width: 42px; padding-left: 4px; padding-right: 4px;"
-            )
-            if split_word_index >= 0:
-                split_key = (line_index, split_word_index)
-                self._word_split_button_refs[split_key] = split_button
-            split_button.disabled = not self._is_split_action_enabled(
-                line_index,
-                split_word_index,
-            )
-
-            vertical_split_button = ui.button(
-                "V",
-                icon="call_split",
-                on_click=lambda event: self._handle_split_word_vertical_closest_line(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip(
-                "Split vertically at marker (V-split: horizontal line, assign to closest line)"
-            )
-            style_word_text_button(vertical_split_button, compact=True)
-            vertical_split_button.style(
-                "min-width: 42px; padding-left: 4px; padding-right: 4px;"
-            )
-            if split_word_index >= 0:
-                split_key = (line_index, split_word_index)
-                self._word_vertical_split_button_refs[split_key] = vertical_split_button
-            vertical_split_button.disabled = not self._is_vertical_split_action_enabled(
-                line_index,
-                split_word_index,
-            )
-
-            delete_button = ui.button(
-                icon="delete",
-                on_click=lambda event: self._handle_delete_single_word(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip("Delete word")
-            style_word_icon_button(delete_button, variant=ButtonVariant.DELETE)
-            delete_button.disabled = (
-                self.delete_words_callback is None or split_word_index < 0
-            )
+    def _open_word_edit_dialog(
+        self,
+        line_index: int,
+        word_index: int,
+        split_word_index: int,
+        word_match,
+    ) -> None:
+        """Open the extracted word edit dialog module."""
+        open_word_edit_dialog(
+            self,
+            line_index=line_index,
+            word_index=word_index,
+            split_word_index=split_word_index,
+            word_match=word_match,
+        )
 
     def _create_image_cell(
         self,
         line_index: int,
         split_word_index: int,
         word_match,
+        *,
+        interactive: bool = True,
+        zoom_scale: float = 1.0,
     ):
-        """Create image cell for a word."""
+        """Create image cell for a word.
+
+        When interactive is False, renders a lightweight preview image without
+        mouse handlers or split-marker tracking.
+        """
         with ui.row().classes("fit"):
             # Unmatched GT words don't have images since they don't have word objects
             if word_match.match_status == MatchStatus.UNMATCHED_GT:
@@ -1633,6 +1611,9 @@ class WordMatchView:
                     image_height = float(
                         word_image_slice.get("display_height", 1.0) or 1.0
                     )
+                    zoom = max(0.5, float(zoom_scale or 1.0))
+                    render_width = image_width * zoom
+                    render_height = image_height * zoom
                     background_source = str(
                         word_image_slice.get("background_source", "") or ""
                     )
@@ -1648,6 +1629,10 @@ class WordMatchView:
                     background_y = float(
                         word_image_slice.get("background_y", 0.0) or 0.0
                     )
+                    render_background_width = background_width * zoom
+                    render_background_height = background_height * zoom
+                    render_background_x = background_x * zoom
+                    render_background_y = background_y * zoom
 
                     safe_bg = (
                         background_source.replace("\\", "\\\\")
@@ -1655,39 +1640,232 @@ class WordMatchView:
                         .replace('"', '\\"')
                     )
 
-                    image = ui.interactive_image(
-                        image_source,
-                        events=[
-                            "mousedown",
-                            "click",
-                            "mousemove",
-                            "mouseenter",
-                            "mouseleave",
-                        ],
-                        on_mouse=lambda event, li=line_index, wi=split_word_index: (
-                            self._handle_word_image_mouse(li, wi, event)
-                        ),
-                        sanitize=False,
-                    ).classes("word-slice-image")
-                    image.style(
-                        f"width: {image_width:.2f}px; "
-                        f"height: {image_height:.2f}px; "
-                        f"background-image: url('{safe_bg}'); "
-                        f"background-repeat: no-repeat; "
-                        f"background-size: {background_width:.2f}px {background_height:.2f}px; "
-                        f"background-position: -{background_x:.2f}px -{background_y:.2f}px; "
-                        "cursor: crosshair;"
-                    )
-                    if split_word_index >= 0:
-                        key = (line_index, split_word_index)
-                        self._word_split_image_refs[key] = image
-                        self._word_split_image_sizes[key] = (
-                            float(image_width),
-                            float(image_height),
+                    if interactive:
+                        image = ui.interactive_image(
+                            image_source,
+                            events=[
+                                "mousedown",
+                                "click",
+                                "mousemove",
+                                "mouseenter",
+                                "mouseleave",
+                            ],
+                            on_mouse=lambda event, li=line_index, wi=split_word_index: (
+                                handle_word_image_mouse(self, li, wi, event)
+                            ),
+                            sanitize=False,
+                        ).classes("word-slice-image")
+                        image.style(
+                            f"width: {render_width:.2f}px; "
+                            f"height: {render_height:.2f}px; "
+                            f"background-image: url('{safe_bg}'); "
+                            f"background-repeat: no-repeat; "
+                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "
+                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "
+                            "cursor: crosshair;"
                         )
-                        self._render_word_split_marker(key)
+                        if split_word_index >= 0:
+                            key = (line_index, split_word_index)
+                            self._word_split_image_refs[key] = image
+                            self._word_split_image_sizes[key] = (
+                                float(render_width),
+                                float(render_height),
+                            )
+                            render_word_split_marker(self, key)
+                    else:
+                        image = ui.interactive_image(
+                            image_source,
+                            events=[],
+                            sanitize=False,
+                        ).classes("word-slice-image")
+                        image.style(
+                            f"width: {render_width:.2f}px; "
+                            f"height: {render_height:.2f}px; "
+                            f"background-image: url('{safe_bg}'); "
+                            f"background-repeat: no-repeat; "
+                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "
+                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "
+                            "cursor: default;"
+                        )
                 else:
                     ui.icon("image_not_supported")
+
+    def _handle_crop_word_to_marker(
+        self,
+        line_index: int,
+        word_index: int,
+        direction: str,
+        _event: ClickEvent = None,
+    ) -> None:
+        """Crop current word bbox to marker side using marker-based fraction."""
+        if self.nudge_word_bbox_callback is None:
+            self._safe_notify("Edit bbox function not available", type_="warning")
+            return
+        if word_index < 0:
+            self._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
+            return
+
+        split_key = (line_index, word_index)
+        split_x_fraction = self._word_split_fractions.get(split_key)
+        split_y_fraction = self._word_split_y_fractions.get(split_key)
+        split_y_px = self._word_split_marker_y.get(split_key)
+        image_size = self._word_split_image_sizes.get(split_key)
+        if image_size is None:
+            self._safe_notify(
+                "Click inside the word image to place a marker first",
+                type_="warning",
+            )
+            return
+
+        line_word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if line_word_match is None:
+            self._safe_notify("Selected word is no longer available", type_="warning")
+            return
+
+        bbox_width = 0.0
+        bbox_height = 0.0
+        line_match = self._line_match_by_index(line_index)
+        page_image = getattr(line_match, "page_image", None) if line_match else None
+        if page_image is not None:
+            try:
+                preview_bbox = self._preview_bbox_for_word(
+                    line_word_match,
+                    page_image,
+                    line_index=line_index,
+                    word_index=word_index,
+                )
+            except Exception:
+                preview_bbox = None
+            if preview_bbox is not None:
+                px1, py1, px2, py2 = preview_bbox
+                bbox_width = max(0.0, float(px2) - float(px1))
+                bbox_height = max(0.0, float(py2) - float(py1))
+
+        if bbox_width <= 0.0 or bbox_height <= 0.0:
+            # Fallback for contexts where preview bbox cannot be resolved.
+            word_object = getattr(line_word_match, "word_object", None)
+            bbox = getattr(word_object, "bounding_box", None)
+            bbox_width = float(getattr(bbox, "width", 0.0) or 0.0)
+            bbox_height = float(getattr(bbox, "height", 0.0) or 0.0)
+
+        image_width, image_height = image_size
+        if (
+            bbox_width <= 0.0
+            or bbox_height <= 0.0
+            or image_width <= 0.0
+            or image_height <= 0.0
+        ):
+            self._safe_notify("Cannot crop: invalid word bounding box", type_="warning")
+            return
+
+        left_delta = 0.0
+        right_delta = 0.0
+        top_delta = 0.0
+        bottom_delta = 0.0
+
+        if direction == "above":
+            if split_y_fraction is None:
+                if split_y_px is None:
+                    self._safe_notify(
+                        "Click inside the word image to place a marker first",
+                        type_="warning",
+                    )
+                    return
+                split_y_fraction = float(split_y_px) / float(image_height)
+            else:
+                split_y_fraction = float(split_y_fraction)
+            if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
+                self._safe_notify("Marker is out of bounds", type_="warning")
+                return
+            bottom_delta = -bbox_height * (1.0 - split_y_fraction)
+        elif direction == "below":
+            if split_y_fraction is None:
+                if split_y_px is None:
+                    self._safe_notify(
+                        "Click inside the word image to place a marker first",
+                        type_="warning",
+                    )
+                    return
+                split_y_fraction = float(split_y_px) / float(image_height)
+            else:
+                split_y_fraction = float(split_y_fraction)
+            if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
+                self._safe_notify("Marker is out of bounds", type_="warning")
+                return
+            top_delta = -bbox_height * split_y_fraction
+        elif direction == "left":
+            if split_x_fraction is None:
+                self._safe_notify(
+                    "Click inside the word image to place a marker first",
+                    type_="warning",
+                )
+                return
+            split_x_fraction = float(split_x_fraction)
+            if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
+                self._safe_notify("Marker is out of bounds", type_="warning")
+                return
+            right_delta = -bbox_width * (1.0 - split_x_fraction)
+        elif direction == "right":
+            if split_x_fraction is None:
+                self._safe_notify(
+                    "Click inside the word image to place a marker first",
+                    type_="warning",
+                )
+                return
+            split_x_fraction = float(split_x_fraction)
+            if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
+                self._safe_notify("Marker is out of bounds", type_="warning")
+                return
+            left_delta = -bbox_width * split_x_fraction
+        else:
+            self._safe_notify("Unsupported crop direction", type_="warning")
+            return
+
+        previous_line_selection = set(self.selected_line_indices)
+        previous_word_selection = set(self.selected_word_indices)
+        self.selected_line_indices.clear()
+        self.selected_word_indices.clear()
+        self._update_action_button_state()
+        self._emit_selection_changed()
+
+        try:
+            success = self.nudge_word_bbox_callback(
+                line_index,
+                word_index,
+                left_delta,
+                right_delta,
+                top_delta,
+                bottom_delta,
+                False,
+            )
+            if success:
+                self._refresh_local_line_match_from_line_object(line_index)
+                self._update_summary()
+                self._rerender_line_card(line_index)
+                self._refresh_open_word_dialog_for(line_index, word_index)
+                self._safe_notify(
+                    f"Cropped word {word_index + 1} ({direction})",
+                    type_="positive",
+                )
+            else:
+                self.selected_line_indices = previous_line_selection
+                self.selected_word_indices = previous_word_selection
+                self._update_action_button_state()
+                self._emit_selection_changed()
+                self._safe_notify("Failed to crop word bbox", type_="warning")
+        except Exception as e:
+            self.selected_line_indices = previous_line_selection
+            self.selected_word_indices = previous_word_selection
+            self._update_action_button_state()
+            self._emit_selection_changed()
+            logger.exception(
+                "Error cropping word bbox (%s, %s, %s): %s",
+                line_index,
+                word_index,
+                direction,
+                e,
+            )
+            self._safe_notify(f"Error cropping word bbox: {e}", type_="negative")
 
     def _create_ocr_cell(self, word_match):
         """Create OCR text cell for a word."""
@@ -2491,6 +2669,19 @@ class WordMatchView:
                 return word_match
         return None
 
+    def _refresh_open_word_dialog_for(self, line_index: int, word_index: int) -> None:
+        """Refresh an open word-edit dialog in-place for the active key."""
+        key = (line_index, word_index)
+        if self._word_dialog_refresh_key != key:
+            return
+        callback = self._word_dialog_refresh_callback
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception:
+            logger.debug("Word dialog refresh callback failed", exc_info=True)
+
     def _is_split_action_enabled(self, line_index: int, word_index: int) -> bool:
         if self.split_word_callback is None or word_index < 0:
             return False
@@ -2565,208 +2756,6 @@ class WordMatchView:
                 "try a different marker position"
             )
         return "Unable to split word at the selected position; try a different marker"
-
-    def _render_word_split_marker(self, split_key: tuple[int, int]) -> None:
-        """Render a persistent split marker and hover-follow guide cross."""
-        image = self._word_split_image_refs.get(split_key)
-        if image is None:
-            return
-
-        try:
-            width, height = self._word_split_image_sizes.get(split_key, (0.0, 0.0))
-            marker_x = self._word_split_marker_x.get(split_key)
-            marker_y = self._word_split_marker_y.get(split_key)
-            marker_height = max(1.0, float(height) if height > 0.0 else 1000.0)
-            marker_width = max(1.0, float(width) if width > 0.0 else 1000.0)
-            center_x = max(1.0, float(width) / 2.0) if width > 0.0 else 1.0
-            center_y = max(1.0, float(height) / 2.0) if height > 0.0 else 1.0
-
-            overlays: list[str] = []
-
-            # Persistent marker selected by click (solid).
-            if marker_x is not None or marker_y is not None:
-                solid_x = marker_x if marker_x is not None else center_x
-                solid_y = marker_y if marker_y is not None else center_y
-                overlays.append(
-                    f'<line x1="{solid_x:.2f}" y1="0" x2="{solid_x:.2f}" y2="{marker_height:.2f}" '
-                    'stroke="#2563eb" stroke-width="2" pointer-events="none" />'
-                )
-                overlays.append(
-                    f'<line x1="0" y1="{solid_y:.2f}" x2="{marker_width:.2f}" y2="{solid_y:.2f}" '
-                    'stroke="#2563eb" stroke-width="2" pointer-events="none" />'
-                )
-
-            # Hover-follow guide (dashed), even after click.
-            if split_key in self._word_split_hover_keys:
-                hover_pos = self._word_split_hover_positions.get(split_key)
-                if hover_pos is None:
-                    hover_x, hover_y = center_x, center_y
-                else:
-                    hover_x, hover_y = hover_pos
-                overlays.append(
-                    f'<line x1="{hover_x:.2f}" y1="0" x2="{hover_x:.2f}" y2="{marker_height:.2f}" '
-                    'stroke="rgba(37, 99, 235, 0.55)" stroke-width="2" stroke-dasharray="4 3" pointer-events="none" />'
-                )
-                overlays.append(
-                    f'<line x1="0" y1="{hover_y:.2f}" x2="{marker_width:.2f}" y2="{hover_y:.2f}" '
-                    'stroke="rgba(37, 99, 235, 0.55)" stroke-width="2" stroke-dasharray="4 3" pointer-events="none" />'
-                )
-
-            image.content = "".join(overlays)
-        except Exception:
-            logger.debug("Failed to render split marker", exc_info=True)
-            self._safe_notify_once(
-                "word-split-marker-render",
-                "Failed to render split marker overlay",
-                type_="warning",
-            )
-
-    def _handle_word_image_mouse(
-        self,
-        line_index: int,
-        word_index: int,
-        event: events.MouseEventArguments,
-    ) -> None:
-        """Handle hover and click events for word split marker interactions."""
-        split_key = (line_index, word_index)
-        event_type = str(getattr(event, "type", "") or "")
-
-        def _event_coords() -> tuple[float, float] | None:
-            image_width, image_height = self._word_split_image_sizes.get(
-                split_key, (0.0, 0.0)
-            )
-            raw_image_x = getattr(event, "image_x", None)
-            raw_image_y = getattr(event, "image_y", None)
-            raw_fallback_x = getattr(event, "x", None)
-            raw_fallback_y = getattr(event, "y", None)
-
-            if raw_image_x is not None:
-                image_x = float(raw_image_x)
-            elif raw_fallback_x is not None:
-                image_x = float(raw_fallback_x)
-            else:
-                return None
-
-            if raw_image_y is not None:
-                image_y = float(raw_image_y)
-            elif raw_fallback_y is not None:
-                image_y = float(raw_fallback_y)
-            else:
-                image_y = float(image_height) / 2.0 if image_height > 0.0 else -1.0
-
-            if (
-                image_width <= 0.0
-                or image_height <= 0.0
-                or image_x <= 0.0
-                or image_y <= 0.0
-                or image_x >= image_width
-                or image_y >= image_height
-            ):
-                return None
-            return (image_x, image_y)
-
-        if event_type == "mouseenter":
-            self._word_split_hover_keys.add(split_key)
-            coords = _event_coords()
-            if coords is not None:
-                self._word_split_hover_positions[split_key] = coords
-            self._render_word_split_marker(split_key)
-            return
-        if event_type == "mousemove":
-            if split_key in self._word_split_hover_keys:
-                coords = _event_coords()
-                if coords is not None:
-                    self._word_split_hover_positions[split_key] = coords
-                self._render_word_split_marker(split_key)
-            return
-        if event_type == "mouseleave":
-            self._word_split_hover_keys.discard(split_key)
-            self._word_split_hover_positions.pop(split_key, None)
-            self._render_word_split_marker(split_key)
-            return
-
-        self._handle_word_image_click(line_index, word_index, event)
-
-    def _handle_word_image_click(
-        self,
-        line_index: int,
-        word_index: int,
-        event: events.MouseEventArguments,
-    ) -> None:
-        """Handle click on word image: display cross marker at click position."""
-        if word_index < 0:
-            return
-
-        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
-        if word_match is None:
-            return
-
-        split_key = (line_index, word_index)
-        image_width, image_height = self._word_split_image_sizes.get(
-            split_key, (0.0, 0.0)
-        )
-
-        # Get click coordinates
-        raw_image_x = getattr(event, "image_x", None)
-        raw_image_y = getattr(event, "image_y", None)
-        raw_fallback_x = getattr(event, "x", None)
-        raw_fallback_y = getattr(event, "y", None)
-
-        if raw_image_x is not None:
-            image_x = float(raw_image_x)
-        elif raw_fallback_x is not None:
-            image_x = float(raw_fallback_x)
-        else:
-            image_x = -1.0
-
-        if raw_image_y is not None:
-            image_y = float(raw_image_y)
-        elif raw_fallback_y is not None:
-            image_y = float(raw_fallback_y)
-        else:
-            # Keep backward compatibility with x-only click payloads.
-            image_y = float(image_height) / 2.0 if image_height > 0.0 else -1.0
-
-        # Validate coordinates are within bounds
-        if (
-            image_width <= 0.0
-            or image_height <= 0.0
-            or image_x <= 0.0
-            or image_y <= 0.0
-            or image_x >= image_width
-            or image_y >= image_height
-        ):
-            return
-
-        # Store both fractions for horizontal and vertical splits
-        horizontal_fraction = image_x / image_width
-        vertical_fraction = image_y / image_height
-
-        if horizontal_fraction <= 0.0 or horizontal_fraction >= 1.0:
-            return
-        if vertical_fraction <= 0.0 or vertical_fraction >= 1.0:
-            return
-
-        # Store click position
-        self._word_split_fractions[split_key] = horizontal_fraction
-        self._word_split_marker_x[split_key] = image_x
-        self._word_split_marker_y[split_key] = image_y
-        self._render_word_split_marker(split_key)
-
-        # Enable both split buttons
-        split_button = self._word_split_button_refs.get(split_key)
-        if split_button is not None:
-            split_button.disabled = not self._is_split_action_enabled(
-                line_index,
-                word_index,
-            )
-
-        vertical_split_button = self._word_vertical_split_button_refs.get(split_key)
-        if vertical_split_button is not None:
-            vertical_split_button.disabled = not self._is_vertical_split_action_enabled(
-                line_index,
-                word_index,
-            )
 
     def _create_word_text_display(self, word_matches, text_type):
         """Create a display of words with appropriate coloring."""
@@ -4918,14 +4907,14 @@ class WordMatchView:
         line_index: int,
         word_index: int,
         _event: ClickEvent = None,
-    ) -> None:
+    ) -> bool:
         """Split the selected word at the current marker."""
         if self.split_word_callback is None:
             self._safe_notify("Split word function not available", type_="warning")
-            return
+            return False
         if word_index < 0:
             self._safe_notify("Select a valid OCR word to split", type_="warning")
-            return
+            return False
 
         split_key = (line_index, word_index)
         split_fraction = self._word_split_fractions.get(split_key)
@@ -4934,7 +4923,7 @@ class WordMatchView:
                 "Click inside the word image to choose split position",
                 type_="warning",
             )
-            return
+            return False
 
         previous_line_selection = set(self.selected_line_indices)
         previous_word_selection = set(self.selected_word_indices)
@@ -4950,7 +4939,7 @@ class WordMatchView:
                 self._rerender_line_card(line_index)
                 self._word_split_fractions.pop(split_key, None)
                 self._word_split_marker_x.pop(split_key, None)
-                self._render_word_split_marker(split_key)
+                render_word_split_marker(self, split_key)
                 split_button = self._word_split_button_refs.get(split_key)
                 if split_button is not None:
                     split_button.disabled = True
@@ -4958,6 +4947,7 @@ class WordMatchView:
                     f"Split word {word_index + 1} on line {line_index + 1}",
                     type_="positive",
                 )
+                return True
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
@@ -4972,6 +4962,7 @@ class WordMatchView:
                     ),
                     type_="warning",
                 )
+                return False
         except Exception as e:
             self.selected_line_indices = previous_line_selection
             self.selected_word_indices = previous_word_selection
@@ -4987,23 +4978,24 @@ class WordMatchView:
                 f"Error splitting line {line_index + 1}, word {word_index + 1}: {e}",
                 type_="negative",
             )
+            return False
 
     def _handle_split_word_vertical_closest_line(
         self,
         line_index: int,
         word_index: int,
         _event: ClickEvent = None,
-    ) -> None:
+    ) -> bool:
         """Split selected word vertically using the clicked x marker position."""
         if self.split_word_vertical_closest_line_callback is None:
             self._safe_notify(
                 "Vertical split-to-line function not available",
                 type_="warning",
             )
-            return
+            return False
         if word_index < 0:
             self._safe_notify("Select a valid OCR word to split", type_="warning")
-            return
+            return False
 
         split_key = (line_index, word_index)
         split_fraction = self._word_split_fractions.get(split_key)
@@ -5012,7 +5004,7 @@ class WordMatchView:
                 "Click inside the word image to choose split position",
                 type_="warning",
             )
-            return
+            return False
 
         previous_line_selection = set(self.selected_line_indices)
         previous_word_selection = set(self.selected_word_indices)
@@ -5036,7 +5028,7 @@ class WordMatchView:
                 self._word_split_fractions.pop(split_key, None)
                 self._word_split_marker_x.pop(split_key, None)
                 self._word_split_marker_y.pop(split_key, None)
-                self._render_word_split_marker(split_key)
+                render_word_split_marker(self, split_key)
                 split_button = self._word_split_button_refs.get(split_key)
                 if split_button is not None:
                     split_button.disabled = True
@@ -5052,6 +5044,7 @@ class WordMatchView:
                     ),
                     type_="positive",
                 )
+                return True
             else:
                 self.selected_line_indices = previous_line_selection
                 self.selected_word_indices = previous_word_selection
@@ -5066,6 +5059,7 @@ class WordMatchView:
                     ),
                     type_="warning",
                 )
+                return False
         except Exception as e:
             self.selected_line_indices = previous_line_selection
             self.selected_word_indices = previous_word_selection
@@ -5084,6 +5078,7 @@ class WordMatchView:
                 ),
                 type_="negative",
             )
+            return False
 
     def _handle_start_rebox_word(
         self,
@@ -5287,6 +5282,7 @@ class WordMatchView:
             if success:
                 self._bbox_pending_deltas.pop(key, None)
                 self._rerender_word_column(line_index, word_index)
+                self._refresh_open_word_dialog_for(line_index, word_index)
                 if refine_after:
                     self._safe_notify(
                         "Applied bbox fine-tune edits and refined",
@@ -5345,6 +5341,7 @@ class WordMatchView:
             if success:
                 self._pending_rebox_word_key = None
                 self._rerender_word_column(line_index, word_index)
+                self._refresh_open_word_dialog_for(line_index, word_index)
                 self._safe_notify(
                     f"Reboxed word {word_index + 1} on line {line_index + 1}",
                     type_="positive",
@@ -5530,6 +5527,8 @@ class WordMatchView:
         self.selected_paragraph_indices.clear()
         self._bbox_editor_open_keys.clear()
         self._bbox_pending_deltas.clear()
+        self._word_dialog_refresh_key = None
+        self._word_dialog_refresh_callback = None
         self._word_style_button_refs = {}
         self._word_column_refs = {}
         self._pending_rebox_word_key = None

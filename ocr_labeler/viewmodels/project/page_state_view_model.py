@@ -32,10 +32,6 @@ _image_encoding_executor = ThreadPoolExecutor(
 # Format: {project_id}_{page:03d}_{image_type}_{content_hash}{ext}
 _IMAGE_TYPE_LABELS: dict[str, str] = {
     "cv2_numpy_page_image": "original",
-    "cv2_numpy_page_image_paragraph_with_bboxes": "paragraphs",
-    "cv2_numpy_page_image_line_with_bboxes": "lines",
-    "cv2_numpy_page_image_word_with_bboxes": "words",
-    "cv2_numpy_page_image_matched_word_with_colors": "mismatches",
 }
 
 
@@ -448,6 +444,10 @@ class PageStateViewModel(BaseViewModel):
                     ("word_view_original_image_source", original_image_source)
                 )
                 encoded_results.append(("word_view_image_page_index", page_index))
+                if current_page_model is not None:
+                    await self._persist_cached_images_async(
+                        current_page_model, project_id
+                    )
                 self._apply_encoded_results(encoded_results, current_page)
                 return
 
@@ -592,6 +592,8 @@ class PageStateViewModel(BaseViewModel):
                     ("word_view_original_image_source", original_image_source)
                 )
                 encoded_results.append(("word_view_image_page_index", page_index))
+                if current_page_model is not None:
+                    self._persist_cached_images_blocking(current_page_model, project_id)
                 self._apply_encoded_results(encoded_results, current_page)
                 return
 
@@ -773,13 +775,6 @@ class PageStateViewModel(BaseViewModel):
     def _image_mappings(self):
         return [
             ("original_image_source", "cv2_numpy_page_image"),
-            ("paragraphs_image_source", "cv2_numpy_page_image_paragraph_with_bboxes"),
-            ("lines_image_source", "cv2_numpy_page_image_line_with_bboxes"),
-            ("words_image_source", "cv2_numpy_page_image_word_with_bboxes"),
-            (
-                "mismatches_image_source",
-                "cv2_numpy_page_image_matched_word_with_colors",
-            ),
         ]
 
     def set_image_update_callback(self, callback: callable):

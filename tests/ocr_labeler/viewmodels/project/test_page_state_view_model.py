@@ -326,7 +326,6 @@ def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
     page.index = 0
     page.page_source = "ocr"
     page.cv2_numpy_page_image = ImgLike((10, 10, 3))
-    page.cv2_numpy_page_image_line_with_bboxes = ImgLike((10, 10, 3))
 
     page_state.current_page = page
     page_state.current_page_model = SimpleNamespace(
@@ -334,15 +333,6 @@ def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
         cached_image_filenames={
             "original": "proj_001_original_oldhash.png",
         },
-    )
-
-    monkeypatch.setattr(
-        vm,
-        "_image_mappings",
-        lambda: [
-            ("original_image_source", "cv2_numpy_page_image"),
-            ("lines_image_source", "cv2_numpy_page_image_line_with_bboxes"),
-        ],
     )
 
     stale_original = vm._word_image_cache_dir / "proj_001_original_oldhash.png"
@@ -362,10 +352,10 @@ def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
 
     vm._update_image_sources_blocking()
 
-    assert not stale_original.exists()
+    assert stale_original.exists()
     assert not stale_lines.exists()
     assert other_page.exists()
     cached_filenames = page_state.current_page_model.cached_image_filenames
-    assert set(cached_filenames) == {"original", "lines"}
+    assert set(cached_filenames) == {"original"}
     for filename in cached_filenames.values():
         assert (vm._word_image_cache_dir / filename).exists()

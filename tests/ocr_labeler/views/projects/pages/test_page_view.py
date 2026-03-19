@@ -87,8 +87,8 @@ def _line(words: list[Word], x: int) -> Block:
     )
 
 
-def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
-    """Merging lines via TextTabs callback should refresh ImageTabs line overlay source."""
+def test_content_area_merge_redraws_viewport_image_source(tmp_path, monkeypatch):
+    """Merging lines via TextTabs callback should refresh ImageTabs unified viewport source."""
     page_state = PageState()
 
     line1 = _line([_word("alpha", 0)], 0)
@@ -97,25 +97,16 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
     page.name = "page_001.png"
 
     page.test_original = _Marker(10)
-    page.test_paragraphs = _Marker(20)
-    page.test_lines = _Marker(30)
-    page.test_words = _Marker(40)
-    page.test_mismatches = _Marker(50)
+    page.test_original = _Marker(10)
 
     refresh_calls = {"count": 0}
 
     def _refresh_page_images():
         refresh_calls["count"] += 1
         if len(page.lines) == 1:
-            page.test_paragraphs = _Marker(120)
-            page.test_lines = _Marker(130)
-            page.test_words = _Marker(140)
-            page.test_mismatches = _Marker(150)
+            page.test_original = _Marker(110)
         else:
-            page.test_paragraphs = _Marker(20)
-            page.test_lines = _Marker(30)
-            page.test_words = _Marker(40)
-            page.test_mismatches = _Marker(50)
+            page.test_original = _Marker(10)
 
     page.refresh_page_images = _refresh_page_images
 
@@ -155,10 +146,6 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
         "_image_mappings",
         lambda: [
             ("original_image_source", "test_original"),
-            ("paragraphs_image_source", "test_paragraphs"),
-            ("lines_image_source", "test_lines"),
-            ("words_image_source", "test_words"),
-            ("mismatches_image_source", "test_mismatches"),
         ],
     )
     monkeypatch.setattr(
@@ -171,22 +158,18 @@ def test_content_area_merge_redraws_lines_image_source(tmp_path, monkeypatch):
 
     content = ContentArea(vm, callbacks=PageActionCallbacks())
     content.image_tabs.images = {
-        "Original": _FakeImage(),
-        "Paragraphs": _FakeImage(),
-        "Lines": _FakeImage(),
-        "Words": _FakeImage(),
-        "Mismatches": _FakeImage(),
+        "Viewport": _FakeImage(),
     }
     vm.set_image_update_callback(content.image_tabs._on_images_updated)
     vm._last_image_callback_signature = None
 
     vm._update_image_sources_blocking()
-    assert content.image_tabs.images["Lines"].source == "encoded:30"
+    assert content.image_tabs.images["Viewport"].source == "encoded:10"
 
     assert content.text_tabs.word_match_view.merge_lines_callback([0, 1]) is True
 
     assert refresh_calls["count"] >= 1
-    assert content.image_tabs.images["Lines"].source == "encoded:130"
+    assert content.image_tabs.images["Viewport"].source == "encoded:110"
 
 
 @pytest.mark.asyncio

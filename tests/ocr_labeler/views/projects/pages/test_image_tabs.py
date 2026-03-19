@@ -61,8 +61,8 @@ def _paragraph(lines: list[Block], y: int) -> Block:
     )
 
 
-def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
-    """Merging lines should trigger image callback with updated line bbox overlay."""
+def test_image_tabs_source_updates_after_merge(tmp_path, monkeypatch):
+    """Merging lines should trigger image callback with updated unified viewport source."""
     page_state = PageState()
 
     line1 = _line([_word("alpha", 0)], 0)
@@ -71,25 +71,16 @@ def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
     page.name = "page_001.png"
 
     page.test_original = _Marker(10)
-    page.test_paragraphs = _Marker(20)
-    page.test_lines = _Marker(30)
-    page.test_words = _Marker(40)
-    page.test_mismatches = _Marker(50)
+    page.test_original = _Marker(10)
 
     refresh_calls = {"count": 0}
 
     def _refresh_page_images():
         refresh_calls["count"] += 1
         if len(page.lines) == 1:
-            page.test_paragraphs = _Marker(120)
-            page.test_lines = _Marker(130)
-            page.test_words = _Marker(140)
-            page.test_mismatches = _Marker(150)
+            page.test_original = _Marker(110)
         else:
-            page.test_paragraphs = _Marker(20)
-            page.test_lines = _Marker(30)
-            page.test_words = _Marker(40)
-            page.test_mismatches = _Marker(50)
+            page.test_original = _Marker(10)
 
     page.refresh_page_images = _refresh_page_images
 
@@ -127,10 +118,6 @@ def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
         "_image_mappings",
         lambda: [
             ("original_image_source", "test_original"),
-            ("paragraphs_image_source", "test_paragraphs"),
-            ("lines_image_source", "test_lines"),
-            ("words_image_source", "test_words"),
-            ("mismatches_image_source", "test_mismatches"),
         ],
     )
 
@@ -144,22 +131,16 @@ def test_image_tabs_lines_source_updates_after_merge(tmp_path, monkeypatch):
 
     image_tabs = ImageTabs(vm)
     image_tabs.images = {
-        "Original": _FakeImage(),
-        "Paragraphs": _FakeImage(),
-        "Lines": _FakeImage(),
-        "Words": _FakeImage(),
-        "Mismatches": _FakeImage(),
+        "Viewport": _FakeImage(),
     }
 
     vm._update_image_sources_blocking()
-    assert image_tabs.images["Paragraphs"].source == "encoded:20"
-    assert image_tabs.images["Lines"].source == "encoded:30"
+    assert image_tabs.images["Viewport"].source == "encoded:10"
 
     assert page_state.merge_lines(0, [0, 1]) is True
 
     assert refresh_calls["count"] >= 1
-    assert image_tabs.images["Paragraphs"].source == "encoded:120"
-    assert image_tabs.images["Lines"].source == "encoded:130"
+    assert image_tabs.images["Viewport"].source == "encoded:110"
 
 
 def test_image_tabs_select_words_in_rect_returns_line_word_indices():
@@ -305,7 +286,7 @@ def test_image_tabs_select_words_in_rect_applies_display_scale_for_large_pages()
         lines=[
             _line([_word("alpha", 1000)], 1000),
         ],
-        cv2_numpy_page_image_word_with_bboxes=SimpleNamespace(shape=(1200, 2400, 3)),
+        cv2_numpy_page_image=SimpleNamespace(shape=(1200, 2400, 3)),
     )
 
     vm = SimpleNamespace(set_image_update_callback=lambda _cb: None)
@@ -512,3 +493,173 @@ def test_image_tabs_clear_drag_state_disables_word_rebox_mode():
     image_tabs._clear_drag_state()
 
     assert image_tabs._word_rebox_mode is False
+
+
+def test_image_tabs_defaults_include_visible_layers_and_word_selection_mode():
+    vm = SimpleNamespace(set_image_update_callback=lambda _cb: None)
+    image_tabs = ImageTabs(vm)
+
+    assert image_tabs.visible_layers == {
+        "paragraphs": True,
+        "lines": True,
+        "words": True,
+    }
+    assert image_tabs.selection_mode == "word"
+
+
+def test_image_tabs_selection_mode_updates_internal_target_tab():
+    vm = SimpleNamespace(set_image_update_callback=lambda _cb: None)
+    image_tabs = ImageTabs(vm)
+
+    image_tabs._set_selection_mode("line")
+    assert image_tabs.selection_mode == "line"
+    assert image_tabs._selection_mode_tab() == "Lines"
+
+    image_tabs._set_selection_mode("paragraph")
+    assert image_tabs.selection_mode == "paragraph"
+    assert image_tabs._selection_mode_tab() == "Paragraphs"
+
+    image_tabs._set_selection_mode("invalid")
+    assert image_tabs.selection_mode == "paragraph"
+
+
+def test_image_tabs_layer_visibility_rerenders_viewport_overlays():
+    page = Page(
+        width=100,
+        height=100,
+        page_index=0,
+        items=[_line([_word("alpha", 10)], 10)],
+    )
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(_VmStub())
+    image_tabs.images = {"Viewport": _FakeInteractiveImage()}
+    image_tabs._selected_word_boxes = [(10.0, 0.0, 20.0, 10.0)]
+
+    image_tabs._render_selection_overlay("Words")
+    assert "#1d4ed8" in image_tabs.images["Viewport"].content
+
+    image_tabs._set_layer_visibility("words", False)
+    assert "#1d4ed8" not in image_tabs.images["Viewport"].content
+
+
+def test_image_tabs_viewport_mouse_in_line_mode_selects_line_words():
+    page = Page(
+        width=200,
+        height=100,
+        page_index=0,
+        items=[
+            _line([_word("alpha", 10), _word("beta", 40)], 10),
+            _line([_word("gamma", 120)], 120),
+        ],
+    )
+    captured = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_words_selected=lambda selection: captured.setdefault("selection", selection),
+    )
+    image_tabs.images = {"Viewport": _FakeInteractiveImage()}
+    image_tabs._set_selection_mode("line")
+
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False
+        )
+    )
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mouseup", image_x=85.0, image_y=20.0, shift=False, ctrl=False
+        )
+    )
+
+    assert captured["selection"] == {(0, 0), (0, 1)}
+
+
+def test_image_tabs_viewport_mouse_in_paragraph_mode_selects_paragraphs():
+    para1 = _paragraph([_line([_word("alpha", 10)], 10)], 0)
+    para2 = _paragraph([_line([_word("beta", 10)], 10)], 30)
+    page = Page(width=200, height=100, page_index=0, items=[para1, para2])
+    captured = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_paragraphs_selected=lambda selection: captured.setdefault(
+            "selection", selection
+        ),
+    )
+    image_tabs.images = {"Viewport": _FakeInteractiveImage()}
+    image_tabs._set_selection_mode("paragraph")
+
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False
+        )
+    )
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mouseup", image_x=200.0, image_y=22.0, shift=False, ctrl=False
+        )
+    )
+
+    assert captured["selection"] == {0}
+
+
+def test_image_tabs_word_rebox_mode_overrides_viewport_selection_mode():
+    page = Page(
+        width=100,
+        height=100,
+        page_index=0,
+        items=[_line([_word("alpha", 10)], 10)],
+    )
+    captured = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault(
+            "bbox", (x1, y1, x2, y2)
+        ),
+    )
+    image_tabs.images = {"Viewport": _FakeInteractiveImage()}
+    image_tabs._set_selection_mode("paragraph")
+    image_tabs.enable_word_rebox_mode()
+
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mousedown", image_x=10.0, image_y=15.0, shift=False, ctrl=False
+        )
+    )
+    image_tabs._handle_viewport_mouse(
+        SimpleNamespace(
+            type="mouseup", image_x=30.0, image_y=35.0, shift=False, ctrl=False
+        )
+    )
+
+    assert captured["bbox"] == (10.0, 15.0, 30.0, 35.0)

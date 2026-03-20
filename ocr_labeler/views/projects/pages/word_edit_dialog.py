@@ -315,6 +315,8 @@ def open_word_edit_dialog(
         )
 
     current_zoom = 2.0
+    bbox_nudge_step_px = 5
+    pending_bbox_deltas: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
     def _column_target_width(
         preview_word_index: int,
@@ -412,6 +414,7 @@ def open_word_edit_dialog(
                                 render_word_match,
                                 interactive=True,
                                 zoom_scale=current_zoom,
+                                bbox_preview_deltas=pending_bbox_deltas,
                             )
 
                     def _refresh_open_dialog_content() -> None:
@@ -579,8 +582,247 @@ def open_word_edit_dialog(
                     ),
                 ).tooltip("Keep region right of vertical marker")
 
+            def _set_bbox_nudge_step(value: object) -> None:
+                nonlocal bbox_nudge_step_px
+                try:
+                    step = int(float(value))
+                except Exception:
+                    return
+                if step <= 0:
+                    return
+                bbox_nudge_step_px = step
+
+            def _accumulate_bbox_nudge(
+                *,
+                left_units: float,
+                right_units: float,
+                top_units: float,
+                bottom_units: float,
+            ) -> None:
+                nonlocal pending_bbox_deltas
+                left_delta = float(left_units) * float(bbox_nudge_step_px)
+                right_delta = float(right_units) * float(bbox_nudge_step_px)
+                top_delta = float(top_units) * float(bbox_nudge_step_px)
+                bottom_delta = float(bottom_units) * float(bbox_nudge_step_px)
+                pending_left, pending_right, pending_top, pending_bottom = (
+                    pending_bbox_deltas
+                )
+                pending_bbox_deltas = (
+                    pending_left + left_delta,
+                    pending_right + right_delta,
+                    pending_top + top_delta,
+                    pending_bottom + bottom_delta,
+                )
+                _refresh_open_dialog_content()
+
+            def _reset_pending_bbox_nudges() -> None:
+                nonlocal pending_bbox_deltas
+                pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
+                _refresh_open_dialog_content()
+
+            def _apply_pending_bbox_nudges(*, refine_after: bool) -> None:
+                nonlocal pending_bbox_deltas
+                if view.nudge_word_bbox_callback is None:
+                    view._safe_notify(
+                        "Edit bbox function not available",
+                        type_="warning",
+                    )
+                    return
+                if split_word_index < 0:
+                    view._safe_notify(
+                        "Select a valid OCR word bbox to edit",
+                        type_="warning",
+                    )
+                    return
+
+                left_delta, right_delta, top_delta, bottom_delta = pending_bbox_deltas
+                if (
+                    left_delta == 0.0
+                    and right_delta == 0.0
+                    and top_delta == 0.0
+                    and bottom_delta == 0.0
+                ):
+                    view._safe_notify("No pending bbox edits to apply", type_="warning")
+                    return
+
+                previous_line_selection = set(view.selected_line_indices)
+                previous_word_selection = set(view.selected_word_indices)
+                view.selected_line_indices.clear()
+                view.selected_word_indices.clear()
+                view._update_action_button_state()
+                view._emit_selection_changed()
+
+                try:
+                    success = view.nudge_word_bbox_callback(
+                        line_index,
+                        split_word_index,
+                        left_delta,
+                        right_delta,
+                        top_delta,
+                        bottom_delta,
+                        refine_after,
+                    )
+                    if success:
+                        pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
+                        view._refresh_local_line_match_from_line_object(line_index)
+                        view._update_summary()
+                        view._rerender_line_card(line_index)
+                        _refresh_open_dialog_content()
+                        if refine_after:
+                            view._safe_notify(
+                                "Applied bbox fine-tune edits and refined",
+                                type_="positive",
+                            )
+                        else:
+                            view._safe_notify(
+                                "Applied bbox fine-tune edits",
+                                type_="positive",
+                            )
+                    else:
+                        view.selected_line_indices = previous_line_selection
+                        view.selected_word_indices = previous_word_selection
+                        view._update_action_button_state()
+                        view._emit_selection_changed()
+                        view._safe_notify("Failed to apply bbox edits", type_="warning")
+                except Exception as error:
+                    view.selected_line_indices = previous_line_selection
+                    view.selected_word_indices = previous_word_selection
+                    view._update_action_button_state()
+                    view._emit_selection_changed()
+                    view._safe_notify(
+                        f"Error applying bbox edits: {error}",
+                        type_="negative",
+                    )
+
             if view.nudge_word_bbox_callback is not None and split_word_index >= 0:
-                view._bbox_editor_open_keys.add(split_key)
+                pending_left, pending_right, pending_top, pending_bottom = (
+                    pending_bbox_deltas
+                )
+                with ui.row().classes("items-center gap-1"):
+                    ui.label("Fine tune")
+                    ui.radio(
+                        options={1: "1px", 5: "5px", 10: "10px"},
+                        value=bbox_nudge_step_px,
+                        on_change=lambda event: _set_bbox_nudge_step(event.value),
+                    ).props("inline dense")
+                with ui.row().classes("items-center gap-1"):
+                    ui.label("Left")
+                    left_minus_button = ui.button(
+                        "X-",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=-1.0,
+                            right_units=0.0,
+                            top_units=0.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(left_minus_button, compact=True)
+                    left_plus_button = ui.button(
+                        "X+",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=1.0,
+                            right_units=0.0,
+                            top_units=0.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(left_plus_button, compact=True)
+
+                    ui.label("Right")
+                    right_minus_button = ui.button(
+                        "X-",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=-1.0,
+                            top_units=0.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(right_minus_button, compact=True)
+                    right_plus_button = ui.button(
+                        "X+",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=1.0,
+                            top_units=0.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(right_plus_button, compact=True)
+
+                with ui.row().classes("items-center gap-1"):
+                    ui.label("Top")
+                    top_minus_button = ui.button(
+                        "Y-",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=0.0,
+                            top_units=-1.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(top_minus_button, compact=True)
+                    top_plus_button = ui.button(
+                        "Y+",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=0.0,
+                            top_units=1.0,
+                            bottom_units=0.0,
+                        ),
+                    )
+                    style_word_text_button(top_plus_button, compact=True)
+
+                    ui.label("Bottom")
+                    bottom_minus_button = ui.button(
+                        "Y-",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=0.0,
+                            top_units=0.0,
+                            bottom_units=-1.0,
+                        ),
+                    )
+                    style_word_text_button(bottom_minus_button, compact=True)
+                    bottom_plus_button = ui.button(
+                        "Y+",
+                        on_click=lambda _event: _accumulate_bbox_nudge(
+                            left_units=0.0,
+                            right_units=0.0,
+                            top_units=0.0,
+                            bottom_units=1.0,
+                        ),
+                    )
+                    style_word_text_button(bottom_plus_button, compact=True)
+
+                with ui.row().classes("items-center gap-2"):
+                    ui.label(
+                        "Pending "
+                        f"L:{pending_left:.0f} "
+                        f"R:{pending_right:.0f} "
+                        f"T:{pending_top:.0f} "
+                        f"B:{pending_bottom:.0f} px"
+                    ).classes("text-xs")
+                    reset_button = ui.button(
+                        "Reset",
+                        on_click=lambda _event: _reset_pending_bbox_nudges(),
+                    ).tooltip("Reset pending bbox edits")
+                    style_word_text_button(reset_button, compact=True)
+                    apply_button = ui.button(
+                        "Apply",
+                        on_click=lambda _event: _apply_pending_bbox_nudges(
+                            refine_after=False
+                        ),
+                    ).tooltip("Apply pending bbox edits")
+                    style_word_text_button(apply_button, compact=True)
+                    apply_refine_button = ui.button(
+                        "Apply + Refine",
+                        on_click=lambda _event: _apply_pending_bbox_nudges(
+                            refine_after=True
+                        ),
+                    ).tooltip("Apply pending bbox edits and refine")
+                    style_word_text_button(apply_refine_button, compact=True)
+
             view._create_word_actions_cell(
                 line_index,
                 split_word_index,
@@ -595,8 +837,6 @@ def open_word_edit_dialog(
         view._word_split_hover_positions.pop(split_key, None)
         view._word_split_hover_keys.discard(split_key)
         view._word_split_y_fractions.pop(split_key, None)
-        view._bbox_editor_open_keys.discard(split_key)
-        view._bbox_pending_deltas.pop(split_key, None)
         if view._word_dialog_refresh_key == split_key:
             view._word_dialog_refresh_key = None
             view._word_dialog_refresh_callback = None

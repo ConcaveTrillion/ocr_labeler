@@ -1768,7 +1768,6 @@ def test_display_signature_changes_when_word_bbox_changes():
 
 def test_preview_bbox_for_word_applies_pending_deltas():
     view = WordMatchView()
-    view._bbox_pending_deltas[(1, 2)] = (3.0, 4.0, 5.0, 6.0)
 
     bbox = SimpleNamespace(
         minX=10.0,
@@ -1785,6 +1784,7 @@ def test_preview_bbox_for_word_applies_pending_deltas():
         page_image,
         line_index=1,
         word_index=2,
+        bbox_preview_deltas=(3.0, 4.0, 5.0, 6.0),
     )
 
     assert preview_bbox == (7, 15, 34, 46)
@@ -1792,7 +1792,6 @@ def test_preview_bbox_for_word_applies_pending_deltas():
 
 def test_preview_bbox_for_word_handles_normalized_bbox():
     view = WordMatchView()
-    view._bbox_pending_deltas[(0, 0)] = (10.0, 0.0, 0.0, 10.0)
 
     bbox = SimpleNamespace(
         minX=0.10,
@@ -1809,6 +1808,7 @@ def test_preview_bbox_for_word_handles_normalized_bbox():
         page_image,
         line_index=0,
         word_index=0,
+        bbox_preview_deltas=(10.0, 0.0, 0.0, 10.0),
     )
 
     assert preview_bbox == (10, 20, 60, 50)

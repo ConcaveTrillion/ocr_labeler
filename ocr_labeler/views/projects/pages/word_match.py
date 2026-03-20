@@ -1573,6 +1573,7 @@ class WordMatchView:
         *,
         interactive: bool = True,
         zoom_scale: float = 1.0,
+        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
     ):
         """Create image cell for a word.
 
@@ -1589,6 +1590,7 @@ class WordMatchView:
                         word_match,
                         line_index=line_index,
                         word_index=split_word_index,
+                        bbox_preview_deltas=bbox_preview_deltas,
                     )
                 except Exception as e:
                     logger.error(f"Error getting word image: {e}")
@@ -2467,195 +2469,6 @@ class WordMatchView:
                 self.expand_then_refine_words_callback is None or split_word_index < 0
             )
 
-            edit_bbox_button = ui.button(
-                icon="tune",
-                on_click=lambda event: self._toggle_bbox_fine_tune(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip("Fine-tune word bbox by pixels")
-            style_word_icon_button(edit_bbox_button)
-            edit_bbox_button.disabled = (
-                self.nudge_word_bbox_callback is None or split_word_index < 0
-            )
-
-        fine_tune_key = (line_index, split_word_index)
-        if (
-            fine_tune_key in self._bbox_editor_open_keys
-            and self.nudge_word_bbox_callback is not None
-            and split_word_index >= 0
-        ):
-            pending_left, pending_right, pending_top, pending_bottom = (
-                self._bbox_pending_deltas.get(
-                    fine_tune_key,
-                    (0.0, 0.0, 0.0, 0.0),
-                )
-            )
-            logger.debug(
-                "Rendering bbox fine-tune controls for key=%s with step=%spx",
-                fine_tune_key,
-                self._bbox_nudge_step_px,
-            )
-            with ui.row().classes("items-center gap-1"):
-                ui.label("Fine tune")
-                ui.radio(
-                    options={1: "1px", 5: "5px", 10: "10px"},
-                    value=self._bbox_nudge_step_px,
-                    on_change=lambda event: self._set_bbox_nudge_step(event.value),
-                ).props("inline dense")
-            with ui.row().classes("items-center gap-1"):
-                ui.label("Left")
-                left_minus_button = ui.button(
-                    "X-",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=-1.0,
-                        right_units=0.0,
-                        top_units=0.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(left_minus_button, compact=True)
-                left_plus_button = ui.button(
-                    "X+",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=1.0,
-                        right_units=0.0,
-                        top_units=0.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(left_plus_button, compact=True)
-
-                ui.label("Right")
-                right_minus_button = ui.button(
-                    "X-",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=-1.0,
-                        top_units=0.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(right_minus_button, compact=True)
-                right_plus_button = ui.button(
-                    "X+",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=1.0,
-                        top_units=0.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(right_plus_button, compact=True)
-
-            with ui.row().classes("items-center gap-1"):
-                ui.label("Top")
-                top_minus_button = ui.button(
-                    "Y-",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=0.0,
-                        top_units=-1.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(top_minus_button, compact=True)
-                top_plus_button = ui.button(
-                    "Y+",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=0.0,
-                        top_units=1.0,
-                        bottom_units=0.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(top_plus_button, compact=True)
-
-                ui.label("Bottom")
-                bottom_minus_button = ui.button(
-                    "Y-",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=0.0,
-                        top_units=0.0,
-                        bottom_units=-1.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(bottom_minus_button, compact=True)
-                bottom_plus_button = ui.button(
-                    "Y+",
-                    on_click=lambda event: self._handle_nudge_single_word_bbox(
-                        line_index,
-                        split_word_index,
-                        left_units=0.0,
-                        right_units=0.0,
-                        top_units=0.0,
-                        bottom_units=1.0,
-                        _event=event,
-                    ),
-                )
-                style_word_text_button(bottom_plus_button, compact=True)
-
-            with ui.row().classes("items-center gap-2"):
-                ui.label(
-                    "Pending "
-                    f"L:{pending_left:.0f} "
-                    f"R:{pending_right:.0f} "
-                    f"T:{pending_top:.0f} "
-                    f"B:{pending_bottom:.0f} px"
-                ).classes("text-xs")
-                reset_button = ui.button(
-                    "↺",
-                    on_click=lambda event: self._reset_pending_single_word_bbox_nudge(
-                        line_index,
-                        split_word_index,
-                        event,
-                    ),
-                ).tooltip("Reset pending bbox edits")
-                style_word_text_button(reset_button, compact=True)
-                apply_button = ui.button(
-                    "✓",
-                    on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
-                        line_index,
-                        split_word_index,
-                        refine_after=False,
-                        _event=event,
-                    ),
-                ).tooltip("Apply pending bbox edits")
-                style_word_text_button(apply_button, compact=True)
-                apply_refine_button = ui.button(
-                    "✓✨",
-                    on_click=lambda event: self._apply_pending_single_word_bbox_nudge(
-                        line_index,
-                        split_word_index,
-                        refine_after=True,
-                        _event=event,
-                    ),
-                ).tooltip("Apply pending bbox edits and refine")
-                style_word_text_button(apply_refine_button, compact=True)
-
     def _line_word_match_by_ocr_index(
         self,
         line_index: int,
@@ -2814,6 +2627,7 @@ class WordMatchView:
         *,
         line_index: int,
         word_index: int,
+        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
     ):
         """Get client-side slice metadata for a word image from original page image."""
         logger.debug(
@@ -2853,6 +2667,7 @@ class WordMatchView:
                 page_image,
                 line_index=line_index,
                 word_index=word_index,
+                bbox_preview_deltas=bbox_preview_deltas,
             )
             if preview_bbox is None:
                 logger.debug(
@@ -3024,6 +2839,7 @@ class WordMatchView:
         *,
         line_index: int,
         word_index: int,
+        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
     ) -> tuple[int, int, int, int] | None:
         """Build clamped preview bbox in pixel coordinates for a word image crop."""
         if word_index < 0:
@@ -3058,10 +2874,9 @@ class WordMatchView:
             y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
 
         left_delta, right_delta, top_delta, bottom_delta = (
-            self._bbox_pending_deltas.get(
-                (line_index, word_index),
-                (0.0, 0.0, 0.0, 0.0),
-            )
+            bbox_preview_deltas
+            if bbox_preview_deltas is not None
+            else (0.0, 0.0, 0.0, 0.0)
         )
         x1 -= float(left_delta)
         x2 += float(right_delta)

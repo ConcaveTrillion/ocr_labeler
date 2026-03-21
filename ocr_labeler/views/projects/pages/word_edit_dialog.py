@@ -269,7 +269,7 @@ def open_word_edit_dialog(
             if preview_word_match is None:
                 ui.label("No word").classes("text-grey-6 text-caption")
                 return
-            view._create_image_cell(
+            view.renderer.create_image_cell(
                 line_index,
                 preview_word_index,
                 preview_word_match,
@@ -328,7 +328,7 @@ def open_word_edit_dialog(
         if preview_word_match is None:
             return 160.0
         try:
-            slice_meta = view._get_word_image_slice(
+            slice_meta = view.bbox.get_word_image_slice(
                 preview_word_match,
                 line_index=line_index,
                 word_index=preview_word_index,
@@ -426,7 +426,7 @@ def open_word_edit_dialog(
                         current_image_slot.clear()
                         with current_image_slot:
                             render_word_match = _current_word_match_for_render()
-                            view._create_image_cell(
+                            view.renderer.create_image_cell(
                                 line_index,
                                 split_word_index,
                                 render_word_match,
@@ -448,8 +448,10 @@ def open_word_edit_dialog(
                         _render_current_interactive_image()
 
                     _render_current_interactive_image()
-                    view._word_dialog_refresh_key = split_key
-                    view._word_dialog_refresh_callback = _refresh_open_dialog_content
+                    view.renderer._word_dialog_refresh_key = split_key
+                    view.renderer._word_dialog_refresh_callback = (
+                        _refresh_open_dialog_content
+                    )
                     ui.toggle(
                         options={1: "1x", 2: "2x", 5: "5x"},
                         value=2,
@@ -467,13 +469,13 @@ def open_word_edit_dialog(
                         .props("dense outlined")
                         .classes("monospace")
                     )
-                    view._set_word_gt_input_width(
+                    view.gt_editing._set_word_gt_input_width(
                         gt_input,
                         value=gt_initial_value,
                         fallback_text=str(word_match.ocr_text or ""),
                     )
                     gt_input.on_value_change(
-                        lambda event: view._handle_word_gt_input_change(
+                        lambda event: view.gt_editing._handle_word_gt_input_change(
                             gt_input,
                             str(event.value or ""),
                             str(word_match.ocr_text or ""),
@@ -511,7 +513,7 @@ def open_word_edit_dialog(
                 merge_previous_button = ui.button(
                     "Merge Prev",
                     icon="call_merge",
-                    on_click=lambda event: view._handle_merge_word_left(
+                    on_click=lambda event: view.actions._handle_merge_word_left(
                         line_index,
                         split_word_index,
                         event,
@@ -526,7 +528,7 @@ def open_word_edit_dialog(
                 merge_next_button = ui.button(
                     "Merge Next",
                     icon="call_merge",
-                    on_click=lambda event: view._handle_merge_word_right(
+                    on_click=lambda event: view.actions._handle_merge_word_right(
                         line_index,
                         split_word_index,
                         event,
@@ -543,7 +545,7 @@ def open_word_edit_dialog(
                     icon="call_split",
                     on_click=lambda event: (
                         _rerender_dialog()
-                        if view._handle_split_word(
+                        if view.actions._handle_split_word(
                             line_index,
                             split_word_index,
                             event,
@@ -565,7 +567,7 @@ def open_word_edit_dialog(
                     icon="call_split",
                     on_click=lambda event: (
                         _rerender_dialog()
-                        if view._handle_split_word_vertical_closest_line(
+                        if view.actions._handle_split_word_vertical_closest_line(
                             line_index,
                             split_word_index,
                             event,
@@ -588,7 +590,7 @@ def open_word_edit_dialog(
 
                 delete_button = ui.button(
                     icon="delete",
-                    on_click=lambda event: view._handle_delete_single_word(
+                    on_click=lambda event: view.actions._handle_delete_single_word(
                         line_index,
                         split_word_index,
                         event,
@@ -600,7 +602,7 @@ def open_word_edit_dialog(
                 )
 
             ui.separator()
-            view._create_word_actions_cell(
+            view.renderer.create_word_actions_cell(
                 line_index,
                 split_word_index,
                 word_match,
@@ -687,7 +689,7 @@ def open_word_edit_dialog(
                 )
                 if page_image is not None:
                     try:
-                        preview_bbox = view._preview_bbox_for_word(
+                        preview_bbox = view.bbox.preview_bbox_for_word(
                             line_word_match,
                             page_image,
                             line_index=line_index,
@@ -838,7 +840,7 @@ def open_word_edit_dialog(
                         pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
                         view._refresh_local_line_match_from_line_object(line_index)
                         view._update_summary()
-                        view._rerender_word_column(line_index, split_word_index)
+                        view.renderer.rerender_word_column(line_index, split_word_index)
                         _refresh_open_dialog_content()
                         if refine_after:
                             view._safe_notify(
@@ -886,7 +888,7 @@ def open_word_edit_dialog(
 
                 def _stage_refine_preview(*, expand: bool) -> None:
                     nonlocal pending_bbox_deltas
-                    deltas = view._compute_refine_preview_deltas(
+                    deltas = view.bbox.compute_refine_preview_deltas(
                         line_index,
                         split_word_index,
                         expand=expand,
@@ -1063,11 +1065,11 @@ def open_word_edit_dialog(
         view._word_split_hover_positions.pop(split_key, None)
         view._word_split_hover_keys.discard(split_key)
         view._word_split_y_fractions.pop(split_key, None)
-        if view._word_dialog_refresh_key == split_key:
-            view._word_dialog_refresh_key = None
-            view._word_dialog_refresh_callback = None
+        if view.renderer._word_dialog_refresh_key == split_key:
+            view.renderer._word_dialog_refresh_key = None
+            view.renderer._word_dialog_refresh_callback = None
         if split_word_index >= 0:
-            view._word_style_button_refs.pop(split_key, None)
+            view.gt_editing._word_style_button_refs.pop(split_key, None)
 
     if split_word_index >= 0:
         view._word_split_button_refs[split_key] = split_button

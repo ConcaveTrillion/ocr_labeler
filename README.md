@@ -195,6 +195,29 @@ make test
 uv run pytest
 ```
 
+### Browser-Based Regression Tests
+Use the browser test target to validate core UI rendering in a real browser context:
+
+```bash
+make test-browser
+```
+
+Browser tests are marked with `@pytest.mark.browser` and run via:
+
+```bash
+uv run pytest -m browser
+```
+
+One-time local setup for Playwright Chromium binaries (required to execute, not skip):
+
+```bash
+uv run playwright install chromium
+```
+
+Notes:
+- Chromium is required for browser tests and is installed by `make install`.
+- If Chromium cannot be launched, browser tests fail fast with a setup error.
+
 ### Code Quality
 ```bash
 make lint        # Lint and auto-fix issues

@@ -650,6 +650,7 @@ class NiceGuiLabeler:
                 host=host,
                 port=port,
                 reload=False,
+                show=False,
                 reconnect_timeout=30.0,
                 **uvicorn_kwargs,
             )
@@ -658,7 +659,7 @@ class NiceGuiLabeler:
             logger.warning(
                 "Falling back to basic ui.run call due to TypeError with kwargs"
             )
-            ui.run(host=host, port=port, reload=False)
+            ui.run(host=host, port=port, reload=False, show=False)
 
     def _prepare_font_css(self) -> str:  # pragma: no cover (UI side effect)
         """Prepare monospace font CSS.

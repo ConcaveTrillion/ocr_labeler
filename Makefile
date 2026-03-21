@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k lint format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k test-browser lint format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -7,6 +7,8 @@ help: ## Show this help message
 install: ## Install dependencies and set up development environment
 	@echo "📦 Installing dependencies..."
 	uv sync --group all-dev
+	@echo "🌐 Installing Playwright Chromium browser..."
+	uv run playwright install chromium
 	@echo "🪝 Setting up pre-commit hooks..."
 	uv run pre-commit install
 	@echo "✅ Installation complete!"
@@ -68,6 +70,10 @@ test-k: ## Run tests by pytest -k expression (usage: make test-k K='pattern')
 	fi
 	@echo "🧪 Running tests with -k: $(K)"
 	uv run pytest -k "$(K)"
+
+test-browser: ## Run browser-based regression tests (Playwright)
+	@echo "🌐 Running browser tests..."
+	uv run pytest -m browser
 
 coverage: ## Run tests with coverage report
 	@echo "🧪 Running tests with coverage..."

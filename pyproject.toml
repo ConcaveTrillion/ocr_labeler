@@ -22,6 +22,7 @@ test = [
     "pytest-cov>=7.0.0",
     "pytest-asyncio>=1.2.0",
     "pytest-mock>=3.15.0",
+    "playwright>=1.54.0",
 ]
 all-dev = [
     {include-group = "dev"},
@@ -77,6 +78,9 @@ output = "coverage.xml"
 [tool.pytest.ini_options]
 addopts = "--cov=ocr_labeler --cov-report=term-missing:skip-covered --cov-report=html"
 asyncio_mode = "auto"
+markers = [
+    "browser: browser-based UI regression tests",
+]
 filterwarnings = [
     # Suppress deprecation warning from vbuild using deprecated pkgutil.find_loader (Python 3.13 -> removed 3.14)
     "ignore:'pkgutil.find_loader' is deprecated and slated for removal in Python 3.14:DeprecationWarning:vbuild",

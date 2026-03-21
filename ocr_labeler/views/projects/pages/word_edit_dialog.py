@@ -381,9 +381,20 @@ def open_word_edit_dialog(
             ui.label(f"Edit Line {line_index + 1}, Word {word_index + 1}").classes(
                 "text-subtitle1"
             )
-            ui.button(icon="close", on_click=dialog.close).props(
-                "flat round dense color=grey-7"
-            ).tooltip("Close")
+            with ui.row().classes("items-center gap-1"):
+
+                def _apply_and_close() -> None:
+                    left, right, top, bottom = pending_bbox_deltas
+                    if left != 0.0 or right != 0.0 or top != 0.0 or bottom != 0.0:
+                        _apply_pending_bbox_nudges(refine_after=False)
+                    dialog.close()
+
+                ui.button(icon="check", on_click=_apply_and_close).props(
+                    "flat round dense color=green-7"
+                ).tooltip("Apply and close")
+                ui.button(icon="close", on_click=dialog.close).props(
+                    "flat round dense color=grey-7"
+                ).tooltip("Close without saving")
 
         with ui.column().classes("full-width").style("gap: 8px;"):
             with (
@@ -403,6 +414,13 @@ def open_word_edit_dialog(
                 ):
                     ui.label("Current").classes("text-caption")
                     current_image_slot = ui.column().classes("items-center")
+
+                    # Preserve the main table's image refs so we can restore
+                    # them on dialog close (the dialog's _create_image_cell
+                    # will overwrite _word_split_image_refs with its own
+                    # interactive image, and cleanup must not simply pop).
+                    _saved_image_ref = view._word_split_image_refs.get(split_key)
+                    _saved_image_size = view._word_split_image_sizes.get(split_key)
 
                     def _render_current_interactive_image() -> None:
                         current_image_slot.clear()
@@ -440,6 +458,47 @@ def open_word_edit_dialog(
                     ui.label(str(word_match.ocr_text or "[empty]")).classes(
                         "text-caption monospace"
                     )
+                    gt_initial_value = str(word_match.ground_truth_text or "")
+                    gt_input = (
+                        ui.input(
+                            label="GT",
+                            value=gt_initial_value,
+                        )
+                        .props("dense outlined")
+                        .classes("monospace")
+                    )
+                    view._set_word_gt_input_width(
+                        gt_input,
+                        value=gt_initial_value,
+                        fallback_text=str(word_match.ocr_text or ""),
+                    )
+                    gt_input.on_value_change(
+                        lambda event: view._handle_word_gt_input_change(
+                            gt_input,
+                            str(event.value or ""),
+                            str(word_match.ocr_text or ""),
+                        )
+                    )
+                    gt_input.on(
+                        "blur",
+                        lambda _event: view._commit_word_gt_input_change(
+                            line_index,
+                            split_word_index,
+                            gt_input,
+                        ),
+                    )
+                    gt_input.on(
+                        "keydown.enter",
+                        lambda _event: view._commit_word_gt_input_change(
+                            line_index,
+                            split_word_index,
+                            gt_input,
+                        ),
+                    )
+                    gt_input.enabled = (
+                        view.edit_word_ground_truth_callback is not None
+                        and split_word_index >= 0
+                    )
                 _render_word_preview(
                     "Next",
                     split_word_index + 1,
@@ -447,7 +506,7 @@ def open_word_edit_dialog(
                 )
 
             ui.separator()
-            ui.label("Merge").classes("text-caption text-grey-7")
+            ui.label("Merge / Split").classes("text-caption text-grey-7")
             with ui.row().classes("items-center gap-2"):
                 merge_previous_button = ui.button(
                     "Merge Prev",
@@ -479,8 +538,6 @@ def open_word_edit_dialog(
                 )
                 merge_next_button.disabled = not can_merge_next
 
-            ui.label("Split / Delete").classes("text-caption text-grey-7")
-            with ui.row().classes("items-center gap-2"):
                 split_button = ui.button(
                     "H",
                     icon="call_split",
@@ -543,44 +600,14 @@ def open_word_edit_dialog(
                 )
 
             ui.separator()
-            ui.label("Attributes & Bounding Box").classes("text-caption text-grey-7")
-            with ui.row().classes("items-center gap-2"):
-                ui.button(
-                    "Crop Above",
-                    on_click=lambda event: view._handle_crop_word_to_marker(
-                        line_index,
-                        split_word_index,
-                        "above",
-                        event,
-                    ),
-                ).tooltip("Keep region above horizontal marker")
-                ui.button(
-                    "Crop Below",
-                    on_click=lambda event: view._handle_crop_word_to_marker(
-                        line_index,
-                        split_word_index,
-                        "below",
-                        event,
-                    ),
-                ).tooltip("Keep region below horizontal marker")
-                ui.button(
-                    "Crop Left",
-                    on_click=lambda event: view._handle_crop_word_to_marker(
-                        line_index,
-                        split_word_index,
-                        "left",
-                        event,
-                    ),
-                ).tooltip("Keep region left of vertical marker")
-                ui.button(
-                    "Crop Right",
-                    on_click=lambda event: view._handle_crop_word_to_marker(
-                        line_index,
-                        split_word_index,
-                        "right",
-                        event,
-                    ),
-                ).tooltip("Keep region right of vertical marker")
+            view._create_word_actions_cell(
+                line_index,
+                split_word_index,
+                word_match,
+            )
+
+            ui.separator()
+            ui.label("Bounding Box").classes("text-caption text-grey-7")
 
             def _set_bbox_nudge_step(value: object) -> None:
                 nonlocal bbox_nudge_step_px
@@ -604,6 +631,158 @@ def open_word_edit_dialog(
                 right_delta = float(right_units) * float(bbox_nudge_step_px)
                 top_delta = float(top_units) * float(bbox_nudge_step_px)
                 bottom_delta = float(bottom_units) * float(bbox_nudge_step_px)
+                pending_left, pending_right, pending_top, pending_bottom = (
+                    pending_bbox_deltas
+                )
+                pending_bbox_deltas = (
+                    pending_left + left_delta,
+                    pending_right + right_delta,
+                    pending_top + top_delta,
+                    pending_bottom + bottom_delta,
+                )
+                _refresh_open_dialog_content()
+
+            def _stage_crop_to_marker(direction: str) -> None:
+                nonlocal pending_bbox_deltas
+
+                if view.nudge_word_bbox_callback is None:
+                    view._safe_notify(
+                        "Edit bbox function not available", type_="warning"
+                    )
+                    return
+                if split_word_index < 0:
+                    view._safe_notify(
+                        "Select a valid OCR word bbox to edit",
+                        type_="warning",
+                    )
+                    return
+
+                split_x_fraction = view._word_split_fractions.get(split_key)
+                split_y_fraction = view._word_split_y_fractions.get(split_key)
+                split_y_px = view._word_split_marker_y.get(split_key)
+                image_size = view._word_split_image_sizes.get(split_key)
+                if image_size is None:
+                    view._safe_notify(
+                        "Click inside the word image to place a marker first",
+                        type_="warning",
+                    )
+                    return
+
+                line_word_match = view._line_word_match_by_ocr_index(
+                    line_index,
+                    split_word_index,
+                )
+                if line_word_match is None:
+                    view._safe_notify(
+                        "Selected word is no longer available",
+                        type_="warning",
+                    )
+                    return
+
+                bbox_width = 0.0
+                bbox_height = 0.0
+                line_match = view._line_match_by_index(line_index)
+                page_image = (
+                    getattr(line_match, "page_image", None) if line_match else None
+                )
+                if page_image is not None:
+                    try:
+                        preview_bbox = view._preview_bbox_for_word(
+                            line_word_match,
+                            page_image,
+                            line_index=line_index,
+                            word_index=split_word_index,
+                            bbox_preview_deltas=pending_bbox_deltas,
+                        )
+                    except Exception:
+                        preview_bbox = None
+                    if preview_bbox is not None:
+                        px1, py1, px2, py2 = preview_bbox
+                        bbox_width = max(0.0, float(px2) - float(px1))
+                        bbox_height = max(0.0, float(py2) - float(py1))
+
+                if bbox_width <= 0.0 or bbox_height <= 0.0:
+                    word_object = getattr(line_word_match, "word_object", None)
+                    bbox = getattr(word_object, "bounding_box", None)
+                    bbox_width = float(getattr(bbox, "width", 0.0) or 0.0)
+                    bbox_height = float(getattr(bbox, "height", 0.0) or 0.0)
+
+                image_width, image_height = image_size
+                if (
+                    bbox_width <= 0.0
+                    or bbox_height <= 0.0
+                    or image_width <= 0.0
+                    or image_height <= 0.0
+                ):
+                    view._safe_notify(
+                        "Cannot crop: invalid word bounding box",
+                        type_="warning",
+                    )
+                    return
+
+                left_delta = 0.0
+                right_delta = 0.0
+                top_delta = 0.0
+                bottom_delta = 0.0
+
+                if direction == "above":
+                    if split_y_fraction is None:
+                        if split_y_px is None:
+                            view._safe_notify(
+                                "Click inside the word image to place a marker first",
+                                type_="warning",
+                            )
+                            return
+                        split_y_fraction = float(split_y_px) / float(image_height)
+                    else:
+                        split_y_fraction = float(split_y_fraction)
+                    if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
+                        view._safe_notify("Marker is out of bounds", type_="warning")
+                        return
+                    top_delta = -bbox_height * split_y_fraction
+                elif direction == "below":
+                    if split_y_fraction is None:
+                        if split_y_px is None:
+                            view._safe_notify(
+                                "Click inside the word image to place a marker first",
+                                type_="warning",
+                            )
+                            return
+                        split_y_fraction = float(split_y_px) / float(image_height)
+                    else:
+                        split_y_fraction = float(split_y_fraction)
+                    if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
+                        view._safe_notify("Marker is out of bounds", type_="warning")
+                        return
+                    bottom_delta = -bbox_height * (1.0 - split_y_fraction)
+                elif direction == "left":
+                    if split_x_fraction is None:
+                        view._safe_notify(
+                            "Click inside the word image to place a marker first",
+                            type_="warning",
+                        )
+                        return
+                    split_x_fraction = float(split_x_fraction)
+                    if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
+                        view._safe_notify("Marker is out of bounds", type_="warning")
+                        return
+                    left_delta = -bbox_width * split_x_fraction
+                elif direction == "right":
+                    if split_x_fraction is None:
+                        view._safe_notify(
+                            "Click inside the word image to place a marker first",
+                            type_="warning",
+                        )
+                        return
+                    split_x_fraction = float(split_x_fraction)
+                    if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
+                        view._safe_notify("Marker is out of bounds", type_="warning")
+                        return
+                    right_delta = -bbox_width * (1.0 - split_x_fraction)
+                else:
+                    view._safe_notify("Unsupported crop direction", type_="warning")
+                    return
+
                 pending_left, pending_right, pending_top, pending_bottom = (
                     pending_bbox_deltas
                 )
@@ -645,13 +824,6 @@ def open_word_edit_dialog(
                     view._safe_notify("No pending bbox edits to apply", type_="warning")
                     return
 
-                previous_line_selection = set(view.selected_line_indices)
-                previous_word_selection = set(view.selected_word_indices)
-                view.selected_line_indices.clear()
-                view.selected_word_indices.clear()
-                view._update_action_button_state()
-                view._emit_selection_changed()
-
                 try:
                     success = view.nudge_word_bbox_callback(
                         line_index,
@@ -666,7 +838,7 @@ def open_word_edit_dialog(
                         pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
                         view._refresh_local_line_match_from_line_object(line_index)
                         view._update_summary()
-                        view._rerender_line_card(line_index)
+                        view._rerender_word_column(line_index, split_word_index)
                         _refresh_open_dialog_content()
                         if refine_after:
                             view._safe_notify(
@@ -679,16 +851,8 @@ def open_word_edit_dialog(
                                 type_="positive",
                             )
                     else:
-                        view.selected_line_indices = previous_line_selection
-                        view.selected_word_indices = previous_word_selection
-                        view._update_action_button_state()
-                        view._emit_selection_changed()
                         view._safe_notify("Failed to apply bbox edits", type_="warning")
                 except Exception as error:
-                    view.selected_line_indices = previous_line_selection
-                    view.selected_word_indices = previous_word_selection
-                    view._update_action_button_state()
-                    view._emit_selection_changed()
                     view._safe_notify(
                         f"Error applying bbox edits: {error}",
                         type_="negative",
@@ -698,6 +862,66 @@ def open_word_edit_dialog(
                 pending_left, pending_right, pending_top, pending_bottom = (
                     pending_bbox_deltas
                 )
+                with ui.row().classes("items-center gap-2"):
+                    crop_above_button = ui.button(
+                        "Crop Above",
+                        on_click=lambda _event: _stage_crop_to_marker("above"),
+                    ).tooltip("Stage removal above horizontal marker")
+                    style_word_text_button(crop_above_button, compact=True)
+                    crop_below_button = ui.button(
+                        "Crop Below",
+                        on_click=lambda _event: _stage_crop_to_marker("below"),
+                    ).tooltip("Stage removal below horizontal marker")
+                    style_word_text_button(crop_below_button, compact=True)
+                    crop_left_button = ui.button(
+                        "Crop Left",
+                        on_click=lambda _event: _stage_crop_to_marker("left"),
+                    ).tooltip("Stage removal left of vertical marker")
+                    style_word_text_button(crop_left_button, compact=True)
+                    crop_right_button = ui.button(
+                        "Crop Right",
+                        on_click=lambda _event: _stage_crop_to_marker("right"),
+                    ).tooltip("Stage removal right of vertical marker")
+                    style_word_text_button(crop_right_button, compact=True)
+
+                def _stage_refine_preview(*, expand: bool) -> None:
+                    nonlocal pending_bbox_deltas
+                    deltas = view._compute_refine_preview_deltas(
+                        line_index,
+                        split_word_index,
+                        expand=expand,
+                        pending_deltas=pending_bbox_deltas,
+                    )
+                    if deltas is None:
+                        view._safe_notify(
+                            "Could not compute refine preview",
+                            type_="warning",
+                        )
+                        return
+                    pending_bbox_deltas = deltas
+                    _refresh_open_dialog_content()
+
+                with ui.row().classes("items-center gap-2"):
+                    refine_preview_button = ui.button(
+                        "Refine",
+                        icon="auto_fix_high",
+                        on_click=lambda _event: _stage_refine_preview(expand=False),
+                    ).tooltip("Preview refine (stage without applying)")
+                    style_word_text_button(refine_preview_button, compact=True)
+                    refine_preview_button.disabled = (
+                        view.refine_words_callback is None or split_word_index < 0
+                    )
+                    expand_refine_preview_button = ui.button(
+                        "Expand + Refine",
+                        icon="unfold_more",
+                        on_click=lambda _event: _stage_refine_preview(expand=True),
+                    ).tooltip("Preview expand then refine (stage without applying)")
+                    style_word_text_button(expand_refine_preview_button, compact=True)
+                    expand_refine_preview_button.disabled = (
+                        view.expand_then_refine_words_callback is None
+                        or split_word_index < 0
+                    )
+
                 with ui.row().classes("items-center gap-1"):
                     ui.label("Fine tune")
                     ui.radio(
@@ -823,17 +1047,19 @@ def open_word_edit_dialog(
                     ).tooltip("Apply pending bbox edits and refine")
                     style_word_text_button(apply_refine_button, compact=True)
 
-            view._create_word_actions_cell(
-                line_index,
-                split_word_index,
-                word_match,
-            )
-
     def _cleanup() -> None:
         view._word_split_button_refs.pop(split_key, None)
         view._word_vertical_split_button_refs.pop(split_key, None)
-        view._word_split_image_refs.pop(split_key, None)
-        view._word_split_image_sizes.pop(split_key, None)
+        # Restore the main table's image ref/sizes so hover dashes keep
+        # working after the dialog closes.
+        if _saved_image_ref is not None:
+            view._word_split_image_refs[split_key] = _saved_image_ref
+        else:
+            view._word_split_image_refs.pop(split_key, None)
+        if _saved_image_size is not None:
+            view._word_split_image_sizes[split_key] = _saved_image_size
+        else:
+            view._word_split_image_sizes.pop(split_key, None)
         view._word_split_hover_positions.pop(split_key, None)
         view._word_split_hover_keys.discard(split_key)
         view._word_split_y_fractions.pop(split_key, None)

@@ -53,6 +53,8 @@ class _ReorganizablePage(Protocol):
 WORD_LABEL_ITALIC = "italic"
 WORD_LABEL_SMALL_CAPS = "small_caps"
 WORD_LABEL_BLACKLETTER = "blackletter"
+WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
+WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
 
 
 # Constants for ground truth operations
@@ -1092,13 +1094,31 @@ class PageOperations:
                     "blackletter",
                     "is_blackletter",
                 )
-                if not (italic or small_caps or blackletter):
+                left_footnote = self._word_style_attr(
+                    word,
+                    "left_footnote",
+                    "is_left_footnote",
+                )
+                right_footnote = self._word_style_attr(
+                    word,
+                    "right_footnote",
+                    "is_right_footnote",
+                )
+                if not (
+                    italic
+                    or small_caps
+                    or blackletter
+                    or left_footnote
+                    or right_footnote
+                ):
                     continue
 
                 word_attributes[f"{line_index}:{word_index}"] = {
                     "italic": italic,
                     "small_caps": small_caps,
                     "blackletter": blackletter,
+                    "left_footnote": left_footnote,
+                    "right_footnote": right_footnote,
                 }
 
         return word_attributes or None
@@ -1153,6 +1173,11 @@ class PageOperations:
             italic = bool(attributes.get("italic", False))
             small_caps = bool(attributes.get("small_caps", False))
             blackletter = bool(attributes.get("blackletter", False))
+            left_footnote = bool(attributes.get("left_footnote", False))
+            right_footnote = bool(attributes.get("right_footnote", False))
+            # Migration: old "footnote" key maps to right_footnote.
+            if not right_footnote and bool(attributes.get("footnote", False)):
+                right_footnote = True
             labels_set = set(labels)
 
             if italic:
@@ -1169,6 +1194,16 @@ class PageOperations:
                 labels_set.add(WORD_LABEL_BLACKLETTER)
             else:
                 labels_set.discard(WORD_LABEL_BLACKLETTER)
+
+            if left_footnote:
+                labels_set.add(WORD_LABEL_LEFT_FOOTNOTE)
+            else:
+                labels_set.discard(WORD_LABEL_LEFT_FOOTNOTE)
+
+            if right_footnote:
+                labels_set.add(WORD_LABEL_RIGHT_FOOTNOTE)
+            else:
+                labels_set.discard(WORD_LABEL_RIGHT_FOOTNOTE)
 
             ordered = [label for label in labels if label in labels_set]
             ordered.extend(

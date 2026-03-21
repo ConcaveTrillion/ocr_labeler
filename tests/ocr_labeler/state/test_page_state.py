@@ -942,14 +942,16 @@ def test_update_word_attributes_notifies_on_success(monkeypatch):
     monkeypatch.setattr(
         line_ops_module.LineOperations,
         "update_word_attributes",
-        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter: True,
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (
+            True
+        ),
     )
 
     page_state.current_page = PageStub()
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.update_word_attributes(0, 1, 2, True, False, True)
+    result = page_state.update_word_attributes(0, 1, 2, True, False, True, False, False)
 
     assert result is True
     assert notified == ["changed"]
@@ -967,14 +969,16 @@ def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
     monkeypatch.setattr(
         line_ops_module.LineOperations,
         "update_word_attributes",
-        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter: True,
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (
+            True
+        ),
     )
 
     page_state.current_page = PageStub()
     seen: list[WordStyleChangedEvent] = []
     page_state.on_word_style_change.subscribe(lambda event: seen.append(event))
 
-    result = page_state.update_word_attributes(3, 1, 2, True, False, True)
+    result = page_state.update_word_attributes(3, 1, 2, True, False, True, False, False)
 
     assert result is True
     assert seen == [
@@ -985,6 +989,8 @@ def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
             italic=True,
             small_caps=False,
             blackletter=True,
+            left_footnote=False,
+            right_footnote=False,
         )
     ]
 

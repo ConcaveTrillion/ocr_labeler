@@ -49,11 +49,15 @@ SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
 ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
 NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float, bool], bool]
 EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
-SetWordAttributesAction: TypeAlias = Callable[[int, int, bool, bool, bool], bool]
+SetWordAttributesAction: TypeAlias = Callable[
+    [int, int, bool, bool, bool, bool, bool], bool
+]
 
 WORD_LABEL_ITALIC = "italic"
 WORD_LABEL_SMALL_CAPS = "small_caps"
 WORD_LABEL_BLACKLETTER = "blackletter"
+WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
+WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
 
 
 class WordMatchView:
@@ -167,7 +171,9 @@ class WordMatchView:
             WordKey, tuple[object, object, object, object]
         ] = {}
         self._word_checkbox_refs: dict[WordKey, object] = {}
-        self._word_style_button_refs: dict[WordKey, tuple[object, object, object]] = {}
+        self._word_style_button_refs: dict[
+            WordKey, tuple[object, object, object, object, object]
+        ] = {}
         self._word_column_refs: dict[WordKey, object] = {}
         self._line_card_refs: dict[int, object] = {}
         self._line_checkbox_refs: dict[int, object] = {}
@@ -839,8 +845,10 @@ class WordMatchView:
 
     def _word_match_attribute_signature(self, word_match: object) -> str:
         """Return a stable signature for word style attributes."""
-        italic, small_caps, blackletter = self._word_style_flags(word_match)
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}"
+        italic, small_caps, blackletter, left_footnote, right_footnote = (
+            self._word_style_flags(word_match)
+        )
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"
 
     def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
@@ -1670,8 +1678,8 @@ class WordMatchView:
                             key = (line_index, split_word_index)
                             self._word_split_image_refs[key] = image
                             self._word_split_image_sizes[key] = (
-                                float(render_width),
-                                float(render_height),
+                                float(image_width),
+                                float(image_height),
                             )
                             render_word_split_marker(self, key)
                     else:
@@ -1699,7 +1707,7 @@ class WordMatchView:
         direction: str,
         _event: ClickEvent = None,
     ) -> None:
-        """Crop current word bbox to marker side using marker-based fraction."""
+        """Trim current word bbox on the named side using marker-based fraction."""
         if self.nudge_word_bbox_callback is None:
             self._safe_notify("Edit bbox function not available", type_="warning")
             return
@@ -1779,7 +1787,7 @@ class WordMatchView:
             if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
                 self._safe_notify("Marker is out of bounds", type_="warning")
                 return
-            bottom_delta = -bbox_height * (1.0 - split_y_fraction)
+            top_delta = -bbox_height * split_y_fraction
         elif direction == "below":
             if split_y_fraction is None:
                 if split_y_px is None:
@@ -1794,7 +1802,7 @@ class WordMatchView:
             if split_y_fraction <= 0.0 or split_y_fraction >= 1.0:
                 self._safe_notify("Marker is out of bounds", type_="warning")
                 return
-            top_delta = -bbox_height * split_y_fraction
+            bottom_delta = -bbox_height * (1.0 - split_y_fraction)
         elif direction == "left":
             if split_x_fraction is None:
                 self._safe_notify(
@@ -1806,7 +1814,7 @@ class WordMatchView:
             if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
                 self._safe_notify("Marker is out of bounds", type_="warning")
                 return
-            right_delta = -bbox_width * (1.0 - split_x_fraction)
+            left_delta = -bbox_width * split_x_fraction
         elif direction == "right":
             if split_x_fraction is None:
                 self._safe_notify(
@@ -1818,7 +1826,7 @@ class WordMatchView:
             if split_x_fraction <= 0.0 or split_x_fraction >= 1.0:
                 self._safe_notify("Marker is out of bounds", type_="warning")
                 return
-            left_delta = -bbox_width * split_x_fraction
+            right_delta = -bbox_width * (1.0 - split_x_fraction)
         else:
             self._safe_notify("Unsupported crop direction", type_="warning")
             return
@@ -2089,23 +2097,27 @@ class WordMatchView:
                 f"Error updating word ground truth: {e}", type_="negative"
             )
 
-    def _word_style_flags(self, word_match: object) -> tuple[bool, bool, bool]:
-        """Return (italic, small_caps, blackletter) for a word match."""
+    def _word_style_flags(
+        self, word_match: object
+    ) -> tuple[bool, bool, bool, bool, bool]:
+        """Return (italic, small_caps, blackletter, left_footnote, right_footnote) for a word match."""
         word_object = getattr(word_match, "word_object", None)
         if word_object is None:
-            return False, False, False
+            return False, False, False, False, False
 
         try:
             word_labels = {str(label) for label in word_object.word_labels}
         except AttributeError:
-            return False, False, False
+            return False, False, False, False, False
         except TypeError:
-            return False, False, False
+            return False, False, False, False, False
 
         italic = WORD_LABEL_ITALIC in word_labels
         small_caps = WORD_LABEL_SMALL_CAPS in word_labels
         blackletter = WORD_LABEL_BLACKLETTER in word_labels
-        return italic, small_caps, blackletter
+        left_footnote = WORD_LABEL_LEFT_FOOTNOTE in word_labels
+        right_footnote = WORD_LABEL_RIGHT_FOOTNOTE in word_labels
+        return italic, small_caps, blackletter, left_footnote, right_footnote
 
     def _handle_set_word_attributes(
         self,
@@ -2114,6 +2126,8 @@ class WordMatchView:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> None:
         """Persist per-word style attributes via callback."""
         if self.set_word_attributes_callback is None:
@@ -2135,6 +2149,8 @@ class WordMatchView:
                 bool(italic),
                 bool(small_caps),
                 bool(blackletter),
+                bool(left_footnote),
+                bool(right_footnote),
             )
             if not success:
                 self._safe_notify("Failed to update word attributes", type_="warning")
@@ -2145,6 +2161,8 @@ class WordMatchView:
                 italic=bool(italic),
                 small_caps=bool(small_caps),
                 blackletter=bool(blackletter),
+                left_footnote=bool(left_footnote),
+                right_footnote=bool(right_footnote),
             )
             self._set_word_style_button_states(
                 line_index=line_index,
@@ -2152,6 +2170,8 @@ class WordMatchView:
                 italic=bool(italic),
                 small_caps=bool(small_caps),
                 blackletter=bool(blackletter),
+                left_footnote=bool(left_footnote),
+                right_footnote=bool(right_footnote),
             )
         except Exception as e:
             logger.exception(
@@ -2169,6 +2189,8 @@ class WordMatchView:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> None:
         """Apply a targeted style-only update from state event routing."""
         self._apply_local_word_style_update(
@@ -2177,6 +2199,8 @@ class WordMatchView:
             italic=bool(italic),
             small_caps=bool(small_caps),
             blackletter=bool(blackletter),
+            left_footnote=bool(left_footnote),
+            right_footnote=bool(right_footnote),
         )
         self._set_word_style_button_states(
             line_index=line_index,
@@ -2184,6 +2208,8 @@ class WordMatchView:
             italic=bool(italic),
             small_caps=bool(small_caps),
             blackletter=bool(blackletter),
+            left_footnote=bool(left_footnote),
+            right_footnote=bool(right_footnote),
         )
 
     def apply_word_ground_truth_change(
@@ -2218,8 +2244,10 @@ class WordMatchView:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> None:
-        """Update only I/SC/BL button colors for a word without rerendering the column."""
+        """Update only I/SC/BL/LFN/RFN button colors for a word without rerendering the column."""
         key = (line_index, word_index)
         button_refs = self._word_style_button_refs.get(key)
         if button_refs is None:
@@ -2229,7 +2257,7 @@ class WordMatchView:
             self._word_style_button_refs.pop(key, None)
             return
 
-        states = (italic, small_caps, blackletter)
+        states = (italic, small_caps, blackletter, left_footnote, right_footnote)
         for button, enabled in zip(button_refs, states, strict=False):
             try:
                 if enabled:
@@ -2262,6 +2290,8 @@ class WordMatchView:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> None:
         """Apply style labels locally for stable subsequent toggle computations."""
         word_match = self._line_word_match_by_ocr_index(line_index, word_index)
@@ -2293,6 +2323,16 @@ class WordMatchView:
         else:
             labels_set.discard(WORD_LABEL_BLACKLETTER)
 
+        if left_footnote:
+            labels_set.add(WORD_LABEL_LEFT_FOOTNOTE)
+        else:
+            labels_set.discard(WORD_LABEL_LEFT_FOOTNOTE)
+
+        if right_footnote:
+            labels_set.add(WORD_LABEL_RIGHT_FOOTNOTE)
+        else:
+            labels_set.discard(WORD_LABEL_RIGHT_FOOTNOTE)
+
         ordered = [label for label in labels if label in labels_set]
         ordered.extend(
             sorted(label for label in labels_set if label not in set(ordered))
@@ -2314,13 +2354,19 @@ class WordMatchView:
             )
             return
 
-        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        italic, small_caps, blackletter, left_footnote, right_footnote = (
+            self._word_style_flags(word_match)
+        )
         if attribute == WORD_LABEL_ITALIC:
             italic = not italic
         elif attribute == WORD_LABEL_SMALL_CAPS:
             small_caps = not small_caps
         elif attribute == WORD_LABEL_BLACKLETTER:
             blackletter = not blackletter
+        elif attribute == WORD_LABEL_LEFT_FOOTNOTE:
+            left_footnote = not left_footnote
+        elif attribute == WORD_LABEL_RIGHT_FOOTNOTE:
+            right_footnote = not right_footnote
         else:
             return
 
@@ -2330,6 +2376,8 @@ class WordMatchView:
             italic,
             small_caps,
             blackletter,
+            left_footnote,
+            right_footnote,
         )
 
     def _create_status_cell(self, word_match):
@@ -2352,7 +2400,9 @@ class WordMatchView:
         word_match,
     ) -> None:
         """Create per-word action buttons displayed below each word."""
-        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        italic, small_caps, blackletter, left_footnote, right_footnote = (
+            self._word_style_flags(word_match)
+        )
         style_button_width = "width: 3rem;"
 
         with ui.row().classes("items-center gap-1"):
@@ -2422,11 +2472,57 @@ class WordMatchView:
                 active=blackletter,
             )
 
+            left_footnote_button = (
+                ui.button(
+                    "LFN",
+                    on_click=lambda event: self._handle_toggle_word_attribute(
+                        line_index,
+                        split_word_index,
+                        WORD_LABEL_LEFT_FOOTNOTE,
+                        event,
+                    ),
+                )
+                .style(style_button_width)
+                .tooltip("Toggle left footnote marker")
+            )
+            left_footnote_button.disabled = (
+                self.set_word_attributes_callback is None or split_word_index < 0
+            )
+            style_word_text_button(
+                left_footnote_button,
+                variant=ButtonVariant.TOGGLE,
+                active=left_footnote,
+            )
+
+            right_footnote_button = (
+                ui.button(
+                    "RFN",
+                    on_click=lambda event: self._handle_toggle_word_attribute(
+                        line_index,
+                        split_word_index,
+                        WORD_LABEL_RIGHT_FOOTNOTE,
+                        event,
+                    ),
+                )
+                .style(style_button_width)
+                .tooltip("Toggle right footnote marker")
+            )
+            right_footnote_button.disabled = (
+                self.set_word_attributes_callback is None or split_word_index < 0
+            )
+            style_word_text_button(
+                right_footnote_button,
+                variant=ButtonVariant.TOGGLE,
+                active=right_footnote,
+            )
+
             if split_word_index >= 0:
                 self._word_style_button_refs[(line_index, split_word_index)] = (
                     italic_button,
                     small_caps_button,
                     blackletter_button,
+                    left_footnote_button,
+                    right_footnote_button,
                 )
 
         with ui.row().classes("items-center gap-1"):
@@ -2601,7 +2697,9 @@ class WordMatchView:
         """Create tooltip content for a word match."""
         lines = [f"Status: {word_match.match_status.value.title()}"]
 
-        italic, small_caps, blackletter = self._word_style_flags(word_match)
+        italic, small_caps, blackletter, left_footnote, right_footnote = (
+            self._word_style_flags(word_match)
+        )
         active_attributes: list[str] = []
         if italic:
             active_attributes.append("italic")
@@ -2609,6 +2707,10 @@ class WordMatchView:
             active_attributes.append("small_caps")
         if blackletter:
             active_attributes.append("blackletter")
+        if left_footnote:
+            active_attributes.append("left_footnote")
+        if right_footnote:
+            active_attributes.append("right_footnote")
         if active_attributes:
             lines.append(f"Attributes: {', '.join(active_attributes)}")
 
@@ -2892,6 +2994,130 @@ class WordMatchView:
             return None
 
         return ix1, iy1, ix2, iy2
+
+    def _compute_refine_preview_deltas(
+        self,
+        line_index: int,
+        word_index: int,
+        *,
+        expand: bool,
+        pending_deltas: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0),
+    ) -> tuple[float, float, float, float] | None:
+        """Compute bbox deltas that a refine operation would produce, without applying.
+
+        When *pending_deltas* are supplied (e.g. from a prior crop), the bbox is
+        first adjusted by those deltas so that ``refine`` sees the cropped image
+        region.  The returned deltas are expressed relative to the **original**
+        bbox so they fully replace ``pending_deltas``.
+
+        Returns (left_delta, right_delta, top_delta, bottom_delta) in pixel space,
+        using the same sign convention as ``_preview_bbox_for_word``:
+        positive left_delta = expand left, positive right_delta = expand right, etc.
+        """
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return None
+
+        page_image = getattr(line_match, "page_image", None)
+        if page_image is None:
+            return None
+
+        shape = getattr(page_image, "shape", None)
+        if shape is None or len(shape) < 2:
+            return None
+        page_height = int(shape[0])
+        page_width = int(shape[1])
+        if page_width <= 0 or page_height <= 0:
+            return None
+
+        word_match = self._line_word_match_by_ocr_index(line_index, word_index)
+        if word_match is None:
+            return None
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return None
+        bbox = getattr(word_object, "bounding_box", None)
+        if bbox is None:
+            return None
+
+        # Resolve original bbox pixel coords.
+        is_normalized = bool(getattr(bbox, "is_normalized", False))
+        if is_normalized:
+            old_x1 = float(getattr(bbox, "minX", 0.0) or 0.0) * page_width
+            old_y1 = float(getattr(bbox, "minY", 0.0) or 0.0) * page_height
+            old_x2 = float(getattr(bbox, "maxX", 0.0) or 0.0) * page_width
+            old_y2 = float(getattr(bbox, "maxY", 0.0) or 0.0) * page_height
+        else:
+            old_x1 = float(getattr(bbox, "minX", 0.0) or 0.0)
+            old_y1 = float(getattr(bbox, "minY", 0.0) or 0.0)
+            old_x2 = float(getattr(bbox, "maxX", 0.0) or 0.0)
+            old_y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
+
+        # Apply pending deltas to get the effective (e.g. cropped) bbox.
+        pd_left, pd_right, pd_top, pd_bottom = pending_deltas
+        eff_x1 = old_x1 - pd_left
+        eff_y1 = old_y1 - pd_top
+        eff_x2 = old_x2 + pd_right
+        eff_y2 = old_y2 + pd_bottom
+
+        # Build a temporary BoundingBox from the effective coords so refine
+        # operates on the cropped region.
+        bbox_from_dict = getattr(type(bbox), "from_dict", None)
+        if bbox_from_dict is None:
+            return None
+
+        has_pending = (pd_left, pd_right, pd_top, pd_bottom) != (0.0, 0.0, 0.0, 0.0)
+        if has_pending:
+            try:
+                eff_bbox = bbox_from_dict(
+                    {
+                        "top_left": {"x": eff_x1, "y": eff_y1},
+                        "bottom_right": {"x": eff_x2, "y": eff_y2},
+                        "is_normalized": False,
+                    }
+                )
+            except Exception:
+                return None
+            refine_fn = getattr(eff_bbox, "refine", None)
+        else:
+            refine_fn = getattr(bbox, "refine", None)
+
+        if not callable(refine_fn):
+            return None
+
+        try:
+            padding_px = 0 if expand else 1
+            refined_bbox = refine_fn(
+                page_image,
+                padding_px=padding_px,
+                expand_beyond_original=expand,
+            )
+        except Exception:
+            return None
+
+        if refined_bbox is None:
+            return None
+
+        # Read refined coords in pixel space.
+        ref_normalized = bool(getattr(refined_bbox, "is_normalized", False))
+        if ref_normalized:
+            new_x1 = float(getattr(refined_bbox, "minX", 0.0) or 0.0) * page_width
+            new_y1 = float(getattr(refined_bbox, "minY", 0.0) or 0.0) * page_height
+            new_x2 = float(getattr(refined_bbox, "maxX", 0.0) or 0.0) * page_width
+            new_y2 = float(getattr(refined_bbox, "maxY", 0.0) or 0.0) * page_height
+        else:
+            new_x1 = float(getattr(refined_bbox, "minX", 0.0) or 0.0)
+            new_y1 = float(getattr(refined_bbox, "minY", 0.0) or 0.0)
+            new_x2 = float(getattr(refined_bbox, "maxX", 0.0) or 0.0)
+            new_y2 = float(getattr(refined_bbox, "maxY", 0.0) or 0.0)
+
+        # Deltas relative to the *original* bbox so they fully replace pending.
+        left_delta = old_x1 - new_x1
+        right_delta = new_x2 - old_x2
+        top_delta = old_y1 - new_y1
+        bottom_delta = new_y2 - old_y2
+
+        return left_delta, right_delta, top_delta, bottom_delta
 
     def _get_line_image(self, line_match: "LineMatch") -> Optional[str]:
         """Get cropped line image as base64 data URL.

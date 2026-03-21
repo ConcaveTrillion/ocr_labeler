@@ -36,6 +36,12 @@ STYLE_LABEL_BY_ATTR = {
     "is_small_caps": "small_caps",
     "blackletter": "blackletter",
     "is_blackletter": "blackletter",
+    "left_footnote": "left_footnote",
+    "is_left_footnote": "left_footnote",
+    "right_footnote": "right_footnote",
+    "is_right_footnote": "right_footnote",
+    "footnote": "right_footnote",
+    "is_footnote": "right_footnote",
 }
 
 
@@ -355,6 +361,8 @@ class LineOperations:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> bool:
         """Update style attributes for a specific word.
 
@@ -365,6 +373,8 @@ class LineOperations:
             italic: Whether word is italic.
             small_caps: Whether word is small caps.
             blackletter: Whether word is blackletter.
+            left_footnote: Whether word has a left footnote marker.
+            right_footnote: Whether word has a right footnote marker.
 
         Returns:
             bool: True if update succeeded, False otherwise.
@@ -392,6 +402,8 @@ class LineOperations:
             desired_italic = bool(italic)
             desired_small_caps = bool(small_caps)
             desired_blackletter = bool(blackletter)
+            desired_left_footnote = bool(left_footnote)
+            desired_right_footnote = bool(right_footnote)
 
             current_italic = self._read_word_attribute(
                 target_word,
@@ -408,11 +420,23 @@ class LineOperations:
                 "blackletter",
                 aliases=("is_blackletter",),
             )
+            current_left_footnote = self._read_word_attribute(
+                target_word,
+                "left_footnote",
+                aliases=("is_left_footnote",),
+            )
+            current_right_footnote = self._read_word_attribute(
+                target_word,
+                "right_footnote",
+                aliases=("is_right_footnote",),
+            )
 
             if (
                 current_italic == desired_italic
                 and current_small_caps == desired_small_caps
                 and current_blackletter == desired_blackletter
+                and current_left_footnote == desired_left_footnote
+                and current_right_footnote == desired_right_footnote
             ):
                 logger.debug(
                     "Word attributes unchanged for line=%s word=%s",
@@ -439,14 +463,28 @@ class LineOperations:
                 desired_blackletter,
                 aliases=("is_blackletter",),
             )
+            self._write_word_attribute(
+                target_word,
+                "left_footnote",
+                desired_left_footnote,
+                aliases=("is_left_footnote",),
+            )
+            self._write_word_attribute(
+                target_word,
+                "right_footnote",
+                desired_right_footnote,
+                aliases=("is_right_footnote",),
+            )
 
             logger.info(
-                "Updated attributes for line=%d word=%d italic=%s small_caps=%s blackletter=%s",
+                "Updated attributes for line=%d word=%d italic=%s small_caps=%s blackletter=%s left_footnote=%s right_footnote=%s",
                 line_index,
                 word_index,
                 desired_italic,
                 desired_small_caps,
                 desired_blackletter,
+                desired_left_footnote,
+                desired_right_footnote,
             )
             return True
 

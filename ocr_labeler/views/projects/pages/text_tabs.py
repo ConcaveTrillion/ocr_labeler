@@ -633,15 +633,19 @@ class TextTabs:
                 italic: bool,
                 small_caps: bool,
                 blackletter: bool,
+                left_footnote: bool,
+                right_footnote: bool,
             ) -> bool:
                 logger.debug(
-                    "Updating word attributes at (%s, %s) on page %d: italic=%s small_caps=%s blackletter=%s",
+                    "Updating word attributes at (%s, %s) on page %d: italic=%s small_caps=%s blackletter=%s left_footnote=%s right_footnote=%s",
                     line_index,
                     word_index,
                     page_index,
                     italic,
                     small_caps,
                     blackletter,
+                    left_footnote,
+                    right_footnote,
                 )
                 result = page_state.update_word_attributes(
                     page_index,
@@ -650,6 +654,8 @@ class TextTabs:
                     italic,
                     small_caps,
                     blackletter,
+                    left_footnote,
+                    right_footnote,
                 )
                 logger.debug("Update word attributes operation result: %s", result)
                 return result
@@ -922,6 +928,8 @@ class TextTabs:
             event.italic,
             event.small_caps,
             event.blackletter,
+            event.left_footnote,
+            event.right_footnote,
         )
 
         # Coalesce with the broad PageState.on_change refresh path by updating the
@@ -1165,4 +1173,6 @@ class TextTabs:
         italic = "italic" in labels
         small_caps = "small_caps" in labels
         blackletter = "blackletter" in labels
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}"
+        left_footnote = "left_footnote" in labels
+        right_footnote = "right_footnote" in labels
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"

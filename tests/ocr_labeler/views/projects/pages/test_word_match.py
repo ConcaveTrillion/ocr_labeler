@@ -1223,7 +1223,7 @@ def test_crop_word_to_marker_prefers_stored_y_fraction(monkeypatch):
 
     view._handle_crop_word_to_marker(1, 2, "above")
 
-    assert seen["args"] == (1, 2, 0.0, 0.0, 0.0, -10.0, False)
+    assert seen["args"] == (1, 2, 0.0, 0.0, -30.0, 0.0, False)
 
 
 def test_crop_word_to_marker_uses_marker_y_when_fraction_missing(monkeypatch):
@@ -1278,7 +1278,7 @@ def test_crop_word_to_marker_uses_marker_y_when_fraction_missing(monkeypatch):
 
     view._handle_crop_word_to_marker(1, 2, "below")
 
-    assert seen["args"] == (1, 2, 0.0, 0.0, -10.0, 0.0, False)
+    assert seen["args"] == (1, 2, 0.0, 0.0, 0.0, -30.0, False)
 
 
 def test_crop_above_works_with_only_y_marker(monkeypatch):
@@ -1328,7 +1328,7 @@ def test_crop_above_works_with_only_y_marker(monkeypatch):
 
     view._handle_crop_word_to_marker(2, 3, "above")
 
-    assert seen["args"] == (2, 3, 0.0, 0.0, 0.0, -30.0, False)
+    assert seen["args"] == (2, 3, 0.0, 0.0, -10.0, 0.0, False)
 
 
 def test_crop_left_works_with_only_x_marker(monkeypatch):
@@ -1378,7 +1378,7 @@ def test_crop_left_works_with_only_x_marker(monkeypatch):
 
     view._handle_crop_word_to_marker(2, 3, "left")
 
-    assert seen["args"] == (2, 3, 0.0, -60.0, 0.0, 0.0, False)
+    assert seen["args"] == (2, 3, -20.0, 0.0, 0.0, 0.0, False)
 
 
 def test_render_word_split_marker_uses_fraction_for_scaled_image():
@@ -1857,6 +1857,8 @@ def test_word_attribute_edit_invokes_callback(monkeypatch):
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> bool:
         seen["args"] = (
             line_index,
@@ -1864,15 +1866,17 @@ def test_word_attribute_edit_invokes_callback(monkeypatch):
             italic,
             small_caps,
             blackletter,
+            left_footnote,
+            right_footnote,
         )
         return True
 
     view = WordMatchView(set_word_attributes_callback=update_callback)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_set_word_attributes(1, 3, True, False, True)
+    view._handle_set_word_attributes(1, 3, True, False, True, False, False)
 
-    assert seen["args"] == (1, 3, True, False, True)
+    assert seen["args"] == (1, 3, True, False, True, False, False)
 
 
 def test_word_attribute_edit_does_not_rerender_word_column(monkeypatch):
@@ -1897,7 +1901,7 @@ def test_word_attribute_edit_does_not_rerender_word_column(monkeypatch):
         lambda **_kwargs: None,
     )
 
-    view._handle_set_word_attributes(1, 3, True, False, True)
+    view._handle_set_word_attributes(1, 3, True, False, True, False, False)
 
     assert seen["rerendered"] == 0
 
@@ -1915,14 +1919,25 @@ def test_toggle_word_attribute_uses_current_flags(monkeypatch):
     monkeypatch.setattr(
         view,
         "_handle_set_word_attributes",
-        lambda line_index, word_index, italic, small_caps, blackletter: seen.setdefault(
-            "args", (line_index, word_index, italic, small_caps, blackletter)
+        lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
+            seen.setdefault(
+                "args",
+                (
+                    line_index,
+                    word_index,
+                    italic,
+                    small_caps,
+                    blackletter,
+                    left_footnote,
+                    right_footnote,
+                ),
+            )
         ),
     )
 
     view._handle_toggle_word_attribute(2, 5, "small_caps")
 
-    assert seen["args"] == (2, 5, False, False, False)
+    assert seen["args"] == (2, 5, False, False, False, False, False)
 
 
 def test_word_attribute_tooltip_includes_active_flags():

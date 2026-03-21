@@ -33,6 +33,8 @@ class WordStyleChangedEvent:
     italic: bool
     small_caps: bool
     blackletter: bool
+    left_footnote: bool
+    right_footnote: bool
 
 
 @dataclass(frozen=True)
@@ -404,6 +406,8 @@ class PageState:
         italic: bool,
         small_caps: bool,
         blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
     ) -> bool:
         """Update style attributes for a single word on the current page.
 
@@ -414,6 +418,8 @@ class PageState:
             italic: Whether word is italic.
             small_caps: Whether word is small caps.
             blackletter: Whether word is blackletter.
+            left_footnote: Whether word has a left footnote marker.
+            right_footnote: Whether word has a right footnote marker.
 
         Returns:
             bool: True if update succeeded, False otherwise.
@@ -438,6 +444,8 @@ class PageState:
                 italic,
                 small_caps,
                 blackletter,
+                left_footnote,
+                right_footnote,
             )
 
             if result:
@@ -450,6 +458,8 @@ class PageState:
                         italic=bool(italic),
                         small_caps=bool(small_caps),
                         blackletter=bool(blackletter),
+                        left_footnote=bool(left_footnote),
+                        right_footnote=bool(right_footnote),
                     )
                 )
                 self.notify()

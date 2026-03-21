@@ -229,6 +229,8 @@ class TestLineOperations:
             italic=True,
             small_caps=True,
             blackletter=False,
+            left_footnote=False,
+            right_footnote=False,
         )
 
         assert result is True
@@ -250,6 +252,8 @@ class TestLineOperations:
             italic=True,
             small_caps=False,
             blackletter=False,
+            left_footnote=False,
+            right_footnote=False,
         )
 
         assert result is False

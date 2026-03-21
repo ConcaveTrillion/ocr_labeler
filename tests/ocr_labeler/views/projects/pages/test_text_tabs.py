@@ -77,6 +77,8 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
             italic=True,
             small_caps=False,
             blackletter=False,
+            left_footnote=False,
+            right_footnote=False,
         )
     )
     text_tabs.word_match_view.apply_word_style_change.assert_called_once()
@@ -98,6 +100,8 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
             italic=False,
             small_caps=False,
             blackletter=False,
+            left_footnote=False,
+            right_footnote=False,
         )
     )
     text_tabs.word_match_view.apply_word_style_change.assert_not_called()
@@ -459,7 +463,7 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        update_word_attributes=lambda page_index, line_index, word_index, italic, small_caps, blackletter: (
+        update_word_attributes=lambda page_index, line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
             calls.append(
                 (
                     page_index,
@@ -468,6 +472,8 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
                     italic,
                     small_caps,
                     blackletter,
+                    left_footnote,
+                    right_footnote,
                 )
             )
             or True
@@ -481,10 +487,12 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
         True,
         False,
         True,
+        False,
+        False,
     )
 
     assert result is True
-    assert calls == [(3, 4, 1, True, False, True)]
+    assert calls == [(3, 4, 1, True, False, True, False, False)]
 
 
 def test_text_tabs_word_style_event_routes_to_targeted_view_update():
@@ -506,6 +514,8 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
             italic=False,
             small_caps=False,
             blackletter=True,
+            left_footnote=False,
+            right_footnote=False,
         )
         page_state.on_word_style_change.emit(event)
         for listener in page_state.on_change:
@@ -534,6 +544,8 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
         False,
         False,
         True,
+        False,
+        False,
     )
     assert result is True
     text_tabs.word_match_view.apply_word_style_change.assert_called_once_with(
@@ -542,6 +554,8 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
         False,
         False,
         True,
+        False,
+        False,
     )
     text_tabs.word_match_view.update_from_page.assert_not_called()
 
@@ -647,6 +661,8 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
             italic=True,
             small_caps=False,
             blackletter=False,
+            left_footnote=False,
+            right_footnote=False,
         )
         page_state.on_word_style_change.emit(event)
         for listener in page_state.on_change:
@@ -675,6 +691,8 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
         0,
         0,
         True,
+        False,
+        False,
         False,
         False,
     )

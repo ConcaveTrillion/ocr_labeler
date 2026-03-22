@@ -102,6 +102,9 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             logger.warning("Cannot refresh LabelerView before it is built")
             return
 
+        if self.header_bar and self.header_bar.is_built:
+            self.header_bar.refresh()
+
         # Show/hide project view vs placeholder based on view model state
         show_project_view = self.viewmodel.show_project_view
         logger.debug(

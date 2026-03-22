@@ -45,13 +45,13 @@ upgrade-deps: ## Upgrade dependencies and sync local environment
 	uv sync --group all-dev
 	@echo "✅ Dependencies upgraded and environment synced!"
 
-test: ## Run tests
-	@echo "🧪 Running tests..."
-	uv run pytest
+test: ## Run tests with parallelization
+	@echo "🧪 Running tests (parallelized)..."
+	uv run pytest -n auto -v -ra
 
-test-verbose: ## Run tests with verbose output
-	@echo "🧪 Running tests (verbose mode)..."
-	uv run pytest -v
+test-verbose: ## Run tests with verbose output and parallelization
+	@echo "🧪 Running tests (verbose mode, parallelized)..."
+	uv run pytest -n auto -v -ra
 
 test-single: ## Run one pytest node id (usage: make test-single TEST='tests/...::test_name')
 	@if [ -z "$(TEST)" ]; then \
@@ -59,8 +59,8 @@ test-single: ## Run one pytest node id (usage: make test-single TEST='tests/...:
 		echo "   Example: make test-single TEST='tests/integration/test_url_routing.py::TestProjectRouting::test_project_route_nonexistent_shows_warning'"; \
 		exit 1; \
 	fi
-	@echo "🧪 Running single test: $(TEST)"
-	uv run pytest "$(TEST)"
+	@echo "🧪 Running single test (parallelized): $(TEST)"
+	uv run pytest -n auto "$(TEST)"
 
 test-k: ## Run tests by pytest -k expression (usage: make test-k K='pattern')
 	@if [ -z "$(K)" ]; then \
@@ -68,16 +68,16 @@ test-k: ## Run tests by pytest -k expression (usage: make test-k K='pattern')
 		echo "   Example: make test-k K='test_project_route_nonexistent_shows_warning'"; \
 		exit 1; \
 	fi
-	@echo "🧪 Running tests with -k: $(K)"
-	uv run pytest -k "$(K)"
+	@echo "🧪 Running tests with -k (parallelized): $(K)"
+	uv run pytest -n auto -k "$(K)"
 
 test-browser: ## Run browser-based regression tests (Playwright)
-	@echo "🌐 Running browser tests..."
-	uv run pytest -m browser
+	@echo "🌐 Running browser tests (parallelized)..."
+	uv run pytest -m browser -n auto -v -ra
 
-coverage: ## Run tests with coverage report
-	@echo "🧪 Running tests with coverage..."
-	uv run pytest --cov=ocr_labeler --cov-report=html
+coverage: ## Run tests with coverage report (parallelized)
+	@echo "🧪 Running tests with coverage (parallelized)..."
+	uv run pytest --cov=ocr_labeler --cov-report=html -n auto -v -ra
 	@echo "📊 Coverage report generated in htmlcov/index.html"
 
 lint: ## Run linting checks

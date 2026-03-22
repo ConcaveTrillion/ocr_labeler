@@ -34,5 +34,4 @@ class HeaderBar(BaseView["MainViewModel"]):
 
     def refresh(self):
         """Refresh the header based on current view model state."""
-        # Header content is mostly static, but we could refresh controls if needed
-        pass
+        self.project_controls.sync_control_states()

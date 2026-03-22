@@ -109,6 +109,31 @@ class ProjectLoadControls:
             )
             self._notify_once(key, message, type_="warning")
 
+    def _bind_disabled_from_safe(
+        self,
+        target: object,
+        source: object,
+        source_property: str,
+        *,
+        key: str,
+        message: str,
+    ) -> None:
+        """Bind a disabled flag onto NiceGUI's enabled property safely."""
+        try:
+            target.bind_enabled_from(  # type: ignore[attr-defined]
+                source,
+                source_property,
+                backward=lambda disabled: not bool(disabled),
+            )
+        except Exception:
+            logger.exception(
+                "Disabled binding failed: %s.enabled <- not %s.%s",
+                type(target).__name__,
+                type(source).__name__,
+                source_property,
+            )
+            self._notify_once(key, message, type_="warning")
+
     def build(self) -> ui.element:
         with (
             ui.dialog() as self._source_folder_dialog,
@@ -206,9 +231,8 @@ class ProjectLoadControls:
                 self.source_folder_button,
             ]
             for control in controls:
-                self._bind_from_safe(
+                self._bind_disabled_from_safe(
                     control,
-                    "disable",
                     self.project_state_model,
                     "is_controls_disabled",
                     key="project-load-controls-disabled-binding",
@@ -223,7 +247,24 @@ class ProjectLoadControls:
                 key="project-load-path-binding",
                 message="Project path label may not update automatically",
             )
+        self.sync_control_states()
         return row
+
+    def sync_control_states(self) -> None:
+        """Apply the latest disabled state directly to all load controls."""
+        enabled = not bool(
+            getattr(self.project_state_model, "is_controls_disabled", False)
+        )
+
+        for control in (
+            getattr(self, "select", None),
+            getattr(self, "load_project_button", None),
+            getattr(self, "source_folder_button", None),
+        ):
+            if control is None:
+                continue
+            control.set_enabled(enabled)
+            control.update()
 
     async def _load_selected_project(
         self,

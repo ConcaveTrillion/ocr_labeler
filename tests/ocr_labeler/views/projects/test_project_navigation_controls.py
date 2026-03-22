@@ -87,3 +87,33 @@ class TestProjectNavigationControls:
         )
 
         notify_mock.assert_called_once_with("nav binding failed", "warning")
+
+    def test_sync_control_states_applies_viewmodel_disabled_flags(self):
+        """Direct sync should mirror disabled flags onto controls."""
+        mock_viewmodel = Mock(
+            prev_disabled=True,
+            next_disabled=False,
+            goto_disabled=True,
+            is_controls_disabled=False,
+        )
+        controls = ProjectNavigationControls(
+            viewmodel=mock_viewmodel,
+            on_prev=Mock(),
+            on_next=Mock(),
+            on_goto=Mock(),
+        )
+        controls.prev_button = Mock()
+        controls.next_button = Mock()
+        controls.goto_button = Mock()
+        controls.page_input = Mock()
+
+        controls.sync_control_states()
+
+        controls.prev_button.set_enabled.assert_called_once_with(False)
+        controls.next_button.set_enabled.assert_called_once_with(True)
+        controls.goto_button.set_enabled.assert_called_once_with(False)
+        controls.page_input.set_enabled.assert_called_once_with(True)
+        controls.prev_button.update.assert_called_once_with()
+        controls.next_button.update.assert_called_once_with()
+        controls.goto_button.update.assert_called_once_with()
+        controls.page_input.update.assert_called_once_with()

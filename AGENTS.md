@@ -45,6 +45,7 @@ Common commands:
 - Always use `uv` to run tests.
 - ALWAYS prefer Make targets for validation when they exist (`make test`, `make ci`, `make test-k`, `make test-single`).
 - Prefer `make test` / `make ci` for standard validation, and use `uv run pytest ...` for targeted test execution.
+- pytest-xdist parallelization is REQUIRED for pytest runs: always include `-n auto`.
 - NEVER run project Python commands with `.venv/bin/python`.
 - NEVER run project Python commands with `python`.
 - NEVER run project Python commands with `python3`.
@@ -64,7 +65,16 @@ Common commands:
 - NEVER use `python -m pytest ...`.
 - NEVER use `python3 -m pytest ...`.
 - ALWAYS use `uv run pytest ...` or Makefile targets that already call `uv`.
+- ALWAYS include `-n auto` on pytest commands (direct or via Make target behavior).
 - If a direct-python test command appears anywhere, treat it as policy violation and replace it.
+
+Examples:
+
+- Allowed: `make test` (must run pytest with `-n auto`).
+- Allowed: `make test-k K='pattern'` (must run pytest with `-n auto`).
+- Allowed: `uv run pytest -n auto -k 'pattern'`.
+- Not allowed: `python -m pytest ...`.
+- Not allowed: `uv run pytest ...` without `-n auto`.
 
 ### Non-negotiable Python executable policy
 

@@ -100,7 +100,7 @@ Constraints:
 
 Validation:
 
-- Run targeted tests first: `pytest tests/ocr/test_page.py`.
+- Run targeted tests first: `uv run pytest -n auto tests/ocr/test_page.py`.
 - Then run broader OCR tests if needed.
 
 ## Acceptance Criteria

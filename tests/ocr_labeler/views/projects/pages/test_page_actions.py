@@ -134,3 +134,23 @@ class TestPageActions:
             "Page source label may not update automatically",
             "warning",
         )
+
+    def test_sync_control_states_applies_project_disabled_flag(self):
+        project_viewmodel = Mock()
+        project_viewmodel.is_controls_disabled = True
+        controls = PageActions(
+            project_viewmodel=project_viewmodel, page_viewmodel=Mock()
+        )
+
+        controls.reload_ocr_button = Mock()
+        controls.save_button = Mock()
+        controls.load_button = Mock()
+
+        controls.sync_control_states()
+
+        controls.reload_ocr_button.set_enabled.assert_called_once_with(False)
+        controls.save_button.set_enabled.assert_called_once_with(False)
+        controls.load_button.set_enabled.assert_called_once_with(False)
+        controls.reload_ocr_button.update.assert_called_once_with()
+        controls.save_button.update.assert_called_once_with()
+        controls.load_button.update.assert_called_once_with()

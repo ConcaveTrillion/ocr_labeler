@@ -113,6 +113,8 @@ class PageView:  # pragma: no cover - UI wrapper file
         total = self.project_view_model.page_total
         display_name = image_name or "(no page)" if total else "(no page)"
         self.set_page_metadata(display_name)
+        if self.page_actions:
+            self.page_actions.sync_control_states()
         logger.debug(
             "Current page state - index: %d, image_name: %s, total_pages: %d, page_loaded: %s",
             current_index,

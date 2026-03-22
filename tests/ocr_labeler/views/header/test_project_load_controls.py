@@ -74,3 +74,24 @@ class TestProjectLoadControls:
         )
 
         notify_mock.assert_called_once_with("two-way bind failed", "warning")
+
+    def test_sync_control_states_applies_project_disabled_flag(self):
+        project_state_model = Mock()
+        project_state_model.is_controls_disabled = True
+        controls = ProjectLoadControls(
+            app_state_model=Mock(),
+            project_state_model=project_state_model,
+        )
+
+        controls.select = Mock()
+        controls.load_project_button = Mock()
+        controls.source_folder_button = Mock()
+
+        controls.sync_control_states()
+
+        controls.select.set_enabled.assert_called_once_with(False)
+        controls.load_project_button.set_enabled.assert_called_once_with(False)
+        controls.source_folder_button.set_enabled.assert_called_once_with(False)
+        controls.select.update.assert_called_once_with()
+        controls.load_project_button.update.assert_called_once_with()
+        controls.source_folder_button.update.assert_called_once_with()

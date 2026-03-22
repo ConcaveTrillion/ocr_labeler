@@ -192,7 +192,7 @@ make reset-full  # Nuclear reset: clear all caches and redownload
 ```bash
 make test
 # or directly:
-uv run pytest
+uv run pytest -n auto -v -ra
 ```
 
 ### Browser-Based Regression Tests
@@ -205,7 +205,7 @@ make test-browser
 Browser tests are marked with `@pytest.mark.browser` and run via:
 
 ```bash
-uv run pytest -m browser
+uv run pytest -m browser -n auto -v -ra
 ```
 
 One-time local setup for Playwright Chromium binaries (required to execute, not skip):

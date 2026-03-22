@@ -77,6 +77,31 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
             )
             self._notify_once(key, message, type_="warning")
 
+    def _bind_disabled_from_safe(
+        self,
+        target: object,
+        source: object,
+        source_property: str,
+        *,
+        key: str,
+        message: str,
+    ) -> None:
+        """Bind a disabled flag onto NiceGUI's enabled property safely."""
+        try:
+            target.bind_enabled_from(  # type: ignore[attr-defined]
+                source,
+                source_property,
+                backward=lambda disabled: not bool(disabled),
+            )
+        except Exception:
+            logger.exception(
+                "Disabled binding failed: %s.enabled <- not %s.%s",
+                type(target).__name__,
+                type(source).__name__,
+                source_property,
+            )
+            self._notify_once(key, message, type_="warning")
+
     def build(self) -> ui.element:
         logger.debug("Building ProjectNavigationControls UI")
         with ui.column().classes("gap-2") as container:
@@ -99,39 +124,37 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
                     .props("autocomplete=off")
                 )
                 self.page_total = ui.label("")
-                self._bind_from_safe(
+                self._bind_disabled_from_safe(
                     self.prev_button,
-                    "disable",
                     self.viewmodel,
                     "prev_disabled",
                     key="nav-prev-disabled-binding",
                     message="Previous button may not reflect disabled state",
                 )
-                self._bind_from_safe(
+                self._bind_disabled_from_safe(
                     self.next_button,
-                    "disable",
                     self.viewmodel,
                     "next_disabled",
                     key="nav-next-disabled-binding",
                     message="Next button may not reflect disabled state",
                 )
-                self._bind_from_safe(
+                self._bind_disabled_from_safe(
                     self.goto_button,
-                    "disable",
                     self.viewmodel,
                     "goto_disabled",
                     key="nav-goto-disabled-binding",
                     message="Go To button may not reflect disabled state",
                 )
                 if self.page_input:
-                    self._bind_from_safe(
+                    self._bind_disabled_from_safe(
                         self.page_input,
-                        "disable",
                         self.viewmodel,
                         "is_controls_disabled",
                         key="nav-page-input-disabled-binding",
                         message="Page input may not reflect disabled state",
                     )
+
+        self.sync_control_states()
 
         return container
 
@@ -145,3 +168,32 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
             self.page_input.value = index_plus_one
         if self.page_total:
             self.page_total.text = f"/ {total}" if total else "/ 0"
+
+    def sync_control_states(self) -> None:
+        """Apply the latest disabled state directly to controls.
+
+        NiceGUI bindings can miss propagating the disabled prop to the DOM when
+        a page is restored from pre-saved fixture data during route loads.
+        Reapplying the current flags during view refresh keeps the Quasar state
+        aligned with the view model.
+        """
+        if getattr(self, "prev_button", None) is not None:
+            self.prev_button.set_enabled(
+                not bool(getattr(self.viewmodel, "prev_disabled", False))
+            )
+            self.prev_button.update()
+        if getattr(self, "next_button", None) is not None:
+            self.next_button.set_enabled(
+                not bool(getattr(self.viewmodel, "next_disabled", False))
+            )
+            self.next_button.update()
+        if getattr(self, "goto_button", None) is not None:
+            self.goto_button.set_enabled(
+                not bool(getattr(self.viewmodel, "goto_disabled", False))
+            )
+            self.goto_button.update()
+        if self.page_input is not None:
+            self.page_input.set_enabled(
+                not bool(getattr(self.viewmodel, "is_controls_disabled", False))
+            )
+            self.page_input.update()

@@ -11,7 +11,8 @@ Copilot-specific adapter for this repository.
 ## Copilot in VS Code
 
 - In VS Code, prefer `run_task` for existing Make-backed tasks from `.vscode/tasks.json`.
-- For tests in VS Code, prefer the built-in VS Code test runner when available.
+- For tests in VS Code, use Make targets or `uv run pytest ...` from terminal/task execution.
+- For any direct pytest command, include `-n auto`.
 - Use terminal commands only when no suitable task exists.
 - When a task and a Make command are equivalent, either is acceptable in VS Code; outside VS Code, follow `AGENTS.md` (`make`-first).
 

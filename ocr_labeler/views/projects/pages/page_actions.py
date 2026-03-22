@@ -82,6 +82,31 @@ class PageActions:  # pragma: no cover - UI wrapper file
             )
             self._notify_once(key, message, type_="warning")
 
+    def _bind_disabled_from_safe(
+        self,
+        target: object,
+        source: object,
+        source_property: str,
+        *,
+        key: str,
+        message: str,
+    ) -> None:
+        """Bind a disabled flag onto NiceGUI's enabled property safely."""
+        try:
+            target.bind_enabled_from(  # type: ignore[attr-defined]
+                source,
+                source_property,
+                backward=lambda disabled: not bool(disabled),
+            )
+        except Exception:
+            logger.exception(
+                "Disabled binding failed: %s.enabled <- not %s.%s",
+                type(target).__name__,
+                type(source).__name__,
+                source_property,
+            )
+            self._notify_once(key, message, type_="warning")
+
     def build(self) -> ui.element:
         logger.debug("Building PageActions UI")
         with ui.row().classes("items-center gap-2") as container:
@@ -128,6 +153,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
                 )
 
         self._bind_disabled_states()
+        self.sync_control_states()
         return container
 
     def set_page_metadata(self, name: str) -> None:
@@ -146,11 +172,26 @@ class PageActions:  # pragma: no cover - UI wrapper file
         for button in buttons:
             if button is None:
                 continue
-            self._bind_from_safe(
+            self._bind_disabled_from_safe(
                 button,
-                "disable",
                 self.project_viewmodel,
                 "is_controls_disabled",
                 key="page-actions-controls-disabled-binding",
                 message="Some page action buttons may not reflect disabled state",
             )
+
+    def sync_control_states(self) -> None:
+        """Apply the latest disabled state directly to page action buttons."""
+        enabled = not bool(
+            getattr(self.project_viewmodel, "is_controls_disabled", False)
+        )
+
+        for button in (
+            self.reload_ocr_button,
+            self.save_button,
+            self.load_button,
+        ):
+            if button is None:
+                continue
+            button.set_enabled(enabled)
+            button.update()

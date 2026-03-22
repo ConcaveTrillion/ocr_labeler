@@ -120,6 +120,7 @@ class ProjectView(
                 self.navigation_controls.set_page(display_index, total)
             else:
                 self.navigation_controls.set_page(1, 0)
+            self.navigation_controls.sync_control_states()
 
     def _goto_page(self, raw_value):
         """Navigate to a specific page number with validation."""

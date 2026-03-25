@@ -1467,7 +1467,7 @@ wheels = [
 
 [[package]]
 name = "ocr-labeler"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "nicegui" },

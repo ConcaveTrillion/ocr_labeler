@@ -27,7 +27,9 @@ Prefer lazy instance-level caching of expensive OCR predictors instead of repeat
 
 ### 4) Mutating `_default_project_state` during app setup
 
-Avoid initializing active project behavior by directly mutating fallback state. Let `load_project(...)` create/manage concrete `ProjectState` instances.
+Avoid initializing active project behavior by directly mutating fallback
+state. Let `load_project(...)` create/manage concrete `ProjectState`
+instances.
 
 ## Debugging Checklist
 

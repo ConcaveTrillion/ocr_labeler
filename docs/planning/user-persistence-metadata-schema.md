@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Define an explicit storage format for **user-authoritative saved page data** (`Save Page`) that captures provenance and compatibility metadata, including:
+Define an explicit storage format for **user-authoritative saved page data**
+(`Save Page`) that captures provenance and compatibility metadata, including:
 
 - this app (`ocr_labeler`) version/build information
 - supporting library/toolchain versions (including `pd-book-tools`)

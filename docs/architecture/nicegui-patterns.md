@@ -18,6 +18,7 @@ Last validated: 2026-02-18.
 - Prefer `*_view_model` attribute names (for example, `project_state_view_model`).
 
 See also:
+
 - `multi-tab/overview.md`
 - `multi-tab/state-hierarchy.md`
 
@@ -29,7 +30,9 @@ See also:
 
 ### Image Source Caveat
 
-Do not rely on direct binding of image source for page image updates. Prefer explicit callback/update methods (`set_source(...)`) triggered by relevant property changes.
+Do not rely on direct binding of image source for page image updates.
+Prefer explicit callback/update methods (`set_source(...)`) triggered by
+relevant property changes.
 
 ## Async Execution Patterns
 
@@ -38,11 +41,13 @@ Do not rely on direct binding of image source for page image updates. Prefer exp
 - Keep async handlers (`async def`) lightweight and update UI state before/after long operations.
 
 Avoid raw asyncio scheduling/offload patterns in app code:
+
 - `asyncio.create_task(...)`
 - `loop.run_in_executor(...)`
 - `asyncio.to_thread(...)`
 
 Detailed migration examples live in:
+
 - `async/overview.md`
 - `async/migration-patterns.md`
 - `async/affected-files.md`

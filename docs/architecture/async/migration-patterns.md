@@ -6,14 +6,14 @@ Validated against `ocr_labeler/**/*.py` on 2026-02-15.
 
 ## Background Task Scheduling
 
-### Before
+### Before (Task Scheduling)
 
 ```python
 loop = asyncio.get_running_loop()
 task = loop.create_task(some_async_function())
 ```
 
-### After
+### After (Task Scheduling)
 
 ```python
 from nicegui import background_tasks
@@ -22,14 +22,14 @@ background_tasks.create(some_async_function())
 
 ## IO-Bound Work
 
-### Before
+### Before (I/O Offloading)
 
 ```python
 loop = asyncio.get_running_loop()
 result = await loop.run_in_executor(executor, blocking_io_function, arg1, arg2)
 ```
 
-### After
+### After (I/O Offloading)
 
 ```python
 from nicegui import run
@@ -60,7 +60,9 @@ await run.io_bound(path.read_text, encoding="utf-8")
 
 ## Current Codebase Validation
 
-- No usages found for `asyncio.create_task`, `loop.run_in_executor`, `asyncio.to_thread`, or `asyncio.get_running_loop()` in `ocr_labeler/**/*.py`.
+- No usages found for `asyncio.create_task`, `loop.run_in_executor`,
+  `asyncio.to_thread`, or `asyncio.get_running_loop()` in
+  `ocr_labeler/**/*.py`.
 - Current runtime scheduling/offload patterns in app code use `background_tasks.create(...)` and `run.io_bound(...)`.
 - Current intentional `asyncio` usages are:
-	- `asyncio.sleep(...)` in `ocr_labeler/views/projects/project_view.py` for cooperative UI yielding.
+  - `asyncio.sleep(...)` in `ocr_labeler/views/projects/project_view.py` for cooperative UI yielding.

@@ -4,7 +4,9 @@
 
 `ocr_labeler` currently attaches OCR provenance metadata to `Page` instances using dynamic attributes (for example, `_ocr_labeler_live_ocr_provenance`).
 
-The goal is to move OCR provenance ownership into `pd-book-tools` at the `Page` object level so provenance travels with `Page` through normal serialization (`to_dict` / `from_dict`) and copy flows.
+The goal is to move OCR provenance ownership into `pd-book-tools` at the
+`Page` object level so provenance travels with `Page` through normal
+serialization (`to_dict` / `from_dict`) and copy flows.
 
 ## Objective
 
@@ -45,8 +47,12 @@ Primary targets:
    - Backward compatibility: missing `ocr_provenance` must not fail and should default to `None`.
 
 4. **Propagate provenance during OCR construction**
-   - In `Document.from_doctr_output(...)` and/or `Document.from_image_ocr_via_doctr(...)`, initialize `Page.ocr_provenance` with best-effort metadata available at creation time.
-   - Keep this minimal and deterministic; avoid expensive runtime introspection.
+   - In `Document.from_doctr_output(...)` and/or
+     `Document.from_image_ocr_via_doctr(...)`, initialize
+     `Page.ocr_provenance` with best-effort metadata available at
+     creation time.
+   - Keep this minimal and deterministic; avoid expensive runtime
+     introspection.
    - Suggested minimum keys:
      - `engine` (e.g., `"doctr"`)
      - `source_lib` (if available)
@@ -89,8 +95,12 @@ Requirements:
 1. Update `pd_book_tools/ocr/page.py` to add an optional `ocr_provenance` field to `Page`.
 2. Update `Page.__init__`, `Page.to_dict()`, and `Page.from_dict()` so provenance round-trips.
 3. Ensure backward compatibility with existing JSON payloads that do not have provenance.
-4. Update OCR construction in `pd_book_tools/ocr/document.py` so OCR-created pages get baseline provenance metadata (`engine`, `source_lib`, `models`, `engine_version`).
-5. Add tests in `tests/ocr/test_page.py` (and `tests/ocr/test_document.py` only if needed) for round-trip, legacy compatibility, and copy behavior.
+4. Update OCR construction in `pd_book_tools/ocr/document.py` so
+   OCR-created pages get baseline provenance metadata
+   (`engine`, `source_lib`, `models`, `engine_version`).
+5. Add tests in `tests/ocr/test_page.py`
+   (and `tests/ocr/test_document.py` only if needed) for round-trip,
+   legacy compatibility, and copy behavior.
 
 Constraints:
 

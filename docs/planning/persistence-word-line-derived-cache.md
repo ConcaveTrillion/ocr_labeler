@@ -145,7 +145,9 @@ Mitigations:
 - Should derived cache be globally size-bounded per project directory?
 - Is a lightweight binary pack needed initially, or can JSON + compressed payload suffice?
 - Should line structure cache be eager (on page load) or lazy (on first line-view access)?
-- Which tooling should back the derived cache: `diskcache` alone, or a two-tier approach with `cachetools` (memory LRU) + `diskcache` (persistent on-disk cache)?
+- Which tooling should back the derived cache: `diskcache` alone, or a
+  two-tier approach with `cachetools` (memory LRU) + `diskcache`
+  (persistent on-disk cache)?
 
 ## Execution Checklist
 

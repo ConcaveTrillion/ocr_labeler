@@ -17,18 +17,20 @@ Keep expensive OCR and filesystem operations off the main NiceGUI event loop.
 ## Current Call Paths
 
 - Project load path:
-	- `ProjectState.load_project(...)` uses `run.io_bound(...)` for directory scan and project creation.
-	- `ProjectState.load_ground_truth_map(...)` uses `run.io_bound(...)` for filesystem and JSON parsing.
+  - `ProjectState.load_project(...)` uses `run.io_bound(...)` for directory scan and project creation.
+  - `ProjectState.load_ground_truth_map(...)` uses `run.io_bound(...)` for filesystem and JSON parsing.
 - Navigation path:
-	- `ProjectState._navigate()` sets navigation flags and schedules `_background_load()` via `background_tasks.create(...)`.
-	- `_background_load()` preloads target page via `await run.io_bound(self.get_page, ...)`.
+  - `ProjectState._navigate()` sets navigation flags and schedules `_background_load()` via `background_tasks.create(...)`.
+  - `_background_load()` preloads target page via `await run.io_bound(self.get_page, ...)`.
 - Image refresh path:
-	- `PageStateViewModel._schedule_image_update()` schedules async update via `background_tasks.create(...)`.
-	- `_update_image_sources_async()` uses `run.io_bound(...)` for image refresh and encoding work.
+  - `PageStateViewModel._schedule_image_update()` schedules async update via `background_tasks.create(...)`.
+  - `_update_image_sources_async()` uses `run.io_bound(...)` for image refresh and encoding work.
 
 ## Runtime Notes
 
-- A blocking fallback path exists for no-event-loop/test contexts in some components; production paths are async (`background_tasks.create` + `run.io_bound`).
+- A blocking fallback path exists for no-event-loop/test contexts in some
+  components; production paths are async
+  (`background_tasks.create` + `run.io_bound`).
 - No current `run.cpu_bound(...)` call sites were found in `ocr_labeler/**/*.py` during this validation pass.
 
 ## Design Goals

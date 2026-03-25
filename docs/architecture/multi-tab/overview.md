@@ -51,4 +51,5 @@ Each route invocation creates new objects for that session, so mutable state is 
 
 ## Lifecycle Note
 
-Session cleanup is registered with `ui.on("disconnect", ...)` to stop timers and clear listeners, reducing late callbacks after client teardown.
+Session cleanup is registered with `ui.on("disconnect", ...)` to stop timers
+and clear listeners, reducing late callbacks after client teardown.

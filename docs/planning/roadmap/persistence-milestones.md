@@ -8,9 +8,12 @@ This track captures persistence work that cuts across product roadmap milestones
 ## Roadmap Placement
 
 - **Page Cache Baseline** aligns with editing-core work.
-- **Metadata + Session Baseline** is a pre-enhanced-UI gate so user metadata persistence is stable before broader feature additions.
+- **Metadata + Session Baseline** is a pre-enhanced-UI gate so user
+  metadata persistence is stable before broader feature additions.
 - **Disconnect/Prewarm Reliability** aligns with navigation/multi-page reliability work.
-- **Derived Cache Optimization** is intentionally deferred to performance/polish work after core behavior and metadata schema are stable.
+- **Derived Cache Optimization** is intentionally deferred to
+  performance/polish work after core behavior and metadata schema are
+  stable.
 
 ## Planned Sequence
 

@@ -38,4 +38,5 @@ Last validated: 2026-02-15.
 
 ## Migration Caveat
 
-File-level and API-level details in these notes are snapshots and should be treated as guidance until revalidated against current code.
+File-level and API-level details in these notes are snapshots and should be
+treated as guidance until revalidated against current code.

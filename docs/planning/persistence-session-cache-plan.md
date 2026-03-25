@@ -2,16 +2,21 @@
 
 ## Problem
 
-Session reloads currently lose in-memory loaded pages, so users can re-trigger OCR for pages that were already processed in prior sessions.
+Session reloads currently lose in-memory loaded pages, so users can
+re-trigger OCR for pages that were already processed in prior sessions.
 
-The app can load saved page JSON from disk, but persistence is mostly user-driven (manual save actions), and there is no formal session restore plan.
+The app can load saved page JSON from disk, but persistence is mostly
+user-driven (manual save actions), and there is no formal session restore
+plan.
 
 ## Goals
 
 - Make OCR a one-time cost per unchanged source image in typical workflows.
 - Restore useful session context after reload (project + page position) without surprising users.
 - Keep behavior safe when source images change (no stale cache usage).
-- Ensure cache invalidation also occurs when OCR/parsing semantics change, including OCR engine changes and `pd-book-tools` version changes (post-processing differences).
+- Ensure cache invalidation also occurs when OCR/parsing semantics change,
+  including OCR engine changes and `pd-book-tools` version changes
+  (post-processing differences).
 - Preserve existing UX: no new required steps for users.
 - Keep **auto cache persistence** separate from **user-authoritative Save Page edits**.
 - Improve source/status visibility so users can distinguish raw, cached, and labeled page origins.
@@ -155,9 +160,12 @@ Acceptance:
 
 Suggested artifacts under `local-data/labeled-ocr/`:
 
-- **User edits lane (existing canonical outputs):** `<project>_<page>.json`, `<project>_<page>.png|jpg` (from explicit `Save Page`)
+- **User edits lane (existing canonical outputs):**
+  `<project>_<page>.json`, `<project>_<page>.png|jpg`
+  (from explicit `Save Page`)
 - **Auto cache lane (new):** separate cache namespace/path (example: `cache/<project>_<page>.json`, `cache/<project>_<page>.png|jpg`)
-- New per-project cache manifest: `<project>_manifest.json` (or `cache/<project>_manifest.json` if colocated with cache lane)
+- New per-project cache manifest: `<project>_manifest.json`
+  (or `cache/<project>_manifest.json` if colocated with cache lane)
 - New session snapshot: `session_state.json`
 
 Note: final directory naming can vary, but lane separation is required to prevent ambiguity.
@@ -201,7 +209,9 @@ Mitigations:
 - Should session restore be per-browser-session only or global last-state?
 - Do we need a user toggle to disable auto-persist for experimentation workflows?
 - Should `Load Page` prefer user-edit lane first, then cache lane fallback, then OCR?
-- For persistence implementation, should we evaluate a two-tier strategy using `cachetools` (in-memory LRU) with `diskcache` (on-disk reloadable cache)?
+- For persistence implementation, should we evaluate a two-tier strategy
+  using `cachetools` (in-memory LRU) with `diskcache`
+  (on-disk reloadable cache)?
 
 ## Execution Checklist
 
@@ -209,7 +219,8 @@ Mitigations:
 - [ ] Define separate storage namespace/path for auto cache vs `Save Page` outputs.
 - [ ] Wire auto-save after OCR success into auto-cache lane only.
 - [ ] Add cache freshness validation in page load path.
-- [ ] Include OCR engine/version + `pd-book-tools` version in cache compatibility checks.
+- [ ] Include OCR engine/version + `pd-book-tools` version in cache
+  compatibility checks.
 - [ ] Extend page source model to represent `raw_ocr`, `cached_ocr`, and `labeled` distinctly.
 - [ ] Add tooltip metadata plumbing (engine/version/fingerprint/timestamp) for cached/labeled statuses.
 - [ ] Ensure `Save Page` path persists user changes as authoritative output.

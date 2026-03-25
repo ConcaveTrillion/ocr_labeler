@@ -1,6 +1,7 @@
 # Next Step: Event-Scoped UI Updates
 
-Goal: replace broad page-level refresh behavior with targeted, typed state-change events so views update only the necessary UI elements.
+Goal: replace broad page-level refresh behavior with targeted, typed
+state-change events so views update only the necessary UI elements.
 
 ## Scope for the First Vertical Slice
 

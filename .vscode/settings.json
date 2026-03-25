@@ -13,8 +13,19 @@
         "VIRTUAL_ENV": "${workspaceFolder}/.venv"
     },
     "chat.tools.terminal.autoApprove": {
+        "make help": true,
+        "make lint": true,
+        "make lint-fix": true,
+        "make py-lint": true,
+        "make py-lint-fix": true,
+        "make md-lint": true,
+        "make md-lint-fix": true,
         "make ci": true,
         "make test": true,
+        "make test-verbose": true,
+        "make test-browser": true,
+        "make coverage": true,
+        "make build": true,
         "make clean-logs": true,
         "make clean-cache": true,
         "make run": true

@@ -23,8 +23,10 @@ AppState (per tab)
 ## Notes
 
 - `projects` stores one `ProjectState` per loaded project.
-- `selected_project_key` is UI-facing selection; `current_project_key` tracks the active loaded project.
-- `project_state` returns the current entry from `projects`, or lazily creates `_default_project_state` when no project is active.
+- `selected_project_key` is UI-facing selection;
+  `current_project_key` tracks the active loaded project.
+- `project_state` returns the current entry from `projects`, or lazily
+  creates `_default_project_state` when no project is active.
 - `_default_project_state` exists for compatibility access paths and is not shared across tabs.
 
 ## Known Historical Issue
@@ -35,7 +37,9 @@ First navigation after loading projects in multiple tabs could disconnect one se
 
 ### Root Cause (Historical)
 
-`PageOperations.build_initial_page_parser()` created closures that instantiated new DocTR predictors per OCR call, causing resource contention under concurrent tab usage.
+`PageOperations.build_initial_page_parser()` created closures that
+instantiated new DocTR predictors per OCR call, causing resource contention
+under concurrent tab usage.
 
 ### Fix (Historical)
 

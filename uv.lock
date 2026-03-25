@@ -1717,7 +1717,7 @@ wheels = [
 
 [[package]]
 name = "pd-book-tools"
-version = "0.3.1"
+version = "0.3.2"
 source = { directory = "../pd-book-tools" }
 dependencies = [
     { name = "cupy-cuda12x" },
@@ -1770,6 +1770,7 @@ dev = [
     { name = "pylint", specifier = ">=3.3.7" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6.2.1" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.12.5" },
 ]
 

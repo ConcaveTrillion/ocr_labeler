@@ -21,7 +21,8 @@ Shared instructions for AI coding agents working in this repository (Copilot, Cl
 
 - Use Makefile targets as the canonical workflow.
 - ALWAYS use a Makefile target first when an equivalent target exists.
-- ONLY fall back to `uv run ...` when no Make target covers the needed command (for example, highly targeted `pytest -k` runs).
+- ONLY fall back to `uv run ...` when no Make target covers the needed
+  command (for example, highly targeted `pytest -k` runs).
 - If running in VS Code, tasks are optional wrappers around Make targets.
 - Dependency manager: `uv` (Python `>=3.13`).
 - Local non-editable dependency: sibling repo `../pd-book-tools`.
@@ -64,9 +65,12 @@ Common commands:
 - NEVER use `.venv/bin/python -m pytest ...`.
 - NEVER use `python -m pytest ...`.
 - NEVER use `python3 -m pytest ...`.
-- ALWAYS use `uv run pytest ...` or Makefile targets that already call `uv`.
-- ALWAYS include `-n auto` on pytest commands (direct or via Make target behavior).
-- If a direct-python test command appears anywhere, treat it as policy violation and replace it.
+- ALWAYS use `uv run pytest ...` or Makefile targets that already call
+  `uv`.
+- ALWAYS include `-n auto` on pytest commands
+  (direct or via Make target behavior).
+- If a direct-python test command appears anywhere, treat it as policy
+  violation and replace it.
 
 Examples:
 
@@ -93,7 +97,8 @@ Examples:
 ## Exception handling guardrails
 
 - Do not silently swallow recoverable exceptions in UI/navigation flows.
-- Log exceptions with sufficient context and surface a user-visible notification when behavior is degraded but the app can continue.
+- Log exceptions with sufficient context and surface a user-visible
+  notification when behavior is degraded but the app can continue.
 
 ## Documentation hygiene
 

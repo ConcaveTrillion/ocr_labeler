@@ -1,16 +1,21 @@
 OCR Labeler (NiceGUI UI)
 ========================
 
-Minimal web UI for navigating OCR page images, viewing overlays, and comparing OCR output with ground truth text. Built with [NiceGUI](https://nicegui.io/) and a lightweight state layer that lazily loads and OCRs pages via `pd-book-tools`.
+Minimal web UI for navigating OCR page images, viewing overlays, and
+comparing OCR output with ground truth text. Built with
+[NiceGUI](https://nicegui.io/) and a lightweight state layer that lazily
+loads and OCRs pages via `pd-book-tools`.
 
 Documentation
 -------------
+
 - Architecture docs: [docs/architecture/README.md](docs/architecture/README.md)
 - Planning and roadmap docs: [docs/planning/README.md](docs/planning/README.md)
 - Current editing roadmap focus: [docs/planning/roadmap/editing-core.md](docs/planning/roadmap/editing-core.md)
 
 AI Doc Retrieval Checklist
 --------------------------
+
 Use this order to keep AI prompts small and rely on canonical docs:
 
 1. Read project overview in this README.
@@ -20,22 +25,28 @@ Use this order to keep AI prompts small and rely on canonical docs:
 5. For async behavior, read: [docs/architecture/async/overview.md](docs/architecture/async/overview.md) and [docs/architecture/async/migration-patterns.md](docs/architecture/async/migration-patterns.md).
 
 Rules:
+
 - Treat docs as source of truth; do not duplicate large guidance in agent instruction files.
 - If implementation changes behavior, update the matching doc in `docs/`.
-- Use Make targets as the default for install, lint, test, build, and run; use VS Code tasks as optional wrappers when in VS Code.
+- Use Make targets as the default for install, lint, test, build, and run;
+  use VS Code tasks as optional wrappers when in VS Code.
 
 Current Capabilities
 --------------------
+
 - Open a project directory containing page images (`.png`, `.jpg`, `.jpeg`).
 - Auto–lazy load & OCR each page the first time you navigate to it.
 - Navigate pages (Prev / Next / direct page number input).
-- Display multiple overlay variants (original, paragraphs, lines, words, mismatches – where available from the underlying OCR lib).
+- Display multiple overlay variants (original, paragraphs, lines, words,
+  mismatches - where available from the underlying OCR lib).
 - Show OCR text and (optional) ground truth text side by side.
-- Auto‑populate ground truth text from an optional `pages.json` file mapping image filename -> ground truth string.
+- Auto-populate ground truth text from an optional `pages.json` file mapping
+  image filename -> ground truth string.
 - Save current page edits to JSON and image files for persistence.
 
 Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
 --------------------------------------------------------------
+
 - Editing & saving OCR / word‑level adjustments (basic save implemented)
 - Bounding box refinement & bulk operations
 - Training / validation export
@@ -45,29 +56,39 @@ Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
 Quick Start
 -----------
 
-### 1. Prerequisites
+Prerequisites
+-------------
+
 - Python 3.13+ (project is configured with `requires-python = ">=3.13"`).
 - [uv](https://github.com/astral-sh/uv) recommended for fast, locked installs (a `uv.lock` is included).
-- Optional: `opencv-python` for image encoding and image-dependent display helpers. In many setups it is available transitively, but install it manually if overlays/previews are missing (see section below).
+- Optional: `opencv-python` for image encoding and image-dependent display
+  helpers. In many setups it is available transitively, but install it
+  manually if overlays/previews are missing (see section below).
 
-### 2. Clone Repositories
+Clone Repositories
+------------------
+
 This project depends on `pd-book-tools` via a relative path (configured in `pyproject.toml`). Place both repos side‑by‑side:
 
-```
+```text
 parent_dir/
-	pd-book-tools/
-	ocr_labeler/   (this repo)
+ pd-book-tools/
+ ocr_labeler/   (this repo)
 ```
 
 Example:
+
 ```bash
 git clone https://github.com/your-org/pd-book-tools.git
 git clone https://github.com/your-org/ocr_labeler.git
 cd ocr_labeler
 ```
 
-### 3. Install Dependencies
+Install Dependencies
+--------------------
+
 Using the Makefile (recommended):
+
 ```bash
 make install
 ```
@@ -75,54 +96,69 @@ make install
 This will install dependencies and set up pre-commit hooks for development.
 
 Alternatively, using uv directly:
+
 ```bash
 uv sync
 ```
 
 Or ad‑hoc run without a full sync (will resolve on the fly):
+
 ```bash
 uv run python -c "import nicegui"
 ```
 
-### 4. Prepare a Project Directory
+Prepare a Project Directory
+---------------------------
+
 Create (or choose) a folder with page images you want to inspect, e.g.:
-```
+
+```text
 sample_project/
-	001.png
-	002.png
-	003.jpg
-	pages.json          (optional ground truth mapping)
+ 001.png
+ 002.png
+ 003.jpg
+ pages.json          (optional ground truth mapping)
 ```
 
 `pages.json` (optional) example:
+
 ```json
 {
-	"001.png": "Ground truth text for first page...",
-	"002.png": "Second page ground truth..."
+ "001.png": "Ground truth text for first page...",
+ "002.png": "Second page ground truth..."
 }
 ```
+
 Keys are matched case‑insensitively; variants without extension (e.g. "001") also map if provided.
 
-### 5. Run the UI (CLI)
+Run the UI (CLI)
+----------------
+
 A console entrypoint `ocr-labeler-ui` is installed.
 
 Basic launch (replace `sample_project` with your images directory):
+
 ```bash
 uv run ocr-labeler-ui sample_project
 ```
 
 Change host/port (e.g. access from another device on LAN):
+
 ```bash
 uv run ocr-labeler-ui sample_project --host 0.0.0.0 --port 9000
 ```
 
 Start with project chooser behavior:
+
 ```bash
 uv run ocr-labeler-ui
 ```
-Auto-load happens only when the resolved `project_dir` is a valid project directory (contains supported page images).
+
+Auto-load happens only when the resolved `project_dir` is a valid project
+directory (contains supported page images).
 
 Increase logging verbosity:
+
 ```bash
 uv run ocr-labeler-ui sample_project -v        # DEBUG app logs
 uv run ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
@@ -130,51 +166,76 @@ uv run ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
 ```
 
 Enable isolated page timing logs in the CLI:
+
 ```bash
 uv run ocr-labeler-ui sample_project --page-timing
 ```
+
 This prints only page timing events (`ocr_labeler.page_timing`) such as
 `page_load_timing`, `page_load_timing_step`, and `page_navigation_timing`.
 
-Then open: http://127.0.0.1:8080/ (or your chosen host/port)
+Then open: <http://127.0.0.1:8080/> (or your chosen host/port)
 
-### 6. Using the Interface
+Using the Interface
+-------------------
+
 1. Project Directory: Confirm (or edit) the path shown, then click Open.
-2. Navigation: Use Prev / Next or type a page number (press Enter or defocus field).
-3. Tabs (left): Switch between overlay variants; a single central spinner shows while a page is loading.
-4. Tabs (right): View Ground Truth vs OCR text. Ground truth is blank if not found in `pages.json`.
+2. Navigation: Use Prev / Next or type a page number
+   (press Enter or defocus field).
+3. Tabs (left): Switch between overlay variants;
+   a single central spinner shows while a page is loading.
+4. Tabs (right): View Ground Truth vs OCR text.
+   Ground truth is blank if not found in `pages.json`.
 5. Saving: Click "Save Page" to persist current page edits to JSON and image files in `local-data/labeled-ocr/`.
 
 Custom Fonts (Optional)
 -----------------------
-`NiceGuiLabeler` accepts `monospace_font_name` and `monospace_font_path`. If a font path is supplied (or the bundled `DPSansMono.ttf` is available), the app injects font CSS at startup and applies it to `.monospace`/CodeMirror elements.
+
+`NiceGuiLabeler` accepts `monospace_font_name` and `monospace_font_path`.
+If a font path is supplied (or the bundled `DPSansMono.ttf` is available),
+the app injects font CSS at startup and applies it to
+`.monospace`/CodeMirror elements.
 
 Example usage:
+
 ```python
 NiceGuiLabeler(project_root, monospace_font_name="MyMono", monospace_font_path=Path("fonts/MyMono.ttf"))
 ```
 
 OpenCV Optional Dependency
 --------------------------
-OpenCV (`opencv-python`) is used for image encoding and some image-dependent display helpers. In many setups it is available transitively via OCR dependencies, but if your environment lacks it you may see missing overlay/preview behavior.
+
+OpenCV (`opencv-python`) is used for image encoding and some image-dependent
+display helpers. In many setups it is available transitively via OCR
+dependencies, but if your environment lacks it you may see missing
+overlay/preview behavior.
 
 Install (optional):
+
 ```bash
 uv add opencv-python
 ```
 
 Troubleshooting
 ---------------
-- Blank Overlays: Ensure images are valid and readable; check logs for OCR/loader errors. Missing OpenCV is usually fine.
+
+- Blank Overlays: Ensure images are valid and readable;
+  check logs for OCR/loader errors. Missing OpenCV is usually fine.
 - No Pages Loaded: Confirm the project directory path is correct and contains supported image extensions.
-- Ground Truth Not Showing: Verify `pages.json` is valid JSON and keys match filenames (case insensitive); restart or click Open again.
-- Import Path Errors: Make sure `pd-book-tools` is cloned sibling to this project root so the relative path source defined in `pyproject.toml` resolves.
-- Environment Issues: Try `make reset` to rebuild the virtual environment, or `make reset-full` for a complete reset including UV cache.
+- Ground Truth Not Showing: Verify `pages.json` is valid JSON and keys match
+  filenames (case insensitive); restart or click Open again.
+- Import Path Errors: Make sure `pd-book-tools` is cloned sibling to this
+  project root so the relative path source defined in `pyproject.toml`
+  resolves.
+- Environment Issues: Try `make reset` to rebuild the virtual environment,
+  or `make reset-full` for a complete reset including UV cache.
 
 Development Workflow
 --------------------
 
-### Makefile Commands
+Makefile Commands
+-----------------
+
 The project includes a Makefile with convenient development commands:
 
 ```bash
@@ -186,16 +247,23 @@ make format      # Format code with ruff
 make clean       # Clean cache files and temporary artifacts
 make reset       # Rebuild virtual environment (keeps UV cache)
 make reset-full  # Nuclear reset: clear all caches and redownload
+make release-patch  # Bump patch version, commit, and tag
+make release-minor  # Bump minor version, commit, and tag
+make release-major  # Bump major version, commit, and tag
 ```
 
-### Running Tests
+Running Tests
+-------------
+
 ```bash
 make test
 # or directly:
 uv run pytest -n auto -v -ra
 ```
 
-### Browser-Based Regression Tests
+Browser-Based Regression Tests
+------------------------------
+
 Use the browser test target to validate core UI rendering in a real browser context:
 
 ```bash
@@ -208,36 +276,70 @@ Browser tests are marked with `@pytest.mark.browser` and run via:
 uv run pytest -m browser -n auto -v -ra
 ```
 
-One-time local setup for Playwright Chromium binaries (required to execute, not skip):
+One-time local setup for Playwright Chromium binaries
+(required to execute, not skip):
 
 ```bash
 uv run playwright install chromium
 ```
 
 Notes:
+
 - Chromium is required for browser tests and is installed by `make install`.
 - If Chromium cannot be launched, browser tests fail fast with a setup error.
 
-### Code Quality
+Code Quality
+------------
+
 ```bash
 make lint        # Lint and auto-fix issues
 make format      # Format code
 make pre-commit-check  # Run pre-commit hooks on all files
 ```
 
-### Development Notes
+Releasing
+---------
+
+Use the Makefile release targets to bump version, create a release commit,
+and create a matching git tag:
+
+```bash
+make release-patch  # 0.1.0 -> 0.1.1
+make release-minor  # 0.1.0 -> 0.2.0
+make release-major  # 0.1.0 -> 1.0.0
+```
+
+Each target will:
+
+- Run `uv version --bump ...`
+- Stage `pyproject.toml` and `uv.lock`
+- Create commit: `chore: release vX.Y.Z`
+- Create tag: `vX.Y.Z`
+
+Then push the release:
+
+```bash
+git push && git push --tags
+```
+
+Development Notes
+-----------------
+
 - See `docs/planning/README.md` for roadmap & phased feature list.
 - `AppState` in `ocr_labeler/state/app_state.py` handles app-level project discovery/selection and session notifications.
-- `ProjectState` in `ocr_labeler/state/project_state.py` handles page navigation, lazy OCR loading, and page persistence actions.
+- `ProjectState` in `ocr_labeler/state/project_state.py` handles page
+  navigation, lazy OCR loading, and page persistence actions.
 - UI composition lives in modular components under `ocr_labeler/views/`.
 - Minimal wrapper `NiceGuiLabeler` is in `ocr_labeler/app.py`.
 
 Future Enhancements (Short List)
 --------------------------------
+
 - Word / line granular editing and validation
 - Bounding box refinement & regeneration
 - Training / validation dataset export
 
 License
 -------
+
 TBD (add license details here).

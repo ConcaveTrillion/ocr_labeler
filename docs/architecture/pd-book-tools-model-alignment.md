@@ -1,6 +1,8 @@
 # pd-book-tools Model Alignment
 
-Purpose: identify dynamic/custom attributes currently attached in `ocr_labeler` to `pd_book_tools` OCR objects, and define the upstream changes needed so these attributes exist natively in `pd-book-tools`.
+Purpose: identify dynamic/custom attributes currently attached in
+`ocr_labeler` to `pd_book_tools` OCR objects, and define the upstream changes
+needed so these attributes exist natively in `pd-book-tools`.
 
 Status: planned migration guide for upstream model changes.
 
@@ -8,7 +10,9 @@ Last validated: 2026-02-15.
 
 ## Scope
 
-This document focuses on attributes we are **writing dynamically** onto `pd_book_tools` objects (primarily `Page`) and should instead model directly in `pd-book-tools`.
+This document focuses on attributes we are **writing dynamically** onto
+`pd_book_tools` objects (primarily `Page`) and should instead model directly
+in `pd-book-tools`.
 
 ## Confirmed dynamic attributes in `ocr_labeler`
 
@@ -52,7 +56,8 @@ Attributes:
 
 ### Not part of this migration
 
-The following are used in `ocr_labeler` but already exist (or are handled) in `pd-book-tools` and are not new model fields to add:
+The following are used in `ocr_labeler` but already exist
+(or are handled) in `pd-book-tools` and are not new model fields to add:
 
 - `Page.add_ground_truth(...)` (already exists)
 - `Page.cv2_numpy_page_image` (already exists)
@@ -167,4 +172,5 @@ Once upstream fields are available, replace dynamic assignment blocks such as:
 - `page.page_source = ...`
 - `setattr(page, "_ocr_labeler_saved_provenance", ...)`
 
-with direct typed assignments and remove local fallback caches that only exist to compensate for missing upstream model fields.
+with direct typed assignments and remove local fallback caches that only exist to compensate for missing upstream
+model fields.

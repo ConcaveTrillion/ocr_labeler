@@ -1,4 +1,4 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k test-browser lint format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing
+.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k test-browser lint py-lint md-lint lint-fix py-lint-fix md-lint-fix format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing release-patch release-minor release-major _do-release
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -82,8 +82,30 @@ coverage: ## Run tests with coverage report (parallelized)
 
 lint: ## Run linting checks
 	@echo "🔍 Running linting checks..."
-	uv run ruff check --select I --fix
-	uv run ruff check --fix
+	@$(MAKE) --no-print-directory py-lint
+	@$(MAKE) --no-print-directory md-lint
+
+py-lint: ## Run Python linting checks
+	@echo "🐍 Running Python linting checks..."
+	uv run pre-commit run ruff-check --all-files
+
+md-lint: ## Run Markdown linting checks
+	@echo "📝 Running Markdown linting checks..."
+	uv run pre-commit run markdownlint-cli2 --all-files
+
+lint-fix: ## Auto-fix lint issues (Python + Markdown where supported)
+	@echo "🛠️  Auto-fixing lint issues..."
+	@$(MAKE) --no-print-directory py-lint-fix
+	@$(MAKE) --no-print-directory md-lint-fix
+
+py-lint-fix: ## Auto-fix Python lint issues
+	@echo "🐍 Auto-fixing Python lint issues..."
+	uv run pre-commit run ruff-format --all-files
+	uv run pre-commit run ruff-check --all-files
+
+md-lint-fix: ## Auto-fix Markdown lint issues
+	@echo "📝 Auto-fixing Markdown lint issues..."
+	uv run pre-commit run --hook-stage manual markdownlint-cli2-fix --all-files
 
 format: ## Format code
 	@echo "✨ Formatting code..."
@@ -154,3 +176,22 @@ clean-lc-run-verbose:
 clean-l-run-verbose:
 	@$(MAKE) --no-print-directory clean-logs
 	@$(MAKE) --no-print-directory run-verbose
+
+release-patch: ## Bump patch version and create a git tag (e.g. 0.1.0 -> 0.1.1)
+	uv version --bump patch
+	@$(MAKE) --no-print-directory _do-release
+
+release-minor: ## Bump minor version and create a git tag (e.g. 0.1.0 -> 0.2.0)
+	uv version --bump minor
+	@$(MAKE) --no-print-directory _do-release
+
+release-major: ## Bump major version and create a git tag (e.g. 0.1.0 -> 1.0.0)
+	uv version --bump major
+	@$(MAKE) --no-print-directory _do-release
+
+_do-release:
+	@VERSION=$$(uv version --short); \
+	git add pyproject.toml uv.lock; \
+	git commit -m "chore: release v$$VERSION"; \
+	git tag "v$$VERSION"; \
+	echo "🏷️  Tagged v$$VERSION - push with: git push && git push --tags"

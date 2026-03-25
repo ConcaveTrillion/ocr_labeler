@@ -8,7 +8,8 @@ Last validated: 2026-02-15.
 
 ## Problem Statement
 
-Historically, low-level asyncio APIs were used in ways that could interfere with NiceGUI event-loop lifecycle and websocket stability.
+Historically, low-level asyncio APIs were used in ways that could interfere
+with NiceGUI event-loop lifecycle and websocket stability.
 
 ## Direction
 
@@ -16,7 +17,8 @@ Use NiceGUI-native async utilities for UI applications:
 
 - `background_tasks.create(...)` for background coroutine scheduling
 - `run.io_bound(...)` for blocking I/O
-- `run.cpu_bound(...)` for CPU-heavy work when process isolation is needed
+- `run.cpu_bound(...)` for CPU-heavy work when process isolation is
+  needed
 
 ## Expected Benefits
 

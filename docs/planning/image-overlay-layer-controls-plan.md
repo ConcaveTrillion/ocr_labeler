@@ -2,7 +2,9 @@
 
 ## Summary
 
-Replace the current multi-tab image experience (`Original`, `Paragraphs`, `Lines`, `Words`, `Mismatches`) with a single image viewport that supports:
+Replace the current multi-tab image experience
+(`Original`, `Paragraphs`, `Lines`, `Words`, `Mismatches`) with a single
+image viewport that supports:
 
 - Layer visibility checkboxes for paragraph, line, and word bounding boxes.
 - A radio-button selection mode switch for active selection target (`paragraph`, `line`, `word`).
@@ -11,7 +13,10 @@ Replace the current multi-tab image experience (`Original`, `Paragraphs`, `Lines
 
 ## Why This Change
 
-Current tab-based visualization forces users to switch tabs to compare overlays. A unified viewport keeps context stable while allowing quick layer toggling and explicit selection intent, which should reduce interaction cost during labeling and refinement.
+Current tab-based visualization forces users to switch tabs to compare
+overlays. A unified viewport keeps context stable while allowing quick layer
+toggling and explicit selection intent, which should reduce interaction cost
+during labeling and refinement.
 
 ## Current Implementation Notes
 
@@ -123,7 +128,9 @@ For this redesign, prefer reducing cache surface area:
 
 ### 1) Introduce unified overlay component
 
-- Replace/refactor `ImageTabs` in `ocr_labeler/views/projects/pages/image_tabs.py` into a single-overlay view (can keep class name initially for low-risk migration, then rename later).
+- Replace/refactor `ImageTabs` in
+  `ocr_labeler/views/projects/pages/image_tabs.py` into a single-overlay view
+  (can keep class name initially for low-risk migration, then rename later).
 - Remove tab definitions and per-tab interactive images.
 - Add controls row (checkboxes + radio) above viewport.
 - Keep existing drag lifecycle methods (`mousedown/mousemove/mouseup`) but route selection by current radio mode.
@@ -137,11 +144,13 @@ For this redesign, prefer reducing cache surface area:
 - Ensure callbacks still emit:
   - selected words to right panel.
   - selected paragraphs to right panel.
-- For line mode, continue expanding selected lines to words when notifying right panel, or add dedicated line callback only if needed.
+- For line mode, continue expanding selected lines to words when notifying
+  right panel, or add dedicated line callback only if needed.
 
 ### 3) Update layout usage
 
-- In `ocr_labeler/views/projects/pages/content.py`, keep left-panel composition the same but expect a single viewport rather than tabs.
+- In `ocr_labeler/views/projects/pages/content.py`, keep left-panel
+  composition the same but expect a single viewport rather than tabs.
 - Ensure image updates from `set_image_update_callback` still update base image source and trigger overlay redraw.
 
 ### 4) Backward-compatible migration guard

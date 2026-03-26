@@ -1960,7 +1960,11 @@ def test_toggle_word_attribute_uses_current_flags(monkeypatch):
     seen = {}
     view = WordMatchView()
     word_match = SimpleNamespace(
-        word_object=SimpleNamespace(word_labels=["small_caps"])
+        word_object=SimpleNamespace(
+            text_style_labels=["small caps"],
+            text_style_label_scopes={"small caps": "whole"},
+            word_components=[],
+        )
     )
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -1997,13 +2001,116 @@ def test_word_attribute_tooltip_includes_active_flags():
         fuzz_score=0.5,
         ocr_text="ocr",
         ground_truth_text="gt",
-        word_object=SimpleNamespace(word_labels=["italic", "blackletter"]),
+        word_object=SimpleNamespace(
+            text_style_labels=["italics", "blackletter"],
+            text_style_label_scopes={
+                "italics": "whole",
+                "blackletter": "whole",
+            },
+            word_components=[],
+        ),
     )
 
     tooltip = view._create_word_tooltip(word_match)
 
     assert tooltip is not None
     assert "Attributes: italic, blackletter" in tooltip
+
+
+def test_apply_style_processor_updates_selected_words(monkeypatch):
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    view.selection.selected_word_indices = {(1, 2), (0, 0)}
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda line_index, word_index: SimpleNamespace(
+            word_object=SimpleNamespace(
+                text_style_labels=["regular"],
+                text_style_label_scopes={"regular": "whole"},
+                word_components=[],
+            ),
+            line_index=line_index,
+            word_index=word_index,
+        ),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        view,
+        "_refresh_word_after_local_operation",
+        lambda line_index, word_index: refreshed.append((line_index, word_index)),
+    )
+
+    result = view.word_operations.apply_style_to_selection("italics")
+
+    assert result.updated_count == 2
+    assert result.severity == "positive"
+    assert refreshed == []
+
+
+def test_apply_style_processor_warns_on_empty_selection():
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+
+    result = view.word_operations.apply_style_to_selection("italics")
+
+    assert result.updated_count == 0
+    assert result.severity == "warning"
+    assert result.message == "Select at least one word"
+
+
+def test_apply_scope_processor_updates_existing_styles(monkeypatch):
+    view = WordMatchView()
+    word_object = SimpleNamespace(
+        text_style_labels=["italics"],
+        text_style_label_scopes={"italics": "whole"},
+        word_components=[],
+    )
+    view.selection.selected_word_indices = {(0, 0)}
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(word_object=word_object),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    original_processor = view.word_operations
+    view.word_operations = type(original_processor)(
+        view,
+        None,
+        refresh_word_callback=lambda line_index, word_index: refreshed.append(
+            (line_index, word_index)
+        ),
+    )
+
+    result = view.word_operations.apply_scope_to_selection("part")
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert result.message == "Applied scope 'part' to existing styles on 1 word(s)"
+    assert word_object.text_style_label_scopes == {"italics": "part"}
+    assert refreshed == [(0, 0)]
+
+
+def test_apply_style_toolbar_buttons_disable_without_selection():
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    view.toolbar.build_actions_toolbar()
+    view.toolbar.update_button_state()
+
+    assert view.toolbar.apply_style_select is not None
+    assert view.toolbar.apply_style_button is not None
+    assert view.toolbar.apply_scope_buttons
+    assert view.toolbar.apply_style_select.enabled is False
+    assert view.toolbar.apply_style_button.disabled is True
+    assert all(button.disabled for button in view.toolbar.apply_scope_buttons)
+
+
+def test_apply_scope_buttons_disable_without_existing_style():
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    view.selection.selected_word_indices = {(0, 0)}
+    view.toolbar.build_actions_toolbar()
+    view.toolbar.update_button_state()
+
+    assert all(button.disabled for button in view.toolbar.apply_scope_buttons)
 
 
 def test_word_gt_input_width_prefers_current_value():

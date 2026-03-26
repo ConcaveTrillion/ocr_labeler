@@ -10,6 +10,7 @@ from pd_book_tools.ocr.page import Page
 
 from ....models.line_match_model import LineMatch
 from ....models.word_match_model import WordMatch
+from ....operations.ocr.word_operations import WordOperations
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
 from .word_match_actions import WordMatchActions
 from .word_match_bbox import WordMatchBbox
@@ -17,6 +18,7 @@ from .word_match_gt_editing import WordMatchGtEditing
 from .word_match_renderer import WordMatchRenderer
 from .word_match_selection import WordMatchSelection
 from .word_match_toolbar import WordMatchToolbar
+from .word_operations import SelectedWordOperationsProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +153,11 @@ class WordMatchView:
         self.gt_editing = WordMatchGtEditing(self)
         self.bbox = WordMatchBbox(self)
         self.actions = WordMatchActions(self)
+        self.word_operations = SelectedWordOperationsProcessor(
+            self,
+            set_word_attributes_callback,
+            refresh_word_callback=self._refresh_word_after_local_operation,
+        )
         self.renderer = WordMatchRenderer(self)
         self.bbox._original_image_source_provider = original_image_source_provider
         self._word_split_fractions: dict[WordKey, float] = {}
@@ -264,6 +271,9 @@ class WordMatchView:
 
         try:
             # Update the view model with the new page
+            self.selection.selected_line_indices.clear()
+            self.selection.selected_word_indices.clear()
+            self.selection.selected_paragraph_indices.clear()
             self.view_model.update_from_page(page)
             # Update the UI
             self._update_summary()
@@ -554,18 +564,30 @@ class WordMatchView:
         if word_object is None:
             return False, False, False, False, False
 
-        try:
-            word_labels = {str(label) for label in word_object.word_labels}
-        except AttributeError:
-            return False, False, False, False, False
-        except TypeError:
-            return False, False, False, False, False
-
-        italic = WORD_LABEL_ITALIC in word_labels
-        small_caps = WORD_LABEL_SMALL_CAPS in word_labels
-        blackletter = WORD_LABEL_BLACKLETTER in word_labels
-        left_footnote = WORD_LABEL_LEFT_FOOTNOTE in word_labels
-        right_footnote = WORD_LABEL_RIGHT_FOOTNOTE in word_labels
+        word_ops = WordOperations()
+        italic = word_ops.read_word_attribute(
+            word_object, "italic", aliases=("is_italic",)
+        )
+        small_caps = word_ops.read_word_attribute(
+            word_object,
+            "small_caps",
+            aliases=("is_small_caps",),
+        )
+        blackletter = word_ops.read_word_attribute(
+            word_object,
+            "blackletter",
+            aliases=("is_blackletter",),
+        )
+        left_footnote = word_ops.read_word_attribute(
+            word_object,
+            "left_footnote",
+            aliases=("is_left_footnote",),
+        )
+        right_footnote = word_ops.read_word_attribute(
+            word_object,
+            "right_footnote",
+            aliases=("is_right_footnote",),
+        )
         return italic, small_caps, blackletter, left_footnote, right_footnote
 
     def _handle_set_word_attributes(
@@ -1015,6 +1037,17 @@ class WordMatchView:
         self.toolbar.update_button_state()
         self.selection.emit_selection_changed()
         self.selection.emit_paragraph_selection_changed()
+
+    def _refresh_word_after_local_operation(
+        self,
+        line_index: int,
+        word_index: int,
+    ) -> None:
+        """Refresh local UI after direct word-object style mutations."""
+        self.renderer.rerender_line_card(line_index)
+        self._refresh_open_word_dialog_for(line_index, word_index)
+        self._update_summary()
+        self.refresh_after_action()
 
     def _update_action_button_state(self) -> None:
         """Enable/disable line and paragraph action buttons based on selection."""

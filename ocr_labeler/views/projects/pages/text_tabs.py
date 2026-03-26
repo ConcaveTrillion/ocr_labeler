@@ -5,6 +5,7 @@ import logging
 from nicegui import binding, ui
 from pd_book_tools.ocr.page import Page
 
+from ....operations.ocr.word_operations import WordOperations
 from ....state import PageState
 from ....state.page_state import WordGroundTruthChangedEvent, WordStyleChangedEvent
 from .word_match import WordMatchView
@@ -660,6 +661,22 @@ class TextTabs:
                 logger.debug("Update word attributes operation result: %s", result)
                 return result
 
+        apply_word_style_callback = None
+        if set_word_attributes_callback is not None:
+
+            def apply_word_style_callback(style: str):
+                return self.word_match_view.word_operations.apply_style_to_selection(
+                    style
+                )
+
+        apply_word_style_scope_callback = None
+        if page_state and hasattr(page_state, "notify"):
+
+            def apply_word_style_scope_callback(scope: str):
+                return self.word_match_view.word_operations.apply_scope_to_selection(
+                    scope
+                )
+
         notify_callback = None
         if (
             page_state
@@ -701,6 +718,10 @@ class TextTabs:
             set_word_attributes_callback=set_word_attributes_callback,
             notify_callback=notify_callback,
             original_image_source_provider=original_image_source_provider,
+        )
+        self.word_match_view.apply_word_style_callback = apply_word_style_callback
+        self.word_match_view.apply_word_style_scope_callback = (
+            apply_word_style_scope_callback
         )
         self.container = None
         self._tabs = None
@@ -1163,16 +1184,26 @@ class TextTabs:
 
     def _word_style_signature(self, word: object) -> str:
         """Return stable style signature for dedupe checks."""
-        try:
-            labels = {str(label) for label in word.word_labels}
-        except AttributeError:
-            labels = set()
-        except TypeError:
-            labels = set()
-
-        italic = "italic" in labels
-        small_caps = "small_caps" in labels
-        blackletter = "blackletter" in labels
-        left_footnote = "left_footnote" in labels
-        right_footnote = "right_footnote" in labels
+        word_ops = WordOperations()
+        italic = word_ops.read_word_attribute(word, "italic", aliases=("is_italic",))
+        small_caps = word_ops.read_word_attribute(
+            word,
+            "small_caps",
+            aliases=("is_small_caps",),
+        )
+        blackletter = word_ops.read_word_attribute(
+            word,
+            "blackletter",
+            aliases=("is_blackletter",),
+        )
+        left_footnote = word_ops.read_word_attribute(
+            word,
+            "left_footnote",
+            aliases=("is_left_footnote",),
+        )
+        right_footnote = word_ops.read_word_attribute(
+            word,
+            "right_footnote",
+            aliases=("is_right_footnote",),
+        )
         return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"

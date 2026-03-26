@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from nicegui import events, ui
 
+from ....operations.ocr.word_operations import WordOperations
+
 if TYPE_CHECKING:
     from .word_match import WordMatchView
 
@@ -467,41 +469,11 @@ class WordMatchGtEditing:
         word_object = getattr(word_match, "word_object", None)
         if word_object is None:
             return
-        try:
-            labels = [str(label) for label in word_object.word_labels]
-        except AttributeError:
-            return
-        except TypeError:
-            return
-
-        labels_set = set(labels)
-        if italic:
-            labels_set.add(WORD_LABEL_ITALIC)
-        else:
-            labels_set.discard(WORD_LABEL_ITALIC)
-
-        if small_caps:
-            labels_set.add(WORD_LABEL_SMALL_CAPS)
-        else:
-            labels_set.discard(WORD_LABEL_SMALL_CAPS)
-
-        if blackletter:
-            labels_set.add(WORD_LABEL_BLACKLETTER)
-        else:
-            labels_set.discard(WORD_LABEL_BLACKLETTER)
-
-        if left_footnote:
-            labels_set.add(WORD_LABEL_LEFT_FOOTNOTE)
-        else:
-            labels_set.discard(WORD_LABEL_LEFT_FOOTNOTE)
-
-        if right_footnote:
-            labels_set.add(WORD_LABEL_RIGHT_FOOTNOTE)
-        else:
-            labels_set.discard(WORD_LABEL_RIGHT_FOOTNOTE)
-
-        ordered = [label for label in labels if label in labels_set]
-        ordered.extend(
-            sorted(label for label in labels_set if label not in set(ordered))
+        WordOperations().update_word_attributes(
+            word_object,
+            italic=italic,
+            small_caps=small_caps,
+            blackletter=blackletter,
+            left_footnote=left_footnote,
+            right_footnote=right_footnote,
         )
-        word_object.word_labels = ordered

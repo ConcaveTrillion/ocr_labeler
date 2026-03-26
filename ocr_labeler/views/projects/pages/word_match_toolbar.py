@@ -49,6 +49,10 @@ class WordMatchToolbar:
         self.refine_words_button = None
         self.expand_then_refine_words_button = None
         self.group_selected_words_into_paragraph_button = None
+        self.apply_style_select = None
+        self.apply_style_button = None
+        self.apply_scope_buttons: list[object] = []
+        self._selected_style_value: str | None = None
 
     def set_refine_bboxes_callback(self, callback: Callable | None) -> None:
         """Register callback for the page-level Refine Bboxes action."""
@@ -253,6 +257,82 @@ class WordMatchToolbar:
                 self.delete_words_button, variant=ButtonVariant.DELETE
             )
 
+        self._build_apply_style_toolbar()
+
+    def _build_apply_style_toolbar(self) -> None:
+        """Build a dedicated immediate-apply style toolbar for selected words."""
+        with (
+            ui.row()
+            .classes("items-center gap-2 pl-2 pt-2 flex-wrap")
+            .style("max-width: 100%;")
+        ):
+            ui.label("Apply Style").classes("text-sm font-semibold")
+
+            style_options = {
+                style_label: self._display_label(style_label)
+                for style_label in self._view.word_operations.supported_styles
+            }
+            self._selected_style_value = next(iter(style_options), None)
+            style_select_trigger = ui.element("div").props(
+                'data-testid="apply-style-select"'
+            )
+            style_select_trigger.on("click", self._open_style_picker)
+            with style_select_trigger:
+                self.apply_style_select = ui.select(
+                    options=style_options,
+                    value=self._selected_style_value,
+                ).props("dense outlined options-dense")
+            self.apply_style_select.tooltip("Choose a text style to apply")
+            self.apply_style_select.on_value_change(self._on_style_value_change)
+
+            self.apply_style_button = ui.button(
+                "Apply",
+                on_click=self._apply_selected_style,
+            ).tooltip("Apply the selected text style to selected words")
+            self.apply_style_button.props("dense")
+            self.apply_style_button.props('data-testid="apply-style-button"')
+
+            ui.separator().props("vertical")
+
+            for scope_label in self._view.word_operations.supported_scopes:
+                button = ui.button(
+                    self._display_label(scope_label),
+                    on_click=lambda _event, scope=scope_label: self._apply_scope(scope),
+                ).tooltip(f"Apply text style scope '{scope_label}' to selected words")
+                button.props("dense outline")
+                self.apply_scope_buttons.append(button)
+
+        # Apply the current selection state immediately so controls are correctly
+        # gated when the toolbar first renders.
+        self.update_button_state()
+
+    def _display_label(self, value: str) -> str:
+        return str(value).title()
+
+    def _on_style_value_change(self, event) -> None:
+        self._selected_style_value = str(event.value) if event.value else None
+
+    def _open_style_picker(self, _event=None) -> None:
+        if self.apply_style_select is None or not self.apply_style_select.enabled:
+            return
+        self.apply_style_select.run_method("showPopup")
+
+    def _apply_selected_style(self) -> None:
+        if not self._selected_style_value:
+            self._view._safe_notify("Select a style to apply", type_="warning")
+            return
+        self._apply_style(self._selected_style_value)
+
+    def _apply_style(self, style: str) -> None:
+        result = self._view.word_operations.apply_style_to_selection(style)
+        self._view._safe_notify(result.message, type_=result.severity)
+        self.update_button_state()
+
+    def _apply_scope(self, scope: str) -> None:
+        result = self._view.word_operations.apply_scope_to_selection(scope)
+        self._view._safe_notify(result.message, type_=result.severity)
+        self.update_button_state()
+
     def update_button_state(self) -> None:
         """Enable/disable line and paragraph action buttons based on selection."""
         selected_lines = self._view._get_effective_selected_lines()
@@ -408,3 +488,15 @@ class WordMatchToolbar:
                 self._view.copy_selected_words_ocr_to_gt_callback is None
                 or len(self._view.selection.selected_word_indices) < 1
             )
+
+        has_selected_words = len(self._view.selection.selected_word_indices) > 0
+        if self.apply_style_select is not None:
+            self.apply_style_select.enabled = has_selected_words
+        if self.apply_style_button is not None:
+            self.apply_style_button.disabled = not has_selected_words
+        has_scope_target = (
+            has_selected_words
+            and self._view.word_operations.selection_has_scope_target()
+        )
+        for button in self.apply_scope_buttons:
+            button.disabled = not has_scope_target

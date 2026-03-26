@@ -12,6 +12,8 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from .word_operations import WordOperations
+
 if TYPE_CHECKING:
     from pd_book_tools.ocr.page import Page
 
@@ -27,22 +29,6 @@ class _ParagraphLike(Protocol):
 class _PageWithParagraphs(Protocol):
     @property
     def paragraphs(self) -> Sequence[object]: ...
-
-
-STYLE_LABEL_BY_ATTR = {
-    "italic": "italic",
-    "is_italic": "italic",
-    "small_caps": "small_caps",
-    "is_small_caps": "small_caps",
-    "blackletter": "blackletter",
-    "is_blackletter": "blackletter",
-    "left_footnote": "left_footnote",
-    "is_left_footnote": "left_footnote",
-    "right_footnote": "right_footnote",
-    "is_right_footnote": "right_footnote",
-    "footnote": "right_footnote",
-    "is_footnote": "right_footnote",
-}
 
 
 class LineOperations:
@@ -398,6 +384,7 @@ class LineOperations:
                 return False
 
             target_word = line_words[word_index]
+            word_ops = WordOperations()
 
             desired_italic = bool(italic)
             desired_small_caps = bool(small_caps)
@@ -405,38 +392,27 @@ class LineOperations:
             desired_left_footnote = bool(left_footnote)
             desired_right_footnote = bool(right_footnote)
 
-            current_italic = self._read_word_attribute(
-                target_word,
-                "italic",
-                aliases=("is_italic",),
-            )
-            current_small_caps = self._read_word_attribute(
-                target_word,
-                "small_caps",
-                aliases=("is_small_caps",),
-            )
-            current_blackletter = self._read_word_attribute(
-                target_word,
-                "blackletter",
-                aliases=("is_blackletter",),
-            )
-            current_left_footnote = self._read_word_attribute(
-                target_word,
-                "left_footnote",
-                aliases=("is_left_footnote",),
-            )
-            current_right_footnote = self._read_word_attribute(
-                target_word,
-                "right_footnote",
-                aliases=("is_right_footnote",),
-            )
-
             if (
-                current_italic == desired_italic
-                and current_small_caps == desired_small_caps
-                and current_blackletter == desired_blackletter
-                and current_left_footnote == desired_left_footnote
-                and current_right_footnote == desired_right_footnote
+                word_ops.read_word_attribute(
+                    target_word, "italic", aliases=("is_italic",)
+                )
+                == desired_italic
+                and word_ops.read_word_attribute(
+                    target_word, "small_caps", aliases=("is_small_caps",)
+                )
+                == desired_small_caps
+                and word_ops.read_word_attribute(
+                    target_word, "blackletter", aliases=("is_blackletter",)
+                )
+                == desired_blackletter
+                and word_ops.read_word_attribute(
+                    target_word, "left_footnote", aliases=("is_left_footnote",)
+                )
+                == desired_left_footnote
+                and word_ops.read_word_attribute(
+                    target_word, "right_footnote", aliases=("is_right_footnote",)
+                )
+                == desired_right_footnote
             ):
                 logger.debug(
                     "Word attributes unchanged for line=%s word=%s",
@@ -445,35 +421,13 @@ class LineOperations:
                 )
                 return True
 
-            self._write_word_attribute(
+            word_ops.update_word_attributes(
                 target_word,
-                "italic",
-                desired_italic,
-                aliases=("is_italic",),
-            )
-            self._write_word_attribute(
-                target_word,
-                "small_caps",
-                desired_small_caps,
-                aliases=("is_small_caps",),
-            )
-            self._write_word_attribute(
-                target_word,
-                "blackletter",
-                desired_blackletter,
-                aliases=("is_blackletter",),
-            )
-            self._write_word_attribute(
-                target_word,
-                "left_footnote",
-                desired_left_footnote,
-                aliases=("is_left_footnote",),
-            )
-            self._write_word_attribute(
-                target_word,
-                "right_footnote",
-                desired_right_footnote,
-                aliases=("is_right_footnote",),
+                italic=desired_italic,
+                small_caps=desired_small_caps,
+                blackletter=desired_blackletter,
+                left_footnote=desired_left_footnote,
+                right_footnote=desired_right_footnote,
             )
 
             logger.info(
@@ -3182,67 +3136,6 @@ class LineOperations:
         except Exception as fallback_error:
             logger.exception("Fallback line merge failed: %s", fallback_error)
             return False
-
-    def _read_word_attribute(
-        self,
-        word: object,
-        primary_name: str,
-        aliases: tuple[str, ...] = (),
-    ) -> bool:
-        """Read bool style attribute from word using fallback aliases."""
-        try:
-            labels = [str(label) for label in word.word_labels]
-        except AttributeError:
-            return False
-        except TypeError:
-            return False
-
-        style_label = STYLE_LABEL_BY_ATTR.get(primary_name)
-        if style_label is None:
-            for alias in aliases:
-                style_label = STYLE_LABEL_BY_ATTR.get(alias)
-                if style_label is not None:
-                    break
-        if style_label is None:
-            return False
-
-        return style_label in set(labels)
-
-    def _write_word_attribute(
-        self,
-        word: object,
-        primary_name: str,
-        value: bool,
-        aliases: tuple[str, ...] = (),
-    ) -> None:
-        """Write bool style attribute to primary name and compatible aliases."""
-        try:
-            labels = [str(label) for label in word.word_labels]
-        except AttributeError:
-            return
-        except TypeError:
-            return
-
-        style_label = STYLE_LABEL_BY_ATTR.get(primary_name)
-        if style_label is None:
-            for alias in aliases:
-                style_label = STYLE_LABEL_BY_ATTR.get(alias)
-                if style_label is not None:
-                    break
-        if style_label is None:
-            return
-
-        labels_set = set(labels)
-        if value:
-            labels_set.add(style_label)
-        else:
-            labels_set.discard(style_label)
-
-        ordered = [label for label in labels if label in labels_set]
-        ordered.extend(
-            sorted(label for label in labels_set if label not in set(ordered))
-        )
-        word.word_labels = ordered
 
     def _refine_block_words(self, page: object, block: object) -> bool:
         """Refine all words in a line-like block and recompute block bbox."""

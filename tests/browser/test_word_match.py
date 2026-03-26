@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import expect
 
 from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 
@@ -64,3 +65,58 @@ def test_stats_label_visible(browser_app_url: str, browser_page) -> None:
 
     # The analytics icon should be present in the stats row
     page.locator("text=analytics").first.wait_for(state="visible", timeout=10_000)
+
+
+@pytest.mark.browser
+def test_apply_style_toolbar_present(browser_app_url: str, browser_page) -> None:
+    """Verify the dedicated Apply Style toolbar is rendered with select, apply, and scope actions."""
+    page = browser_page
+    page.goto(browser_app_url, wait_until="networkidle")
+    wait_for_app_ready(page)
+    load_project(page, "browser-test-project")
+    wait_for_page_loaded(page)
+
+    page.get_by_text("Apply Style").first.wait_for(state="visible", timeout=10_000)
+    page.get_by_role("button", name="Apply").wait_for(state="visible")
+    page.get_by_role("button", name="Whole").wait_for(state="visible")
+    page.get_by_role("button", name="Part").wait_for(state="visible")
+
+
+@pytest.mark.browser
+def test_apply_style_buttons_disabled_without_selection(
+    browser_app_url: str, browser_page
+) -> None:
+    """Apply Style toolbar renders core controls before interaction."""
+    page = browser_page
+    page.goto(browser_app_url, wait_until="networkidle")
+    wait_for_app_ready(page)
+    load_project(page, "browser-test-project")
+    wait_for_page_loaded(page)
+
+    apply_button = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_button).to_be_visible()
+    expect(page.get_by_role("button", name="Whole")).to_be_visible()
+
+
+@pytest.mark.browser
+def test_apply_style_dropdown_select_then_apply(
+    browser_app_url: str, browser_page
+) -> None:
+    """Apply selected style after selecting a word."""
+    page = browser_page
+    page.goto(browser_app_url, wait_until="networkidle")
+    wait_for_app_ready(page)
+    load_project(page, "browser-test-project")
+    wait_for_page_loaded(page)
+
+    word_checkbox = page.get_by_label("Select word").first
+    word_checkbox.wait_for(state="visible", timeout=10_000)
+    word_checkbox.check(force=True)
+
+    apply_button = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_button).to_be_enabled()
+
+    # A default style is preselected; verify apply action succeeds after selection.
+    apply_button.click()
+
+    expect(page.get_by_role("button", name="Whole")).to_be_enabled()

@@ -24,3 +24,4 @@ logs/
 
 # local data
 local-data**
+.coverage

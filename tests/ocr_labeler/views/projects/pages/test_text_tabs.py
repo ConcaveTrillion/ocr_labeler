@@ -233,7 +233,9 @@ def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
     word = SimpleNamespace(
         text="alpha",
         ground_truth_text="alpha",
-        word_labels=[],
+        text_style_labels=["regular"],
+        text_style_label_scopes={"regular": "whole"},
+        word_components=[],
     )
     line = SimpleNamespace(
         text="alpha",
@@ -244,7 +246,8 @@ def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
     page = SimpleNamespace(name="p001.png", index=0, lines=[line])
 
     text_tabs.update_word_matches(page)
-    word.word_labels = ["italic"]
+    word.text_style_labels = ["italics"]
+    word.text_style_label_scopes = {"italics": "whole"}
     text_tabs.update_word_matches(page)
 
     assert text_tabs.word_match_view.update_from_page.call_count == 2

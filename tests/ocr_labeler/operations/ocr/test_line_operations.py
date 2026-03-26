@@ -235,9 +235,9 @@ class TestLineOperations:
 
         assert result is True
         line1 = mock_page_with_lines.lines[0]
-        assert "italic" in line1.words[1].word_labels
-        assert "small_caps" in line1.words[1].word_labels
-        assert "blackletter" not in line1.words[1].word_labels
+        assert "italics" in line1.words[1].text_style_labels
+        assert "small caps" in line1.words[1].text_style_labels
+        assert "blackletter" not in line1.words[1].text_style_labels
 
     def test_update_word_attributes_invalid_word_index(
         self,

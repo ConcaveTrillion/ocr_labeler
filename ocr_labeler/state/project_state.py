@@ -439,7 +439,7 @@ class ProjectState:
                 duration_ms=duration_ms,
             )
 
-        if not self.project.pages:
+        if self.project is None or not self.project.pages:
             logger.info("ensure_page_model: no pages loaded yet")
             _log_page_timing(source="none", status="no_pages")
             return None
@@ -732,7 +732,8 @@ class ProjectState:
                     if not isinstance(page_index, int):
                         page_obj.index = index  # type: ignore[attr-defined]
 
-                    self.project.pages[index] = page_obj
+                    if self.project is not None:
+                        self.project.pages[index] = page_obj
                     self.upsert_page_model(
                         page_index=index,
                         page=page_obj,
@@ -807,12 +808,12 @@ class ProjectState:
                     )
 
                     # Fallback: still display original image even if OCR failed
-                    self.project.pages[index] = self.create_fallback_page(
-                        index, img_path
-                    )
+                    fallback_page = self.create_fallback_page(index, img_path)
+                    if self.project is not None:
+                        self.project.pages[index] = fallback_page
                     self.upsert_page_model(
                         page_index=index,
-                        page=self.project.pages[index],
+                        page=fallback_page,
                         source="fallback",
                         ocr_failed=True,
                     )
@@ -825,10 +826,12 @@ class ProjectState:
                     "ensure_page_model: no loader provided, creating placeholder page for index=%s",
                     index,
                 )
-                self.project.pages[index] = self.create_fallback_page(index, img_path)
+                fallback_page = self.create_fallback_page(index, img_path)
+                if self.project is not None:
+                    self.project.pages[index] = fallback_page
                 self.upsert_page_model(
                     page_index=index,
-                    page=self.project.pages[index],
+                    page=fallback_page,
                     source="fallback",
                     ocr_failed=True,
                 )
@@ -839,7 +842,11 @@ class ProjectState:
             page_source = (
                 page_model.page_source
                 if page_model
-                else getattr(self.project.pages[index], "page_source", "memory")
+                else getattr(
+                    self.project.pages[index] if self.project is not None else None,
+                    "page_source",
+                    "memory",
+                )
             )
             _log_page_timing(
                 source=page_source,
@@ -850,6 +857,8 @@ class ProjectState:
         if page_model is not None:
             return page_model
 
+        if self.project is None:
+            return None
         page = self.project.pages[index]
         if page is None:
             return None

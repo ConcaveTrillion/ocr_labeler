@@ -35,23 +35,28 @@ Current Capabilities
 --------------------
 
 - Open a project directory containing page images (`.png`, `.jpg`, `.jpeg`).
-- Auto–lazy load & OCR each page the first time you navigate to it.
+- Auto-lazy load & OCR each page the first time you navigate to it.
 - Navigate pages (Prev / Next / direct page number input).
 - Display multiple overlay variants (original, paragraphs, lines, words,
-  mismatches - where available from the underlying OCR lib).
+  mismatches -- where available from the underlying OCR lib).
 - Show OCR text and (optional) ground truth text side by side.
 - Auto-populate ground truth text from an optional `pages.json` file mapping
   image filename -> ground truth string.
 - Save current page edits to JSON and image files for persistence.
+- Word-level editing: merge, split, delete, rebox, and per-word GT inline editing.
+- Word tag editing: assign text style labels (italics, bold, small caps, etc.),
+  style scopes (whole/part), and word components (footnote markers, etc.) via
+  toolbar controls and a word edit dialog.
+- Paragraph actions: merge, delete, split-after-line, split-by-selected-lines.
+- Backend project export formats (json/jsonl/csv).
 
 Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
 --------------------------------------------------------------
 
-- Editing & saving OCR / word‑level adjustments (basic save implemented)
-- Bounding box refinement & bulk operations
-- Training / validation export
-- Word split / merge / crop tools
-- Line & word validation workflows
+- Bounding box refinement: add-word workflow, expand-bbox action
+- Image zoom controls
+- Training / validation export UX wiring
+- Line & word validation state persistence
 
 Quick Start
 -----------
@@ -335,9 +340,10 @@ Development Notes
 Future Enhancements (Short List)
 --------------------------------
 
-- Word / line granular editing and validation
-- Bounding box refinement & regeneration
-- Training / validation dataset export
+- Add-word and expand-bbox workflows
+- Image zoom controls for inspection/editing
+- Training / validation dataset export UX
+- Line & word validation state persistence
 
 License
 -------

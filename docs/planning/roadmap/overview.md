@@ -6,6 +6,7 @@ Status: implementation-aligned snapshot.
 
 ## Current Focus
 
+- **Next:** Ground truth PGDP preprocessing ([next-step.md](../next-step.md))
 - Editing-core wrap-up (remaining line/paragraph refinement and persistence details)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
 - Testing/documentation follow-through
@@ -21,6 +22,8 @@ Status: implementation-aligned snapshot.
 - Enhanced matching UI baseline (unmatched GT placeholders, mismatch overlays, monospace surfaces)
 - Multi-page navigation controls + route/page index synchronization
 - Backend project export formats (json/jsonl/csv)
+- Word tag editing: style labels, scopes, word components via toolbar and dialog
+- Unified footnote marker behavior and migration to pd-book-tools label model
 
 ## Next Milestones
 

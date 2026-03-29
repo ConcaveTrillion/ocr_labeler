@@ -34,4 +34,4 @@ Status: planning snapshots that may not fully match current implementation.
 
 ## Immediate Next Step
 
-- [Next Step: Event-Scoped UI Updates](next-step.md)
+- [Next Step: Ground Truth PGDP Preprocessing](next-step.md)

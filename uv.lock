@@ -1891,7 +1891,7 @@ wheels = [
 
 [[package]]
 name = "pd-book-tools"
-version = "0.4.0"
+version = "0.4.2"
 source = { directory = "../pd-book-tools" }
 dependencies = [
     { name = "cupy-cuda12x" },

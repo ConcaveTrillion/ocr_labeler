@@ -3,7 +3,14 @@
 **Priority:** Medium
 **Status:** In Progress
 
-## Scope
+## Completed
+
+- Playwright browser test infrastructure (`tests/browser/`)
+- Browser regression tests for word match editing workflows
+- Word match unit tests (`tests/views/projects/pages/test_word_match.py`)
+- Markdown linting via `markdownlint-cli2` (pre-commit hook + `make md-lint`)
+
+## Scope (Remaining)
 
 - Save/load round-trip tests
 - Filtering behavior tests

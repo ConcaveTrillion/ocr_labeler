@@ -9,6 +9,11 @@ Small, low-context tasks for reconciling docs with code. Do only a few at a time
 - [x] Verify `docs/architecture/async/migration-patterns.md` examples against current APIs
 - [x] Verify `docs/architecture/threading-architecture.md` against OCR and persistence call paths
 - [x] Add a brief “last validated” date to each architecture doc after review
+- [x] Update code map with word operations modules (2026-03-29)
+- [x] Update editing-core roadmap with word tag editing completions (2026-03-29)
+- [x] Update README capabilities to reflect word/paragraph editing features (2026-03-29)
+- [ ] Verify `docs/architecture/pd-book-tools-model-alignment.md` against current word_operations migration to `text_style_labels`/`word_components`
+- [ ] Document word operations architecture (WordOperations + SelectedWordOperationsProcessor pattern)
 
 Suggested workflow:
 

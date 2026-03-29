@@ -20,6 +20,13 @@
 - Per-word GT input UX polish: dynamic width near word length with live resize while typing
 - Per-word GT commit behavior: persist on blur and Enter
 - Per-word GT keyboard navigation: Tab to next word, Shift+Tab to previous word
+- Word tag editing: dedicated `WordOperations` class for style label, scope, and component mutations
+- Word tag editing: `SelectedWordOperationsProcessor` bridging backend operations with UI selection model
+- Word tag editing: toolbar style/scope/component controls (dropdowns + apply/clear buttons)
+- Word tag editing: tag chip display in word match grid and word edit dialog (with hover-close removal)
+- Word tag editing: unified footnote marker behavior (LFN/RFN merged into single FN toggle)
+- Word tag editing: migration from `word_labels` list to
+  `text_style_labels`/`text_style_label_scopes`/`word_components` model
 
 ## Block/Line Editing
 

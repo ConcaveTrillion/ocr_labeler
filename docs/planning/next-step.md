@@ -1,67 +1,81 @@
-# Next Step: Event-Scoped UI Updates
+# Next Step: Ground Truth PGDP Preprocessing
 
-Goal: replace broad page-level refresh behavior with targeted, typed
-state-change events so views update only the necessary UI elements.
+Goal: pass raw PGDP ground truth text through the `PGDPResults` preprocessor
+before matching it against OCR output, so that GT text is in an OCR-comparable
+format.
 
-## Scope for the First Vertical Slice
+## Problem
 
-- Focus first on word style toggles (`I`, `SC`, `BL`) end-to-end.
-- Keep existing full-refresh path as fallback for safety.
-- Remove ad-hoc refresh suppression gates once event flow is stable.
+Ground truth text loaded from `pages.json` is raw PGDP proofreader output. It
+contains PGDP-specific markup (diacritic codes, footnote bracket notation,
+ASCII dash conventions, straight quotes, proofer notes, etc.) that does not
+match what an OCR engine produces. Without preprocessing, the GT-to-OCR word
+matching produces excessive false mismatches.
 
-## Checklist
+## Available Preprocessor
 
-1. **Define event model (state layer)**
-   - Add a typed event payload for word-style updates.
-   - Include at minimum: `page_index`, `line_index`, `word_index`, `italic`, `small_caps`, `blackletter`.
-   - Keep event names explicit (for example, `word_style_changed`).
+`pd-book-tools` already provides a full preprocessing pipeline:
 
-2. **Add event emission in mutation operations**
-   - Emit `word_style_changed` after successful `update_word_attributes` writes.
-   - Ensure emit happens only on successful mutation.
-   - Preserve existing broad notifications for backward compatibility during migration.
+- **`PGDPResults`** (`pd_book_tools.pgdp.pgdp_results`)
+  - Normalizes line endings
+  - Removes proofer notes (`[*...*]`)
+  - Removes `[Blank Page]` markers
+  - Converts PGDP diacritic markup to Unicode (macrons, umlauts, accents, etc.)
+  - Converts footnote markers (e.g. `[12]` -> space-separated number)
+  - Handles hyphenation continuations (`-*`)
+  - Converts ASCII dashes to em/two-em dash Unicode characters
+  - Strips page continuation asterisks
+  - Converts straight quotes to curly quotes
 
-3. **Add event subscription in coordinator (`TextTabs`)**
-   - Register listener for typed word-style events.
-   - Route event to `WordMatchView` targeted update API instead of full `update_from_page`.
-   - Unregister listener during teardown to avoid stale callbacks.
+- **`PGDPExport`** (same module) -- loads a multi-page PGDP JSON export and
+  creates a `PGDPResults` per page automatically.
 
-4. **Add targeted update API in `WordMatchView`**
-   - Add method for style-only updates by `(line_index, word_index)`.
-   - Update only local style state + style button colors.
-   - Avoid rebuilding line/word containers for this event type.
+## Integration Path
 
-5. **Define precedence rules between events and full refresh**
-   - If typed event arrives, apply targeted update immediately.
-   - If full page update arrives for the same change window, dedupe/coalesce to prevent duplicate repaint.
-   - Keep behavior deterministic under rapid clicks.
+The existing `pd-book-tools` integration point is:
 
-6. **Migrate away from suppression gate**
-   - Remove one-shot skip flags once typed-event path is proven.
-   - Keep temporary compatibility for one release cycle if needed.
+```text
+PGDPResults(filename, raw_text)
+  -> pgdp_results.processed_page_text
+    -> page.add_ground_truth(processed_text)
+      -> update_page_with_ground_truth_text() in ground_truth_matching.py
+```
 
-7. **Tests: unit + integration coverage**
-   - Verify style edit emits `word_style_changed` exactly once.
-   - Verify `TextTabs` consumes event and does not call full `update_from_page` for style-only change.
-   - Verify `WordMatchView` updates button state without line/word rerender.
-   - Verify rapid toggles produce correct final style state.
-   - Verify fallback full refresh still works for structural edits.
+## Implementation Checklist
 
-8. **Instrumentation and observability**
-   - Add debug log markers for event emitted, event consumed, targeted update applied.
-   - Add a lightweight counter for full refresh vs targeted updates (debug builds/logging only).
+1. **Locate GT ingestion in `ocr_labeler`**
+   - Find where raw `pages.json` text is read and passed to
+     `page.add_ground_truth()`.
+   - Confirm the text is currently passed without preprocessing.
 
-9. **Rollout and cleanup**
-   - Ship style slice first.
-   - Repeat same pattern for:
-     - word GT edit events,
-     - bbox fine-tune/rebox events,
-     - structural word/line changes (which may still require broader rerender scope).
-   - Remove obsolete suppression/dedupe workarounds introduced for interim fixes.
+2. **Add PGDP preprocessing step**
+   - Import `PGDPResults` from `pd_book_tools.pgdp.pgdp_results`.
+   - Before calling `add_ground_truth()`, run the raw text through
+     `PGDPResults(image_filename, raw_text)`.
+   - Pass `pgdp_results.processed_page_text` to `add_ground_truth()`.
+
+3. **Consider `PGDPExport` for bulk loading**
+   - If the project loads GT from a single JSON file mapping filenames to text,
+     `PGDPExport.from_json_file(path)` may be a cleaner integration point
+     (preprocesses all pages at load time).
+
+4. **Handle edge cases**
+   - GT text that is already preprocessed (non-PGDP sources) -- consider a
+     flag or heuristic to skip preprocessing when not needed.
+   - Empty or missing GT text -- ensure no crash on empty input.
+
+5. **Validate matching improvement**
+   - Compare mismatch counts before/after preprocessing on a sample project.
+   - Verify curly quotes, diacritics, and dashes now match OCR output.
+
+6. **Tests**
+   - Unit test confirming GT text passes through `PGDPResults` before matching.
+   - Integration test with sample PGDP markup verifying reduced mismatches.
 
 ## Done Criteria
 
-- Clicking `I`, `SC`, or `BL` updates only the corresponding style controls and local model state.
-- No full `_update_lines_display` call is triggered by style-only edits.
-- All existing tests pass, and new event-path regressions are green.
-- Logs clearly show typed event flow from mutation to targeted UI update.
+- Raw PGDP text from `pages.json` is preprocessed via `PGDPResults` before
+  GT matching.
+- PGDP-specific markup (diacritics, footnotes, dashes, quotes, proofer notes)
+  no longer causes false mismatches in the word match grid.
+- Existing tests pass; no regression in non-PGDP GT workflows.

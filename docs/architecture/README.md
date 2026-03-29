@@ -4,9 +4,9 @@ Architecture documentation is organized into smaller, topic-focused files.
 
 Status: maintained incrementally; validate details against current implementation.
 
-Last validated: 2026-02-18.
+Last validated: 2026-03-29.
 
-## Current Code Map (2026-02-18 snapshot)
+## Current Code Map (2026-03-29 snapshot)
 
 - App entry and routing:
   - `ocr_labeler/app.py`
@@ -27,10 +27,12 @@ Last validated: 2026-02-18.
   - `ocr_labeler/views/header/header.py`
   - `ocr_labeler/views/projects/project_view.py`
   - `ocr_labeler/views/projects/project_navigation_controls.py`
-  - `ocr_labeler/views/projects/pages/{page_view,page_actions,content,image_tabs,text_tabs,word_match}.py`
+  - `ocr_labeler/views/projects/pages/{page_view,page_actions,content,image_tabs,text_tabs}.py`
+  - `ocr_labeler/views/projects/pages/{word_match,word_match_toolbar,word_match_renderer,word_match_selection,word_match_actions,word_match_bbox,word_match_gt_editing}.py`
+  - `ocr_labeler/views/projects/pages/{word_edit_dialog,word_operations}.py`
   - `ocr_labeler/views/shared/{base_view,container_view}.py`
 - Operations and services:
-  - `ocr_labeler/operations/ocr/{navigation_operations,page_operations,text_operations,line_operations,ocr_service}.py`
+  - `ocr_labeler/operations/ocr/{navigation_operations,page_operations,text_operations,line_operations,word_operations,ocr_service}.py`
   - `ocr_labeler/operations/persistence/{project_discovery_operations,project_operations,state_persistence_operations}.py`
   - `ocr_labeler/services/*`
 

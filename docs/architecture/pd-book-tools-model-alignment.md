@@ -6,13 +6,24 @@ needed so these attributes exist natively in `pd-book-tools`.
 
 Status: planned migration guide for upstream model changes.
 
-Last validated: 2026-02-15.
+Last validated: 2026-03-29.
 
 ## Scope
 
 This document focuses on attributes we are **writing dynamically** onto
 `pd_book_tools` objects (primarily `Page`) and should instead model directly
 in `pd-book-tools`.
+
+## Recent progress
+
+The word-level label model has been migrated in `ocr_labeler`:
+
+- `WordOperations` (`ocr_labeler/operations/ocr/word_operations.py`) now uses
+  upstream `text_style_labels`, `text_style_label_scopes`, and `word_components`
+  fields instead of the legacy `word_labels` list.
+- Label normalization uses `pd_book_tools.ocr.label_normalization` utilities.
+- The old `_read_word_attribute`/`_write_word_attribute` helpers in
+  `LineOperations` have been removed in favor of `WordOperations`.
 
 ## Confirmed dynamic attributes in `ocr_labeler`
 

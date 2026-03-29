@@ -439,6 +439,74 @@ def open_word_edit_dialog(
                         dialog_card.style(_dialog_card_style_for_content())
                         _render_current_interactive_image()
 
+                    tag_chips_slot = ui.column().classes("full-width").style("gap: 0;")
+
+                    def _render_tag_chips() -> None:
+                        tag_chips_slot.clear()
+                        current_tag_items = view._word_display_tag_items(
+                            _current_word_match_for_render()
+                        )
+                        if not current_tag_items:
+                            return
+
+                        with tag_chips_slot:
+                            with ui.row().classes(
+                                "items-center justify-start gap-1 full-width"
+                            ):
+                                for item in current_tag_items:
+                                    with (
+                                        ui.row()
+                                        .classes(
+                                            "items-center gap-1 word-edit-tag-chip"
+                                        )
+                                        .style(view._word_tag_chip_style(item["kind"]))
+                                    ) as chip:
+                                        chip.props('data-testid="word-edit-tag-chip"')
+                                        ui.label(item["display"]).classes(
+                                            "text-caption"
+                                        )
+                                        clear_button = ui.button(
+                                            icon="close",
+                                            on_click=lambda _event, tag=item: (
+                                                (
+                                                    _refresh_open_dialog_content(),
+                                                    _render_tag_chips(),
+                                                )
+                                                if view._clear_word_tag(
+                                                    line_index,
+                                                    split_word_index,
+                                                    kind=tag["kind"],
+                                                    label=tag["label"],
+                                                )
+                                                else None
+                                            ),
+                                        ).props(
+                                            'flat dense round size=xs data-testid="word-edit-tag-clear-button"'
+                                        )
+                                        clear_button.classes(
+                                            "word-edit-tag-clear-button"
+                                        )
+                                        clear_button.style(
+                                            "min-width: 0; width: 14px; height: 14px;"
+                                        )
+                                        clear_button.visible = False
+                                        chip.on(
+                                            "mouseenter",
+                                            lambda _event, button=clear_button: setattr(
+                                                button,
+                                                "visible",
+                                                True,
+                                            ),
+                                        )
+                                        chip.on(
+                                            "mouseleave",
+                                            lambda _event, button=clear_button: setattr(
+                                                button,
+                                                "visible",
+                                                False,
+                                            ),
+                                        )
+
                     def _set_current_zoom(value: object) -> None:
                         nonlocal current_zoom
                         if value not in (1, 2, 5):
@@ -501,11 +569,243 @@ def open_word_edit_dialog(
                         view.edit_word_ground_truth_callback is not None
                         and split_word_index >= 0
                     )
+
+                    style_options = {
+                        style_label: str(style_label).title()
+                        for style_label in view.word_operations.supported_styles
+                    }
+                    scope_options = {
+                        "": "--",
+                        "whole": "Whole",
+                        "part": "Part",
+                    }
+                    component_options = {
+                        component_label: {
+                            "footnote marker": "Footnote Marker",
+                            "drop cap": "Drop Cap",
+                            "subscript": "Subscript",
+                            "superscript": "Superscript",
+                        }.get(component_label, str(component_label).title())
+                        for component_label in view.word_operations.supported_components
+                    }
+                    selected_style_value = next(iter(style_options), None)
+                    selected_scope_value = ""
+                    selected_component_value = next(iter(component_options), None)
+
+                    scope_select = None
+
+                    def _scope_value_for_style(style_value: str | None) -> str:
+                        if not style_value:
+                            return ""
+                        render_word_match = _current_word_match_for_render()
+                        word_object = getattr(render_word_match, "word_object", None)
+                        if word_object is None:
+                            return ""
+                        try:
+                            style_scopes = dict(
+                                getattr(word_object, "text_style_label_scopes", {})
+                                or {}
+                            )
+                        except Exception:
+                            return ""
+
+                        scope_value = style_scopes.get(str(style_value).strip().lower())
+                        if scope_value is None:
+                            return ""
+                        normalized_scope = str(scope_value).strip().lower()
+                        return (
+                            normalized_scope
+                            if normalized_scope in {"whole", "part"}
+                            else ""
+                        )
+
+                    def _sync_scope_value_for_selected_style() -> None:
+                        nonlocal selected_scope_value
+                        selected_scope_value = _scope_value_for_style(
+                            selected_style_value
+                        )
+                        if scope_select is not None:
+                            scope_select.value = selected_scope_value
+
+                    def _set_selected_style(event) -> None:
+                        nonlocal selected_style_value
+                        selected_style_value = str(event.value) if event.value else None
+                        _sync_scope_value_for_selected_style()
+
+                    def _set_selected_component(event) -> None:
+                        nonlocal selected_component_value
+                        selected_component_value = (
+                            str(event.value) if event.value else None
+                        )
+
+                    def _apply_selected_style_from_dialog() -> None:
+                        if split_word_index < 0:
+                            view._safe_notify(
+                                "Select a valid OCR word to apply style",
+                                type_="warning",
+                            )
+                            return
+                        if not selected_style_value:
+                            view._safe_notify(
+                                "Select a style to apply", type_="warning"
+                            )
+                            return
+                        result = view.word_operations.apply_style_to_word(
+                            line_index,
+                            split_word_index,
+                            selected_style_value,
+                        )
+                        view._safe_notify(result.message, type_=result.severity)
+                        if result.updated_count > 0:
+                            _refresh_open_dialog_content()
+                            _sync_scope_value_for_selected_style()
+                            _render_tag_chips()
+
+                    def _apply_scope_for_selected_style(scope_value: str) -> None:
+                        if split_word_index < 0:
+                            view._safe_notify(
+                                "Select a valid OCR word to apply scope",
+                                type_="warning",
+                            )
+                            return
+                        if not selected_style_value:
+                            view._safe_notify(
+                                "Select a style before setting scope",
+                                type_="warning",
+                            )
+                            return
+
+                        if scope_value in {"whole", "part"}:
+                            result = view.word_operations.apply_scope_to_word_style(
+                                line_index,
+                                split_word_index,
+                                selected_style_value,
+                                scope_value,
+                            )
+                        else:
+                            result = view.word_operations.clear_scope_on_word_style(
+                                line_index,
+                                split_word_index,
+                                selected_style_value,
+                            )
+
+                        view._safe_notify(result.message, type_=result.severity)
+                        if result.updated_count > 0:
+                            _refresh_open_dialog_content()
+                            _sync_scope_value_for_selected_style()
+                            _render_tag_chips()
+
+                    def _apply_selected_component_from_dialog(*, enabled: bool) -> None:
+                        if split_word_index < 0:
+                            view._safe_notify(
+                                "Select a valid OCR word to apply component",
+                                type_="warning",
+                            )
+                            return
+                        if not selected_component_value:
+                            view._safe_notify(
+                                "Select a component to update",
+                                type_="warning",
+                            )
+                            return
+                        result = view.word_operations.apply_component_to_word(
+                            line_index,
+                            split_word_index,
+                            selected_component_value,
+                            enabled=enabled,
+                        )
+                        view._safe_notify(result.message, type_=result.severity)
+                        if result.updated_count > 0:
+                            _refresh_open_dialog_content()
+                            _render_tag_chips()
+
+                    _sync_scope_value_for_selected_style()
+
                 _render_word_preview(
                     "Next",
                     split_word_index + 1,
                     next_word_match,
                 )
+
+            ui.separator()
+            with (
+                ui.row()
+                .classes("items-end justify-start gap-1 full-width")
+                .style("flex-wrap: wrap;")
+            ):
+                style_select = ui.select(
+                    options=style_options,
+                    value=selected_style_value,
+                    label="Style",
+                ).props("dense outlined options-dense")
+                style_select.classes("text-caption")
+                style_select.style(
+                    "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
+                )
+                style_select.on_value_change(_set_selected_style)
+                style_select.enabled = split_word_index >= 0
+
+                scope_select = ui.select(
+                    options=scope_options,
+                    value=selected_scope_value,
+                    label="Scope",
+                ).props("dense outlined options-dense")
+                scope_select.classes("text-caption")
+                scope_select.style(
+                    "min-width: 96px; max-width: 108px; font-size: 0.72rem;"
+                )
+                scope_select.on_value_change(
+                    lambda event: _apply_scope_for_selected_style(
+                        str(event.value or "")
+                    )
+                )
+                scope_select.enabled = split_word_index >= 0
+
+                apply_style_button = ui.button(
+                    "Apply Style",
+                    on_click=_apply_selected_style_from_dialog,
+                ).props("dense no-caps size=sm")
+                style_word_text_button(apply_style_button, compact=True)
+                apply_style_button.style(
+                    "min-width: 80px; padding-left: 6px; padding-right: 6px; "
+                    "font-size: 0.72rem;"
+                )
+
+                component_select = ui.select(
+                    options=component_options,
+                    value=selected_component_value,
+                    label="Component",
+                ).props("dense outlined options-dense")
+                component_select.classes("text-caption")
+                component_select.style(
+                    "min-width: 138px; max-width: 162px; font-size: 0.72rem;"
+                )
+                component_select.on_value_change(_set_selected_component)
+                component_select.enabled = split_word_index >= 0
+                apply_component_button = ui.button(
+                    "Apply Component",
+                    on_click=lambda: _apply_selected_component_from_dialog(
+                        enabled=True
+                    ),
+                ).props("dense no-caps size=sm")
+                style_word_text_button(apply_component_button, compact=True)
+                apply_component_button.style(
+                    "min-width: 98px; padding-left: 6px; padding-right: 6px; "
+                    "font-size: 0.72rem;"
+                )
+                clear_component_button = ui.button(
+                    "Clear Component",
+                    on_click=lambda: _apply_selected_component_from_dialog(
+                        enabled=False
+                    ),
+                ).props("dense no-caps size=sm outline")
+                style_word_text_button(clear_component_button, compact=True)
+                clear_component_button.style(
+                    "min-width: 102px; padding-left: 6px; padding-right: 6px; "
+                    "font-size: 0.72rem;"
+                )
+
+            _render_tag_chips()
 
             ui.separator()
             ui.label("Merge / Split").classes("text-caption text-grey-7")
@@ -600,13 +900,6 @@ def open_word_edit_dialog(
                 delete_button.disabled = (
                     view.delete_words_callback is None or split_word_index < 0
                 )
-
-            ui.separator()
-            view.renderer.create_word_actions_cell(
-                line_index,
-                split_word_index,
-                word_match,
-            )
 
             ui.separator()
             ui.label("Bounding Box").classes("text-caption text-grey-7")

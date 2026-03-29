@@ -20,6 +20,7 @@ ClickEvent = events.ClickEventArguments | None
 WORD_LABEL_ITALIC = "italic"
 WORD_LABEL_SMALL_CAPS = "small_caps"
 WORD_LABEL_BLACKLETTER = "blackletter"
+WORD_LABEL_FOOTNOTE = "footnote"
 WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
 WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
 
@@ -31,7 +32,7 @@ class WordMatchGtEditing:
         self._view = view
         self._word_gt_input_refs: dict[WordKey, object] = {}
         self._word_style_button_refs: dict[
-            WordKey, tuple[object, object, object, object, object]
+            WordKey, tuple[object, object, object, object]
         ] = {}
 
     def create_gt_cell(self, line_index: int, word_index: int, word_match):
@@ -334,10 +335,14 @@ class WordMatchGtEditing:
             small_caps = not small_caps
         elif attribute == WORD_LABEL_BLACKLETTER:
             blackletter = not blackletter
-        elif attribute == WORD_LABEL_LEFT_FOOTNOTE:
-            left_footnote = not left_footnote
-        elif attribute == WORD_LABEL_RIGHT_FOOTNOTE:
-            right_footnote = not right_footnote
+        elif attribute in {
+            WORD_LABEL_FOOTNOTE,
+            WORD_LABEL_LEFT_FOOTNOTE,
+            WORD_LABEL_RIGHT_FOOTNOTE,
+        }:
+            footnote_marker = not (left_footnote or right_footnote)
+            left_footnote = footnote_marker
+            right_footnote = footnote_marker
         else:
             return
 
@@ -416,7 +421,7 @@ class WordMatchGtEditing:
         left_footnote: bool,
         right_footnote: bool,
     ) -> None:
-        """Update only I/SC/BL/LFN/RFN button colors for a word without rerendering the column."""
+        """Update style button colors for a word without rerendering the column."""
         key = (line_index, word_index)
         button_refs = self._word_style_button_refs.get(key)
         if button_refs is None:
@@ -426,7 +431,12 @@ class WordMatchGtEditing:
             self._word_style_button_refs.pop(key, None)
             return
 
-        states = (italic, small_caps, blackletter, left_footnote, right_footnote)
+        states = (
+            italic,
+            small_caps,
+            blackletter,
+            (left_footnote or right_footnote),
+        )
         for button, enabled in zip(button_refs, states, strict=False):
             try:
                 if enabled:
@@ -469,11 +479,12 @@ class WordMatchGtEditing:
         word_object = getattr(word_match, "word_object", None)
         if word_object is None:
             return
+        footnote_marker = bool(left_footnote or right_footnote)
         WordOperations().update_word_attributes(
             word_object,
             italic=italic,
             small_caps=small_caps,
             blackletter=blackletter,
-            left_footnote=left_footnote,
-            right_footnote=right_footnote,
+            left_footnote=footnote_marker,
+            right_footnote=footnote_marker,
         )

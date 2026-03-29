@@ -2017,6 +2017,90 @@ def test_word_attribute_tooltip_includes_active_flags():
     assert "Attributes: italic, blackletter" in tooltip
 
 
+def test_word_display_tags_include_styles_and_components():
+    view = WordMatchView()
+    word_match = SimpleNamespace(
+        word_object=SimpleNamespace(
+            text_style_labels=["italics", "small caps", "regular"],
+            word_components=["footnote marker", "drop cap"],
+        )
+    )
+
+    tags = view._word_display_tags(word_match)
+
+    assert tags == ["Italics", "Small Caps", "Footnote Marker", "Drop Cap"]
+
+
+def test_word_display_tags_include_explicit_scope_suffix():
+    view = WordMatchView()
+    word_match = SimpleNamespace(
+        word_object=SimpleNamespace(
+            text_style_labels=["italics", "small caps"],
+            text_style_label_scopes={"italics": "whole"},
+            word_components=[],
+        )
+    )
+
+    tags = view._word_display_tags(word_match)
+
+    assert tags == ["Italics (Whole)", "Small Caps"]
+
+
+def test_word_display_tag_items_include_kind_and_label():
+    view = WordMatchView()
+    word_match = SimpleNamespace(
+        word_object=SimpleNamespace(
+            text_style_labels=["italics"],
+            word_components=["footnote marker"],
+        )
+    )
+
+    tag_items = view._word_display_tag_items(word_match)
+
+    assert tag_items == [
+        {"kind": "style", "label": "italics", "display": "Italics"},
+        {
+            "kind": "component",
+            "label": "footnote marker",
+            "display": "Footnote Marker",
+        },
+    ]
+
+
+def test_word_display_tags_empty_without_word_object():
+    view = WordMatchView()
+
+    tags = view._word_display_tags(SimpleNamespace(word_object=None))
+
+    assert tags == []
+
+
+def test_clear_word_tag_dispatches_to_style_clear(monkeypatch):
+    view = WordMatchView()
+    seen = {}
+
+    def clear_style(line_index: int, word_index: int, style: str):
+        seen["args"] = (line_index, word_index, style)
+        return SimpleNamespace(updated_count=1, message="ok", severity="positive")
+
+    monkeypatch.setattr(
+        view.word_operations,
+        "clear_style_on_word",
+        clear_style,
+    )
+    monkeypatch.setattr(view, "_safe_notify", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        view,
+        "_refresh_word_after_local_operation",
+        lambda *_args, **_kwargs: None,
+    )
+
+    result = view._clear_word_tag(1, 2, kind="style", label="italics")
+
+    assert result is True
+    assert seen["args"] == (1, 2, "italics")
+
+
 def test_apply_style_processor_updates_selected_words(monkeypatch):
     view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
     view.selection.selected_word_indices = {(1, 2), (0, 0)}
@@ -2058,6 +2142,28 @@ def test_apply_style_processor_warns_on_empty_selection():
     assert result.message == "Select at least one word"
 
 
+def test_apply_style_processor_updates_explicit_word(monkeypatch):
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda line_index, word_index: SimpleNamespace(
+            word_object=SimpleNamespace(
+                text_style_labels=["regular"],
+                text_style_label_scopes={"regular": "whole"},
+                word_components=[],
+            ),
+            line_index=line_index,
+            word_index=word_index,
+        ),
+    )
+
+    result = view.word_operations.apply_style_to_word(0, 0, "italics")
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+
+
 def test_apply_scope_processor_updates_existing_styles(monkeypatch):
     view = WordMatchView()
     word_object = SimpleNamespace(
@@ -2091,26 +2197,319 @@ def test_apply_scope_processor_updates_existing_styles(monkeypatch):
     assert refreshed == [(0, 0)]
 
 
+def test_apply_scope_processor_updates_explicit_word(monkeypatch):
+    view = WordMatchView()
+    word_object = SimpleNamespace(
+        text_style_labels=["italics"],
+        text_style_label_scopes={"italics": "whole"},
+        word_components=[],
+    )
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(word_object=word_object),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    original_processor = view.word_operations
+    view.word_operations = type(original_processor)(
+        view,
+        None,
+        refresh_word_callback=lambda line_index, word_index: refreshed.append(
+            (line_index, word_index)
+        ),
+    )
+
+    result = view.word_operations.apply_scope_to_word(0, 0, "part")
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert word_object.text_style_label_scopes == {"italics": "part"}
+    assert refreshed == [(0, 0)]
+
+
+def test_apply_scope_processor_updates_explicit_word_style(monkeypatch):
+    view = WordMatchView()
+    word_object = SimpleNamespace(
+        text_style_labels=["italics", "small caps"],
+        text_style_label_scopes={"italics": "whole", "small caps": "whole"},
+        word_components=[],
+    )
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(word_object=word_object),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    original_processor = view.word_operations
+    view.word_operations = type(original_processor)(
+        view,
+        None,
+        refresh_word_callback=lambda line_index, word_index: refreshed.append(
+            (line_index, word_index)
+        ),
+    )
+
+    result = view.word_operations.apply_scope_to_word_style(0, 0, "italics", "part")
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert word_object.text_style_label_scopes == {
+        "italics": "part",
+        "small caps": "whole",
+    }
+    assert refreshed == [(0, 0)]
+
+
+def test_clear_scope_on_word_removes_scope_entries(monkeypatch):
+    view = WordMatchView()
+    word_object = SimpleNamespace(
+        text_style_labels=["italics", "small caps"],
+        text_style_label_scopes={"italics": "part", "small caps": "whole"},
+        word_components=[],
+    )
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(word_object=word_object),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    original_processor = view.word_operations
+    view.word_operations = type(original_processor)(
+        view,
+        None,
+        refresh_word_callback=lambda line_index, word_index: refreshed.append(
+            (line_index, word_index)
+        ),
+    )
+
+    result = view.word_operations.clear_scope_on_word(0, 0)
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert word_object.text_style_label_scopes == {}
+    assert refreshed == [(0, 0)]
+
+
+def test_clear_scope_on_word_style_removes_only_target_style(monkeypatch):
+    view = WordMatchView()
+    word_object = SimpleNamespace(
+        text_style_labels=["italics", "small caps"],
+        text_style_label_scopes={"italics": "part", "small caps": "whole"},
+        word_components=[],
+    )
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(word_object=word_object),
+    )
+
+    refreshed: list[tuple[int, int]] = []
+    original_processor = view.word_operations
+    view.word_operations = type(original_processor)(
+        view,
+        None,
+        refresh_word_callback=lambda line_index, word_index: refreshed.append(
+            (line_index, word_index)
+        ),
+    )
+
+    result = view.word_operations.clear_scope_on_word_style(0, 0, "italics")
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert word_object.text_style_label_scopes == {"small caps": "whole"}
+    assert refreshed == [(0, 0)]
+
+
+def test_apply_component_processor_updates_selected_words(monkeypatch):
+    seen_calls: list[tuple[int, int, bool, bool, bool, bool, bool]] = []
+
+    def update_callback(
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
+    ) -> bool:
+        seen_calls.append(
+            (
+                line_index,
+                word_index,
+                italic,
+                small_caps,
+                blackletter,
+                left_footnote,
+                right_footnote,
+            )
+        )
+        return True
+
+    view = WordMatchView(set_word_attributes_callback=update_callback)
+    view.selection.selected_word_indices = {(1, 2), (0, 0)}
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda line_index, word_index: SimpleNamespace(
+            word_object=SimpleNamespace(
+                text_style_labels=["regular"],
+                text_style_label_scopes={"regular": "whole"},
+                word_components=[],
+            ),
+            line_index=line_index,
+            word_index=word_index,
+        ),
+    )
+
+    result = view.word_operations.apply_component_to_selection(
+        "footnote marker",
+        enabled=True,
+    )
+
+    assert result.updated_count == 2
+    assert result.severity == "positive"
+    assert len(seen_calls) == 2
+    assert all(call[5] is True for call in seen_calls)
+    assert all(call[6] is True for call in seen_calls)
+
+
+def test_apply_component_processor_clears_existing_component(monkeypatch):
+    seen = {}
+
+    def update_callback(
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            italic,
+            small_caps,
+            blackletter,
+            left_footnote,
+            right_footnote,
+        )
+        return True
+
+    view = WordMatchView(set_word_attributes_callback=update_callback)
+    view.selection.selected_word_indices = {(0, 0)}
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(
+            word_object=SimpleNamespace(
+                text_style_labels=["regular"],
+                text_style_label_scopes={"regular": "whole"},
+                word_components=["footnote marker"],
+            )
+        ),
+    )
+
+    result = view.word_operations.apply_component_to_selection(
+        "footnote marker",
+        enabled=False,
+    )
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert seen["args"] == (0, 0, False, False, False, False, False)
+
+
+def test_apply_component_processor_updates_explicit_word(monkeypatch):
+    seen = {}
+
+    def update_callback(
+        line_index: int,
+        word_index: int,
+        italic: bool,
+        small_caps: bool,
+        blackletter: bool,
+        left_footnote: bool,
+        right_footnote: bool,
+    ) -> bool:
+        seen["args"] = (
+            line_index,
+            word_index,
+            italic,
+            small_caps,
+            blackletter,
+            left_footnote,
+            right_footnote,
+        )
+        return True
+
+    view = WordMatchView(set_word_attributes_callback=update_callback)
+    monkeypatch.setattr(
+        view,
+        "_line_word_match_by_ocr_index",
+        lambda *_args: SimpleNamespace(
+            word_object=SimpleNamespace(
+                text_style_labels=["regular"],
+                text_style_label_scopes={"regular": "whole"},
+                word_components=[],
+            )
+        ),
+    )
+
+    result = view.word_operations.apply_component_to_word(
+        0,
+        0,
+        "footnote marker",
+        enabled=True,
+    )
+
+    assert result.updated_count == 1
+    assert result.severity == "positive"
+    assert seen["args"] == (0, 0, False, False, False, True, True)
+
+
 def test_apply_style_toolbar_buttons_disable_without_selection():
     view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
-    view.toolbar.build_actions_toolbar()
+    view.toolbar.apply_style_select = SimpleNamespace(enabled=True)
+    view.toolbar.apply_style_button = SimpleNamespace(disabled=False)
+    view.toolbar.apply_scope_select = SimpleNamespace(enabled=True)
     view.toolbar.update_button_state()
 
     assert view.toolbar.apply_style_select is not None
     assert view.toolbar.apply_style_button is not None
-    assert view.toolbar.apply_scope_buttons
+    assert view.toolbar.apply_scope_select is not None
     assert view.toolbar.apply_style_select.enabled is False
     assert view.toolbar.apply_style_button.disabled is True
-    assert all(button.disabled for button in view.toolbar.apply_scope_buttons)
+    assert view.toolbar.apply_scope_select.enabled is False
 
 
-def test_apply_scope_buttons_disable_without_existing_style():
+def test_apply_scope_select_enabled_with_selection():
     view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
     view.selection.selected_word_indices = {(0, 0)}
-    view.toolbar.build_actions_toolbar()
+    view.toolbar.apply_scope_select = SimpleNamespace(enabled=False)
     view.toolbar.update_button_state()
 
-    assert all(button.disabled for button in view.toolbar.apply_scope_buttons)
+    assert view.toolbar.apply_scope_select is not None
+    assert view.toolbar.apply_scope_select.enabled is True
+
+
+def test_apply_component_toolbar_buttons_disable_without_selection():
+    view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
+    view.toolbar.apply_component_select = SimpleNamespace(enabled=True)
+    view.toolbar.apply_component_button = SimpleNamespace(disabled=False)
+    view.toolbar.clear_component_button = SimpleNamespace(disabled=False)
+    view.toolbar.update_button_state()
+
+    assert view.toolbar.apply_component_select is not None
+    assert view.toolbar.apply_component_button is not None
+    assert view.toolbar.clear_component_button is not None
+    assert view.toolbar.apply_component_select.enabled is False
+    assert view.toolbar.apply_component_button.disabled is True
+    assert view.toolbar.clear_component_button.disabled is True
 
 
 def test_word_gt_input_width_prefers_current_value():

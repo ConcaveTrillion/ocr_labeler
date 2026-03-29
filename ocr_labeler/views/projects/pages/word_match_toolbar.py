@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Callable
 
 from nicegui import ui
 
-from ...shared.button_styles import ButtonVariant, style_word_icon_button
+from ...shared.button_styles import (
+    ButtonVariant,
+    style_word_icon_button,
+    style_word_text_button,
+)
 
 if TYPE_CHECKING:
     from .word_match import WordMatchView
@@ -51,8 +55,12 @@ class WordMatchToolbar:
         self.group_selected_words_into_paragraph_button = None
         self.apply_style_select = None
         self.apply_style_button = None
-        self.apply_scope_buttons: list[object] = []
+        self.apply_scope_select = None
         self._selected_style_value: str | None = None
+        self.apply_component_select = None
+        self.apply_component_button = None
+        self.clear_component_button = None
+        self._selected_component_value: str | None = None
 
     def set_refine_bboxes_callback(self, callback: Callable | None) -> None:
         """Register callback for the page-level Refine Bboxes action."""
@@ -263,44 +271,90 @@ class WordMatchToolbar:
         """Build a dedicated immediate-apply style toolbar for selected words."""
         with (
             ui.row()
-            .classes("items-center gap-2 pl-2 pt-2 flex-wrap")
+            .classes("items-end gap-2 pl-2 pt-2 flex-wrap")
             .style("max-width: 100%;")
         ):
-            ui.label("Apply Style").classes("text-sm font-semibold")
-
             style_options = {
                 style_label: self._display_label(style_label)
                 for style_label in self._view.word_operations.supported_styles
             }
             self._selected_style_value = next(iter(style_options), None)
-            style_select_trigger = ui.element("div").props(
-                'data-testid="apply-style-select"'
+            self.apply_style_select = ui.select(
+                options=style_options,
+                value=self._selected_style_value,
+                label="Style",
+            ).props("dense outlined options-dense")
+            self.apply_style_select.classes("text-caption")
+            self.apply_style_select.style(
+                "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
             )
-            style_select_trigger.on("click", self._open_style_picker)
-            with style_select_trigger:
-                self.apply_style_select = ui.select(
-                    options=style_options,
-                    value=self._selected_style_value,
-                ).props("dense outlined options-dense")
-            self.apply_style_select.tooltip("Choose a text style to apply")
             self.apply_style_select.on_value_change(self._on_style_value_change)
 
+            self.apply_scope_select = ui.select(
+                options={"": "--", "whole": "Whole", "part": "Part"},
+                value="",
+                label="Scope",
+            ).props("dense outlined options-dense")
+            self.apply_scope_select.classes("text-caption")
+            self.apply_scope_select.style(
+                "min-width: 96px; max-width: 108px; font-size: 0.72rem;"
+            )
+            self.apply_scope_select.on_value_change(
+                lambda event: (
+                    self._apply_scope(str(event.value))
+                    if event.value in {"whole", "part"}
+                    else None
+                )
+            )
+
             self.apply_style_button = ui.button(
-                "Apply",
+                "Apply Style",
                 on_click=self._apply_selected_style,
-            ).tooltip("Apply the selected text style to selected words")
-            self.apply_style_button.props("dense")
+            ).props("dense no-caps size=sm")
+            style_word_text_button(self.apply_style_button, compact=True)
+            self.apply_style_button.style(
+                "min-width: 80px; padding-left: 6px; padding-right: 6px; "
+                "font-size: 0.72rem;"
+            )
             self.apply_style_button.props('data-testid="apply-style-button"')
 
-            ui.separator().props("vertical")
+            component_options = {
+                component_label: self._display_component_label(component_label)
+                for component_label in self._view.word_operations.supported_components
+            }
+            self._selected_component_value = next(iter(component_options), None)
+            self.apply_component_select = ui.select(
+                options=component_options,
+                value=self._selected_component_value,
+                label="Component",
+            ).props("dense outlined options-dense")
+            self.apply_component_select.classes("text-caption")
+            self.apply_component_select.style(
+                "min-width: 138px; max-width: 162px; font-size: 0.72rem;"
+            )
+            self.apply_component_select.on_value_change(self._on_component_value_change)
 
-            for scope_label in self._view.word_operations.supported_scopes:
-                button = ui.button(
-                    self._display_label(scope_label),
-                    on_click=lambda _event, scope=scope_label: self._apply_scope(scope),
-                ).tooltip(f"Apply text style scope '{scope_label}' to selected words")
-                button.props("dense outline")
-                self.apply_scope_buttons.append(button)
+            self.apply_component_button = ui.button(
+                "Apply Component",
+                on_click=self._apply_selected_component,
+            ).props("dense no-caps size=sm")
+            style_word_text_button(self.apply_component_button, compact=True)
+            self.apply_component_button.style(
+                "min-width: 98px; padding-left: 6px; padding-right: 6px; "
+                "font-size: 0.72rem;"
+            )
+            self.apply_component_button.props('data-testid="apply-component-button"')
+
+            self.clear_component_button = ui.button(
+                "Clear Component",
+                on_click=self._clear_selected_component,
+            ).props("dense no-caps size=sm outline")
+            style_word_text_button(self.clear_component_button, compact=True)
+            self.clear_component_button.style(
+                "min-width: 102px; padding-left: 6px; padding-right: 6px; "
+                "font-size: 0.72rem;"
+            )
+            self.clear_component_button.props('data-testid="clear-component-button"')
 
         # Apply the current selection state immediately so controls are correctly
         # gated when the toolbar first renders.
@@ -309,13 +363,20 @@ class WordMatchToolbar:
     def _display_label(self, value: str) -> str:
         return str(value).title()
 
+    def _display_component_label(self, value: str) -> str:
+        component_labels = {
+            "footnote marker": "Footnote Marker",
+            "drop cap": "Drop Cap",
+            "subscript": "Subscript",
+            "superscript": "Superscript",
+        }
+        return component_labels.get(str(value), self._display_label(value))
+
     def _on_style_value_change(self, event) -> None:
         self._selected_style_value = str(event.value) if event.value else None
 
-    def _open_style_picker(self, _event=None) -> None:
-        if self.apply_style_select is None or not self.apply_style_select.enabled:
-            return
-        self.apply_style_select.run_method("showPopup")
+    def _on_component_value_change(self, event) -> None:
+        self._selected_component_value = str(event.value) if event.value else None
 
     def _apply_selected_style(self) -> None:
         if not self._selected_style_value:
@@ -330,6 +391,26 @@ class WordMatchToolbar:
 
     def _apply_scope(self, scope: str) -> None:
         result = self._view.word_operations.apply_scope_to_selection(scope)
+        self._view._safe_notify(result.message, type_=result.severity)
+        self.update_button_state()
+
+    def _apply_selected_component(self) -> None:
+        if not self._selected_component_value:
+            self._view._safe_notify("Select a component to apply", type_="warning")
+            return
+        self._apply_component(self._selected_component_value, enabled=True)
+
+    def _clear_selected_component(self) -> None:
+        if not self._selected_component_value:
+            self._view._safe_notify("Select a component to clear", type_="warning")
+            return
+        self._apply_component(self._selected_component_value, enabled=False)
+
+    def _apply_component(self, component: str, *, enabled: bool) -> None:
+        result = self._view.word_operations.apply_component_to_selection(
+            component,
+            enabled=enabled,
+        )
         self._view._safe_notify(result.message, type_=result.severity)
         self.update_button_state()
 
@@ -494,9 +575,11 @@ class WordMatchToolbar:
             self.apply_style_select.enabled = has_selected_words
         if self.apply_style_button is not None:
             self.apply_style_button.disabled = not has_selected_words
-        has_scope_target = (
-            has_selected_words
-            and self._view.word_operations.selection_has_scope_target()
-        )
-        for button in self.apply_scope_buttons:
-            button.disabled = not has_scope_target
+        if self.apply_scope_select is not None:
+            self.apply_scope_select.enabled = has_selected_words
+        if self.apply_component_select is not None:
+            self.apply_component_select.enabled = has_selected_words
+        if self.apply_component_button is not None:
+            self.apply_component_button.disabled = not has_selected_words
+        if self.clear_component_button is not None:
+            self.clear_component_button.disabled = not has_selected_words

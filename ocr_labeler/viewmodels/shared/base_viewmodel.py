@@ -8,6 +8,11 @@ from nicegui import binding
 
 logger = __import__("logging").getLogger(__name__)
 
+_BENIGN_CALLBACK_ERROR_FRAGMENTS = (
+    "the client this element belongs to has been deleted",
+    "cannot enqueue javascript commands",
+)
+
 
 @binding.bindable_dataclass
 class BaseViewModel(ABC):
@@ -55,6 +60,16 @@ class BaseViewModel(ABC):
             try:
                 callback(property_name, value)
             except Exception as e:
+                message = str(e).lower()
+                if any(
+                    fragment in message for fragment in _BENIGN_CALLBACK_ERROR_FRAGMENTS
+                ):
+                    logger.debug(
+                        "Ignoring benign property change callback error for %s: %s",
+                        property_name,
+                        e,
+                    )
+                    continue
                 logger.exception(
                     f"Error in property change callback for {property_name}: {e}"
                 )

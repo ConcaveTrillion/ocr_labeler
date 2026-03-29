@@ -35,12 +35,12 @@ STYLE_SCOPE_BY_ATTR = {
 }
 
 WORD_COMPONENT_BY_ATTR = {
-    "left_footnote": "has starting footnote marker",
-    "is_left_footnote": "has starting footnote marker",
-    "right_footnote": "has ending footnote marker",
-    "is_right_footnote": "has ending footnote marker",
-    "footnote": "has ending footnote marker",
-    "is_footnote": "has ending footnote marker",
+    "left_footnote": "footnote marker",
+    "is_left_footnote": "footnote marker",
+    "right_footnote": "footnote marker",
+    "is_right_footnote": "footnote marker",
+    "footnote": "footnote marker",
+    "is_footnote": "footnote marker",
 }
 
 
@@ -106,14 +106,12 @@ class WordOperations:
                 style_labels_set.discard(style_label)
                 style_scopes.pop(style_label, None)
 
-        for attr_name in ("left_footnote", "right_footnote"):
-            component_label = self._resolve_word_component(attr_name, ())
-            if component_label is None:
-                continue
-            if desired_flags[attr_name]:
-                component_set.add(component_label)
+        footnote_component = self._resolve_word_component("left_footnote", ())
+        if footnote_component is not None:
+            if desired_flags["left_footnote"] or desired_flags["right_footnote"]:
+                component_set.add(footnote_component)
             else:
-                component_set.discard(component_label)
+                component_set.discard(footnote_component)
 
         normalized_style_labels = self._ordered_values(style_labels, style_labels_set)
         normalized_components = self._ordered_values(word_components, component_set)
@@ -160,6 +158,45 @@ class WordOperations:
         word.text_style_label_scopes = {
             label: normalize_text_style_label_scope(style_scopes.get(label, "whole"))
             for label in word.text_style_labels
+        }
+        return True
+
+    def apply_word_component(
+        self,
+        word: object,
+        component: str,
+        *,
+        enabled: bool,
+    ) -> bool:
+        """Add or remove a normalized word component label."""
+        normalized_component = normalize_word_component(component)
+        word_components = self._read_word_components(word)
+        component_set = set(word_components)
+        if enabled:
+            component_set.add(normalized_component)
+        else:
+            component_set.discard(normalized_component)
+        word.word_components = self._ordered_values(word_components, component_set)
+        return True
+
+    def remove_text_style_label(self, word: object, style: str) -> bool:
+        """Remove a text style label while preserving other style metadata."""
+        normalized_style = normalize_text_style_label(style)
+        style_labels = self._read_text_style_labels(word)
+        style_scopes = self._read_text_style_label_scopes(word)
+
+        style_set = set(style_labels)
+        style_set.discard(normalized_style)
+        style_scopes.pop(normalized_style, None)
+
+        ordered_labels = self._ordered_values(style_labels, style_set)
+        if not ordered_labels:
+            ordered_labels = ["regular"]
+
+        word.text_style_labels = ordered_labels
+        word.text_style_label_scopes = {
+            label: normalize_text_style_label_scope(style_scopes.get(label, "whole"))
+            for label in ordered_labels
         }
         return True
 

@@ -32,8 +32,7 @@ ClickEvent = events.ClickEventArguments | None
 WORD_LABEL_ITALIC = "italic"
 WORD_LABEL_SMALL_CAPS = "small_caps"
 WORD_LABEL_BLACKLETTER = "blackletter"
-WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
-WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
+WORD_LABEL_FOOTNOTE = "footnote"
 
 
 class WordMatchRenderer:
@@ -614,7 +613,11 @@ class WordMatchRenderer:
                 target_word_match,
                 interactive=False,
             )
-            self._create_ocr_cell(target_word_match)
+            self._create_ocr_cell(
+                target_word_match,
+                line_index=line_index,
+                split_word_index=word_index,
+            )
             self._view.gt_editing.create_gt_cell(
                 line_index,
                 word_index,
@@ -678,7 +681,11 @@ class WordMatchRenderer:
                         interactive=False,
                     )
                     # OCR text cell
-                    self._create_ocr_cell(word_match)
+                    self._create_ocr_cell(
+                        word_match,
+                        line_index=line_match.line_index,
+                        split_word_index=split_word_index,
+                    )
                     # Ground Truth text cell
                     self._view.gt_editing.create_gt_cell(
                         line_match.line_index,
@@ -734,6 +741,7 @@ class WordMatchRenderer:
                     word_match,
                 ),
             ).tooltip("Edit word actions")
+            edit_button.props('data-testid="edit-word-button"')
             style_word_icon_button(edit_button)
 
     def _open_word_edit_dialog(
@@ -879,7 +887,13 @@ class WordMatchRenderer:
                 else:
                     ui.icon("image_not_supported")
 
-    def _create_ocr_cell(self, word_match) -> None:
+    def _create_ocr_cell(
+        self,
+        word_match,
+        *,
+        line_index: int | None = None,
+        split_word_index: int | None = None,
+    ) -> None:
         """Create OCR text cell for a word."""
         with ui.row():
             if word_match.ocr_text.strip():
@@ -893,6 +907,54 @@ class WordMatchRenderer:
                     ui.label("[missing]").classes("text-blue-600 monospace")
                 else:
                     ui.label("[empty]").classes("monospace")
+
+        tag_items = self._view._word_display_tag_items(word_match)
+        if tag_items:
+            with ui.row().classes("items-center gap-1").style("flex-wrap: wrap;"):
+                for item in tag_items:
+                    with (
+                        ui.row()
+                        .classes("items-center gap-1 word-tag-chip")
+                        .style(self._view._word_tag_chip_style(item["kind"]))
+                    ) as chip:
+                        chip.props('data-testid="word-tag-chip"')
+                        ui.label(item["display"]).classes("text-caption")
+                        clear_button = ui.button(
+                            icon="close",
+                            on_click=lambda _event, tag=item: (
+                                self._view._clear_word_tag(
+                                    line_index,
+                                    split_word_index,
+                                    kind=tag["kind"],
+                                    label=tag["label"],
+                                )
+                                if line_index is not None
+                                and split_word_index is not None
+                                and split_word_index >= 0
+                                else None
+                            ),
+                        ).props(
+                            'flat dense round size=xs data-testid="word-tag-clear-button"'
+                        )
+                        clear_button.classes("word-tag-clear-button")
+                        clear_button.style("min-width: 0; width: 14px; height: 14px;")
+                        clear_button.visible = False
+                        chip.on(
+                            "mouseenter",
+                            lambda _event, button=clear_button: setattr(
+                                button,
+                                "visible",
+                                True,
+                            ),
+                        )
+                        chip.on(
+                            "mouseleave",
+                            lambda _event, button=clear_button: setattr(
+                                button,
+                                "visible",
+                                False,
+                            ),
+                        )
 
     def _create_status_cell(self, word_match) -> None:
         """Create status cell for a word."""
@@ -917,6 +979,7 @@ class WordMatchRenderer:
         italic, small_caps, blackletter, left_footnote, right_footnote = (
             self._view._word_style_flags(word_match)
         )
+        footnote_marker = left_footnote or right_footnote
         style_button_width = "width: 3rem;"
 
         with ui.row().classes("items-center gap-1"):
@@ -992,52 +1055,28 @@ class WordMatchRenderer:
                 active=blackletter,
             )
 
-            left_footnote_button = (
+            footnote_button = (
                 ui.button(
-                    "LFN",
+                    "FN",
                     on_click=lambda event: (
                         self._view.gt_editing._handle_toggle_word_attribute(
                             line_index,
                             split_word_index,
-                            WORD_LABEL_LEFT_FOOTNOTE,
+                            WORD_LABEL_FOOTNOTE,
                             event,
                         )
                     ),
                 )
                 .style(style_button_width)
-                .tooltip("Toggle left footnote marker")
+                .tooltip("Toggle footnote marker")
             )
-            left_footnote_button.disabled = (
+            footnote_button.disabled = (
                 self._view.set_word_attributes_callback is None or split_word_index < 0
             )
             style_word_text_button(
-                left_footnote_button,
+                footnote_button,
                 variant=ButtonVariant.TOGGLE,
-                active=left_footnote,
-            )
-
-            right_footnote_button = (
-                ui.button(
-                    "RFN",
-                    on_click=lambda event: (
-                        self._view.gt_editing._handle_toggle_word_attribute(
-                            line_index,
-                            split_word_index,
-                            WORD_LABEL_RIGHT_FOOTNOTE,
-                            event,
-                        )
-                    ),
-                )
-                .style(style_button_width)
-                .tooltip("Toggle right footnote marker")
-            )
-            right_footnote_button.disabled = (
-                self._view.set_word_attributes_callback is None or split_word_index < 0
-            )
-            style_word_text_button(
-                right_footnote_button,
-                variant=ButtonVariant.TOGGLE,
-                active=right_footnote,
+                active=footnote_marker,
             )
 
             if split_word_index >= 0:
@@ -1047,8 +1086,7 @@ class WordMatchRenderer:
                     italic_button,
                     small_caps_button,
                     blackletter_button,
-                    left_footnote_button,
-                    right_footnote_button,
+                    footnote_button,
                 )
 
         with ui.row().classes("items-center gap-1"):

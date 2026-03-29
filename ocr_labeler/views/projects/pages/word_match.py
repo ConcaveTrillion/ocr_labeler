@@ -578,17 +578,12 @@ class WordMatchView:
             "blackletter",
             aliases=("is_blackletter",),
         )
-        left_footnote = word_ops.read_word_attribute(
+        footnote_marker = word_ops.read_word_attribute(
             word_object,
             "left_footnote",
             aliases=("is_left_footnote",),
         )
-        right_footnote = word_ops.read_word_attribute(
-            word_object,
-            "right_footnote",
-            aliases=("is_right_footnote",),
-        )
-        return italic, small_caps, blackletter, left_footnote, right_footnote
+        return italic, small_caps, blackletter, footnote_marker, footnote_marker
 
     def _handle_set_word_attributes(
         self,
@@ -841,10 +836,8 @@ class WordMatchView:
             active_attributes.append("small_caps")
         if blackletter:
             active_attributes.append("blackletter")
-        if left_footnote:
-            active_attributes.append("left_footnote")
-        if right_footnote:
-            active_attributes.append("right_footnote")
+        if left_footnote or right_footnote:
+            active_attributes.append("footnote_marker")
         if active_attributes:
             lines.append(f"Attributes: {', '.join(active_attributes)}")
 
@@ -856,6 +849,118 @@ class WordMatchView:
             lines.append(f"GT: '{word_match.ground_truth_text}'")
 
         return "\\n".join(lines) if lines else None
+
+    def _word_display_tag_items(self, word_match: object) -> list[dict[str, str]]:
+        """Return style/component tag metadata for display and removal."""
+        word_object = getattr(word_match, "word_object", None)
+        if word_object is None:
+            return []
+
+        style_map = {
+            "italics": "Italics",
+            "small caps": "Small Caps",
+            "blackletter": "Blackletter",
+            "all caps": "All Caps",
+            "bold": "Bold",
+            "underline": "Underline",
+            "strikethrough": "Strikethrough",
+            "monospace": "Monospace",
+            "handwritten": "Handwritten",
+        }
+        component_map = {
+            "footnote marker": "Footnote Marker",
+            "drop cap": "Drop Cap",
+            "subscript": "Subscript",
+            "superscript": "Superscript",
+        }
+
+        style_labels = list(getattr(word_object, "text_style_labels", []) or [])
+        component_labels = list(getattr(word_object, "word_components", []) or [])
+        try:
+            style_scopes = dict(
+                getattr(word_object, "text_style_label_scopes", {}) or {}
+            )
+        except Exception:
+            style_scopes = {}
+
+        tag_items: list[dict[str, str]] = []
+        for label in style_labels:
+            normalized = str(label).strip().lower()
+            if not normalized or normalized == "regular":
+                continue
+            display = style_map.get(normalized, normalized.title())
+            explicit_scope = style_scopes.get(normalized)
+            if explicit_scope is not None:
+                normalized_scope = str(explicit_scope).strip().lower()
+                if normalized_scope in {"whole", "part"}:
+                    display = f"{display} ({normalized_scope.title()})"
+            tag_items.append(
+                {
+                    "kind": "style",
+                    "label": normalized,
+                    "display": display,
+                }
+            )
+
+        for label in component_labels:
+            normalized = str(label).strip().lower()
+            if not normalized:
+                continue
+            tag_items.append(
+                {
+                    "kind": "component",
+                    "label": normalized,
+                    "display": component_map.get(normalized, normalized.title()),
+                }
+            )
+
+        return tag_items
+
+    def _word_tag_chip_style(self, kind: str) -> str:
+        """Return visual style string for a word tag chip by kind."""
+        base = "font-size: 0.62rem; line-height: 1; padding: 2px 6px; border-radius: 9999px;"
+        if kind == "style":
+            return f"{base} background: #e7f0ff; border: 1px solid #b8ccf3; color: #1f4b99;"
+        if kind == "component":
+            return f"{base} background: #e7f8ee; border: 1px solid #b7dfc3; color: #1f6b3a;"
+        return f"{base} background: #eef2f7; border: 1px solid #cfd8e3;"
+
+    def _word_display_tags(self, word_match: object) -> list[str]:
+        """Return compact style/component tag labels for display."""
+        return [item["display"] for item in self._word_display_tag_items(word_match)]
+
+    def _clear_word_tag(
+        self,
+        line_index: int,
+        word_index: int,
+        *,
+        kind: str,
+        label: str,
+    ) -> bool:
+        """Clear one style/component tag from a word and notify the user."""
+        if kind == "style":
+            result = self.word_operations.clear_style_on_word(
+                line_index,
+                word_index,
+                label,
+            )
+        elif kind == "component":
+            result = self.word_operations.clear_component_on_word(
+                line_index,
+                word_index,
+                label,
+            )
+        else:
+            self._safe_notify(f"Unknown tag type '{kind}'", type_="warning")
+            return False
+
+        self._safe_notify(result.message, type_=result.severity)
+        if result.updated_count > 0:
+            self._refresh_word_after_local_operation(line_index, word_index)
+            self.toolbar.update_button_state()
+            return True
+
+        return False
 
     def _get_word_image_slice(
         self,

@@ -67,6 +67,26 @@ def test_reload_ground_truth_into_project_handles_invalid_json(tmp_path):
     assert state.notified is True
 
 
+def test_reload_ground_truth_into_project_preprocesses_pgdp_markup(tmp_path):
+    pages_json = tmp_path / "pages.json"
+    pages_json.write_text(
+        '{"001":"Hello [=a] world--here","002.png":"Text[12] end"}',
+        encoding="utf-8",
+    )
+
+    state = _make_state(tmp_path)
+    ops = ProjectOperations()
+
+    ops.reload_ground_truth_into_project(state)
+
+    # Diacritics converted: [=a] -> ā
+    assert "\u0101" in state.project.ground_truth_map["001"]
+    # ASCII dashes converted: -- -> em dash
+    assert "\u2014" in state.project.ground_truth_map["001"]
+    # Footnote brackets converted: [12] removed
+    assert "[12]" not in state.project.ground_truth_map["002.png"]
+
+
 def test_backup_project_defaults_to_user_backup_root(monkeypatch, tmp_path):
     from ocr_labeler.operations.persistence import persistence_paths_operations
 

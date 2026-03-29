@@ -21,7 +21,7 @@ matching produces excessive false mismatches.
   - Removes proofer notes (`[*...*]`)
   - Removes `[Blank Page]` markers
   - Converts PGDP diacritic markup to Unicode (macrons, umlauts, accents, etc.)
-  - Converts footnote markers (e.g. `[12]` -> space-separated number)
+  - Converts footnote markers (e.g. `[12]` -> space-separated number `12`)
   - Handles hyphenation continuations (`-*`)
   - Converts ASCII dashes to em/two-em dash Unicode characters
   - Strips page continuation asterisks

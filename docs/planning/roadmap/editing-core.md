@@ -25,8 +25,8 @@
 - Word tag editing: toolbar style/scope/component controls (dropdowns + apply/clear buttons)
 - Word tag editing: tag chip display in word match grid and word edit dialog (with hover-close removal)
 - Word tag editing: unified footnote marker behavior (LFN/RFN merged into single FN toggle)
-- Word tag editing: migration from `word_labels` list to
-  `text_style_labels`/`text_style_label_scopes`/`word_components` model
+- Word tag editing: migration from `word_labels` list to `text_style_labels` /
+  `text_style_label_scopes` / `word_components` model
 
 ## Block/Line Editing
 

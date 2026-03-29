@@ -15,6 +15,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from pd_book_tools.pgdp.pgdp_results import PGDPResults
+
 from .persistence_paths_operations import PersistencePathsOperations
 
 if TYPE_CHECKING:
@@ -487,7 +489,12 @@ class ProjectOperations:
         return saved_projects
 
     def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
-        """Normalize pages.json entries for flexible filename lookup."""
+        """Normalize pages.json entries for flexible filename lookup.
+
+        Raw PGDP text values are preprocessed via ``PGDPResults`` to convert
+        diacritic markup, footnote brackets, ASCII dashes, straight quotes,
+        and proofer notes into OCR-comparable Unicode.
+        """
         image_exts = (".png", ".jpg", ".jpeg")
         normalized: dict[str, str] = {}
 
@@ -503,6 +510,7 @@ class ProjectOperations:
             if text_value is None:
                 continue
 
+            text_value = PGDPResults(key, text_value).processed_page_text
             normalized[key] = text_value
             lower_key = key.lower()
             normalized.setdefault(lower_key, text_value)

@@ -105,6 +105,8 @@ Examples:
 - Update relevant docs when implementation changes architecture or roadmap behavior.
 - Prefer updating doc indexes when adding new topical docs.
 - Avoid duplicating long architecture/roadmap guidance in instruction files.
+- When creating or modifying Markdown files under `docs/`, run `make lint`
+  (or the markdownlint step) and fix any reported errors before committing.
 
 ## Practical compatibility note
 

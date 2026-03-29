@@ -26,9 +26,6 @@ from .page_state import PageState
 logger = logging.getLogger(__name__)
 page_timing_logger = logging.getLogger("ocr_labeler.page_timing")
 
-# Constants for ground truth operations
-IMAGE_EXTS = (".png", ".jpg", ".jpeg")
-
 
 @dataclass
 class ProjectState:
@@ -1228,10 +1225,8 @@ class ProjectState:
     def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
         """Normalize ground truth entries for flexible filename lookup.
 
-        Creates multiple lookup keys for each entry:
-        - Original key
-        - Lowercase variant
-        - With/without file extensions
+        Delegates to ``ProjectOperations._normalize_ground_truth_entries``
+        which handles key normalization and PGDP text preprocessing.
 
         Parameters
         ----------
@@ -1243,23 +1238,7 @@ class ProjectState:
         dict[str, str]
             Normalized lookup dictionary with multiple keys per entry
         """
-        norm: dict[str, str] = {}
-        for k, v in data.items():
-            if not isinstance(k, str):
-                continue
-            text_val: str | None = (
-                v if isinstance(v, str) else (str(v) if v is not None else None)
-            )
-            if text_val is None:
-                continue
-            norm[k] = text_val
-            lower_k = k.lower()
-            norm.setdefault(lower_k, text_val)
-            if "." not in k:
-                for ext in IMAGE_EXTS:
-                    norm.setdefault(f"{k}{ext}", text_val)
-                    norm.setdefault(f"{k}{ext}".lower(), text_val)
-        return norm
+        return ProjectOperations()._normalize_ground_truth_entries(data)
 
     async def load_ground_truth_map(self, directory: Path) -> dict[str, str]:
         """Load and normalize ground truth data from pages.json file.

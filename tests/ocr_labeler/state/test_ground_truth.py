@@ -147,3 +147,62 @@ def test_find_ground_truth_text_empty_map(project_state):
 
     result = project_state.find_ground_truth_text("", {})
     assert result is None
+
+
+# ------------- PGDP preprocessing tests --------------
+
+
+class TestNormalizeGroundTruthPreprocessing:
+    """Verify that _normalize_ground_truth_entries runs PGDPResults preprocessing."""
+
+    def test_diacritics_converted(self, project_state):
+        """PGDP diacritic markup like [=a] should become Unicode macron ā."""
+        data = {"001.png": "Hello [=a] world"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert result["001.png"] == "Hello ā world"
+
+    def test_proofer_notes_removed(self, project_state):
+        """Proofer notes [*...] should be stripped."""
+        data = {"001.png": "Hello [*sic] world"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert "[*" not in result["001.png"]
+
+    def test_ascii_dashes_converted(self, project_state):
+        """-- should become em dash, ---- should become two-em dash."""
+        data = {"001.png": "word--word"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert "\u2014" in result["001.png"]  # em dash
+
+    def test_footnote_brackets_converted(self, project_state):
+        """[12] footnote markers should be converted."""
+        data = {"001.png": "Text[12] here"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert "[12]" not in result["001.png"]
+
+    def test_blank_page_removed(self, project_state):
+        """[Blank Page] markers should be stripped."""
+        data = {"001.png": "[Blank Page]"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert "[Blank Page]" not in result["001.png"]
+
+    def test_plain_text_unchanged(self, project_state):
+        """Text without PGDP markup passes through unchanged."""
+        data = {"001.png": "Hello world"}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert result["001.png"] == "Hello world"
+
+    def test_empty_text_no_crash(self, project_state):
+        """Empty GT text should not crash."""
+        data = {"001.png": ""}
+        result = project_state._normalize_ground_truth_entries(data)
+        assert result["001.png"] == ""
+
+    def test_preprocessing_applied_to_all_key_variants(self, project_state):
+        """All normalized key variants should get the preprocessed text."""
+        data = {"001": "word--word"}
+        result = project_state._normalize_ground_truth_entries(data)
+        expected = result["001"]
+        assert "\u2014" in expected
+        # Extension variants should also have preprocessed text
+        assert result["001.png"] == expected
+        assert result["001.jpg"] == expected

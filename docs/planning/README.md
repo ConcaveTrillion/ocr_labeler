@@ -32,6 +32,15 @@ Status: planning snapshots that may not fully match current implementation.
 
 - [Unified Image Overlay Layers and Selection Mode Controls](image-overlay-layer-controls-plan.md)
 
+## Known Issues
+
+- **Flaky test under parallel execution**:
+  `test_expand_refine_bboxes_button_triggers_operation` in
+  `tests/integration/test_project_loading.py` intermittently fails when run
+  with `pytest -n auto` but passes in isolation. Likely a race condition or
+  shared state issue in the NiceGUI test harness. Needs investigation and a
+  fix to ensure reliable CI.
+
 ## Immediate Next Step
 
 - [Next Step: Ground Truth PGDP Preprocessing](next-step.md)

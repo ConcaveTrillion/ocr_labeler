@@ -43,8 +43,9 @@ Status: planning snapshots that may not fully match current implementation.
 
 ## Immediate Next Step
 
-- [Preserve Per-Word GT Edits Across Save/Load](next-step.md)
+- [Per-Line Validation State](next-step.md)
 
 ## Recently Completed
 
+- [Preserve Per-Word GT Edits Across Save/Load](next-step.md) (Done)
 - [Ground Truth PGDP Preprocessing (Done)](next-step.md)

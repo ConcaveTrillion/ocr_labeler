@@ -6,7 +6,7 @@ Status: implementation-aligned snapshot.
 
 ## Current Focus
 
-- **Next:** Preserve per-word GT edits across save/load ([next-step.md](../next-step.md))
+- **Next:** Per-line validation state ([next-step.md](../next-step.md))
 - Editing-core wrap-up (remaining line/paragraph refinement and persistence details)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
 - Testing/documentation follow-through
@@ -25,6 +25,7 @@ Status: implementation-aligned snapshot.
 - Word tag editing: style labels, scopes, word components via toolbar and dialog
 - Unified footnote marker behavior and migration to pd-book-tools label model
 - Ground truth PGDP preprocessing via `PGDPResults` at GT load time
+- Preserve per-word GT edits across save/load + explicit "Rematch GT" action
 
 ## Next Milestones
 

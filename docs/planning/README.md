@@ -43,4 +43,8 @@ Status: planning snapshots that may not fully match current implementation.
 
 ## Immediate Next Step
 
-- [Next Step: Ground Truth PGDP Preprocessing](next-step.md)
+- [Preserve Per-Word GT Edits Across Save/Load](next-step.md)
+
+## Recently Completed
+
+- [Ground Truth PGDP Preprocessing (Done)](next-step.md)

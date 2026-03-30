@@ -1,81 +1,74 @@
-# Next Step: Ground Truth PGDP Preprocessing
+# Next Step: Preserve Per-Word GT Edits Across Save/Load
 
-Goal: pass raw PGDP ground truth text through the `PGDPResults` preprocessor
-before matching it against OCR output, so that GT text is in an OCR-comparable
-format.
+Goal: ensure that manual per-word ground truth edits survive page save/load
+round-trips and are not silently overwritten by bulk GT re-injection.
 
 ## Problem
 
-Ground truth text loaded from `pages.json` is raw PGDP proofreader output. It
-contains PGDP-specific markup (diacritic codes, footnote bracket notation,
-ASCII dash conventions, straight quotes, proofer notes, etc.) that does not
-match what an OCR engine produces. Without preprocessing, the GT-to-OCR word
-matching produces excessive false mismatches.
+Per-word GT fields (`ground_truth_text`, `ground_truth_match_keys`) are
+correctly serialized by `Page.to_dict()` and restored by `Page.from_dict()`.
+However, when a saved page is loaded back, `PageState.load_page_from_file()`
+calls `page.add_ground_truth(gt_text)` which internally runs
+`remove_ground_truth()` then re-runs the difflib-based matching algorithm.
+This **wipes any manual per-word GT edits** the user made before saving.
 
-## Available Preprocessor
-
-`pd-book-tools` already provides a full preprocessing pipeline:
-
-- **`PGDPResults`** (`pd_book_tools.pgdp.pgdp_results`)
-  - Normalizes line endings
-  - Removes proofer notes (`[*...*]`)
-  - Removes `[Blank Page]` markers
-  - Converts PGDP diacritic markup to Unicode (macrons, umlauts, accents, etc.)
-  - Converts footnote markers (e.g. `[12]` -> space-separated number `12`)
-  - Handles hyphenation continuations (`-*`)
-  - Converts ASCII dashes to em/two-em dash Unicode characters
-  - Strips page continuation asterisks
-  - Converts straight quotes to curly quotes
-
-- **`PGDPExport`** (same module) -- loads a multi-page PGDP JSON export and
-  creates a `PGDPResults` per page automatically.
-
-## Integration Path
-
-The existing `pd-book-tools` integration point is:
+Affected code path:
 
 ```text
-PGDPResults(filename, raw_text)
-  -> pgdp_results.processed_page_text
-    -> page.add_ground_truth(processed_text)
-      -> update_page_with_ground_truth_text() in ground_truth_matching.py
+PageState.load_page_from_file()          [page_state.py ~line 599]
+  -> Page.from_dict(payload)             # restores saved word GT (correct)
+  -> page.add_ground_truth(gt_text)      # wipes + re-matches (destructive)
 ```
 
-## Implementation Checklist
+## Desired Behavior
 
-1. **Locate GT ingestion in `ocr_labeler`**
-   - Find where raw `pages.json` text is read and passed to
-     `page.add_ground_truth()`.
-   - Confirm the text is currently passed without preprocessing.
+- If a page was previously saved with per-word GT edits, those edits are
+  preserved on reload — the bulk re-match step is skipped.
+- If a page has no saved per-word GT (first-time load, cache-only), the
+  existing bulk match behavior continues unchanged.
+- A user can explicitly request GT re-match to reset edits (e.g. after
+  `pages.json` changes).
 
-2. **Add PGDP preprocessing step**
-   - Import `PGDPResults` from `pd_book_tools.pgdp.pgdp_results`.
-   - Before calling `add_ground_truth()`, run the raw text through
-     `PGDPResults(image_filename, raw_text)`.
-   - Pass `pgdp_results.processed_page_text` to `add_ground_truth()`.
+## Implementation Sketch
 
-3. **Consider `PGDPExport` for bulk loading**
-   - If the project loads GT from a single JSON file mapping filenames to text,
-     `PGDPExport.from_json_file(path)` may be a cleaner integration point
-     (preprocesses all pages at load time).
+1. **Detect saved GT on load** — after `Page.from_dict()`, check whether
+   the deserialized words already carry `ground_truth_text` values.  If
+   they do, skip the `add_ground_truth()` call.
 
-4. **Handle edge cases**
-   - GT text that is already preprocessed (non-PGDP sources) -- consider a
-     flag or heuristic to skip preprocessing when not needed.
-   - Empty or missing GT text -- ensure no crash on empty input.
+2. **Persist a "gt_edited" flag** — add a boolean to the
+   `UserPagePayload` (or envelope metadata) that records whether any
+   word-level GT was manually edited.  On load, consult this flag to
+   decide whether to re-match.  Bump schema version if needed.
 
-5. **Validate matching improvement**
-   - Compare mismatch counts before/after preprocessing on a sample project.
-   - Verify curly quotes, diacritics, and dashes now match OCR output.
+3. **Explicit re-match action** — expose a UI action (button or menu
+   item) that calls `remove_ground_truth()` + `add_ground_truth()` so the
+   user can intentionally refresh GT matching when the source text changes.
 
-6. **Tests**
-   - Unit test confirming GT text passes through `PGDPResults` before matching.
-   - Integration test with sample PGDP markup verifying reduced mismatches.
+4. **Per-line validation state (stretch)** — add an `is_validated: bool`
+   field to the line/block model so users can mark individual lines as
+   reviewed.  Persist it in the payload alongside `word_attributes`.
+
+## Edge Cases
+
+- Page loaded from cache vs. from explicit save — cache pages may not
+  have user-edited GT; treat them the same as fresh pages.
+- `pages.json` updated after save — the explicit re-match action covers
+  this.  Consider surfacing a hint if `pages.json` mtime is newer than
+  the saved page.
+
+## Tests
+
+- Round-trip test: save a page with edited per-word GT, reload, assert
+  edits survive.
+- Round-trip test: save a page without GT edits, reload with GT text
+  available, assert bulk match runs normally.
+- Explicit re-match test: trigger re-match on a page with saved GT
+  edits, assert GT is refreshed from `pages.json`.
 
 ## Done Criteria
 
-- Raw PGDP text from `pages.json` is preprocessed via `PGDPResults` before
-  GT matching.
-- PGDP-specific markup (diacritics, footnotes, dashes, quotes, proofer notes)
-  no longer causes false mismatches in the word match grid.
-- Existing tests pass; no regression in non-PGDP GT workflows.
+- Manual per-word GT edits persist across save/load without being
+  overwritten.
+- Bulk GT re-match still works for pages without prior GT edits.
+- At least one round-trip test validates the behavior.
+- No regression in existing tests.

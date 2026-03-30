@@ -27,6 +27,9 @@
 - Word tag editing: unified footnote marker behavior (LFN/RFN merged into single FN toggle)
 - Word tag editing: migration from `word_labels` list to `text_style_labels` /
   `text_style_label_scopes` / `word_components` model
+- Ground truth PGDP preprocessing: raw `pages.json` text preprocessed via
+  `PGDPResults` at load time (diacritics, dashes, footnotes, quotes, proofer
+  notes)
 
 ## Block/Line Editing
 

@@ -47,6 +47,10 @@ class WordGroundTruthChangedEvent:
     ground_truth_text: str
 
 
+class _GroundTruthRematchSkipped(Exception):
+    """Raised when GT rematch cannot proceed (no GT text or missing methods)."""
+
+
 @dataclass
 class PageState:
     """Page-specific state management. Oversees page loading, caching, and operations.
@@ -596,20 +600,27 @@ class PageState:
         loaded_page_model, original_page_dict = loaded_result
         loaded_page = loaded_page_model.page
 
-        # Inject ground truth text if available
-        gt_text = self._resolve_ground_truth_text(
-            page=loaded_page,
-            page_model=loaded_page_model,
-            page_index=page_index,
-        )
-        if gt_text:
-            try:
-                loaded_page.add_ground_truth(gt_text)
-                logger.debug(f"Injected ground truth for loaded page {page_index}")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to add ground truth to loaded page {page_index}: {e}"
-                )
+        # Inject ground truth text if available — but skip if the loaded
+        # page already carries per-word GT (i.e. user edits from a prior save).
+        if self._page_has_word_ground_truth(loaded_page):
+            logger.debug(
+                "Loaded page %s already has per-word GT; skipping bulk re-match",
+                page_index,
+            )
+        else:
+            gt_text = self._resolve_ground_truth_text(
+                page=loaded_page,
+                page_model=loaded_page_model,
+                page_index=page_index,
+            )
+            if gt_text:
+                try:
+                    loaded_page.add_ground_truth(gt_text)
+                    logger.debug("Injected ground truth for loaded page %s", page_index)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to add ground truth to loaded page {page_index}: {e}"
+                    )
 
         # Replace the page in the project
         if 0 <= page_index < len(self._project.pages):
@@ -2078,25 +2089,46 @@ class PageState:
         self._cached_ocr_text = ""
         self._cached_gt_text = ""
 
+    @staticmethod
+    def _page_has_word_ground_truth(page: object) -> bool:
+        """Return True if any word on the page already carries ground truth text."""
+        lines = getattr(page, "lines", None)
+        if not lines:
+            return False
+        try:
+            for line in lines:
+                words = getattr(line, "words", None)
+                if not words:
+                    continue
+                for word in words:
+                    gt = getattr(word, "ground_truth_text", None)
+                    if gt is not None and gt != "":
+                        return True
+        except TypeError:
+            return False
+        return False
+
     def _rematch_page_ground_truth(self, page: object, operation: str) -> None:
-        """Re-apply page-level ground truth mapping after structural edits."""
+        """Re-apply page-level ground truth mapping after structural edits.
+
+        Raises:
+            _GroundTruthRematchSkipped: when GT text is unavailable or the
+                page type lacks the required GT methods.
+        """
         gt_text = self._resolve_ground_truth_text(
             page=page,
             page_model=self.current_page_model,
             page_index=self._current_page_index,
         )
         if not gt_text:
-            return
+            raise _GroundTruthRematchSkipped("no GT text available")
 
         remove_ground_truth = getattr(page, "remove_ground_truth", None)
         add_ground_truth = getattr(page, "add_ground_truth", None)
         if not callable(remove_ground_truth) or not callable(add_ground_truth):
-            logger.debug(
-                "Skipping GT rematch after %s; page type %s lacks GT methods",
-                operation,
-                type(page).__name__,
+            raise _GroundTruthRematchSkipped(
+                f"page type {type(page).__name__} lacks GT methods"
             )
-            return
 
         remove_ground_truth()
         add_ground_truth(gt_text)
@@ -2110,6 +2142,8 @@ class PageState:
         """Run post-success page updates after structural OCR edits."""
         try:
             self._rematch_page_ground_truth(page, operation)
+        except _GroundTruthRematchSkipped:
+            logger.debug("Skipping GT rematch after %s (no GT available)", operation)
         except Exception:
             logger.exception("Failed to re-match ground truth after %s", operation)
 
@@ -2117,6 +2151,33 @@ class PageState:
         self._invalidate_text_cache()
         self._auto_save_to_cache()
         self.notify()
+
+    @notify_on_completion
+    def rematch_ground_truth(self) -> bool:
+        """Explicitly re-run bulk GT matching on the current page.
+
+        Wipes any per-word GT edits and re-matches from the source GT text.
+        Called by the UI when the user intentionally wants to refresh GT.
+
+        Returns:
+            True if GT was successfully re-matched, False otherwise.
+        """
+        page = self.current_page
+        if page is None:
+            logger.warning("rematch_ground_truth: no current page")
+            return False
+
+        try:
+            self._rematch_page_ground_truth(page, "explicit rematch")
+        except _GroundTruthRematchSkipped:
+            return False
+
+        self._invalidate_text_cache()
+        logger.info(
+            "Re-matched ground truth for page index %s",
+            self._current_page_index,
+        )
+        return True
 
     def _finalize_bbox_edit(self, page: object) -> None:
         """Run post-success updates after bbox-only edits."""

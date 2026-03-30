@@ -338,6 +338,18 @@ class ProjectStateViewModel(BaseViewModel):
             "is_controls_disabled": self.is_controls_disabled,
         }
 
+    def get_current_page(self) -> object | None:
+        """Return the current page object, or None if unavailable."""
+        if not self._project_state:
+            return None
+        project = getattr(self._project_state, "project", None)
+        if project is None or not hasattr(project, "pages"):
+            return None
+        idx = self.current_page_index
+        if 0 <= idx < len(project.pages):
+            return project.pages[idx]
+        return None
+
     def command_save_page(self) -> bool:
         """Command to save the current page.
 
@@ -396,6 +408,21 @@ class ProjectStateViewModel(BaseViewModel):
             return self._project_state.expand_and_refine_all_bboxes()
         except Exception as e:
             logger.exception(f"Error expanding and refining bboxes: {e}")
+            return False
+
+    def command_rematch_gt(self) -> bool:
+        """Re-run bulk GT matching on the current page.
+
+        Returns:
+            True if GT was successfully re-matched, False otherwise.
+        """
+        try:
+            if not self._project_state:
+                logger.warning("No project state available for GT rematch")
+                return False
+            return self._project_state.rematch_ground_truth()
+        except Exception as e:
+            logger.exception(f"Error re-matching ground truth: {e}")
             return False
 
     def command_reload_page_with_ocr(self) -> bool:

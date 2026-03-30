@@ -1085,6 +1085,17 @@ class ProjectState:
         logger.debug("load_current_page: completed, success=%s", success)
         return success
 
+    def rematch_ground_truth(self) -> bool:
+        """Re-run bulk GT matching on the current page.
+
+        Wipes per-word GT edits and re-matches from source GT text.
+
+        Returns:
+            bool: True if GT was successfully re-matched, False otherwise.
+        """
+        page_state = self.get_page_state(self.current_page_index)
+        return page_state.rematch_ground_truth()
+
     def refine_all_bboxes(self, padding_px: int = 2) -> bool:
         """Refine all bounding boxes in the current page.
 

@@ -55,6 +55,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             refine_bboxes=self._refine_bboxes_async,
             expand_refine_bboxes=self._expand_refine_bboxes_async,
             reload_ocr=self._reload_ocr_async,
+            rematch_gt=self._rematch_gt_async,
         )
 
         self.page_actions: PageActions | None = None
@@ -72,6 +73,9 @@ class PageView:  # pragma: no cover - UI wrapper file
             if self.page_action_callbacks
             else None,
             on_reload_ocr=self.page_action_callbacks.reload_ocr
+            if self.page_action_callbacks
+            else None,
+            on_rematch_gt=self.page_action_callbacks.rematch_gt
             if self.page_action_callbacks
             else None,
         )
@@ -369,3 +373,31 @@ class PageView:  # pragma: no cover - UI wrapper file
             except Exception as exc:  # noqa: BLE001
                 logger.error("OCR reload failed: %s", exc)
                 self._notify(f"OCR reload failed: {exc}", "negative")
+
+    async def _rematch_gt_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
+        """Re-run bulk GT matching on the current page, replacing per-word edits."""
+        if self.project_view_model.is_project_loading:
+            logger.debug("Rematch GT blocked - currently loading")
+            return
+
+        async with self._action_context("Re-matching ground truth..."):
+            try:
+                success = self.project_view_model.command_rematch_gt()
+                if success:
+                    current_page = self.project_view_model.get_current_page()
+                    if current_page is not None:
+                        self._sync_text_tabs(current_page)
+
+                    logger.info("Ground truth re-matched successfully")
+                    self._notify("Ground truth re-matched from source text", "positive")
+                else:
+                    logger.warning("Failed to rematch ground truth")
+                    self._notify(
+                        "No ground truth text available for this page", "warning"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.error("GT rematch failed: %s", exc)
+                self._notify(f"GT rematch failed: {exc}", "negative")

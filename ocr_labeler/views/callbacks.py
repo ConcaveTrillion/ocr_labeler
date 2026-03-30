@@ -24,3 +24,4 @@ class PageActionCallbacks:
     refine_bboxes: Optional[PageActionCallback] = None
     expand_refine_bboxes: Optional[PageActionCallback] = None
     reload_ocr: Optional[PageActionCallback] = None
+    rematch_gt: Optional[PageActionCallback] = None

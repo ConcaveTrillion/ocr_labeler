@@ -27,10 +27,10 @@ All new tests follow the existing patterns in `tests/browser/`:
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 14 | `test_reload_ocr_button_click` | Click Reload OCR → notification appears |
-| 16 | `test_load_page_button_click` | Click Load Page → notification appears |
-| 17 | `test_rematch_gt_button_present` | Rematch GT button visible after load |
-| 17 | `test_rematch_gt_button_click` | Click Rematch GT → notification appears |
+| 14 | `test_reload_ocr_button_click` | Click Reload OCR → word match list re-renders, success notification "Page reloaded" appears |
+| 16 | `test_load_page_button_click` | Click Load Page → word match content refreshes with loaded state, success notification "Page loaded" appears |
+| 17 | `test_rematch_gt_button_present` | Rematch GT button visible with tooltip after project load |
+| 17 | `test_rematch_gt_button_click` | Click Rematch GT → GT text fields update, match status colours refresh, success notification appears |
 
 **Estimated size:** ~50 lines of new test code.
 
@@ -45,11 +45,11 @@ Requires: `data-testid` attributes on line-card action buttons in
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 57 | `test_paragraph_expander_toggle` | Click expander → paragraph collapses/expands |
-| 58 | `test_line_copy_gt_to_ocr` | Click GT→OCR on a line → no error |
-| 59 | `test_line_copy_ocr_to_gt` | Click OCR→GT on a line → no error |
-| 60 | `test_line_validate_toggle` | Click Validate on a line → icon changes to Unvalidate |
-| 61 | `test_line_delete` | Click delete on a line → line removed from DOM |
+| 57 | `test_paragraph_expander_toggle` | Click expander → paragraph body collapses (hidden); click again → body re-appears |
+| 58 | `test_line_copy_gt_to_ocr` | Click GT→OCR → OCR text fields in that line update to match GT values |
+| 59 | `test_line_copy_ocr_to_gt` | Click OCR→GT → GT text fields in that line update to match OCR values |
+| 60 | `test_line_validate_toggle` | Click Validate → word icons turn green; line header shows validated count; click Unvalidate → icons revert to grey |
+| 61 | `test_line_delete` | Click delete → line card element removed from DOM, total line count decreases |
 
 **Source changes:** Add `data-testid` to line-card action buttons in
 `word_match_renderer.py`.
@@ -64,9 +64,9 @@ Requires: `data-testid` attributes on line-card action buttons in
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 63 | `test_word_validate_toggle` | Click validate icon → word marked validated |
-| 64 | `test_word_tag_clear_in_renderer` | Clear tag chip in renderer → chip removed |
-| 107 | `test_line_checkbox_selection` | Check line checkbox → line selected |
+| 63 | `test_word_validate_toggle` | Click validate icon → icon colour changes grey→green; click again → reverts green→grey; stats label updates |
+| 64 | `test_word_tag_clear_in_renderer` | Hover tag chip → clear button appears; click clear → chip element removed from DOM |
+| 107 | `test_line_checkbox_selection` | Check line checkbox → line-scope toolbar buttons become enabled; uncheck → buttons disable |
 
 **Source changes:** May need `data-testid` on word validate button if
 tooltip selectors are unreliable.
@@ -81,12 +81,12 @@ tooltip selectors are unreliable.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 18 | `test_page_refine_bboxes_present` | Refine bboxes button visible |
-| 19 | `test_page_expand_refine_bboxes_present` | Expand+Refine button visible |
-| 20 | `test_page_copy_gt_to_ocr` | Click GT→OCR (page) → notification |
-| 21 | `test_page_copy_ocr_to_gt` | Click OCR→GT (page) → notification |
-| 22 | `test_page_validate_all` | Click Validate all → words marked validated |
-| 23 | `test_page_unvalidate_all` | Click Unvalidate all → words marked unvalidated |
+| 18 | `test_page_refine_bboxes_click` | Click Refine → success notification "Bounding boxes refined"; word images refresh (src attributes change) |
+| 19 | `test_page_expand_refine_bboxes_click` | Click Expand+Refine → success notification "expanded and refined"; word images refresh |
+| 20 | `test_page_copy_gt_to_ocr` | Click GT→OCR (page) → all OCR text fields update to match GT text; success notification with line count |
+| 21 | `test_page_copy_ocr_to_gt` | Click OCR→GT (page) → all GT text fields update to match OCR text; success notification with line count |
+| 22 | `test_page_validate_all` | Click Validate all → all word validate icons turn green; stats label shows all validated |
+| 23 | `test_page_unvalidate_all` | Validate all first, then Unvalidate all → all icons revert to grey; stats label shows 0 validated |
 
 **Source changes:** Add `data-testid` to page-row toolbar buttons in
 `word_match_toolbar.py`.
@@ -104,15 +104,15 @@ or word checkboxes within it).
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 24 | `test_paragraph_merge_button_present` | Merge paragraphs button visible |
-| 25 | `test_paragraph_refine_present` | Refine paragraphs button visible |
-| 26 | `test_paragraph_expand_refine_present` | Expand+Refine button visible |
-| 27 | `test_paragraph_split_after_line_present` | Split after line button visible |
-| 28 | `test_paragraph_copy_gt_to_ocr` | Click GT→OCR (paragraphs) → no error |
-| 29 | `test_paragraph_copy_ocr_to_gt` | Click OCR→GT (paragraphs) → no error |
-| 30 | `test_paragraph_validate` | Click Validate (paragraphs) → validated |
-| 31 | `test_paragraph_unvalidate` | Click Unvalidate (paragraphs) → unvalidated |
-| 32 | `test_paragraph_delete` | Click Delete (paragraphs) → paragraph removed |
+| 24 | `test_paragraph_merge` | Select 2 paragraphs → merge → paragraph count decreases by 1; lines consolidated into first |
+| 25 | `test_paragraph_refine` | Select paragraph → click Refine → success notification; word images refresh |
+| 26 | `test_paragraph_expand_refine` | Select paragraph → click Expand+Refine → success notification; word images refresh |
+| 27 | `test_paragraph_split_after_line` | Select a line within paragraph → split → paragraph count increases by 1 |
+| 28 | `test_paragraph_copy_gt_to_ocr` | Select paragraph → click GT→OCR → OCR text fields in paragraph update to match GT; selection cleared |
+| 29 | `test_paragraph_copy_ocr_to_gt` | Select paragraph → click OCR→GT → GT text fields in paragraph update to match OCR; selection cleared |
+| 30 | `test_paragraph_validate` | Select paragraph → Validate → all word icons in paragraph turn green; line headers show full validation |
+| 31 | `test_paragraph_unvalidate` | Validate first, then Unvalidate → icons revert to grey; line headers show 0 validated |
+| 32 | `test_paragraph_delete` | Select paragraph → Delete → paragraph container removed from DOM; total paragraph count decreases |
 
 **Source changes:** Add `data-testid` to paragraph-row toolbar buttons.
 
@@ -128,17 +128,17 @@ Prerequisite: select lines via line checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 33 | `test_line_merge_with_selection` | Select 2 lines → merge → count decreases |
-| 34 | `test_line_refine_present` | Refine lines button visible |
-| 35 | `test_line_expand_refine_present` | Expand+Refine button visible |
-| 36 | `test_line_split_after_word_present` | Split after word button visible |
-| 37 | `test_line_split_by_selection_present` | Split by selection button visible |
-| 38 | `test_line_form_paragraph_present` | Form new paragraph button visible |
-| 39 | `test_line_copy_gt_to_ocr` | Click GT→OCR (lines) → no error |
-| 40 | `test_line_copy_ocr_to_gt` | Click OCR→GT (lines) → no error |
-| 41 | `test_line_validate` | Click Validate (lines) → validated |
-| 42 | `test_line_unvalidate` | Click Unvalidate (lines) → unvalidated |
-| 43 | `test_line_delete` | Click Delete (lines) → line removed |
+| 33 | `test_line_merge_with_selection` | Select 2 lines → merge → line count decreases by 1; words consolidated into first line |
+| 34 | `test_line_refine` | Select line → click Refine → success notification; word images in line refresh |
+| 35 | `test_line_expand_refine` | Select line → click Expand+Refine → success notification; word images refresh |
+| 36 | `test_line_split_after_word` | Select word in middle of line → split → line count increases by 1; words distributed |
+| 37 | `test_line_split_by_selection` | Select subset of words → split by selection → line count increases; selected words in new line |
+| 38 | `test_line_form_paragraph` | Select lines → form new paragraph → paragraph count increases by 1; lines moved |
+| 39 | `test_line_copy_gt_to_ocr` | Select line → GT→OCR → OCR text fields in selected lines update to match GT; selection cleared |
+| 40 | `test_line_copy_ocr_to_gt` | Select line → OCR→GT → GT text fields in selected lines update to match OCR; selection cleared |
+| 41 | `test_line_validate` | Select line → Validate → all word icons in line turn green; line header shows full validation |
+| 42 | `test_line_unvalidate` | Validate first, then Unvalidate → icons revert to grey; line header shows 0 validated |
+| 43 | `test_line_delete` | Select line → Delete → line card removed from DOM; line count decreases |
 
 **Source changes:** Add `data-testid` to line-row toolbar buttons.
 
@@ -154,16 +154,16 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 44 | `test_word_merge_with_selection` | Select 2 words → merge → count decreases |
-| 45 | `test_word_refine_present` | Refine words button visible |
-| 46 | `test_word_expand_refine_present` | Expand+Refine button visible |
-| 47 | `test_word_form_line_present` | Form new line button visible |
-| 48 | `test_word_form_paragraph_present` | Form new paragraph button visible |
-| 49 | `test_word_copy_gt_to_ocr` | Click GT→OCR (words) → no error |
-| 50 | `test_word_copy_ocr_to_gt` | Click OCR→GT (words) → no error |
-| 51 | `test_word_validate` | Click Validate (words) → validated |
-| 52 | `test_word_unvalidate` | Click Unvalidate (words) → unvalidated |
-| 53 | `test_word_delete` | Click Delete (words) → word removed |
+| 44 | `test_word_merge_with_selection` | Select 2 adjacent words → merge → word count in line decreases by 1; merged word text contains both |
+| 45 | `test_word_refine` | Select word → click Refine → success notification; word image refreshes |
+| 46 | `test_word_expand_refine` | Select word → click Expand+Refine → success notification; word image refreshes |
+| 47 | `test_word_form_line` | Select words from a line → form new line → line count increases by 1; words move to new line |
+| 48 | `test_word_form_paragraph` | Select words → form new paragraph → paragraph count increases by 1; words move to new paragraph |
+| 49 | `test_word_copy_gt_to_ocr` | Select word → GT→OCR → word's OCR text updates to match GT value; selection cleared |
+| 50 | `test_word_copy_ocr_to_gt` | Select word → OCR→GT → word's GT text updates to match OCR value; selection cleared |
+| 51 | `test_word_validate` | Select word → Validate → word icon turns green; line validation count increments |
+| 52 | `test_word_unvalidate` | Validate first, then Unvalidate → icon reverts to grey; validation count decrements |
+| 53 | `test_word_delete` | Select word → Delete → word element removed from DOM; word count in line decreases |
 
 **Source changes:** Add `data-testid` to word-row toolbar buttons.
 
@@ -177,8 +177,8 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 56 | `test_clear_component_button` | Select word → Apply Component → Clear Component → tag removed |
-| 104 | `test_scope_dropdown_interaction` | Select Scope option → value changes |
+| 56 | `test_clear_component_button` | Select word → Apply Component → tag chip appears; Clear Component → tag chip removed from DOM |
+| 104 | `test_scope_dropdown_interaction` | Open Scope dropdown → select "Whole" → dropdown shows selected value; select "Part" → value updates |
 
 **Estimated size:** ~40 lines.
 
@@ -190,10 +190,10 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 65 | `test_dialog_apply_and_close` | Click checkmark → dialog closes, changes saved |
-| 66 | `test_dialog_close_without_saving` | Click X → dialog closes, no changes |
-| 67 | `test_dialog_apply_style` | Apply Style in dialog → tag chip appears (already partly tested) |
-| 69 | `test_dialog_clear_component` | Clear Component in dialog → chip removed |
+| 65 | `test_dialog_apply_and_close` | Edit GT text → click checkmark → dialog closes; word in main grid shows updated GT text |
+| 66 | `test_dialog_close_without_saving` | Edit GT text → click X → dialog closes; word in main grid retains original GT text |
+| 67 | `test_dialog_apply_style` | Click Apply Style in dialog → tag chip appears; close dialog → word in grid shows style indicator |
+| 69 | `test_dialog_clear_component` | Apply Component → chip appears; Clear Component → chip count drops to 0 |
 
 **Estimated size:** ~70 lines.
 
@@ -205,11 +205,11 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 71 | `test_dialog_merge_prev` | Click Merge Prev → dialog closes, word count decreases |
-| 72 | `test_dialog_merge_next` | Click Merge Next → dialog closes, word count decreases |
-| 73 | `test_dialog_split_horizontal` | Click H split → word count increases |
-| 74 | `test_dialog_split_vertical` | Click V split → word count increases |
-| 75 | `test_dialog_delete_word` | Click Delete → dialog closes, word removed |
+| 71 | `test_dialog_merge_prev` | Click Merge Prev → dialog refreshes with merged text; close → word count in line decreases by 1 |
+| 72 | `test_dialog_merge_next` | Click Merge Next → dialog refreshes with merged text; close → word count in line decreases by 1 |
+| 73 | `test_dialog_split_horizontal` | Click in word image to place marker → click H split → dialog shows first half; close → word count increases by 1 |
+| 74 | `test_dialog_split_vertical` | Click in word image to place marker → click V split → dialog shows top portion; close → word count increases by 1 |
+| 75 | `test_dialog_delete_word` | Click Delete → dialog closes; word element removed from line in main grid |
 
 **Source changes:** Add `data-testid` to merge/split/delete buttons in
 `word_edit_dialog.py`.
@@ -224,10 +224,10 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 76 | `test_dialog_crop_above` | Crop Above button visible and clickable |
-| 77 | `test_dialog_crop_below` | Crop Below button visible and clickable |
-| 78 | `test_dialog_crop_left` | Crop Left button visible and clickable |
-| 79 | `test_dialog_crop_right` | Crop Right button visible and clickable |
+| 76 | `test_dialog_crop_above` | Place horizontal marker → click Crop Above → preview image updates showing cropped bbox |
+| 77 | `test_dialog_crop_below` | Place horizontal marker → click Crop Below → preview image updates showing cropped bbox |
+| 78 | `test_dialog_crop_left` | Place vertical marker → click Crop Left → preview image updates showing cropped bbox |
+| 79 | `test_dialog_crop_right` | Place vertical marker → click Crop Right → preview image updates showing cropped bbox |
 
 **Estimated size:** ~60 lines.
 
@@ -239,12 +239,12 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 80 | `test_dialog_refine_preview` | Click Refine → preview updates |
-| 81 | `test_dialog_expand_refine_preview` | Click Expand+Refine → preview updates |
-| 82-89 | `test_dialog_nudge_buttons` | All 8 nudge buttons clickable, pending state shown |
-| 90 | `test_dialog_reset_nudges` | Click Reset → pending edits cleared |
-| 91 | `test_dialog_apply_nudges` | Click Apply → bbox updated |
-| 92 | `test_dialog_apply_and_refine_nudges` | Click Apply+Refine → bbox updated |
+| 80 | `test_dialog_refine_preview` | Click Refine → preview image src changes to show refined bbox |
+| 81 | `test_dialog_expand_refine_preview` | Click Expand+Refine → preview image src changes to show expanded+refined bbox |
+| 82-89 | `test_dialog_nudge_buttons` | Click each of 8 nudge buttons → preview image src changes after each click; all directions work |
+| 90 | `test_dialog_reset_nudges` | Nudge then Reset → preview image reverts to original src |
+| 91 | `test_dialog_apply_nudges` | Nudge then Apply → dialog closes; word image in main grid shows updated bbox |
+| 92 | `test_dialog_apply_and_refine_nudges` | Nudge then Apply+Refine → dialog closes; word image in main grid shows refined bbox |
 
 **Source changes:** Add `data-testid` to nudge/apply/reset buttons in
 `word_edit_dialog.py`.
@@ -259,14 +259,14 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 2 | `test_folder_icon_opens_dialog` | Click folder icon → dialog appears |
-| 3 | `test_dialog_home_button` | Click Home → path resets |
-| 4 | `test_dialog_up_button` | Click Up → navigates to parent |
-| 5 | `test_dialog_open_typed_path` | Type path → click Open → path changes |
-| 6 | `test_dialog_use_current` | Click Use Current → path populated |
-| 7 | `test_dialog_cancel` | Click Cancel → dialog closes, no change |
-| 8 | `test_dialog_apply` | Click Apply → source folder updated |
-| 9 | `test_dialog_enter_in_path_input` | Press Enter in path input → navigates |
+| 2 | `test_folder_icon_opens_dialog` | Click folder icon → dialog element appears in DOM with "Source Projects Folder" heading |
+| 3 | `test_dialog_home_button` | Click Home → path label updates to home directory; folder listing refreshes |
+| 4 | `test_dialog_up_button` | Click Up → path label changes to parent directory; folder listing refreshes with parent contents |
+| 5 | `test_dialog_open_typed_path` | Type valid path in input → click Open → path label updates to typed path; listing shows contents |
+| 6 | `test_dialog_use_current` | Click Use Current → path input populated with current source folder path |
+| 7 | `test_dialog_cancel` | Click Cancel → dialog closes; project dropdown options unchanged from before |
+| 8 | `test_dialog_apply` | Navigate to valid folder → Apply → dialog closes; project dropdown options update to new folder's projects |
+| 9 | `test_dialog_enter_in_path_input` | Type path + press Enter → path label updates; folder listing refreshes (same as Open Typed Path) |
 
 **Estimated size:** ~120 lines.
 
@@ -278,9 +278,9 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 13 | `test_enter_in_page_input_navigates` | Press Enter in page input → page changes |
-| 93 | `test_enter_in_gt_input_commits` | Press Enter in GT input → value committed |
-| 108 | `test_gt_text_input_edit` | Type in GT field → value stored |
+| 13 | `test_enter_in_page_input_navigates` | Fill page input with "3" + press Enter → URL updates to page/3; page content refreshes |
+| 93 | `test_enter_in_gt_input_commits` | Edit GT text in word edit dialog + press Enter → GT text saved; input loses focus |
+| 108 | `test_gt_text_input_edit` | Click GT field in inline editor → type new text → field value persists after clicking away |
 
 **Estimated size:** ~60 lines.
 
@@ -292,9 +292,9 @@ Prerequisite: select words via word checkboxes.
 
 | Button # | Test | What it verifies |
 | --- | --- | --- |
-| 96 | `test_show_lines_checkbox_toggle` | Click Show Lines → toggle on/off |
-| 97 | `test_show_words_checkbox_toggle` | Click Show Words → toggle on/off |
-| 98 | `test_selection_mode_radio_buttons` | Click each selection mode → value changes |
+| 96 | `test_show_lines_checkbox_toggle` | Uncheck Show Lines → line overlay rectangles disappear from SVG; re-check → rectangles reappear |
+| 97 | `test_show_words_checkbox_toggle` | Uncheck Show Words → word overlay rectangles disappear from SVG; re-check → rectangles reappear |
+| 98 | `test_selection_mode_radio_buttons` | Click each mode (Paragraph/Line/Word) → corresponding checkboxes appear/disappear in word match list; toolbar buttons enable/disable accordingly |
 
 **Estimated size:** ~50 lines.
 

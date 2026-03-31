@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -11,11 +10,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NavigationResult:
     """Result of a navigation attempt."""
-
-    class NavigationStatus(Enum):
-        SUCCESS = "success"
-        FAILURE = "failure"
-        NO_OP = "no_op"
 
     success: bool
     message: str = ""

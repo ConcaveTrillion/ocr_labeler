@@ -27,8 +27,6 @@ class ProjectNavigationControls:  # pragma: no cover - UI wrapper file
         self._on_next = on_next
         self._on_goto = on_goto
         self.row = None
-        self.page_index_box = None
-        self.dir_input = None
         self.page_input = None
         self.page_total = None
         self._notified_error_keys: set[str] = set()

@@ -89,6 +89,7 @@ class NotificationService:
             self.ui.notify(message, **kwargs)
             logger.info(f"Info notification: {message}")
 
+    # TODO: Wire disable/enable to a UI toggle (settings or toolbar).
     def disable_notifications(self):
         """Disable all notifications."""
         self._notifications_enabled = False
@@ -98,11 +99,3 @@ class NotificationService:
         """Enable all notifications."""
         self._notifications_enabled = True
         logger.debug("Notifications enabled")
-
-    def is_enabled(self) -> bool:
-        """Check if notifications are enabled.
-
-        Returns:
-            True if notifications are enabled, False otherwise.
-        """
-        return self._notifications_enabled

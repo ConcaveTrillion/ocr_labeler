@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Callable
 
 from pd_book_tools.ocr.label_normalization import (
     ALLOWED_COMPONENTS,
-    ALLOWED_TEXT_STYLE_LABEL_SCOPES,
     ALLOWED_TEXT_STYLE_LABELS,
     normalize_text_style_label,
     normalize_text_style_label_scope,
@@ -66,46 +65,8 @@ class SelectedWordOperationsProcessor:
         )
 
     @property
-    def supported_scopes(self) -> tuple[str, ...]:
-        return tuple(sorted(ALLOWED_TEXT_STYLE_LABEL_SCOPES))
-
-    @property
     def supported_components(self) -> tuple[str, ...]:
         return SUPPORTED_WORD_COMPONENTS
-
-    def selection_has_scope_target(self) -> bool:
-        """Return True when selected words already have a non-regular text style."""
-        for line_index, word_index in self._selected_words():
-            try:
-                word_match = self._view._line_word_match_by_ocr_index(
-                    line_index, word_index
-                )
-            except AttributeError:
-                logger.debug(
-                    "Skipping scope-target detection for placeholder match at line=%s word=%s",
-                    line_index,
-                    word_index,
-                )
-                continue
-            word_object = (
-                getattr(word_match, "word_object", None) if word_match else None
-            )
-            if word_object is None:
-                continue
-            try:
-                style_labels = self._word_ops._read_text_style_labels(word_object)
-            except Exception:
-                logger.debug(
-                    "Skipping scope-target detection for line=%s word=%s",
-                    line_index,
-                    word_index,
-                    exc_info=True,
-                )
-                continue
-            style_labels = [label for label in style_labels if label != "regular"]
-            if style_labels:
-                return True
-        return False
 
     def apply_style_to_selection(self, style: str) -> WordOperationResult:
         return self._apply_style(style, targets=None)

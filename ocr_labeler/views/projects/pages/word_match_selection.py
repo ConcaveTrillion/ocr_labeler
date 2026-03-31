@@ -263,23 +263,3 @@ class WordMatchSelection:
         self.refresh_line_checkbox_states()
         self.refresh_word_checkbox_states()
         self.refresh_paragraph_checkbox_states()
-
-    def clear_all_selections(self) -> None:
-        """Clear all selection sets."""
-        self.selected_line_indices.clear()
-        self.selected_word_indices.clear()
-        self.selected_paragraph_indices.clear()
-
-    def save_selection(self) -> tuple[set[int], set[WordKey], set[int]]:
-        """Snapshot current selection state for potential restore."""
-        return (
-            set(self.selected_line_indices),
-            set(self.selected_word_indices),
-            set(self.selected_paragraph_indices),
-        )
-
-    def restore_selection(self, saved: tuple[set[int], set[WordKey], set[int]]) -> None:
-        """Restore a previously saved selection snapshot."""
-        self.selected_line_indices = saved[0]
-        self.selected_word_indices = saved[1]
-        self.selected_paragraph_indices = saved[2]

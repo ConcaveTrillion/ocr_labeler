@@ -73,37 +73,3 @@ class BaseViewModel(ABC):
                 logger.exception(
                     f"Error in property change callback for {property_name}: {e}"
                 )
-
-    def execute_command(self, command_name: str, *args, **kwargs) -> Any:
-        """Execute a command by name.
-
-        This provides a way for views to trigger view model actions through a command pattern.
-
-        Args:
-            command_name: Name of the command to execute.
-            *args: Positional arguments for the command.
-            **kwargs: Keyword arguments for the command.
-
-        Returns:
-            Result of the command execution.
-
-        Raises:
-            AttributeError: If the command method doesn't exist.
-            Exception: If the command execution fails.
-        """
-        command_method = getattr(self, f"command_{command_name}", None)
-        if command_method is None:
-            raise AttributeError(
-                f"Command '{command_name}' not found in {self.__class__.__name__}"
-            )
-
-        if not callable(command_method):
-            raise AttributeError(
-                f"Command '{command_name}' is not callable in {self.__class__.__name__}"
-            )
-
-        try:
-            return command_method(*args, **kwargs)
-        except Exception as e:
-            logger.exception(f"Error executing command '{command_name}': {e}")
-            raise

@@ -457,27 +457,6 @@ class WordMatchView:
         """Create a card display for a single line match."""
         self.renderer._create_line_card(line_match)
 
-    def _rerender_line_card(self, line_index: int) -> None:
-        """Rerender a single line card in-place when only that line changed."""
-        self.renderer.rerender_line_card(line_index)
-
-    def _rerender_word_column(self, line_index: int, word_index: int) -> None:
-        """Rerender a single OCR word column in-place when only that word changed."""
-        self.renderer.rerender_word_column(line_index, word_index)
-
-    def _apply_local_word_gt_update(
-        self,
-        line_index: int,
-        word_index: int,
-        ground_truth_text: str,
-    ) -> None:
-        """Apply GT text update to in-memory line matches for incremental UI refresh."""
-        self.renderer.apply_local_word_gt_update(
-            line_index=line_index,
-            word_index=word_index,
-            ground_truth_text=ground_truth_text,
-        )
-
     def _build_word_match_from_word_object(
         self,
         word_index: int,
@@ -524,26 +503,6 @@ class WordMatchView:
             word_index,
             split_word_index,
             word_match,
-        )
-
-    def _create_image_cell(
-        self,
-        line_index: int,
-        split_word_index: int,
-        word_match,
-        *,
-        interactive: bool = True,
-        zoom_scale: float = 1.0,
-        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
-    ):
-        """Create image cell for a word."""
-        self.renderer.create_image_cell(
-            line_index,
-            split_word_index,
-            word_match,
-            interactive=interactive,
-            zoom_scale=zoom_scale,
-            bbox_preview_deltas=bbox_preview_deltas,
         )
 
     def _handle_crop_word_to_marker(
@@ -980,22 +939,6 @@ class WordMatchView:
 
         return False
 
-    def _get_word_image_slice(
-        self,
-        word_match,
-        *,
-        line_index: int,
-        word_index: int,
-        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
-    ):
-        """Get client-side slice metadata for a word image from original page image."""
-        return self.bbox.get_word_image_slice(
-            word_match,
-            line_index=line_index,
-            word_index=word_index,
-            bbox_preview_deltas=bbox_preview_deltas,
-        )
-
     def _get_original_image_source(self) -> str:
         """Return encoded original image source for client-side slice rendering."""
         return self.bbox._get_original_image_source()
@@ -1003,10 +946,6 @@ class WordMatchView:
     def on_image_sources_updated(self, image_dict: dict[str, str]) -> None:
         """React to state image updates and rerender if word-view source changed."""
         self.bbox.on_image_sources_updated(image_dict)
-
-    def _refresh_word_slice_source(self) -> None:
-        """Publish original image source once on the lines container as a CSS variable."""
-        self.bbox.refresh_word_slice_source()
 
     def _compute_encoded_dimensions(
         self,
@@ -1023,10 +962,6 @@ class WordMatchView:
     def _build_slice_placeholder_source(self, width: int, height: int) -> str:
         """Build tiny transparent SVG source that preserves interactive-image geometry."""
         return self.bbox._build_slice_placeholder_source(width, height)
-
-    def _ensure_word_slice_css_registered(self) -> None:
-        """Inject shared CSS for word-slice interactive image rendering once."""
-        self.bbox.ensure_word_slice_css_registered()
 
     def _preview_bbox_for_word(
         self,
@@ -1045,26 +980,6 @@ class WordMatchView:
             word_index=word_index,
             bbox_preview_deltas=bbox_preview_deltas,
         )
-
-    def _compute_refine_preview_deltas(
-        self,
-        line_index: int,
-        word_index: int,
-        *,
-        expand: bool,
-        pending_deltas: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0),
-    ) -> tuple[float, float, float, float] | None:
-        """Compute bbox deltas that a refine operation would produce, without applying."""
-        return self.bbox.compute_refine_preview_deltas(
-            line_index,
-            word_index,
-            expand=expand,
-            pending_deltas=pending_deltas,
-        )
-
-    def _get_line_image(self, line_match: "LineMatch") -> Optional[str]:
-        """Get cropped line image as base64 data URL."""
-        return self.bbox.get_line_image(line_match)
 
     def _get_status_icon(self, status: str) -> str:
         """Get icon for match status."""
@@ -1098,11 +1013,6 @@ class WordMatchView:
             "unmatched_gt": "text-blue-600",  # Blue for unmatched ground truth
         }
         return color_class_map.get(status, "text-gray-400")  # Default gray
-
-    def set_fuzz_threshold(self, threshold: float):
-        """Set the fuzzy matching threshold."""
-        self.view_model.fuzz_threshold = threshold
-        # Note: Would need to trigger a refresh of the current page to see changes
 
     def _on_filter_change(self, event: events.ValueChangeEventArguments) -> None:
         """Handle filter selection change."""
@@ -1447,15 +1357,6 @@ class WordMatchView:
             bottom_units=bottom_units,
             _event=_event,
         )
-
-    def _reset_pending_single_word_bbox_nudge(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Reset pending bbox deltas for a single word."""
-        self.bbox.reset_pending_single_word_bbox_nudge(line_index, word_index, _event)
 
     def _apply_pending_single_word_bbox_nudge(
         self,

@@ -72,19 +72,6 @@ class BaseView(ABC, Generic[TViewModel]):
         # Default implementation does nothing - subclasses should override
         pass
 
-    def dispose(self):
-        """Clean up the view and remove listeners.
-
-        This method should be called when the view is no longer needed
-        to prevent memory leaks and remove event listeners.
-        """
-        if hasattr(self.viewmodel, "remove_property_changed_listener"):
-            self.viewmodel.remove_property_changed_listener(
-                self._on_viewmodel_property_changed
-            )
-        self._is_built = False
-        logger.debug(f"View {self.__class__.__name__} disposed")
-
     @property
     def is_built(self) -> bool:
         """Check if the view has been built.

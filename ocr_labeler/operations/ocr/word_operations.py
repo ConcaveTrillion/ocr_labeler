@@ -25,15 +25,6 @@ STYLE_LABEL_BY_ATTR = {
     "is_blackletter": "blackletter",
 }
 
-STYLE_SCOPE_BY_ATTR = {
-    "italic": "italics",
-    "is_italic": "italics",
-    "small_caps": "small caps",
-    "is_small_caps": "small caps",
-    "blackletter": "blackletter",
-    "is_blackletter": "blackletter",
-}
-
 WORD_COMPONENT_BY_ATTR = {
     "left_footnote": "footnote marker",
     "is_left_footnote": "footnote marker",

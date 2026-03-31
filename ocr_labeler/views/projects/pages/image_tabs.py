@@ -354,10 +354,6 @@ class ImageTabs:
         """Enable drag-to-rebox mode on the Words image tab."""
         self._word_rebox_mode = True
 
-    def disable_word_rebox_mode(self) -> None:
-        """Disable drag-to-rebox mode on the Words image tab."""
-        self._word_rebox_mode = False
-
     def _render_drag_overlay(self, tab_name: str) -> None:
         """Render selection overlay while drag is in progress."""
         if "Viewport" in self.images:
@@ -1042,23 +1038,3 @@ class ImageTabs:
             self._suspend_overlay_render = False
         self._render_selection_overlay(self._selection_mode_tab())
         logger.debug("Image update complete for unified viewport")
-
-    def _bind_image_source(self, img: ui.image, tab_name: str):
-        """DEPRECATED: Data binding removed to prevent websocket issues."""
-        _ = img
-        prop_map = {"Viewport": "original_image_source"}
-
-        prop_name = prop_map.get(tab_name)
-        if prop_name:
-            logger.warning(
-                "_bind_image_source called but binding is deprecated; using callback instead"
-            )
-        else:
-            logger.warning(f"No property mapping found for tab: {tab_name}")
-
-    def update_images(self):
-        """Manually refresh images from viewmodel (for backward compatibility).
-
-        Note: This is now automatic via callback, but kept for compatibility.
-        """
-        logger.debug("update_images called - images update automatically via callback")

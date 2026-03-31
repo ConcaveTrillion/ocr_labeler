@@ -43,10 +43,6 @@ class PageStateViewModel(BaseViewModel):
     original_image_source: str = ""
     word_view_original_image_source: str = ""
     word_view_image_page_index: int = -1
-    paragraphs_image_source: str = ""
-    lines_image_source: str = ""
-    words_image_source: str = ""
-    mismatches_image_source: str = ""
 
     # Exposed page metadata for UI binding
     page_index: int = -1
@@ -61,9 +57,6 @@ class PageStateViewModel(BaseViewModel):
     _update_in_progress: bool = False
     _update_scheduled: bool = False
     _update_reschedule_requested: bool = False
-
-    # Cache for encoded images to avoid re-encoding unchanged images
-    _encoded_image_cache: dict[str, str] = None
 
     # Callback for direct image updates (bypasses binding to avoid websocket issues)
     _image_update_callback: Optional[callable] = None
@@ -92,7 +85,6 @@ class PageStateViewModel(BaseViewModel):
         self._update_in_progress: bool = False
         self._update_scheduled: bool = False
         self._update_reschedule_requested: bool = False
-        self._encoded_image_cache: dict[str, str] = {}  # kept for test monkeypatching
         self._image_update_callback: Optional[callable] = None
         self._word_view_image_ready_callback: Optional[callable] = None
         self._last_image_callback_signature: tuple | None = None
@@ -149,10 +141,6 @@ class PageStateViewModel(BaseViewModel):
         self.original_image_source = ""
         self.word_view_original_image_source = ""
         self.word_view_image_page_index = -1
-        self.paragraphs_image_source = ""
-        self.lines_image_source = ""
-        self.words_image_source = ""
-        self.mismatches_image_source = ""
 
         if not keep_metadata:
             self.page_index = -1
@@ -1000,65 +988,6 @@ class PageStateViewModel(BaseViewModel):
             return f"/_word_image_cache/{file_name}?v={img_hash[:8]}"
         except Exception:
             logger.debug("Failed caching image to disk", exc_info=True)
-            return ""
-
-    def _encode_image_sync(self, np_img) -> str:
-        """Encode a numpy image to a base64 data URL (synchronous)."""
-        if np_img is None:
-            logger.debug("No image to encode")
-            return ""
-
-        shape = getattr(np_img, "shape", None)
-        if not isinstance(shape, tuple):
-            logger.debug("Unsupported image object for encoding; skipping")
-            return ""
-
-        try:
-            import base64
-
-            import cv2
-
-            # Ensure image is in the right format
-            if len(shape) == 2:
-                # Grayscale image, convert to RGB
-                np_img = cv2.cvtColor(np_img, cv2.COLOR_GRAY2RGB)
-            elif len(shape) > 2 and shape[2] == 4:
-                # RGBA image, convert to RGB
-                np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
-
-            # Resize large images to make them more manageable
-            height, width = np_img.shape[:2]
-            max_dimension = 1200  # Reasonable max size for web display
-
-            if width > max_dimension or height > max_dimension:
-                # Calculate new dimensions maintaining aspect ratio
-                if width > height:
-                    new_width = max_dimension
-                    new_height = int(height * max_dimension / width)
-                else:
-                    new_height = max_dimension
-                    new_width = int(width * max_dimension / height)
-
-                np_img = cv2.resize(
-                    np_img, (new_width, new_height), interpolation=cv2.INTER_AREA
-                )
-                logger.debug(
-                    f"Resized image from {width}x{height} to {new_width}x{new_height}"
-                )
-
-            # Encode to PNG
-            success, buffer = cv2.imencode(".png", np_img)
-            if success:
-                encoded = base64.b64encode(buffer.tobytes()).decode("ascii")
-                data_url = f"data:image/png;base64,{encoded}"
-                logger.debug(f"Successfully encoded image, size: {len(data_url)} chars")
-                return data_url
-            else:
-                logger.warning("cv2.imencode failed to encode image")
-                return ""
-
-        except Exception as e:
-            logger.exception(f"Failed to encode image: {e}")
             return ""
 
     def _get_current_page_model(self):

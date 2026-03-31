@@ -220,21 +220,3 @@ class AppStateViewModel(BaseViewModel):
             True if project is available, False otherwise.
         """
         return key in self._app_state.available_projects
-
-    # Legacy methods for backward compatibility (deprecated)
-    def update_selected_project(self, key: str):
-        """Update the selected project key in the underlying AppState."""
-        logger.warning(
-            "update_selected_project is deprecated, use command_select_project instead"
-        )
-        self.command_select_project(key)
-
-    async def load_selected_project(self):
-        """Load the currently selected project."""
-        import traceback
-
-        logger.warning(
-            "load_selected_project is deprecated, use command_load_selected_project instead"
-        )
-        logger.warning("Call stack: %s", traceback.format_stack())
-        await self.command_load_selected_project()

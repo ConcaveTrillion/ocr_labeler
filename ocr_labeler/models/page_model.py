@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from pd_book_tools.ocr.page import Page
@@ -133,11 +132,6 @@ class PageModel:
 
     def add_ground_truth(self, text: str) -> None:
         self.page.add_ground_truth(text)
-
-    def get_image_path(self) -> Path | None:
-        if not self.image_path:
-            return None
-        return Path(self.image_path)
 
     def __getattr__(self, attr_name: str) -> Any:
         return getattr(self.page, attr_name)

@@ -977,34 +977,6 @@ class PageState:
             project_id=project_id,
         )
 
-    def copy_ground_truth_to_ocr_for_current_page(
-        self, current_page_index: int, line_index: int
-    ) -> bool:
-        """Copy ground truth text to OCR text for all words in the specified line on the current page.
-
-        Args:
-            current_page_index: Zero-based index of the current page
-            line_index: Zero-based line index to process
-
-        Returns:
-            bool: True if any modifications were made, False otherwise
-        """
-        return self.copy_ground_truth_to_ocr(self._current_page_index, line_index)
-
-    def copy_ocr_to_ground_truth_for_current_page(
-        self, current_page_index: int, line_index: int
-    ) -> bool:
-        """Copy OCR text to ground truth text for all words in the specified line on the current page.
-
-        Args:
-            current_page_index: Zero-based index of the current page
-            line_index: Zero-based line index to process
-
-        Returns:
-            bool: True if any modifications were made, False otherwise
-        """
-        return self.copy_ocr_to_ground_truth(self._current_page_index, line_index)
-
     def merge_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Merge selected lines on the current page into the first selected line.
 

@@ -29,7 +29,6 @@ class ProjectStateViewModel(BaseViewModel):
     project_root: str = ""
     project_root_resolved: str = ""
     is_busy: bool = False
-    busy_message: str = ""
     is_action_busy: bool = False
     can_navigate: bool = False
     can_navigate_override: bool = False
@@ -79,20 +78,8 @@ class ProjectStateViewModel(BaseViewModel):
         object.__setattr__(self, "is_controls_disabled", False)
         object.__setattr__(self, "can_navigate_override", False)
         object.__setattr__(self, "is_action_busy", False)
-        object.__setattr__(self, "busy_message", "")
 
         # Don't call update() in __init__ for bindable dataclasses - let state change listeners handle it
-
-    def override_can_navigate(self, can_navigate_override: bool):
-        """Override can_navigate property, e.g. to disable navigation during modal dialogs and requests."""
-        logger.debug(f"Setting can_navigate_override to {can_navigate_override}")
-        old_value = self.can_navigate_override
-        self.can_navigate_override = can_navigate_override
-        if old_value != self.can_navigate_override:
-            self.notify_property_changed(
-                "can_navigate_override", self.can_navigate_override
-            )
-            self._update_navigation_properties()
 
     def set_action_busy(self, is_busy: bool, message: str = ""):
         """Set or clear a manual busy state for long-running actions.
@@ -103,7 +90,6 @@ class ProjectStateViewModel(BaseViewModel):
         """
         logger.debug(f"Setting action busy to {is_busy} with message: {message}")
         self.is_action_busy = is_busy
-        self.busy_message = message if is_busy else ""
         self.update()
         self._update_navigation_properties()
 
@@ -266,30 +252,6 @@ class ProjectStateViewModel(BaseViewModel):
             return False
 
         return self.command_navigate_to_page(self.current_page_index - 1)
-
-    def command_navigate_first(self) -> bool:
-        """Command to navigate to the first page.
-
-        Returns:
-            True if navigation was successful, False otherwise.
-        """
-        if not self.can_navigate or self.page_total == 0:
-            logger.debug("Cannot navigate to first page")
-            return False
-
-        return self.command_navigate_to_page(0)
-
-    def command_navigate_last(self) -> bool:
-        """Command to navigate to the last page.
-
-        Returns:
-            True if navigation was successful, False otherwise.
-        """
-        if not self.can_navigate or self.page_total == 0:
-            logger.debug("Cannot navigate to last page")
-            return False
-
-        return self.command_navigate_to_page(self.page_total - 1)
 
     def command_get_page_display_info(self, page_index: Optional[int] = None) -> dict:
         """Command to get display information for a page.

@@ -18,6 +18,12 @@ This track captures persistence work that cuts across product roadmap milestones
 ## Planned Sequence
 
 - **Metadata + Session Baseline:** user metadata + session snapshot save/restore
+- **Save Project (bulk page persist):** extend per-page "Save Page" to a
+  "Save Project" action that persists all worked pages in a single
+  operation. Should use cached in-memory page versions where available,
+  fall back to already-persisted cache files for untouched pages, and
+  skip pages that have never been loaded. Wire a UI action (toolbar or
+  menu) and surface progress/result via notification.
 - **Disconnect/Prewarm Reliability:** disconnect flush + optional cache prewarm
 - **Derived Cache Optimization (later):** derived word/line cache strategy and performance-focused persistence
 

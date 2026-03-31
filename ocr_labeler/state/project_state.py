@@ -88,15 +88,6 @@ class ProjectState:
         with self._notification_lock:
             self._notification_queue.append((message, kind))
 
-    def drain_notifications(self) -> list[tuple[str, str]]:
-        """Drain queued notifications for UI-thread display."""
-        with self._notification_lock:
-            if not self._notification_queue:
-                return []
-            items = list(self._notification_queue)
-            self._notification_queue.clear()
-            return items
-
     def pop_notification(self) -> tuple[str, str] | None:
         """Pop a single queued notification for incremental UI display."""
         with self._notification_lock:

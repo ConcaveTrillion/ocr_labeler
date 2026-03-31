@@ -171,8 +171,6 @@ class ProjectLoadControls:
                 ui.button("Apply", on_click=self._apply_source_folder)
 
         with ui.row().classes("w-full items-center gap-2") as row:
-            self._row = row
-
             # Bind select options and value to AppState model
             options = self.app_state_model.project_keys
             selected_key = self.app_state_model.selected_project_key

@@ -68,11 +68,6 @@ class WordMatch:
         )
 
     @property
-    def css_class(self) -> str:
-        """Return CSS class for styling based on match status."""
-        return f"word-match-{self.match_status.value}"
-
-    @property
     def is_match(self) -> bool:
         """Return True if this is a match (exact or fuzzy)."""
         return self.match_status in (MatchStatus.EXACT, MatchStatus.FUZZY)

@@ -122,23 +122,6 @@ class ProjectView(
                 self.navigation_controls.set_page(1, 0)
             self.navigation_controls.sync_control_states()
 
-    def _goto_page(self, raw_value):
-        """Navigate to a specific page number with validation."""
-        try:
-            n = int(raw_value)
-            logger.debug("Parsed goto page value: %s -> %d", raw_value, n)
-        except (TypeError, ValueError):
-            logger.warning(
-                "Failed to parse goto page value: %s, defaulting to 1", raw_value
-            )
-            n = 1
-        if n < 1:
-            logger.debug("Page number %d is less than 1, setting to 1", n)
-            n = 1
-        logger.debug("Navigating to page number: %d", n)
-        # Use viewmodel command
-        self.viewmodel.command_navigate_to_page(n - 1)  # Convert to 0-based index
-
     def _notify(self, message: str, type_: str = "info"):
         """Route notifications through per-session queue with UI fallback."""
         app_state_model = getattr(self.viewmodel, "_app_state_model", None)

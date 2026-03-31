@@ -739,7 +739,6 @@ class TextTabs:
             apply_word_style_scope_callback
         )
         self.container = None
-        self._tabs = None
         self._last_word_match_page_key = None
 
     def _register_state_listeners(self) -> None:
@@ -884,7 +883,6 @@ class TextTabs:
                         # Don't use bind_value for large text - it's slow
                         # We'll update directly in _update_text_editors()
                         logger.debug("Created OCR text editor (manual updates)")
-            self._tabs = text_tabs
         self.container = col
         logger.info("TextTabs UI build completed")
 

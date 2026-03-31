@@ -42,7 +42,6 @@ def test_pagesate_viewmodel_binds_to_page_state_directly(tmp_path, monkeypatch):
 
     # Ensure image sources properties exist (even if empty)
     assert hasattr(vm, "original_image_source")
-    assert hasattr(vm, "paragraphs_image_source")
 
 
 def test_pagesate_viewmodel_rebinds_on_project_state_navigation(tmp_path, monkeypatch):

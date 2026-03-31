@@ -41,32 +41,34 @@ def test_word_match_toolbar_present(browser_app_url: str, browser_page) -> None:
 
 @pytest.mark.browser
 def test_filter_toggle_present(browser_app_url: str, browser_page) -> None:
-    """Verify the Mismatched Lines / All Lines filter toggle exists."""
+    """Verify the line filter toggle exists with all options."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    # The filter toggle should have "Mismatched Lines" and "All Lines" options
-    page.get_by_text("Mismatched Lines").first.wait_for(state="visible", timeout=10_000)
+    # The filter toggle should have all three options
+    page.get_by_text("Unvalidated Lines").first.wait_for(
+        state="visible", timeout=10_000
+    )
 
 
 @pytest.mark.browser
 def test_switching_filter_toggle(browser_app_url: str, browser_page) -> None:
-    """Switch between Mismatched Lines and All Lines filter."""
+    """Switch between filter toggle options."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    # Click "All Lines" toggle
-    page.get_by_text("All Lines").first.click()
-
-    # Wait for content to update, then switch back
-    page.wait_for_timeout(500)
+    # Default is Unvalidated Lines; switch through the options
     page.get_by_text("Mismatched Lines").first.click()
+    page.wait_for_timeout(500)
+    page.get_by_text("All Lines").first.click()
+    page.wait_for_timeout(500)
+    page.get_by_text("Unvalidated Lines").first.click()
 
 
 @pytest.mark.browser

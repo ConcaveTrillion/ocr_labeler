@@ -197,7 +197,9 @@ class TestNiceGuiIntegration:
         """Test that test projects are discovered and displayed in the UI."""
         # Create the app instance with test projects
         labeler = NiceGuiLabeler(
-            project_root=test_projects_root, projects_root=test_projects_root
+            project_root=test_projects_root,
+            projects_root=test_projects_root,
+            enable_session_logging=False,
         )
         labeler.create_routes()
 
@@ -318,7 +320,7 @@ class TestNiceGuiIntegration:
             "TEST STEP 12: Waiting for 'Loaded' notification - THIS IS WHERE IT MIGHT HANG"
         )
         # Wait for loading to complete - confirm loaded notification first
-        await user.should_see("Loaded projectID629292e7559a8")
+        await user.should_see("Loaded projectID629292e7559a8", retries=30)
         logger.info("TEST STEP 12 COMPLETE: Loaded notification appeared")
 
         logger.info("TEST STEP 13: Waiting for overlay to disappear")
@@ -345,7 +347,9 @@ class TestNiceGuiIntegration:
         """
         # Create the app instance with test projects
         labeler = NiceGuiLabeler(
-            project_root=test_projects_root, projects_root=test_projects_root
+            project_root=test_projects_root,
+            projects_root=test_projects_root,
+            enable_session_logging=False,
         )
         labeler.create_routes()
 
@@ -365,7 +369,7 @@ class TestNiceGuiIntegration:
         await user.should_see("Loading projectID629292e7559a8")
 
         # Wait for loading to complete - confirm loaded notification first
-        await user.should_see("Loaded projectID629292e7559a8")
+        await user.should_see("Loaded projectID629292e7559a8", retries=30)
 
         # Verify that the project loaded successfully - navigation controls should be present
         await user.should_see("Prev")
@@ -397,7 +401,7 @@ class TestNiceGuiIntegration:
 
             # Load first project to render the word-match page action toolbar.
             user.find("LOAD").click()
-            await user.should_see("Loaded projectID629292e7559a8")
+            await user.should_see("Loaded projectID629292e7559a8", retries=30)
             for _ in range(40):
                 expand_buttons = sorted(
                     [

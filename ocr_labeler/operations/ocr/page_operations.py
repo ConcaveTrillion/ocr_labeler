@@ -55,6 +55,7 @@ WORD_LABEL_SMALL_CAPS = "small_caps"
 WORD_LABEL_BLACKLETTER = "blackletter"
 WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
 WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
+WORD_LABEL_VALIDATED = "validated"
 
 
 # Constants for ground truth operations
@@ -1104,12 +1105,17 @@ class PageOperations:
                     "right_footnote",
                     "is_right_footnote",
                 )
+                validated = self._word_style_attr(
+                    word,
+                    "validated",
+                )
                 if not (
                     italic
                     or small_caps
                     or blackletter
                     or left_footnote
                     or right_footnote
+                    or validated
                 ):
                     continue
 
@@ -1119,6 +1125,7 @@ class PageOperations:
                     "blackletter": blackletter,
                     "left_footnote": left_footnote,
                     "right_footnote": right_footnote,
+                    "validated": validated,
                 }
 
         return word_attributes or None
@@ -1204,6 +1211,12 @@ class PageOperations:
                 labels_set.add(WORD_LABEL_RIGHT_FOOTNOTE)
             else:
                 labels_set.discard(WORD_LABEL_RIGHT_FOOTNOTE)
+
+            validated = bool(attributes.get("validated", False))
+            if validated:
+                labels_set.add(WORD_LABEL_VALIDATED)
+            else:
+                labels_set.discard(WORD_LABEL_VALIDATED)
 
             ordered = [label for label in labels if label in labels_set]
             ordered.extend(

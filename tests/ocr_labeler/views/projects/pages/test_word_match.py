@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from ocr_labeler.models.line_match_model import LineMatch
+from ocr_labeler.models.word_match_model import MatchStatus, WordMatch
 from ocr_labeler.views.projects.pages.word_edit_dialog import (
     handle_word_image_click,
     render_word_split_marker,
@@ -1805,6 +1807,7 @@ def test_display_signature_changes_when_word_bbox_changes():
         mismatch_count=0,
         unmatched_gt_count=0,
         unmatched_ocr_count=0,
+        validated_word_count=0,
         word_matches=[word_match],
     )
     view.view_model.line_matches = [line_match]
@@ -2613,3 +2616,290 @@ def test_word_gt_keydown_routes_tab_and_shift_tab(monkeypatch):
     )
 
     assert seen == [((0, 1), False), ((0, 1), True)]
+
+
+# ---------------------------------------------------------------------------
+# _filter_lines_for_display
+# ---------------------------------------------------------------------------
+
+
+def _make_line_match(line_index, *, match_status=MatchStatus.EXACT, is_validated=True):
+    """Helper: build a real LineMatch with one WordMatch."""
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a" if match_status == MatchStatus.EXACT else "b",
+        match_status=match_status,
+        fuzz_score=1.0 if match_status == MatchStatus.EXACT else 0.5,
+        word_index=0,
+        is_validated=is_validated,
+    )
+    return LineMatch(
+        line_index=line_index,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+
+
+def test_filter_lines_all_lines_returns_everything():
+    view = WordMatchView()
+    view.filter_mode = "All Lines"
+    lm0 = _make_line_match(0, is_validated=True)
+    lm1 = _make_line_match(1, is_validated=False)
+    view.view_model.line_matches = [lm0, lm1]
+
+    result = view.renderer._filter_lines_for_display()
+
+    assert result == [lm0, lm1]
+
+
+def test_filter_lines_unvalidated_excludes_fully_validated():
+    view = WordMatchView()
+    view.filter_mode = "Unvalidated Lines"
+    lm_validated = _make_line_match(0, is_validated=True)
+    lm_unvalidated = _make_line_match(1, is_validated=False)
+    view.view_model.line_matches = [lm_validated, lm_unvalidated]
+
+    result = view.renderer._filter_lines_for_display()
+
+    assert result == [lm_unvalidated]
+
+
+def test_filter_lines_mismatched_excludes_exact_only():
+    view = WordMatchView()
+    view.filter_mode = "Mismatched Lines"
+    lm_exact = _make_line_match(0, match_status=MatchStatus.EXACT)
+    lm_mismatch = _make_line_match(1, match_status=MatchStatus.MISMATCH)
+    view.view_model.line_matches = [lm_exact, lm_mismatch]
+
+    result = view.renderer._filter_lines_for_display()
+
+    assert result == [lm_mismatch]
+
+
+# ---------------------------------------------------------------------------
+# apply_word_validation_change
+# ---------------------------------------------------------------------------
+
+
+def test_apply_word_validation_change_updates_model(monkeypatch):
+    view = WordMatchView()
+    wm = WordMatch(
+        ocr_text="hello",
+        ground_truth_text="hello",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="hello",
+        ground_truth_line_text="hello",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+
+    view.apply_word_validation_change(0, 0, True)
+
+    assert wm.is_validated is True
+
+
+def test_apply_word_validation_change_does_not_rerender(monkeypatch):
+    """apply_word_validation_change must NOT call rerender (callers handle it)."""
+    view = WordMatchView()
+    wm = WordMatch(
+        ocr_text="hello",
+        ground_truth_text="hello",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="hello",
+        ground_truth_line_text="hello",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+    rerender_calls = []
+    monkeypatch.setattr(
+        view.renderer,
+        "rerender_word_column",
+        lambda *args: rerender_calls.append(("word_column", args)),
+    )
+    monkeypatch.setattr(
+        view.renderer,
+        "rerender_line_card",
+        lambda *args: rerender_calls.append(("line_card", args)),
+    )
+
+    view.apply_word_validation_change(0, 0, True)
+
+    assert rerender_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Toolbar: _collect_word_keys_for_lines
+# ---------------------------------------------------------------------------
+
+
+def test_collect_word_keys_for_lines():
+    view = WordMatchView()
+    wm0 = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+    )
+    wm1 = WordMatch(
+        ocr_text="b",
+        ground_truth_text="b",
+        match_status=MatchStatus.EXACT,
+        word_index=1,
+    )
+    lm0 = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm0],
+    )
+    lm1 = LineMatch(
+        line_index=1,
+        ocr_line_text="b",
+        ground_truth_line_text="b",
+        word_matches=[wm1],
+    )
+    view.view_model.line_matches = [lm0, lm1]
+
+    keys = view.toolbar._collect_word_keys_for_lines([1])
+
+    assert keys == [(1, 1)]
+
+
+# ---------------------------------------------------------------------------
+# Toolbar: _set_validation_for_keys
+# ---------------------------------------------------------------------------
+
+
+def test_set_validation_for_keys_validates(monkeypatch):
+    view = WordMatchView()
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+
+    toggled = []
+    view.toggle_word_validated_callback = lambda li, wi: toggled.append((li, wi))
+    monkeypatch.setattr(view.renderer, "rerender_line_card", lambda _line_index: None)
+
+    view.toolbar._set_validation_for_keys([(0, 0)], validate=True)
+
+    assert toggled == [(0, 0)]
+
+
+def test_set_validation_for_keys_skips_already_validated(monkeypatch):
+    view = WordMatchView()
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=True,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+
+    toggled = []
+    view.toggle_word_validated_callback = lambda li, wi: toggled.append((li, wi))
+
+    view.toolbar._set_validation_for_keys([(0, 0)], validate=True)
+
+    assert toggled == []
+
+
+def test_set_validation_for_keys_unvalidates(monkeypatch):
+    view = WordMatchView()
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=True,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+
+    toggled = []
+    view.toggle_word_validated_callback = lambda li, wi: toggled.append((li, wi))
+    monkeypatch.setattr(view.renderer, "rerender_line_card", lambda _line_index: None)
+
+    view.toolbar._set_validation_for_keys([(0, 0)], validate=False)
+
+    assert toggled == [(0, 0)]
+
+
+# ---------------------------------------------------------------------------
+# Toolbar: validation button enable/disable
+# ---------------------------------------------------------------------------
+
+
+def test_validation_buttons_disabled_without_callback():
+    view = WordMatchView()
+    view.toolbar.validate_page_button = SimpleNamespace(disabled=False)
+    view.toolbar.unvalidate_page_button = SimpleNamespace(disabled=False)
+    view.toolbar.validate_lines_button = SimpleNamespace(disabled=False)
+    view.toolbar.unvalidate_lines_button = SimpleNamespace(disabled=False)
+    view.toolbar.validate_words_button = SimpleNamespace(disabled=False)
+    view.toolbar.unvalidate_words_button = SimpleNamespace(disabled=False)
+    view.view_model.line_matches = [
+        _make_line_match(0),
+    ]
+
+    view.toolbar.update_button_state()
+
+    assert view.toolbar.validate_page_button.disabled is True
+    assert view.toolbar.validate_lines_button.disabled is True
+    assert view.toolbar.validate_words_button.disabled is True
+
+
+def test_validation_buttons_enabled_with_callback_and_selection():
+    view = WordMatchView(
+        toggle_word_validated_callback=lambda li, wi: True,
+    )
+    view.toolbar.validate_page_button = SimpleNamespace(disabled=True)
+    view.toolbar.unvalidate_page_button = SimpleNamespace(disabled=True)
+    view.toolbar.validate_lines_button = SimpleNamespace(disabled=True)
+    view.toolbar.unvalidate_lines_button = SimpleNamespace(disabled=True)
+    view.toolbar.validate_words_button = SimpleNamespace(disabled=True)
+    view.toolbar.unvalidate_words_button = SimpleNamespace(disabled=True)
+    view.view_model.line_matches = [
+        _make_line_match(0),
+    ]
+    view.selection.selected_line_indices = {0}
+    view.selection.selected_word_indices = {(0, 0)}
+
+    view.toolbar.update_button_state()
+
+    assert view.toolbar.validate_page_button.disabled is False
+    assert view.toolbar.validate_lines_button.disabled is False
+    assert view.toolbar.validate_words_button.disabled is False

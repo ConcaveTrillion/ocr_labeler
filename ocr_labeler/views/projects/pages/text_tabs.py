@@ -7,7 +7,11 @@ from pd_book_tools.ocr.page import Page
 
 from ....operations.ocr.word_operations import WordOperations
 from ....state import PageState
-from ....state.page_state import WordGroundTruthChangedEvent, WordStyleChangedEvent
+from ....state.page_state import (
+    WordGroundTruthChangedEvent,
+    WordStyleChangedEvent,
+    WordValidationChangedEvent,
+)
 from .word_match import WordMatchView
 
 logger = logging.getLogger(__name__)
@@ -661,6 +665,16 @@ class TextTabs:
                 logger.debug("Update word attributes operation result: %s", result)
                 return result
 
+        toggle_word_validated_callback = None
+        if page_state and hasattr(page_state, "toggle_word_validated"):
+
+            def toggle_word_validated_callback(
+                line_index: int, word_index: int
+            ) -> bool:
+                return page_state.toggle_word_validated(
+                    page_index, line_index, word_index
+                )
+
         apply_word_style_callback = None
         if set_word_attributes_callback is not None:
 
@@ -716,6 +730,7 @@ class TextTabs:
             group_selected_words_into_paragraph_callback=group_selected_words_into_paragraph_callback,
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             set_word_attributes_callback=set_word_attributes_callback,
+            toggle_word_validated_callback=toggle_word_validated_callback,
             notify_callback=notify_callback,
             original_image_source_provider=original_image_source_provider,
         )
@@ -736,6 +751,11 @@ class TextTabs:
 
         if self.page_state and hasattr(self.page_state, "on_word_style_change"):
             self.page_state.on_word_style_change.subscribe(self._on_word_style_changed)
+
+        if self.page_state and hasattr(self.page_state, "on_word_validation_change"):
+            self.page_state.on_word_validation_change.subscribe(
+                self._on_word_validation_changed
+            )
 
         project_state = (
             self.page_state._project_state
@@ -763,6 +783,12 @@ class TextTabs:
             with contextlib.suppress(Exception):
                 self.page_state.on_word_style_change.unsubscribe(
                     self._on_word_style_changed
+                )
+
+        if self.page_state and hasattr(self.page_state, "on_word_validation_change"):
+            with contextlib.suppress(Exception):
+                self.page_state.on_word_validation_change.unsubscribe(
+                    self._on_word_validation_changed
                 )
 
         project_state = (
@@ -957,6 +983,31 @@ class TextTabs:
         # last seen dedupe key to the current page snapshot after this targeted edit.
         # This keeps fallback full refresh behavior intact while avoiding duplicate
         # style-only rerenders.
+        page = self.page_state.current_page if self.page_state is not None else None
+        if page is not None:
+            self._last_word_match_page_key = self._build_word_match_page_key(page)
+
+    def _on_word_validation_changed(self, event: WordValidationChangedEvent) -> None:
+        """Apply targeted validation updates to WordMatchView."""
+        if not self._ensure_attached():
+            return
+        if event.page_index != self.page_index:
+            return
+        if not getattr(self, "word_match_view", None):
+            return
+
+        logger.debug(
+            "[word_match_refresh] targeted.word_validation_changed line=%s word=%s validated=%s",
+            event.line_index,
+            event.word_index,
+            event.is_validated,
+        )
+        self.word_match_view.apply_word_validation_change(
+            event.line_index,
+            event.word_index,
+            event.is_validated,
+        )
+
         page = self.page_state.current_page if self.page_state is not None else None
         if page is not None:
             self._last_word_match_page_key = self._build_word_match_page_key(page)

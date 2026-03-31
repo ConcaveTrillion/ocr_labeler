@@ -12,7 +12,6 @@ from ...shared.button_styles import (
     ButtonVariant,
     style_action_button,
     style_word_icon_button,
-    style_word_text_button,
 )
 from .word_edit_dialog import (
     handle_word_image_mouse,
@@ -28,11 +27,6 @@ logger = logging.getLogger(__name__)
 
 WordKey = tuple[int, int]
 ClickEvent = events.ClickEventArguments | None
-
-WORD_LABEL_ITALIC = "italic"
-WORD_LABEL_SMALL_CAPS = "small_caps"
-WORD_LABEL_BLACKLETTER = "blackletter"
-WORD_LABEL_FOOTNOTE = "footnote"
 
 
 class WordMatchRenderer:
@@ -187,9 +181,13 @@ class WordMatchRenderer:
                     with ui.card_section():
                         ui.icon("filter_list_off")
                         ui.label("No lines match the current filter")
-                        if self._view.show_only_mismatches:
+                        if self._view.filter_mode == "Unvalidated Lines":
                             ui.label(
-                                "All lines have perfect matches. Try selecting 'All lines' to see them."
+                                "All lines are validated. Try selecting 'All Lines' to see them."
+                            )
+                        elif self._view.filter_mode == "Mismatched Lines":
+                            ui.label(
+                                "All lines have perfect matches. Try selecting 'All Lines' to see them."
                             )
             self._display_update_render_count += 1
             self._last_display_signature = display_signature
@@ -312,12 +310,13 @@ class WordMatchRenderer:
                     line_match.mismatch_count,
                     line_match.unmatched_gt_count,
                     line_match.unmatched_ocr_count,
+                    line_match.validated_word_count,
                     word_signatures,
                 )
             )
 
         return (
-            self._view.show_only_mismatches,
+            self._view.filter_mode,
             tuple(sorted(self._view.selection.selected_line_indices)),
             tuple(sorted(self._view.selection.selected_word_indices)),
             tuple(sorted(self._view.selection.selected_paragraph_indices)),
@@ -338,35 +337,30 @@ class WordMatchRenderer:
 
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""
-        logger.debug(
-            f"Filtering lines. Show only mismatches: {self._view.show_only_mismatches}"
-        )
+        filter_mode = self._view.filter_mode
+        logger.debug(f"Filtering lines. Filter mode: {filter_mode}")
         logger.debug(
             f"Total line matches available: {len(self._view.view_model.line_matches)}"
         )
 
-        if not self._view.show_only_mismatches:
-            # Show all lines
+        if filter_mode == "All Lines":
             logger.debug("Returning all lines (no filtering)")
             return self._view.view_model.line_matches
+        elif filter_mode == "Unvalidated Lines":
+            filtered_lines = [
+                lm
+                for lm in self._view.view_model.line_matches
+                if not lm.is_fully_validated
+            ]
+            logger.debug(f"Filtered to {len(filtered_lines)} unvalidated lines")
+            return filtered_lines
         else:
-            # Show only lines with mismatches (any word that's not an exact match)
-            # This includes fuzzy matches, mismatches, unmatched OCR, and unmatched GT
-            filtered_lines = []
-            for line_match in self._view.view_model.line_matches:
-                has_mismatch = any(
-                    wm.match_status != MatchStatus.EXACT
-                    for wm in line_match.word_matches
-                )
-                if has_mismatch:
-                    filtered_lines.append(line_match)
-                    logger.debug(
-                        f"Line {line_match.line_index} has mismatches, including in filtered results"
-                    )
-                else:
-                    logger.debug(
-                        f"Line {line_match.line_index} has no mismatches, excluding from filtered results"
-                    )
+            # Mismatched Lines: any word that's not an exact match
+            filtered_lines = [
+                lm
+                for lm in self._view.view_model.line_matches
+                if any(wm.match_status != MatchStatus.EXACT for wm in lm.word_matches)
+            ]
             logger.debug(f"Filtered to {len(filtered_lines)} lines with mismatches")
             return filtered_lines
 
@@ -439,20 +433,39 @@ class WordMatchRenderer:
                             )
                         ).classes("text-caption")
                         ui.icon("bar_chart")
-                        stats_items = [
-                            f"\u2713 {line_match.exact_match_count}",
-                            f"\u26a0 {line_match.fuzzy_match_count}",
-                            f"\u2717 {line_match.mismatch_count}",
-                        ]
+                        ui.label(f"\u2713 {line_match.exact_match_count}").tooltip(
+                            "Exact matches"
+                        )
+                        ui.label(f"\u26a0 {line_match.fuzzy_match_count}").tooltip(
+                            "Fuzzy matches"
+                        )
+                        ui.label(f"\u2717 {line_match.mismatch_count}").tooltip(
+                            "Mismatches"
+                        )
                         if line_match.unmatched_gt_count > 0:
-                            stats_items.append(
+                            ui.label(
                                 f"\U0001f535 {line_match.unmatched_gt_count}"
-                            )
+                            ).tooltip("Unmatched ground truth")
                         if line_match.unmatched_ocr_count > 0:
-                            stats_items.append(
+                            ui.label(
                                 f"\u26ab {line_match.unmatched_ocr_count}"
-                            )
-                        ui.label(" \u2022 ".join(stats_items))
+                            ).tooltip("Unmatched OCR")
+
+                        # Validation rollup indicator
+                        v_count = line_match.validated_word_count
+                        v_total = line_match.total_word_count
+                        if v_total > 0:
+                            if line_match.is_fully_validated:
+                                ui.icon("verified").classes(
+                                    "text-green-600 text-sm"
+                                ).tooltip("All words validated")
+                            else:
+                                color = (
+                                    "text-blue-600" if v_count > 0 else "text-grey-400"
+                                )
+                                ui.label(f"\u2611 {v_count}/{v_total}").classes(
+                                    f"text-xs {color}"
+                                ).tooltip(f"{v_count} of {v_total} words validated")
 
                     # Right side: Action buttons
                     logger.debug(
@@ -497,6 +510,26 @@ class WordMatchRenderer:
                                 lambda: self._view.actions._handle_copy_ocr_to_gt(
                                     line_match.line_index
                                 )
+                            )
+
+                        # Validate line button
+                        if self._view.toggle_word_validated_callback:
+                            v_count = line_match.validated_word_count
+                            v_total = line_match.total_word_count
+                            all_validated = line_match.is_fully_validated
+                            validate_line_btn = ui.button(
+                                "Validate" if not all_validated else "Unvalidate",
+                                icon="check_circle"
+                                if not all_validated
+                                else "unpublished",
+                            ).tooltip(
+                                f"{'Unvalidate' if all_validated else 'Validate'} all words in this line ({v_count}/{v_total})"
+                            )
+                            style_action_button(validate_line_btn)
+                            if all_validated:
+                                validate_line_btn.classes("text-green-600")
+                            validate_line_btn.on_click(
+                                lambda _e, lm=line_match: self._handle_validate_line(lm)
                             )
 
                         delete_button = ui.button(icon="delete").tooltip(
@@ -744,6 +777,24 @@ class WordMatchRenderer:
             edit_button.props('data-testid="edit-word-button"')
             style_word_icon_button(edit_button)
 
+            # Validation toggle next to edit button
+            validated = getattr(word_match, "is_validated", False)
+            val_btn = ui.button(
+                icon="check",
+                on_click=lambda _event, li=line_index, wi=split_word_index: (
+                    self._handle_toggle_word_validated(li, wi, _event)
+                ),
+            ).tooltip("Validated" if validated else "Mark as validated")
+            val_btn.props("size=xs unelevated round")
+            if validated:
+                val_btn.props("color=green text-color=white")
+            else:
+                val_btn.props("color=grey text-color=white")
+            val_btn.disabled = (
+                self._view.toggle_word_validated_callback is None
+                or split_word_index < 0
+            )
+
     def _open_word_edit_dialog(
         self,
         line_index: int,
@@ -969,169 +1020,6 @@ class WordMatchRenderer:
                 if word_match.fuzz_score is not None:
                     ui.label(f"{word_match.fuzz_score:.2f}")
 
-    def create_word_actions_cell(
-        self,
-        line_index: int,
-        split_word_index: int,
-        word_match,
-    ) -> None:
-        """Create per-word action buttons displayed below each word."""
-        italic, small_caps, blackletter, left_footnote, right_footnote = (
-            self._view._word_style_flags(word_match)
-        )
-        footnote_marker = left_footnote or right_footnote
-        style_button_width = "width: 3rem;"
-
-        with ui.row().classes("items-center gap-1"):
-            italic_button = (
-                ui.button(
-                    "I",
-                    on_click=lambda event: (
-                        self._view.gt_editing._handle_toggle_word_attribute(
-                            line_index,
-                            split_word_index,
-                            WORD_LABEL_ITALIC,
-                            event,
-                        )
-                    ),
-                )
-                .style(style_button_width)
-                .tooltip("Toggle italic")
-            )
-            italic_button.disabled = (
-                self._view.set_word_attributes_callback is None or split_word_index < 0
-            )
-            style_word_text_button(
-                italic_button,
-                variant=ButtonVariant.TOGGLE,
-                active=italic,
-            )
-
-            small_caps_button = (
-                ui.button(
-                    "SC",
-                    on_click=lambda event: (
-                        self._view.gt_editing._handle_toggle_word_attribute(
-                            line_index,
-                            split_word_index,
-                            WORD_LABEL_SMALL_CAPS,
-                            event,
-                        )
-                    ),
-                )
-                .style(style_button_width)
-                .tooltip("Toggle small caps")
-            )
-            small_caps_button.disabled = (
-                self._view.set_word_attributes_callback is None or split_word_index < 0
-            )
-            style_word_text_button(
-                small_caps_button,
-                variant=ButtonVariant.TOGGLE,
-                active=small_caps,
-            )
-
-            blackletter_button = (
-                ui.button(
-                    "BL",
-                    on_click=lambda event: (
-                        self._view.gt_editing._handle_toggle_word_attribute(
-                            line_index,
-                            split_word_index,
-                            WORD_LABEL_BLACKLETTER,
-                            event,
-                        )
-                    ),
-                )
-                .style(style_button_width)
-                .tooltip("Toggle blackletter")
-            )
-            blackletter_button.disabled = (
-                self._view.set_word_attributes_callback is None or split_word_index < 0
-            )
-            style_word_text_button(
-                blackletter_button,
-                variant=ButtonVariant.TOGGLE,
-                active=blackletter,
-            )
-
-            footnote_button = (
-                ui.button(
-                    "FN",
-                    on_click=lambda event: (
-                        self._view.gt_editing._handle_toggle_word_attribute(
-                            line_index,
-                            split_word_index,
-                            WORD_LABEL_FOOTNOTE,
-                            event,
-                        )
-                    ),
-                )
-                .style(style_button_width)
-                .tooltip("Toggle footnote marker")
-            )
-            footnote_button.disabled = (
-                self._view.set_word_attributes_callback is None or split_word_index < 0
-            )
-            style_word_text_button(
-                footnote_button,
-                variant=ButtonVariant.TOGGLE,
-                active=footnote_marker,
-            )
-
-            if split_word_index >= 0:
-                self._view.gt_editing._word_style_button_refs[
-                    (line_index, split_word_index)
-                ] = (
-                    italic_button,
-                    small_caps_button,
-                    blackletter_button,
-                    footnote_button,
-                )
-
-        with ui.row().classes("items-center gap-1"):
-            rebox_button = ui.button(
-                icon="crop_free",
-                on_click=lambda event: self._view.bbox.handle_start_rebox_word(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip("Redraw word bounding box")
-            style_word_icon_button(rebox_button)
-            rebox_button.disabled = (
-                self._view.rebox_word_callback is None or split_word_index < 0
-            )
-
-            refine_button = ui.button(
-                icon="auto_fix_high",
-                on_click=lambda event: self._view.actions._handle_refine_single_word(
-                    line_index,
-                    split_word_index,
-                    event,
-                ),
-            ).tooltip("Refine word bounding box")
-            style_word_icon_button(refine_button)
-            refine_button.disabled = (
-                self._view.refine_words_callback is None or split_word_index < 0
-            )
-
-            expand_then_refine_button = ui.button(
-                icon="unfold_more",
-                on_click=lambda event: (
-                    self._view.actions._handle_expand_then_refine_single_word(
-                        line_index,
-                        split_word_index,
-                        event,
-                    )
-                ),
-            ).tooltip("Expand then refine word bounding box")
-            style_word_icon_button(expand_then_refine_button)
-            expand_then_refine_button.disabled = (
-                self._view.expand_then_refine_words_callback is None
-                or split_word_index < 0
-            )
-
     def _create_word_text_display(self, word_matches, text_type) -> None:
         """Create a display of words with appropriate coloring."""
         if not word_matches:
@@ -1175,6 +1063,47 @@ class WordMatchRenderer:
             callback()
         except Exception:
             logger.debug("Word dialog refresh callback failed", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Validation toggle
+    # ------------------------------------------------------------------
+
+    def _handle_toggle_word_validated(
+        self,
+        line_index: int,
+        word_index: int,
+        _event: ClickEvent = None,
+    ) -> None:
+        """Handle per-word validation toggle."""
+        callback = self._view.toggle_word_validated_callback
+        if callback is None or word_index < 0:
+            return
+        callback(line_index, word_index)
+        # Re-render line card to update both the word column and the header stats.
+        # apply_word_validation_change (called via the event pipeline) updates the
+        # in-memory model only; rendering is our responsibility.
+        self.rerender_line_card(line_index)
+
+    def _handle_validate_line(self, line_match) -> None:
+        """Validate or unvalidate all words in a line."""
+        callback = self._view.toggle_word_validated_callback
+        if callback is None:
+            return
+        # Snapshot before the loop: each callback toggles state, so reading
+        # is_validated mid-loop would see already-toggled values.
+        all_validated = line_match.is_fully_validated
+        targets = [
+            (wm.word_index, wm.is_validated)
+            for wm in line_match.word_matches
+            if wm.word_index is not None and wm.word_index >= 0
+        ]
+        for wi, was_validated in targets:
+            if all_validated and was_validated:
+                callback(line_match.line_index, wi)
+            elif not all_validated and not was_validated:
+                callback(line_match.line_index, wi)
+        # Re-render line card once after all toggles to update header stats
+        self.rerender_line_card(line_match.line_index)
 
     # ------------------------------------------------------------------
     # Local in-memory state updates

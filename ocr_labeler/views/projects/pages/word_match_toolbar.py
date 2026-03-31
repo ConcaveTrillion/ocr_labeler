@@ -53,6 +53,14 @@ class WordMatchToolbar:
         self.refine_words_button = None
         self.expand_then_refine_words_button = None
         self.group_selected_words_into_paragraph_button = None
+        self.validate_page_button = None
+        self.unvalidate_page_button = None
+        self.validate_paragraphs_button = None
+        self.unvalidate_paragraphs_button = None
+        self.validate_lines_button = None
+        self.unvalidate_lines_button = None
+        self.validate_words_button = None
+        self.unvalidate_words_button = None
         self.apply_style_select = None
         self.apply_style_button = None
         self.apply_scope_select = None
@@ -73,9 +81,11 @@ class WordMatchToolbar:
     def build_actions_toolbar(self):
         """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
         # Operations grid: columns = scope label | Merge | Refine | Expand+Refine |
-        # Split After | Split Select | Word Select | To Paragraph | GT->OCR | OCR->GT | Delete
+        # Split After | Split Select | Word Select | To Paragraph | GT->OCR | OCR->GT | Validate | Unvalidate | Delete
         with (
-            ui.grid(columns="auto auto auto auto auto auto auto auto auto auto auto")
+            ui.grid(
+                columns="auto auto auto auto auto auto auto auto auto auto auto auto auto"
+            )
             .classes("items-center justify-items-center w-auto pl-2")
             .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
         ):
@@ -113,6 +123,16 @@ class WordMatchToolbar:
                 on_click=self._view.actions._handle_copy_page_ocr_to_gt,
             ).tooltip("Copy all OCR text to ground truth on this page")
             style_word_icon_button(self.copy_ocr_to_gt_page_button)
+            self.validate_page_button = ui.button(
+                icon="check_circle",
+                on_click=self._handle_validate_page,
+            ).tooltip("Validate all words on this page")
+            style_word_icon_button(self.validate_page_button)
+            self.unvalidate_page_button = ui.button(
+                icon="unpublished",
+                on_click=self._handle_unvalidate_page,
+            ).tooltip("Unvalidate all words on this page")
+            style_word_icon_button(self.unvalidate_page_button)
             ui.element("div")  # no Delete for page
 
             # Paragraph row
@@ -155,6 +175,16 @@ class WordMatchToolbar:
                 on_click=self._view.actions._handle_copy_selected_paragraphs_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected paragraphs")
             style_word_icon_button(self.copy_ocr_to_gt_paragraphs_button)
+            self.validate_paragraphs_button = ui.button(
+                icon="check_circle",
+                on_click=self._handle_validate_selected_paragraphs,
+            ).tooltip("Validate all words in selected paragraphs")
+            style_word_icon_button(self.validate_paragraphs_button)
+            self.unvalidate_paragraphs_button = ui.button(
+                icon="unpublished",
+                on_click=self._handle_unvalidate_selected_paragraphs,
+            ).tooltip("Unvalidate all words in selected paragraphs")
+            style_word_icon_button(self.unvalidate_paragraphs_button)
             self.delete_paragraphs_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_paragraphs,
@@ -207,6 +237,16 @@ class WordMatchToolbar:
                 on_click=self._view.actions._handle_copy_selected_lines_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected lines")
             style_word_icon_button(self.copy_ocr_to_gt_lines_button)
+            self.validate_lines_button = ui.button(
+                icon="check_circle",
+                on_click=self._handle_validate_selected_lines,
+            ).tooltip("Validate all words in selected lines")
+            style_word_icon_button(self.validate_lines_button)
+            self.unvalidate_lines_button = ui.button(
+                icon="unpublished",
+                on_click=self._handle_unvalidate_selected_lines,
+            ).tooltip("Unvalidate all words in selected lines")
+            style_word_icon_button(self.unvalidate_lines_button)
             self.delete_lines_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_lines,
@@ -257,6 +297,16 @@ class WordMatchToolbar:
                 on_click=self._view.actions._handle_copy_selected_words_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected words")
             style_word_icon_button(self.copy_ocr_to_gt_words_button)
+            self.validate_words_button = ui.button(
+                icon="check_circle",
+                on_click=self._handle_validate_selected_words,
+            ).tooltip("Validate selected words")
+            style_word_icon_button(self.validate_words_button)
+            self.unvalidate_words_button = ui.button(
+                icon="unpublished",
+                on_click=self._handle_unvalidate_selected_words,
+            ).tooltip("Unvalidate selected words")
+            style_word_icon_button(self.unvalidate_words_button)
             self.delete_words_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_words,
@@ -413,6 +463,96 @@ class WordMatchToolbar:
         )
         self._view._safe_notify(result.message, type_=result.severity)
         self.update_button_state()
+
+    # ------------------------------------------------------------------
+    # Validation handlers
+    # ------------------------------------------------------------------
+
+    def _collect_word_keys_for_lines(
+        self, line_indices: list[int]
+    ) -> list[tuple[int, int]]:
+        """Return (line_index, word_index) pairs for all words in given lines."""
+        line_set = set(line_indices)
+        keys: list[tuple[int, int]] = []
+        for lm in self._view.view_model.line_matches:
+            if lm.line_index in line_set:
+                for wm in lm.word_matches:
+                    wi = wm.word_index
+                    if wi is not None and wi >= 0:
+                        keys.append((lm.line_index, wi))
+        return keys
+
+    def _set_validation_for_keys(
+        self, keys: list[tuple[int, int]], *, validate: bool
+    ) -> None:
+        """Toggle validation for a list of (line_index, word_index) pairs.
+
+        Snapshots each word's current state *before* calling the callback so
+        that we never re-read a value that a prior iteration already toggled.
+        """
+        callback = self._view.toggle_word_validated_callback
+        if callback is None:
+            return
+        # Build snapshot: (line_idx, word_idx, currently_validated)
+        snapshot: list[tuple[int, int, bool]] = []
+        for line_idx, word_idx in keys:
+            lm = self._view._line_match_by_index(line_idx)
+            if lm is None:
+                continue
+            wm = next((w for w in lm.word_matches if w.word_index == word_idx), None)
+            if wm is None:
+                continue
+            snapshot.append((line_idx, word_idx, wm.is_validated))
+
+        toggled_lines: set[int] = set()
+        for line_idx, word_idx, was_validated in snapshot:
+            if validate and not was_validated:
+                callback(line_idx, word_idx)
+                toggled_lines.add(line_idx)
+            elif not validate and was_validated:
+                callback(line_idx, word_idx)
+                toggled_lines.add(line_idx)
+        # Rerender affected line cards once each
+        for line_idx in toggled_lines:
+            self._view.renderer.rerender_line_card(line_idx)
+
+    def _handle_validate_page(self) -> None:
+        all_lines = self._view._get_all_line_indices()
+        keys = self._collect_word_keys_for_lines(all_lines)
+        self._set_validation_for_keys(keys, validate=True)
+
+    def _handle_unvalidate_page(self) -> None:
+        all_lines = self._view._get_all_line_indices()
+        keys = self._collect_word_keys_for_lines(all_lines)
+        self._set_validation_for_keys(keys, validate=False)
+
+    def _handle_validate_selected_paragraphs(self) -> None:
+        line_indices = self._view._get_selected_paragraph_line_indices()
+        keys = self._collect_word_keys_for_lines(line_indices)
+        self._set_validation_for_keys(keys, validate=True)
+
+    def _handle_unvalidate_selected_paragraphs(self) -> None:
+        line_indices = self._view._get_selected_paragraph_line_indices()
+        keys = self._collect_word_keys_for_lines(line_indices)
+        self._set_validation_for_keys(keys, validate=False)
+
+    def _handle_validate_selected_lines(self) -> None:
+        line_indices = self._view._get_effective_selected_lines()
+        keys = self._collect_word_keys_for_lines(line_indices)
+        self._set_validation_for_keys(keys, validate=True)
+
+    def _handle_unvalidate_selected_lines(self) -> None:
+        line_indices = self._view._get_effective_selected_lines()
+        keys = self._collect_word_keys_for_lines(line_indices)
+        self._set_validation_for_keys(keys, validate=False)
+
+    def _handle_validate_selected_words(self) -> None:
+        keys = list(self._view.selection.selected_word_indices)
+        self._set_validation_for_keys(keys, validate=True)
+
+    def _handle_unvalidate_selected_words(self) -> None:
+        keys = list(self._view.selection.selected_word_indices)
+        self._set_validation_for_keys(keys, validate=False)
 
     def update_button_state(self) -> None:
         """Enable/disable line and paragraph action buttons based on selection."""
@@ -583,3 +723,30 @@ class WordMatchToolbar:
             self.apply_component_button.disabled = not has_selected_words
         if self.clear_component_button is not None:
             self.clear_component_button.disabled = not has_selected_words
+
+        # Validation buttons
+        has_callback = self._view.toggle_word_validated_callback is not None
+        has_any_lines = len(self._view._get_all_line_indices()) > 0
+        has_selected_paragraphs = (
+            len(self._view.selection.selected_paragraph_indices) > 0
+        )
+        has_selected_lines = len(selected_lines) > 0
+
+        for btn in (self.validate_page_button, self.unvalidate_page_button):
+            if btn is not None:
+                btn.disabled = not has_callback or not has_any_lines
+
+        for btn in (
+            self.validate_paragraphs_button,
+            self.unvalidate_paragraphs_button,
+        ):
+            if btn is not None:
+                btn.disabled = not has_callback or not has_selected_paragraphs
+
+        for btn in (self.validate_lines_button, self.unvalidate_lines_button):
+            if btn is not None:
+                btn.disabled = not has_callback or not has_selected_lines
+
+        for btn in (self.validate_words_button, self.unvalidate_words_button):
+            if btn is not None:
+                btn.disabled = not has_callback or not has_selected_words

@@ -41,6 +41,7 @@ class WordMatchViewModel(BaseViewModel):
     unmatched_ocr_count: int = field(default=0)
     exact_percentage: float = field(default=0.0)
     match_percentage: float = field(default=0.0)
+    validated_words_count: int = field(default=0)
 
     def __post_init__(self):
         """Initialize after dataclass construction."""
@@ -245,6 +246,8 @@ class WordMatchViewModel(BaseViewModel):
         try:
             ocr_text = getattr(word, "text", "")
             ground_truth_text = getattr(word, "ground_truth_text", "")
+            word_labels = set(getattr(word, "word_labels", []) or [])
+            is_validated = "validated" in word_labels
 
             # If no ground truth, mark as unmatched OCR
             if not ground_truth_text:
@@ -254,6 +257,7 @@ class WordMatchViewModel(BaseViewModel):
                     match_status=MatchStatus.UNMATCHED_OCR,
                     word_index=word_idx,
                     word_object=word,
+                    is_validated=is_validated,
                 )
 
             # First, do a strict exact text comparison - this is the ONLY way to be marked as exact
@@ -265,6 +269,7 @@ class WordMatchViewModel(BaseViewModel):
                     fuzz_score=1.0,
                     word_index=word_idx,
                     word_object=word,
+                    is_validated=is_validated,
                 )
 
             # If not exact, compute fuzzy score for non-exact matches
@@ -293,6 +298,7 @@ class WordMatchViewModel(BaseViewModel):
                 fuzz_score=fuzz_score,
                 word_index=word_idx,
                 word_object=word,
+                is_validated=is_validated,
             )
 
         except Exception as e:
@@ -313,6 +319,7 @@ class WordMatchViewModel(BaseViewModel):
         old_unmatched_ocr = self.unmatched_ocr_count
         old_exact_pct = self.exact_percentage
         old_match_pct = self.match_percentage
+        old_validated = self.validated_words_count
 
         self.total_words = sum(len(lm.word_matches) for lm in self.line_matches)
         self.exact_matches_count = sum(lm.exact_match_count for lm in self.line_matches)
@@ -321,6 +328,9 @@ class WordMatchViewModel(BaseViewModel):
         self.unmatched_gt_count = sum(lm.unmatched_gt_count for lm in self.line_matches)
         self.unmatched_ocr_count = sum(
             lm.unmatched_ocr_count for lm in self.line_matches
+        )
+        self.validated_words_count = sum(
+            lm.validated_word_count for lm in self.line_matches
         )
 
         self.exact_percentage = (
@@ -348,6 +358,7 @@ class WordMatchViewModel(BaseViewModel):
             ("unmatched_ocr_count", old_unmatched_ocr, self.unmatched_ocr_count),
             ("exact_percentage", old_exact_pct, self.exact_percentage),
             ("match_percentage", old_match_pct, self.match_percentage),
+            ("validated_words_count", old_validated, self.validated_words_count),
         ]
 
         for prop_name, old_val, new_val in changes:
@@ -366,6 +377,7 @@ class WordMatchViewModel(BaseViewModel):
             "exact_percentage": self.exact_percentage,
             "total_matches": self.exact_matches_count + self.fuzzy_matches_count,
             "match_percentage": self.match_percentage,
+            "validated_words": self.validated_words_count,
         }
 
     # Command methods for UI actions

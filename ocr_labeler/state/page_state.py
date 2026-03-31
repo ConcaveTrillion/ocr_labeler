@@ -47,6 +47,16 @@ class WordGroundTruthChangedEvent:
     ground_truth_text: str
 
 
+@dataclass(frozen=True)
+class WordValidationChangedEvent:
+    """Typed event emitted when a single word's validation state is toggled."""
+
+    page_index: int
+    line_index: int
+    word_index: int
+    is_validated: bool
+
+
 class _GroundTruthRematchSkipped(Exception):
     """Raised when GT rematch cannot proceed (no GT text or missing methods)."""
 
@@ -67,6 +77,9 @@ class PageState:
         default_factory=Event
     )
     on_word_style_change: Event[WordStyleChangedEvent] = field(default_factory=Event)
+    on_word_validation_change: Event[WordValidationChangedEvent] = field(
+        default_factory=Event
+    )
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Optional[Project] = field(default=None, init=False)
@@ -118,6 +131,20 @@ class PageState:
             event.ground_truth_text,
         )
         self.on_word_ground_truth_change.emit(event)
+
+    def _emit_word_validation_changed(
+        self,
+        event: WordValidationChangedEvent,
+    ) -> None:
+        """Notify listeners of a targeted word validation toggle."""
+        logger.debug(
+            "[word_validation_event] emitted page=%s line=%s word=%s validated=%s",
+            event.page_index,
+            event.line_index,
+            event.word_index,
+            event.is_validated,
+        )
+        self.on_word_validation_change.emit(event)
 
     def _resolve_workspace_save_directory(
         self, save_directory: str | Path | None
@@ -472,6 +499,71 @@ class PageState:
         except Exception as e:
             logger.exception(
                 "Error updating word attributes line=%s word=%s: %s",
+                line_index,
+                word_index,
+                e,
+            )
+            return False
+
+    def toggle_word_validated(
+        self,
+        page_index: int,
+        line_index: int,
+        word_index: int,
+    ) -> bool:
+        """Toggle the validated flag for a single word on the current page.
+
+        Returns:
+            True if toggle succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical(
+                "No page available at index %s for word validation toggle.",
+                page_index,
+            )
+            return False
+
+        try:
+            lines = list(getattr(page, "lines", []) or [])
+            if line_index < 0 or line_index >= len(lines):
+                logger.warning(
+                    "toggle_word_validated: invalid line_index=%s", line_index
+                )
+                return False
+
+            words = list(getattr(lines[line_index], "words", []) or [])
+            if word_index < 0 or word_index >= len(words):
+                logger.warning(
+                    "toggle_word_validated: invalid word_index=%s", word_index
+                )
+                return False
+
+            word = words[word_index]
+            labels = set(getattr(word, "word_labels", []) or [])
+            is_validated = "validated" not in labels
+            if is_validated:
+                labels.add("validated")
+            else:
+                labels.discard("validated")
+            word.word_labels = list(labels)
+
+            self._invalidate_text_cache()
+            self._emit_word_validation_changed(
+                WordValidationChangedEvent(
+                    page_index=page_index,
+                    line_index=line_index,
+                    word_index=word_index,
+                    is_validated=is_validated,
+                )
+            )
+            self._auto_save_to_cache()
+            self.notify()
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error toggling word validation line=%s word=%s: %s",
                 line_index,
                 word_index,
                 e,
@@ -2140,6 +2232,8 @@ class PageState:
 
     def _finalize_structural_edit(self, page: object, operation: str) -> None:
         """Run post-success page updates after structural OCR edits."""
+        self._clear_all_validation(page)
+
         try:
             self._rematch_page_ground_truth(page, operation)
         except _GroundTruthRematchSkipped:
@@ -2152,12 +2246,61 @@ class PageState:
         self._auto_save_to_cache()
         self.notify()
 
+    def _clear_all_validation(self, page: object) -> None:
+        """Remove 'validated' label from all words on the page."""
+        try:
+            for line in getattr(page, "lines", []) or []:
+                for word in getattr(line, "words", []) or []:
+                    labels = getattr(word, "word_labels", None)
+                    if labels and "validated" in labels:
+                        labels_set = set(labels)
+                        labels_set.discard("validated")
+                        word.word_labels = list(labels_set)
+        except Exception:
+            logger.debug("Error clearing validation labels", exc_info=True)
+
+    def _snapshot_word_ground_truth(self, page: object) -> dict[tuple[int, int], str]:
+        """Return a snapshot of per-word GT text keyed by (line_index, word_index)."""
+        snapshot: dict[tuple[int, int], str] = {}
+        try:
+            for li, line in enumerate(getattr(page, "lines", []) or []):
+                for wi, word in enumerate(getattr(line, "words", []) or []):
+                    snapshot[(li, wi)] = str(
+                        getattr(word, "ground_truth_text", "") or ""
+                    )
+        except Exception:
+            logger.debug("Error snapshotting word GT", exc_info=True)
+        return snapshot
+
+    def _clear_validation_for_changed_gt(
+        self,
+        page: object,
+        gt_snapshot: dict[tuple[int, int], str],
+    ) -> None:
+        """Clear 'validated' only for words whose GT changed relative to the snapshot."""
+        try:
+            for li, line in enumerate(getattr(page, "lines", []) or []):
+                for wi, word in enumerate(getattr(line, "words", []) or []):
+                    old_gt = gt_snapshot.get((li, wi))
+                    new_gt = str(getattr(word, "ground_truth_text", "") or "")
+                    if old_gt != new_gt:
+                        labels = getattr(word, "word_labels", None)
+                        if labels and "validated" in labels:
+                            labels_set = set(labels)
+                            labels_set.discard("validated")
+                            word.word_labels = list(labels_set)
+        except Exception:
+            logger.debug(
+                "Error clearing validation for changed GT words", exc_info=True
+            )
+
     @notify_on_completion
     def rematch_ground_truth(self) -> bool:
         """Explicitly re-run bulk GT matching on the current page.
 
         Wipes any per-word GT edits and re-matches from the source GT text.
         Called by the UI when the user intentionally wants to refresh GT.
+        Validation is cleared only for words whose GT actually changed.
 
         Returns:
             True if GT was successfully re-matched, False otherwise.
@@ -2167,12 +2310,19 @@ class PageState:
             logger.warning("rematch_ground_truth: no current page")
             return False
 
+        # Snapshot per-word GT before rematch
+        gt_snapshot = self._snapshot_word_ground_truth(page)
+
         try:
             self._rematch_page_ground_truth(page, "explicit rematch")
         except _GroundTruthRematchSkipped:
             return False
 
+        # Clear validation only for words whose GT actually changed
+        self._clear_validation_for_changed_gt(page, gt_snapshot)
+
         self._invalidate_text_cache()
+        self._auto_save_to_cache()
         logger.info(
             "Re-matched ground truth for page index %s",
             self._current_page_index,

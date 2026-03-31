@@ -32,6 +32,7 @@ class WordMatch:
     word_object: Optional[object] = (
         None  # Reference to the original word object for image access
     )
+    is_validated: bool = False
 
     def __eq__(self, other: object) -> bool:
         """Custom equality that handles word_object using identity check.
@@ -49,6 +50,7 @@ class WordMatch:
             and self.fuzz_score == other.fuzz_score
             and self.word_index == other.word_index
             and self.word_object is other.word_object  # Identity check
+            and self.is_validated == other.is_validated
         )
 
     def __hash__(self) -> int:
@@ -60,6 +62,7 @@ class WordMatch:
                 self.match_status,
                 self.fuzz_score,
                 self.word_index,
+                self.is_validated,
                 # word_object excluded - may contain unhashable types
             )
         )

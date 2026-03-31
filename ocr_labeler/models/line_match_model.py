@@ -95,6 +95,23 @@ class LineMatch:
         )
 
     @property
+    def validated_word_count(self) -> int:
+        """Count of validated words."""
+        return sum(1 for wm in self.word_matches if wm.is_validated)
+
+    @property
+    def total_word_count(self) -> int:
+        """Total number of words in this line."""
+        return len(self.word_matches)
+
+    @property
+    def is_fully_validated(self) -> bool:
+        """Return True if all words in this line are validated."""
+        return bool(self.word_matches) and all(
+            wm.is_validated for wm in self.word_matches
+        )
+
+    @property
     def overall_match_status(self) -> MatchStatus:
         """Overall status for the line."""
         if not self.word_matches:

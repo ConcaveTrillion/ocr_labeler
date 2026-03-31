@@ -89,6 +89,7 @@ class WordMatchView:
         group_selected_words_into_paragraph_callback: WordKeysAction | None = None,
         edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
         set_word_attributes_callback: SetWordAttributesAction | None = None,
+        toggle_word_validated_callback: LineWordAction | None = None,
         notify_callback: NotifyCallback | None = None,
         original_image_source_provider: Callable[[], str] | None = None,
     ):
@@ -103,7 +104,7 @@ class WordMatchView:
         self._summary_callback: Callable[[str], None] | None = None
         self.lines_container = None
         self.filter_selector = None
-        self.show_only_mismatches = True  # Default to showing only mismatched lines
+        self.filter_mode = "Unvalidated Lines"  # Default filter mode
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         self.copy_ocr_to_gt_callback = copy_ocr_to_gt_callback
         self.copy_selected_words_ocr_to_gt_callback = (
@@ -148,6 +149,7 @@ class WordMatchView:
         self._on_expand_refine_bboxes: Callable | None = None
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.set_word_attributes_callback = set_word_attributes_callback
+        self.toggle_word_validated_callback = toggle_word_validated_callback
         self.selection = WordMatchSelection(self)
         self.toolbar = WordMatchToolbar(self)
         self.gt_editing = WordMatchGtEditing(self)
@@ -228,8 +230,8 @@ class WordMatchView:
             ):
                 ui.icon("filter_list")
                 self.filter_selector = ui.toggle(
-                    options=["Mismatched Lines", "All Lines"],
-                    value="Mismatched Lines",
+                    options=["Unvalidated Lines", "Mismatched Lines", "All Lines"],
+                    value="Unvalidated Lines",
                 )
                 self.filter_selector.on_value_change(self._on_filter_change)
 
@@ -306,7 +308,8 @@ class WordMatchView:
                 f"❌ {stats['mismatches']} mismatches • "
                 f"🔵 {stats['unmatched_gt']} unmatched GT • "
                 f"⚫ {stats['unmatched_ocr']} unmatched OCR • "
-                f"🎯 {stats['match_percentage']:.1f}% match rate"
+                f"🎯 {stats['match_percentage']:.1f}% match rate • "
+                f"☑️ {stats['validated_words']}/{stats['total_words']} validated"
             )
 
         if self._summary_callback is not None:
@@ -348,7 +351,8 @@ class WordMatchView:
         italic, small_caps, blackletter, left_footnote, right_footnote = (
             self._word_style_flags(word_match)
         )
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"
+        is_validated = getattr(word_match, "is_validated", False)
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}:{int(is_validated)}"
 
     def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
@@ -640,6 +644,29 @@ class WordMatchView:
             ground_truth_text,
         )
 
+    def apply_word_validation_change(
+        self,
+        line_index: int,
+        word_index: int,
+        is_validated: bool,
+    ) -> None:
+        """Apply a targeted validation-only update from state event routing.
+
+        Updates the in-memory model and statistics only.  Callers (renderer
+        click handlers, toolbar bulk handlers) are responsible for triggering
+        the appropriate rerender so that single-word and bulk toggles can
+        each choose the most efficient rendering strategy.
+        """
+        line_match = self._line_match_by_index(line_index)
+        if line_match is None:
+            return
+        for wm in line_match.word_matches:
+            if wm.word_index == word_index:
+                wm.is_validated = is_validated
+                break
+        self.view_model._update_statistics()
+        self._update_summary()
+
     def _set_word_style_button_states(self, **kwargs) -> None:
         """Delegate to gt_editing."""
         self.gt_editing._set_word_style_button_states(**kwargs)
@@ -716,15 +743,6 @@ class WordMatchView:
     def _create_status_cell(self, word_match):
         """Create status cell for a word."""
         self.renderer._create_status_cell(word_match)
-
-    def _create_word_actions_cell(
-        self,
-        line_index: int,
-        split_word_index: int,
-        word_match,
-    ) -> None:
-        """Create per-word action buttons displayed below each word."""
-        self.renderer.create_word_actions_cell(line_index, split_word_index, word_match)
 
     def _line_word_match_by_ocr_index(
         self,
@@ -1090,8 +1108,8 @@ class WordMatchView:
         """Handle filter selection change."""
         logger.debug(f"Filter change event triggered: {event}")
         logger.debug(f"Filter selector value: {self.filter_selector.value}")
-        self.show_only_mismatches = self.filter_selector.value == "Mismatched Lines"
-        logger.debug(f"Show only mismatches set to: {self.show_only_mismatches}")
+        self.filter_mode = self.filter_selector.value
+        logger.debug(f"Filter mode set to: {self.filter_mode}")
         self._update_lines_display()
         logger.debug("Filter change handling complete")
 

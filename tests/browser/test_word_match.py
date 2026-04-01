@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
 from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
+
+# ---------------------------------------------------------------------------
+# Selectors
+# ---------------------------------------------------------------------------
+
+WORD_VALIDATE_BUTTON = '[data-testid="word-validate-button"]'
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _select_first_word(page) -> None:
@@ -21,6 +34,14 @@ def _clear_first_tag_chip(page, *, chip_testid: str, clear_button_testid: str) -
     clear_button = chip.locator(f".{clear_button_testid}").first
     expect(clear_button).to_be_visible()
     clear_button.click()
+
+
+def _setup(page, url: str) -> None:
+    """Navigate, load project, and wait for page content."""
+    page.goto(url, wait_until="networkidle")
+    wait_for_app_ready(page)
+    load_project(page, "browser-test-project")
+    wait_for_page_loaded(page)
 
 
 @pytest.mark.browser
@@ -188,3 +209,129 @@ def test_dialog_tag_chip_clear_rerenders_immediately(
         clear_button_testid="word-edit-tag-clear-button",
     )
     expect(dialog_chips).to_have_count(0)
+
+
+# ---------------------------------------------------------------------------
+# Per-word validate toggle (Commit 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_word_validate_button_present(browser_app_url: str, browser_page) -> None:
+    """Validate icon visible on each word column."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    buttons = page.locator(WORD_VALIDATE_BUTTON)
+    expect(buttons.first).to_be_visible()
+    assert buttons.count() > 0
+
+
+@pytest.mark.browser
+def test_word_validate_toggle(browser_app_url: str, browser_page) -> None:
+    """Click validate button: grey→green; click again: green→grey."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    val_btn = page.locator(WORD_VALIDATE_BUTTON).first
+    expect(val_btn).to_be_visible()
+
+    # Should start as grey (unvalidated)
+    expect(val_btn).to_have_attribute("class", re.compile(r"bg-grey"))
+
+    # Click to validate
+    val_btn.click()
+    page.wait_for_timeout(500)
+
+    # Should now be green
+    val_btn = page.locator(WORD_VALIDATE_BUTTON).first
+    expect(val_btn).to_have_attribute("class", re.compile(r"bg-green"))
+
+    # Click again to unvalidate
+    val_btn.click()
+    page.wait_for_timeout(500)
+
+    # Should revert to grey
+    val_btn = page.locator(WORD_VALIDATE_BUTTON).first
+    expect(val_btn).to_have_attribute("class", re.compile(r"bg-grey"))
+
+
+# ---------------------------------------------------------------------------
+# Per-word tag chip clear (Commit 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_word_tag_clear_in_renderer(browser_app_url: str, browser_page) -> None:
+    """Apply a style via word edit dialog, close, then clear chip in renderer."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Open the word edit dialog for the first word
+    page.locator('[data-testid="edit-word-button"]').first.click()
+    page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
+    dialog = page.locator(".q-dialog").last
+
+    # Apply a style inside the dialog
+    dialog.get_by_role("button", name="Apply Style").click()
+    page.wait_for_timeout(500)
+
+    # Close dialog with Escape (closes without additional save)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(1000)
+
+    # Tag chip should now be visible in the renderer
+    chip = page.locator('[data-testid="word-tag-chip"]').first
+    expect(chip).to_be_visible(timeout=10_000)
+
+    # Hover to reveal clear button, then click it
+    chip.hover()
+    clear_btn = chip.locator('[data-testid="word-tag-clear-button"]').first
+    expect(clear_btn).to_be_visible()
+    clear_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Chip should be gone
+    expect(page.locator('[data-testid="word-tag-chip"]')).to_have_count(0)
+
+
+# ---------------------------------------------------------------------------
+# Line checkbox selection (Commit 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_line_checkbox_present(browser_app_url: str, browser_page) -> None:
+    """Line selection checkbox visible in each line card header."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    line_checkboxes = page.get_by_label("Select line", exact=True)
+    expect(line_checkboxes.first).to_be_visible()
+    assert line_checkboxes.count() > 0
+
+
+@pytest.mark.browser
+def test_line_checkbox_selection(browser_app_url: str, browser_page) -> None:
+    """Check line checkbox toggles selection state; uncheck reverts it."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Check first line checkbox — use click() since Quasar checkboxes
+    # need the inner element clicked, not the outer wrapper
+    line_checkbox = page.get_by_label("Select line", exact=True).first
+    expect(line_checkbox).to_be_visible()
+
+    # Click to check
+    line_checkbox.click()
+    page.wait_for_timeout(500)
+
+    # Verify checked state
+    expect(line_checkbox).to_be_checked()
+
+    # Click again to uncheck
+    line_checkbox.click()
+    page.wait_for_timeout(500)
+
+    # Verify unchecked
+    expect(line_checkbox).not_to_be_checked()

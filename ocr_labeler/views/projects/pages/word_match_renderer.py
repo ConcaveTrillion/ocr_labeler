@@ -415,7 +415,8 @@ class WordMatchRenderer:
                                     line_match.line_index
                                 ),
                             )
-                            .props("size=sm")
+                            .props('size=sm aria-label="Select line"')
+                            .tooltip("Select line")
                             .on_value_change(
                                 lambda event, index=line_match.line_index: (
                                     self._view.selection.on_line_selection_change(
@@ -797,7 +798,7 @@ class WordMatchRenderer:
                     self._handle_toggle_word_validated(li, wi, _event)
                 ),
             ).tooltip("Validated" if validated else "Mark as validated")
-            val_btn.props("size=xs unelevated round")
+            val_btn.props('size=xs unelevated round data-testid="word-validate-button"')
             if validated:
                 val_btn.props("color=green text-color=white")
             else:

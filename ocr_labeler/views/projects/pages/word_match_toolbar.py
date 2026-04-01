@@ -97,6 +97,9 @@ class WordMatchToolbar:
                     icon="auto_fix_high",
                     on_click=self._on_refine_bboxes,
                 ).tooltip("Refine all bounding boxes on this page")
+                self.refine_bboxes_button.props(
+                    'data-testid="page-refine-bboxes-button"'
+                )
                 style_word_icon_button(self.refine_bboxes_button)
             else:
                 ui.element("div")
@@ -105,6 +108,9 @@ class WordMatchToolbar:
                     icon="zoom_out_map",
                     on_click=self._on_expand_refine_bboxes,
                 ).tooltip("Expand then refine all bounding boxes on this page")
+                self.expand_refine_bboxes_button.props(
+                    'data-testid="page-expand-refine-bboxes-button"'
+                )
                 style_word_icon_button(self.expand_refine_bboxes_button)
             else:
                 ui.element("div")
@@ -116,22 +122,30 @@ class WordMatchToolbar:
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_page_gt_to_ocr,
             ).tooltip("Copy all ground truth text to OCR on this page")
+            self.copy_gt_to_ocr_page_button.props(
+                'data-testid="page-copy-gt-to-ocr-button"'
+            )
             self.copy_gt_to_ocr_page_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_page_button)
             self.copy_ocr_to_gt_page_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_page_ocr_to_gt,
             ).tooltip("Copy all OCR text to ground truth on this page")
+            self.copy_ocr_to_gt_page_button.props(
+                'data-testid="page-copy-ocr-to-gt-button"'
+            )
             style_word_icon_button(self.copy_ocr_to_gt_page_button)
             self.validate_page_button = ui.button(
                 icon="check_circle",
                 on_click=self._handle_validate_page,
             ).tooltip("Validate all words on this page")
+            self.validate_page_button.props('data-testid="page-validate-button"')
             style_word_icon_button(self.validate_page_button)
             self.unvalidate_page_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_page,
             ).tooltip("Unvalidate all words on this page")
+            self.unvalidate_page_button.props('data-testid="page-unvalidate-button"')
             style_word_icon_button(self.unvalidate_page_button)
             ui.element("div")  # no Delete for page
 

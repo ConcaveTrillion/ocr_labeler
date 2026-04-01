@@ -89,7 +89,7 @@ Requires: `data-testid` attributes on line-card action buttons in
 
 ---
 
-## Commit 3 — Per-word buttons (validate toggle, tag clear)
+## Commit 3 — Per-word buttons (validate toggle, tag clear) ✅
 
 **File:** `tests/browser/test_word_match.py` (extend existing)
 
@@ -112,7 +112,7 @@ tooltip selectors are unreliable.
 
 ---
 
-## Commit 4 — Toolbar: page-scope actions
+## Commit 4 — Toolbar: page-scope actions ✅
 
 **File:** `tests/browser/test_toolbar_page_actions.py` (new)
 

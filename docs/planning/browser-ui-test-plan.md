@@ -39,7 +39,7 @@ tests.
 
 ---
 
-## Commit 1 — Page Actions: interaction tests for untested buttons
+## Commit 1 — Page Actions: interaction tests for untested buttons ✅
 
 **File:** `tests/browser/test_page_actions.py` (extend existing)
 
@@ -61,7 +61,7 @@ tests.
 
 ---
 
-## Commit 2 — Per-line action buttons (renderer line cards)
+## Commit 2 — Per-line action buttons (renderer line cards) ✅
 
 **File:** `tests/browser/test_word_match_line_actions.py` (new)
 

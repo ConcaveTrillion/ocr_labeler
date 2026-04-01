@@ -245,7 +245,9 @@ class WordMatchRenderer:
                             on_click=lambda _event, index=paragraph_index: (
                                 self._toggle_paragraph_expanded(index)
                             ),
-                        ).props("flat round dense size=sm").classes("shrink-0")
+                        ).props(
+                            'flat round dense size=sm data-testid="paragraph-expander-button"'
+                        ).classes("shrink-0")
 
                         ui.button(
                             self._view._format_paragraph_label(paragraph_index),
@@ -485,6 +487,9 @@ class WordMatchRenderer:
                             ).tooltip(
                                 "Copy ground truth text to OCR text for all words in this line"
                             )
+                            gt_to_ocr_button.props(
+                                'data-testid="line-gt-to-ocr-button"'
+                            )
                             style_action_button(gt_to_ocr_button)
                             gt_to_ocr_button.on_click(
                                 lambda: self._view.actions._handle_copy_gt_to_ocr(
@@ -504,6 +509,9 @@ class WordMatchRenderer:
                                 icon="content_copy",
                             ).tooltip(
                                 "Copy OCR text to ground truth text for all words in this line"
+                            )
+                            ocr_to_gt_button.props(
+                                'data-testid="line-ocr-to-gt-button"'
                             )
                             style_action_button(ocr_to_gt_button)
                             ocr_to_gt_button.on_click(
@@ -525,6 +533,9 @@ class WordMatchRenderer:
                             ).tooltip(
                                 f"{'Unvalidate' if all_validated else 'Validate'} all words in this line ({v_count}/{v_total})"
                             )
+                            validate_line_btn.props(
+                                'data-testid="line-validate-button"'
+                            )
                             style_action_button(validate_line_btn)
                             if all_validated:
                                 validate_line_btn.classes("text-green-600")
@@ -535,6 +546,7 @@ class WordMatchRenderer:
                         delete_button = ui.button(icon="delete").tooltip(
                             "Delete this line"
                         )
+                        delete_button.props('data-testid="line-delete-button"')
                         style_word_icon_button(
                             delete_button,
                             variant=ButtonVariant.DELETE,

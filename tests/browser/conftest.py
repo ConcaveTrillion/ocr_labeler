@@ -119,9 +119,9 @@ def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
             process.kill()
 
 
-@pytest.fixture
-def browser_page():
-    """Provide a Playwright page; fail fast if browsers are unavailable."""
+@pytest.fixture(scope="session")
+def _browser_instance():
+    """Session-scoped Playwright + Chromium browser (shared across all tests)."""
     from playwright.sync_api import sync_playwright
 
     playwright = sync_playwright().start()
@@ -133,34 +133,24 @@ def browser_page():
                 "Playwright Chromium is required but could not be launched. "
                 "Run: make install"
             )
-
-        context = browser.new_context()
-        page = context.new_page()
-        yield page
-        context.close()
+        yield browser
         browser.close()
     finally:
         playwright.stop()
 
 
 @pytest.fixture
-def browser_context():
+def browser_page(_browser_instance):
+    """Provide a fresh Playwright page in an isolated context per test."""
+    context = _browser_instance.new_context()
+    page = context.new_page()
+    yield page
+    context.close()
+
+
+@pytest.fixture
+def browser_context(_browser_instance):
     """Provide a Playwright browser context for multi-tab tests."""
-    from playwright.sync_api import sync_playwright
-
-    playwright = sync_playwright().start()
-    try:
-        try:
-            browser = playwright.chromium.launch(headless=True)
-        except Exception:
-            raise RuntimeError(
-                "Playwright Chromium is required but could not be launched. "
-                "Run: make install"
-            )
-
-        context = browser.new_context()
-        yield context
-        context.close()
-        browser.close()
-    finally:
-        playwright.stop()
+    context = _browser_instance.new_context()
+    yield context
+    context.close()

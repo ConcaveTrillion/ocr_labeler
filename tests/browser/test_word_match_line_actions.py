@@ -74,14 +74,15 @@ def test_paragraph_expander_toggle(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
-    # Line cards should be visible initially (paragraphs expanded by default)
+    # Wait for line cards to render, then count
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
     count_before = page.locator(LINE_DELETE).count()
     assert count_before > 0, "Expected at least one line card to be visible"
 
     # Click expander to collapse — line count should decrease
     expander = page.locator(PARAGRAPH_EXPANDER).first
     expander.click()
-    page.wait_for_timeout(500)
+    expect(page.locator(LINE_DELETE)).not_to_have_count(count_before, timeout=5_000)
 
     # After collapse, there should be fewer line cards
     count_after_collapse = page.locator(LINE_DELETE).count()
@@ -127,6 +128,8 @@ def test_line_copy_gt_to_ocr(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
+    # Wait for line cards to render before checking button presence
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
     gt_to_ocr = page.locator(LINE_GT_TO_OCR).first
     # GT→OCR only appears on non-exact lines, so may not exist. Skip if absent.
     if gt_to_ocr.count() == 0:
@@ -158,6 +161,8 @@ def test_line_copy_ocr_to_gt(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
+    # Wait for line cards to render before checking button presence
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
     ocr_to_gt = page.locator(LINE_OCR_TO_GT).first
     if ocr_to_gt.count() == 0:
         pytest.skip("No OCR→GT button rendered (all lines may be exact matches)")
@@ -224,6 +229,7 @@ def test_line_delete(browser_app_url: str, browser_page) -> None:
     # Switch to All Lines so we can count reliably
     _switch_to_all_lines(page)
 
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
     delete_buttons = page.locator(LINE_DELETE)
     count_before = delete_buttons.count()
 

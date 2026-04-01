@@ -169,6 +169,7 @@ def test_page_validate_all(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
+    page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     val_buttons = page.locator(WORD_VALIDATE_BUTTON)
     assert val_buttons.count() > 0
 
@@ -177,8 +178,11 @@ def test_page_validate_all(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(1000)
 
     # All validate buttons should now be green
+    page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     val_buttons = page.locator(WORD_VALIDATE_BUTTON)
-    for i in range(val_buttons.count()):
+    count = val_buttons.count()
+    assert count > 0
+    for i in range(count):
         expect(val_buttons.nth(i)).to_have_attribute("class", re.compile(r"bg-green"))
 
 
@@ -188,13 +192,17 @@ def test_page_unvalidate_all(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
-    # Validate all first
+    # Wait for word buttons to render, then validate all
+    page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     page.locator(PAGE_VALIDATE).click()
     page.wait_for_timeout(1000)
 
     # Confirm all green
+    page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     val_buttons = page.locator(WORD_VALIDATE_BUTTON)
-    for i in range(val_buttons.count()):
+    count = val_buttons.count()
+    assert count > 0
+    for i in range(count):
         expect(val_buttons.nth(i)).to_have_attribute("class", re.compile(r"bg-green"))
 
     # Click Unvalidate all
@@ -202,6 +210,9 @@ def test_page_unvalidate_all(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(1000)
 
     # All should revert to grey
+    page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     val_buttons = page.locator(WORD_VALIDATE_BUTTON)
-    for i in range(val_buttons.count()):
+    count = val_buttons.count()
+    assert count > 0
+    for i in range(count):
         expect(val_buttons.nth(i)).to_have_attribute("class", re.compile(r"bg-grey"))

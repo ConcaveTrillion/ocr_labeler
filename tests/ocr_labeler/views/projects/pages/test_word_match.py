@@ -954,16 +954,16 @@ def test_merge_selected_words_restores_selection_on_failure(monkeypatch):
 
 def test_merge_selected_words_button_state(monkeypatch):
     view = WordMatchView()
-    view.toolbar.merge_words_button = SimpleNamespace(disabled=None)
+    view.toolbar.merge_words_button = SimpleNamespace(enabled=None)
     view.merge_word_right_callback = lambda _line_index, _word_index: True
 
     view.selection.selected_word_indices = {(0, 0), (0, 1)}
     view._update_action_button_state()
-    assert view.toolbar.merge_words_button.disabled is False
+    assert view.toolbar.merge_words_button.enabled is True
 
     view.selection.selected_word_indices = {(0, 0), (0, 2)}
     view._update_action_button_state()
-    assert view.toolbar.merge_words_button.disabled is True
+    assert view.toolbar.merge_words_button.enabled is False
 
 
 def test_delete_single_word_clears_selection_before_callback(monkeypatch):
@@ -2478,7 +2478,7 @@ def test_apply_component_processor_updates_explicit_word(monkeypatch):
 def test_apply_style_toolbar_buttons_disable_without_selection():
     view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
     view.toolbar.apply_style_select = SimpleNamespace(enabled=True)
-    view.toolbar.apply_style_button = SimpleNamespace(disabled=False)
+    view.toolbar.apply_style_button = SimpleNamespace(enabled=True)
     view.toolbar.apply_scope_select = SimpleNamespace(enabled=True)
     view.toolbar.update_button_state()
 
@@ -2486,7 +2486,7 @@ def test_apply_style_toolbar_buttons_disable_without_selection():
     assert view.toolbar.apply_style_button is not None
     assert view.toolbar.apply_scope_select is not None
     assert view.toolbar.apply_style_select.enabled is False
-    assert view.toolbar.apply_style_button.disabled is True
+    assert view.toolbar.apply_style_button.enabled is False
     assert view.toolbar.apply_scope_select.enabled is False
 
 
@@ -2503,16 +2503,16 @@ def test_apply_scope_select_enabled_with_selection():
 def test_apply_component_toolbar_buttons_disable_without_selection():
     view = WordMatchView(set_word_attributes_callback=lambda *_args: True)
     view.toolbar.apply_component_select = SimpleNamespace(enabled=True)
-    view.toolbar.apply_component_button = SimpleNamespace(disabled=False)
-    view.toolbar.clear_component_button = SimpleNamespace(disabled=False)
+    view.toolbar.apply_component_button = SimpleNamespace(enabled=True)
+    view.toolbar.clear_component_button = SimpleNamespace(enabled=True)
     view.toolbar.update_button_state()
 
     assert view.toolbar.apply_component_select is not None
     assert view.toolbar.apply_component_button is not None
     assert view.toolbar.clear_component_button is not None
     assert view.toolbar.apply_component_select.enabled is False
-    assert view.toolbar.apply_component_button.disabled is True
-    assert view.toolbar.clear_component_button.disabled is True
+    assert view.toolbar.apply_component_button.enabled is False
+    assert view.toolbar.clear_component_button.enabled is False
 
 
 def test_word_gt_input_width_prefers_current_value():
@@ -2865,33 +2865,33 @@ def test_set_validation_for_keys_unvalidates(monkeypatch):
 
 def test_validation_buttons_disabled_without_callback():
     view = WordMatchView()
-    view.toolbar.validate_page_button = SimpleNamespace(disabled=False)
-    view.toolbar.unvalidate_page_button = SimpleNamespace(disabled=False)
-    view.toolbar.validate_lines_button = SimpleNamespace(disabled=False)
-    view.toolbar.unvalidate_lines_button = SimpleNamespace(disabled=False)
-    view.toolbar.validate_words_button = SimpleNamespace(disabled=False)
-    view.toolbar.unvalidate_words_button = SimpleNamespace(disabled=False)
+    view.toolbar.validate_page_button = SimpleNamespace(enabled=True)
+    view.toolbar.unvalidate_page_button = SimpleNamespace(enabled=True)
+    view.toolbar.validate_lines_button = SimpleNamespace(enabled=True)
+    view.toolbar.unvalidate_lines_button = SimpleNamespace(enabled=True)
+    view.toolbar.validate_words_button = SimpleNamespace(enabled=True)
+    view.toolbar.unvalidate_words_button = SimpleNamespace(enabled=True)
     view.view_model.line_matches = [
         _make_line_match(0),
     ]
 
     view.toolbar.update_button_state()
 
-    assert view.toolbar.validate_page_button.disabled is True
-    assert view.toolbar.validate_lines_button.disabled is True
-    assert view.toolbar.validate_words_button.disabled is True
+    assert view.toolbar.validate_page_button.enabled is False
+    assert view.toolbar.validate_lines_button.enabled is False
+    assert view.toolbar.validate_words_button.enabled is False
 
 
 def test_validation_buttons_enabled_with_callback_and_selection():
     view = WordMatchView(
         toggle_word_validated_callback=lambda li, wi: True,
     )
-    view.toolbar.validate_page_button = SimpleNamespace(disabled=True)
-    view.toolbar.unvalidate_page_button = SimpleNamespace(disabled=True)
-    view.toolbar.validate_lines_button = SimpleNamespace(disabled=True)
-    view.toolbar.unvalidate_lines_button = SimpleNamespace(disabled=True)
-    view.toolbar.validate_words_button = SimpleNamespace(disabled=True)
-    view.toolbar.unvalidate_words_button = SimpleNamespace(disabled=True)
+    view.toolbar.validate_page_button = SimpleNamespace(enabled=False)
+    view.toolbar.unvalidate_page_button = SimpleNamespace(enabled=False)
+    view.toolbar.validate_lines_button = SimpleNamespace(enabled=False)
+    view.toolbar.unvalidate_lines_button = SimpleNamespace(enabled=False)
+    view.toolbar.validate_words_button = SimpleNamespace(enabled=False)
+    view.toolbar.unvalidate_words_button = SimpleNamespace(enabled=False)
     view.view_model.line_matches = [
         _make_line_match(0),
     ]
@@ -2900,6 +2900,6 @@ def test_validation_buttons_enabled_with_callback_and_selection():
 
     view.toolbar.update_button_state()
 
-    assert view.toolbar.validate_page_button.disabled is False
-    assert view.toolbar.validate_lines_button.disabled is False
-    assert view.toolbar.validate_words_button.disabled is False
+    assert view.toolbar.validate_page_button.enabled is True
+    assert view.toolbar.validate_lines_button.enabled is True
+    assert view.toolbar.validate_words_button.enabled is True

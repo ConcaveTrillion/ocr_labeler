@@ -157,22 +157,32 @@ class WordMatchToolbar:
                 icon="call_merge",
                 on_click=self._view.actions._handle_merge_selected_paragraphs,
             ).tooltip("Merge selected paragraphs")
+            self.merge_paragraphs_button.props('data-testid="paragraph-merge-button"')
             style_word_icon_button(self.merge_paragraphs_button)
             self.refine_paragraphs_button = ui.button(
                 icon="auto_fix_high",
                 on_click=self._view.actions._handle_refine_selected_paragraphs,
             ).tooltip("Refine selected paragraphs")
+            self.refine_paragraphs_button.props(
+                'data-testid="paragraph-refine-bboxes-button"'
+            )
             style_word_icon_button(self.refine_paragraphs_button)
             self.expand_then_refine_paragraphs_button = ui.button(
                 icon="zoom_out_map",
                 on_click=self._view.actions._handle_expand_then_refine_selected_paragraphs,
             ).tooltip("Expand then refine selected paragraphs")
+            self.expand_then_refine_paragraphs_button.props(
+                'data-testid="paragraph-expand-refine-bboxes-button"'
+            )
             style_word_icon_button(self.expand_then_refine_paragraphs_button)
             self.split_paragraph_after_line_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_paragraph_after_selected_line,
             ).tooltip(
                 "Split the containing paragraph immediately after the selected line"
+            )
+            self.split_paragraph_after_line_button.props(
+                'data-testid="paragraph-split-after-line-button"'
             )
             style_word_icon_button(self.split_paragraph_after_line_button)
             ui.element("div")  # no Split Select for paragraph
@@ -182,27 +192,40 @@ class WordMatchToolbar:
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_paragraphs_gt_to_ocr,
             ).tooltip("Copy ground truth text to OCR for selected paragraphs")
+            self.copy_gt_to_ocr_paragraphs_button.props(
+                'data-testid="paragraph-copy-gt-to-ocr-button"'
+            )
             self.copy_gt_to_ocr_paragraphs_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_paragraphs_button)
             self.copy_ocr_to_gt_paragraphs_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_paragraphs_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected paragraphs")
+            self.copy_ocr_to_gt_paragraphs_button.props(
+                'data-testid="paragraph-copy-ocr-to-gt-button"'
+            )
             style_word_icon_button(self.copy_ocr_to_gt_paragraphs_button)
             self.validate_paragraphs_button = ui.button(
                 icon="check_circle",
                 on_click=self._handle_validate_selected_paragraphs,
             ).tooltip("Validate all words in selected paragraphs")
+            self.validate_paragraphs_button.props(
+                'data-testid="paragraph-validate-button"'
+            )
             style_word_icon_button(self.validate_paragraphs_button)
             self.unvalidate_paragraphs_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_paragraphs,
             ).tooltip("Unvalidate all words in selected paragraphs")
+            self.unvalidate_paragraphs_button.props(
+                'data-testid="paragraph-unvalidate-button"'
+            )
             style_word_icon_button(self.unvalidate_paragraphs_button)
             self.delete_paragraphs_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_paragraphs,
             ).tooltip("Delete selected paragraphs")
+            self.delete_paragraphs_button.props('data-testid="paragraph-delete-button"')
             style_word_icon_button(
                 self.delete_paragraphs_button, variant=ButtonVariant.DELETE
             )
@@ -569,174 +592,184 @@ class WordMatchToolbar:
         self._set_validation_for_keys(keys, validate=False)
 
     def update_button_state(self) -> None:
-        """Enable/disable line and paragraph action buttons based on selection."""
+        """Enable/disable line and paragraph action buttons based on selection.
+
+        Uses ``button.enabled`` (not ``button.disabled``) because NiceGUI's
+        ``DisableableElement`` only reacts to the ``enabled`` property; setting
+        an ad-hoc ``disabled`` attribute has no effect on the rendered Quasar
+        component.
+        """
         selected_lines = self._view._get_effective_selected_lines()
         if self.merge_lines_button is None:
             pass
         else:
-            self.merge_lines_button.disabled = (
-                self._view.merge_lines_callback is None or len(selected_lines) < 2
+            self.merge_lines_button.enabled = (
+                self._view.merge_lines_callback is not None and len(selected_lines) >= 2
             )
 
         if self.delete_lines_button is not None:
-            self.delete_lines_button.disabled = (
-                self._view.delete_lines_callback is None or len(selected_lines) < 1
+            self.delete_lines_button.enabled = (
+                self._view.delete_lines_callback is not None
+                and len(selected_lines) >= 1
             )
 
         if self.refine_lines_button is not None:
-            self.refine_lines_button.disabled = (
-                self._view.refine_lines_callback is None or len(selected_lines) < 1
+            self.refine_lines_button.enabled = (
+                self._view.refine_lines_callback is not None
+                and len(selected_lines) >= 1
             )
 
         if self.expand_then_refine_lines_button is not None:
-            self.expand_then_refine_lines_button.disabled = (
-                self._view.expand_then_refine_lines_callback is None
-                or len(selected_lines) < 1
+            self.expand_then_refine_lines_button.enabled = (
+                self._view.expand_then_refine_lines_callback is not None
+                and len(selected_lines) >= 1
             )
 
         if self.merge_paragraphs_button is not None:
-            self.merge_paragraphs_button.disabled = (
-                self._view.merge_paragraphs_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 2
+            self.merge_paragraphs_button.enabled = (
+                self._view.merge_paragraphs_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 2
             )
 
         if self.delete_paragraphs_button is not None:
-            self.delete_paragraphs_button.disabled = (
-                self._view.delete_paragraphs_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 1
+            self.delete_paragraphs_button.enabled = (
+                self._view.delete_paragraphs_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
         if self.refine_paragraphs_button is not None:
-            self.refine_paragraphs_button.disabled = (
-                self._view.refine_paragraphs_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 1
+            self.refine_paragraphs_button.enabled = (
+                self._view.refine_paragraphs_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
         if self.expand_then_refine_paragraphs_button is not None:
-            self.expand_then_refine_paragraphs_button.disabled = (
-                self._view.expand_then_refine_paragraphs_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 1
+            self.expand_then_refine_paragraphs_button.enabled = (
+                self._view.expand_then_refine_paragraphs_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
         if self.split_paragraph_after_line_button is not None:
-            self.split_paragraph_after_line_button.disabled = (
-                self._view.split_paragraph_after_line_callback is None
-                or len(self._view.selection.selected_line_indices) != 1
+            self.split_paragraph_after_line_button.enabled = (
+                self._view.split_paragraph_after_line_callback is not None
+                and len(self._view.selection.selected_line_indices) == 1
             )
 
         if self.split_paragraph_by_selection_button is not None:
-            self.split_paragraph_by_selection_button.disabled = (
-                self._view.split_paragraph_with_selected_lines_callback is None
-                or len(self._view.selection.selected_line_indices) < 1
+            self.split_paragraph_by_selection_button.enabled = (
+                self._view.split_paragraph_with_selected_lines_callback is not None
+                and len(self._view.selection.selected_line_indices) >= 1
             )
 
         if self.split_line_after_word_button is not None:
-            self.split_line_after_word_button.disabled = (
-                self._view.split_line_after_word_callback is None
-                or len(self._view.selection.selected_word_indices) != 1
+            self.split_line_after_word_button.enabled = (
+                self._view.split_line_after_word_callback is not None
+                and len(self._view.selection.selected_word_indices) == 1
             )
 
         if self.delete_words_button is not None:
-            self.delete_words_button.disabled = (
-                self._view.delete_words_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.delete_words_button.enabled = (
+                self._view.delete_words_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.merge_words_button is not None:
-            self.merge_words_button.disabled = (
-                self._view.merge_word_right_callback is None
-                or not self._view._can_merge_selected_words()
+            self.merge_words_button.enabled = (
+                self._view.merge_word_right_callback is not None
+                and self._view._can_merge_selected_words()
             )
 
         if self.split_line_by_selection_button is not None:
-            self.split_line_by_selection_button.disabled = (
-                self._view.split_lines_into_selected_unselected_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.split_line_by_selection_button.enabled = (
+                self._view.split_lines_into_selected_unselected_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.extract_line_from_selection_button is not None:
-            self.extract_line_from_selection_button.disabled = (
-                self._view.split_line_with_selected_words_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.extract_line_from_selection_button.enabled = (
+                self._view.split_line_with_selected_words_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.group_selected_words_into_paragraph_button is not None:
-            self.group_selected_words_into_paragraph_button.disabled = (
-                self._view.group_selected_words_into_paragraph_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.group_selected_words_into_paragraph_button.enabled = (
+                self._view.group_selected_words_into_paragraph_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.refine_words_button is not None:
-            self.refine_words_button.disabled = (
-                self._view.refine_words_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.refine_words_button.enabled = (
+                self._view.refine_words_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.expand_then_refine_words_button is not None:
-            self.expand_then_refine_words_button.disabled = (
-                self._view.expand_then_refine_words_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.expand_then_refine_words_button.enabled = (
+                self._view.expand_then_refine_words_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.copy_gt_to_ocr_page_button is not None:
-            self.copy_gt_to_ocr_page_button.disabled = (
-                self._view.copy_gt_to_ocr_callback is None
-                or len(self._view._get_all_line_indices()) < 1
+            self.copy_gt_to_ocr_page_button.enabled = (
+                self._view.copy_gt_to_ocr_callback is not None
+                and len(self._view._get_all_line_indices()) >= 1
             )
 
         if self.copy_ocr_to_gt_page_button is not None:
-            self.copy_ocr_to_gt_page_button.disabled = (
-                self._view.copy_ocr_to_gt_callback is None
-                or len(self._view._get_all_line_indices()) < 1
+            self.copy_ocr_to_gt_page_button.enabled = (
+                self._view.copy_ocr_to_gt_callback is not None
+                and len(self._view._get_all_line_indices()) >= 1
             )
 
         if self.copy_gt_to_ocr_paragraphs_button is not None:
-            self.copy_gt_to_ocr_paragraphs_button.disabled = (
-                self._view.copy_gt_to_ocr_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 1
+            self.copy_gt_to_ocr_paragraphs_button.enabled = (
+                self._view.copy_gt_to_ocr_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
         if self.copy_ocr_to_gt_paragraphs_button is not None:
-            self.copy_ocr_to_gt_paragraphs_button.disabled = (
-                self._view.copy_ocr_to_gt_callback is None
-                or len(self._view.selection.selected_paragraph_indices) < 1
+            self.copy_ocr_to_gt_paragraphs_button.enabled = (
+                self._view.copy_ocr_to_gt_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
         if self.copy_gt_to_ocr_lines_button is not None:
-            self.copy_gt_to_ocr_lines_button.disabled = (
-                self._view.copy_gt_to_ocr_callback is None or len(selected_lines) < 1
+            self.copy_gt_to_ocr_lines_button.enabled = (
+                self._view.copy_gt_to_ocr_callback is not None
+                and len(selected_lines) >= 1
             )
 
         if self.copy_ocr_to_gt_lines_button is not None:
-            self.copy_ocr_to_gt_lines_button.disabled = (
-                self._view.copy_ocr_to_gt_callback is None or len(selected_lines) < 1
+            self.copy_ocr_to_gt_lines_button.enabled = (
+                self._view.copy_ocr_to_gt_callback is not None
+                and len(selected_lines) >= 1
             )
 
         if self.copy_gt_to_ocr_words_button is not None:
-            self.copy_gt_to_ocr_words_button.disabled = (
-                self._view.copy_gt_to_ocr_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.copy_gt_to_ocr_words_button.enabled = (
+                self._view.copy_gt_to_ocr_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         if self.copy_ocr_to_gt_words_button is not None:
-            self.copy_ocr_to_gt_words_button.disabled = (
-                self._view.copy_selected_words_ocr_to_gt_callback is None
-                or len(self._view.selection.selected_word_indices) < 1
+            self.copy_ocr_to_gt_words_button.enabled = (
+                self._view.copy_selected_words_ocr_to_gt_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
             )
 
         has_selected_words = len(self._view.selection.selected_word_indices) > 0
         if self.apply_style_select is not None:
             self.apply_style_select.enabled = has_selected_words
         if self.apply_style_button is not None:
-            self.apply_style_button.disabled = not has_selected_words
+            self.apply_style_button.enabled = has_selected_words
         if self.apply_scope_select is not None:
             self.apply_scope_select.enabled = has_selected_words
         if self.apply_component_select is not None:
             self.apply_component_select.enabled = has_selected_words
         if self.apply_component_button is not None:
-            self.apply_component_button.disabled = not has_selected_words
+            self.apply_component_button.enabled = has_selected_words
         if self.clear_component_button is not None:
-            self.clear_component_button.disabled = not has_selected_words
+            self.clear_component_button.enabled = has_selected_words
 
         # Validation buttons
         has_callback = self._view.toggle_word_validated_callback is not None
@@ -748,19 +781,19 @@ class WordMatchToolbar:
 
         for btn in (self.validate_page_button, self.unvalidate_page_button):
             if btn is not None:
-                btn.disabled = not has_callback or not has_any_lines
+                btn.enabled = has_callback and has_any_lines
 
         for btn in (
             self.validate_paragraphs_button,
             self.unvalidate_paragraphs_button,
         ):
             if btn is not None:
-                btn.disabled = not has_callback or not has_selected_paragraphs
+                btn.enabled = has_callback and has_selected_paragraphs
 
         for btn in (self.validate_lines_button, self.unvalidate_lines_button):
             if btn is not None:
-                btn.disabled = not has_callback or not has_selected_lines
+                btn.enabled = has_callback and has_selected_lines
 
         for btn in (self.validate_words_button, self.unvalidate_words_button):
             if btn is not None:
-                btn.disabled = not has_callback or not has_selected_words
+                btn.enabled = has_callback and has_selected_words

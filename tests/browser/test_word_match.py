@@ -22,9 +22,10 @@ WORD_VALIDATE_BUTTON = '[data-testid="word-validate-button"]'
 
 
 def _select_first_word(page) -> None:
-    word_checkbox = page.get_by_label("Select word").first
+    word_checkbox = page.locator('[data-testid="word-checkbox"]').first
     word_checkbox.wait_for(state="visible", timeout=10_000)
-    word_checkbox.check(force=True)
+    word_checkbox.click()
+    page.wait_for_timeout(1000)
 
 
 def _clear_first_tag_chip(page, *, chip_testid: str, clear_button_testid: str) -> None:

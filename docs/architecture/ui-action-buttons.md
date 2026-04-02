@@ -89,15 +89,15 @@ operation is not applicable at that scope.
 
 | # | Icon | Tooltip | Handler | Browser-Tested |
 | --- | --- | --- | --- | --- |
-| 24 | `call_merge` | "Merge selected paragraphs" | `_handle_merge_selected_paragraphs` | No |
-| 25 | `auto_fix_high` | "Refine selected paragraphs" | `_handle_refine_selected_paragraphs` | No |
-| 26 | `zoom_out_map` | "Expand then refine selected paragraphs" | `_handle_expand_then_refine_selected_paragraphs` | No |
-| 27 | `call_split` | "Split the containing paragraph immediately after the selected line" | `_handle_split_paragraph_after_selected_line` | No |
-| 28 | `content_copy` (flipped) | "Copy ground truth text to OCR for selected paragraphs" | `_handle_copy_selected_paragraphs_gt_to_ocr` | No |
-| 29 | `content_copy` | "Copy OCR text to ground truth for selected paragraphs" | `_handle_copy_selected_paragraphs_ocr_to_gt` | No |
-| 30 | `check_circle` | "Validate all words in selected paragraphs" | `_handle_validate_selected_paragraphs` | No |
-| 31 | `unpublished` | "Unvalidate all words in selected paragraphs" | `_handle_unvalidate_selected_paragraphs` | No |
-| 32 | `delete` | "Delete selected paragraphs" | `_handle_delete_selected_paragraphs` | No |
+| 24 | `call_merge` | "Merge selected paragraphs" | `_handle_merge_selected_paragraphs` | Yes |
+| 25 | `auto_fix_high` | "Refine selected paragraphs" | `_handle_refine_selected_paragraphs` | Yes |
+| 26 | `zoom_out_map` | "Expand then refine selected paragraphs" | `_handle_expand_then_refine_selected_paragraphs` | Yes |
+| 27 | `call_split` | "Split the containing paragraph immediately after the selected line" | `_handle_split_paragraph_after_selected_line` | Yes |
+| 28 | `content_copy` (flipped) | "Copy ground truth text to OCR for selected paragraphs" | `_handle_copy_selected_paragraphs_gt_to_ocr` | Yes |
+| 29 | `content_copy` | "Copy OCR text to ground truth for selected paragraphs" | `_handle_copy_selected_paragraphs_ocr_to_gt` | Yes |
+| 30 | `check_circle` | "Validate all words in selected paragraphs" | `_handle_validate_selected_paragraphs` | Yes |
+| 31 | `unpublished` | "Unvalidate all words in selected paragraphs" | `_handle_unvalidate_selected_paragraphs` | Yes |
+| 32 | `delete` | "Delete selected paragraphs" | `_handle_delete_selected_paragraphs` | Yes |
 
 ### 4c. Line Row
 

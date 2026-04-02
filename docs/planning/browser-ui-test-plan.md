@@ -137,7 +137,7 @@ tooltip selectors are unreliable.
 
 ---
 
-## Commit 5 — Toolbar: paragraph-scope actions
+## Commit 5 — Toolbar: paragraph-scope actions ✅
 
 **File:** `tests/browser/test_toolbar_paragraph_actions.py` (new)
 

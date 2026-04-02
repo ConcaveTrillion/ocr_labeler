@@ -221,7 +221,10 @@ class WordMatchRenderer:
                                     value=paragraph_index
                                     in self._view.selection.selected_paragraph_indices,
                                 )
-                                .props("size=sm dense")
+                                .props(
+                                    'size=sm dense aria-label="Select paragraph"'
+                                    ' data-testid="paragraph-checkbox"'
+                                )
                                 .classes("shrink-0 self-center")
                                 .style("margin-right: 0.125rem;")
                                 .on_value_change(
@@ -765,7 +768,9 @@ class WordMatchRenderer:
                     text="",
                     value=selection_key in self._view.selection.selected_word_indices,
                 )
-                .props("size=xs dense")
+                .props(
+                    'size=xs dense aria-label="Select word" data-testid="word-checkbox"'
+                )
                 .tooltip("Select word")
                 .on_value_change(
                     lambda event, key=selection_key: (

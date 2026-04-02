@@ -236,58 +236,85 @@ class WordMatchToolbar:
                 icon="call_merge",
                 on_click=self._view.actions._handle_merge_selected_lines,
             ).tooltip("Merge selected lines into the first selected line")
+            self.merge_lines_button.props('data-testid="line-merge-button"')
             style_word_icon_button(self.merge_lines_button)
             self.refine_lines_button = ui.button(
                 icon="auto_fix_high",
                 on_click=self._view.actions._handle_refine_selected_lines,
             ).tooltip("Refine selected lines")
+            self.refine_lines_button.props('data-testid="line-refine-bboxes-button"')
             style_word_icon_button(self.refine_lines_button)
             self.expand_then_refine_lines_button = ui.button(
                 icon="zoom_out_map",
                 on_click=self._view.actions._handle_expand_then_refine_selected_lines,
             ).tooltip("Expand then refine selected lines")
+            self.expand_then_refine_lines_button.props(
+                'data-testid="line-expand-refine-bboxes-button"'
+            )
             style_word_icon_button(self.expand_then_refine_lines_button)
             self.split_line_after_word_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_line_after_selected_word,
             ).tooltip("Split the selected line immediately after the selected word")
+            self.split_line_after_word_button.props(
+                'data-testid="line-split-after-word-button"'
+            )
             style_word_icon_button(self.split_line_after_word_button)
             self.split_line_by_selection_button = ui.button(
                 icon="vertical_split",
                 on_click=self._view.actions._handle_split_lines_into_selected_unselected_words,
             ).tooltip("Split line(s) into selected and unselected words")
+            self.split_line_by_selection_button.props(
+                'data-testid="line-split-by-selection-button"'
+            )
             style_word_icon_button(self.split_line_by_selection_button)
             ui.element("div")  # moved to word scope
             self.split_paragraph_by_selection_button = ui.button(
                 icon="subject",
                 on_click=self._view.actions._handle_split_paragraph_by_selected_lines,
             ).tooltip("Select lines to form a new paragraph")
+            self.split_paragraph_by_selection_button.props(
+                'data-testid="line-form-paragraph-button"'
+            )
             style_word_icon_button(self.split_paragraph_by_selection_button)
             self.copy_gt_to_ocr_lines_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_lines_gt_to_ocr,
             ).tooltip("Copy ground truth text to OCR for selected lines")
+            self.copy_gt_to_ocr_lines_button.props(
+                'data-testid="line-copy-gt-to-ocr-toolbar-button"'
+            )
             self.copy_gt_to_ocr_lines_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_lines_button)
             self.copy_ocr_to_gt_lines_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_lines_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected lines")
+            self.copy_ocr_to_gt_lines_button.props(
+                'data-testid="line-copy-ocr-to-gt-toolbar-button"'
+            )
             style_word_icon_button(self.copy_ocr_to_gt_lines_button)
             self.validate_lines_button = ui.button(
                 icon="check_circle",
                 on_click=self._handle_validate_selected_lines,
             ).tooltip("Validate all words in selected lines")
+            self.validate_lines_button.props(
+                'data-testid="line-validate-toolbar-button"'
+            )
             style_word_icon_button(self.validate_lines_button)
             self.unvalidate_lines_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_lines,
             ).tooltip("Unvalidate all words in selected lines")
+            self.unvalidate_lines_button.props(
+                'data-testid="line-unvalidate-toolbar-button"'
+            )
             style_word_icon_button(self.unvalidate_lines_button)
             self.delete_lines_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_lines,
             ).tooltip("Delete selected lines")
+            self.delete_lines_button.props('data-testid="line-delete-toolbar-button"')
             style_word_icon_button(
                 self.delete_lines_button, variant=ButtonVariant.DELETE
             )
@@ -298,16 +325,21 @@ class WordMatchToolbar:
                 icon="call_merge",
                 on_click=self._view.actions._handle_merge_selected_words,
             ).tooltip("Merge selected words on the same line")
+            self.merge_words_button.props('data-testid="word-merge-button"')
             style_word_icon_button(self.merge_words_button)
             self.refine_words_button = ui.button(
                 icon="auto_fix_high",
                 on_click=self._view.actions._handle_refine_selected_words,
             ).tooltip("Refine selected words")
+            self.refine_words_button.props('data-testid="word-refine-bboxes-button"')
             style_word_icon_button(self.refine_words_button)
             self.expand_then_refine_words_button = ui.button(
                 icon="zoom_out_map",
                 on_click=self._view.actions._handle_expand_then_refine_selected_words,
             ).tooltip("Expand then refine selected words")
+            self.expand_then_refine_words_button.props(
+                'data-testid="word-expand-refine-bboxes-button"'
+            )
             style_word_icon_button(self.expand_then_refine_words_button)
             ui.element("div")  # no Split After for word
             ui.element("div")  # no Split Select for word
@@ -315,6 +347,9 @@ class WordMatchToolbar:
                 icon="short_text",
                 on_click=self._view.actions._handle_split_line_by_selected_words,
             ).tooltip("Form one new line from selected words")
+            self.extract_line_from_selection_button.props(
+                'data-testid="word-form-line-button"'
+            )
             style_word_icon_button(self.extract_line_from_selection_button)
             self.group_selected_words_into_paragraph_button = ui.button(
                 icon="format_paragraph",
@@ -322,32 +357,48 @@ class WordMatchToolbar:
             ).tooltip(
                 "Select words to form a new paragraph (one new line per source line)"
             )
+            self.group_selected_words_into_paragraph_button.props(
+                'data-testid="word-form-paragraph-button"'
+            )
             style_word_icon_button(self.group_selected_words_into_paragraph_button)
             self.copy_gt_to_ocr_words_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_words_gt_to_ocr,
             ).tooltip("Copy ground truth text to OCR for selected words")
+            self.copy_gt_to_ocr_words_button.props(
+                'data-testid="word-copy-gt-to-ocr-button"'
+            )
             self.copy_gt_to_ocr_words_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_words_button)
             self.copy_ocr_to_gt_words_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_words_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected words")
+            self.copy_ocr_to_gt_words_button.props(
+                'data-testid="word-copy-ocr-to-gt-button"'
+            )
             style_word_icon_button(self.copy_ocr_to_gt_words_button)
             self.validate_words_button = ui.button(
                 icon="check_circle",
                 on_click=self._handle_validate_selected_words,
             ).tooltip("Validate selected words")
+            self.validate_words_button.props(
+                'data-testid="word-validate-toolbar-button"'
+            )
             style_word_icon_button(self.validate_words_button)
             self.unvalidate_words_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_words,
             ).tooltip("Unvalidate selected words")
+            self.unvalidate_words_button.props(
+                'data-testid="word-unvalidate-toolbar-button"'
+            )
             style_word_icon_button(self.unvalidate_words_button)
             self.delete_words_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_words,
             ).tooltip("Delete selected words")
+            self.delete_words_button.props('data-testid="word-delete-button"')
             style_word_icon_button(
                 self.delete_words_button, variant=ButtonVariant.DELETE
             )

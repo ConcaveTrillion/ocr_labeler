@@ -168,7 +168,9 @@ or word checkboxes within it).
 
 ---
 
-## Commit 6 — Toolbar: line-scope actions
+## Commit 6 — Toolbar: line-scope and word-scope actions ✅
+
+### Line-scope
 
 **File:** `tests/browser/test_toolbar_line_actions.py` (new)
 
@@ -197,11 +199,7 @@ Prerequisite: select lines via line checkboxes.
 - `test_line_scope_buttons_have_tooltips` — each button has a descriptive tooltip/aria-label.
 - `test_line_merge_disabled_with_single_selection` — merge disabled when only 1 line selected (need 2+).
 
-**Estimated size:** ~190 lines of test code, ~25 lines of source changes.
-
----
-
-## Commit 7 — Toolbar: word-scope actions
+### Word-scope
 
 **File:** `tests/browser/test_toolbar_word_actions.py` (new)
 
@@ -230,11 +228,11 @@ Prerequisite: select words via word checkboxes.
 - `test_word_merge_disabled_with_single_selection` — merge disabled when only 1 word selected (need 2+).
 - `test_word_delete_disabled_without_selection` — delete disabled when nothing selected.
 
-**Estimated size:** ~200 lines of test code, ~25 lines of source changes.
+**Estimated size:** ~390 lines of test code, ~50 lines of source changes.
 
 ---
 
-## Commit 8 — Toolbar: Clear Component + Scope dropdown
+## Commit 7 — Toolbar: Clear Component + Scope dropdown
 
 **File:** `tests/browser/test_word_match.py` (extend existing)
 
@@ -252,7 +250,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 9 — Word Edit Dialog: header and style controls
+## Commit 8 — Word Edit Dialog: header and style controls
 
 **File:** `tests/browser/test_word_edit_dialog.py` (new)
 
@@ -274,7 +272,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 10 — Word Edit Dialog: merge / split / delete
+## Commit 9 — Word Edit Dialog: merge / split / delete
 
 **File:** `tests/browser/test_word_edit_dialog.py` (extend)
 
@@ -300,7 +298,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 11 — Word Edit Dialog: bbox cropping
+## Commit 10 — Word Edit Dialog: bbox cropping
 
 **File:** `tests/browser/test_word_edit_dialog.py` (extend)
 
@@ -320,7 +318,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 12 — Word Edit Dialog: bbox refine + nudge + apply/reset
+## Commit 11 — Word Edit Dialog: bbox refine + nudge + apply/reset
 
 **File:** `tests/browser/test_word_edit_dialog.py` (extend)
 
@@ -347,7 +345,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 13 — Source folder dialog
+## Commit 12 — Source folder dialog
 
 **File:** `tests/browser/test_source_folder_dialog.py` (new)
 
@@ -372,7 +370,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 14 — Keyboard shortcuts + GT editing
+## Commit 13 — Keyboard shortcuts + GT editing
 
 **File:** `tests/browser/test_keyboard_shortcuts.py` (new)
 
@@ -391,7 +389,7 @@ Prerequisite: select words via word checkboxes.
 
 ---
 
-## Commit 15 — Remaining interactive controls
+## Commit 14 — Remaining interactive controls
 
 **File:** `tests/browser/test_image_tabs.py` (extend existing)
 
@@ -420,16 +418,15 @@ Prerequisite: select words via word checkboxes.
 | 3 | Word buttons | 3 | 3 | 6 | 31% |
 | 4 | Toolbar — page scope | 6 | 2 | 8 | 36% |
 | 5 | Toolbar — paragraph scope | 9 | 3 | 12 | 45% |
-| 6 | Toolbar — line scope | 11 | 4 | 15 | 55% |
-| 7 | Toolbar — word scope | 10 | 5 | 15 | 64% |
-| 8 | Toolbar — clear/scope | 2 | 2 | 4 | 66% |
-| 9 | Dialog — header/style | 4 | 3 | 7 | 70% |
-| 10 | Dialog — merge/split/delete | 5 | 4 | 9 | 74% |
-| 11 | Dialog — bbox crop | 4 | 2 | 6 | 78% |
-| 12 | Dialog — refine/nudge/apply | 6 | 4 | 10 | 84% |
-| 13 | Source folder dialog | 8 | 3 | 11 | 91% |
-| 14 | Keyboard shortcuts | 3 | 2 | 5 | 94% |
-| 15 | Image tab controls | 3 | 3 | 6 | 97% |
+| 6 | Toolbar — line + word scope | 21 | 9 | 30 | 64% |
+| 7 | Toolbar — clear/scope | 2 | 2 | 4 | 66% |
+| 8 | Dialog — header/style | 4 | 3 | 7 | 70% |
+| 9 | Dialog — merge/split/delete | 5 | 4 | 9 | 74% |
+| 10 | Dialog — bbox crop | 4 | 2 | 6 | 78% |
+| 11 | Dialog — refine/nudge/apply | 6 | 4 | 10 | 84% |
+| 12 | Source folder dialog | 8 | 3 | 11 | 91% |
+| 13 | Keyboard shortcuts | 3 | 2 | 5 | 94% |
+| 14 | Image tab controls | 3 | 3 | 6 | 97% |
 | **Total** | | **83** | **47** | **130 new tests** | **97%** |
 
 Remaining 3% is display-only elements (page name, stats label, loading

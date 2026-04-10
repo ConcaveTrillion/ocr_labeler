@@ -444,6 +444,7 @@ class WordMatchToolbar:
                     else None
                 )
             )
+            self.apply_scope_select.props('data-testid="scope-select"')
 
             self.apply_style_button = ui.button(
                 "Apply Style",

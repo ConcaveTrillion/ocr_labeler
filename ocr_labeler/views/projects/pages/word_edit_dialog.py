@@ -390,10 +390,10 @@ def open_word_edit_dialog(
                     dialog.close()
 
                 ui.button(icon="check", on_click=_apply_and_close).props(
-                    "flat round dense color=green-7"
+                    'flat round dense color=green-7 data-testid="dialog-apply-close-button"'
                 ).tooltip("Apply and close")
                 ui.button(icon="close", on_click=dialog.close).props(
-                    "flat round dense color=grey-7"
+                    'flat round dense color=grey-7 data-testid="dialog-close-button"'
                 ).tooltip("Close without saving")
 
         with ui.column().classes("full-width").style("gap: 8px;"):
@@ -770,6 +770,7 @@ def open_word_edit_dialog(
                     "min-width: 80px; padding-left: 6px; padding-right: 6px; "
                     "font-size: 0.72rem;"
                 )
+                apply_style_button.props('data-testid="dialog-apply-style-button"')
 
                 component_select = ui.select(
                     options=component_options,
@@ -793,6 +794,9 @@ def open_word_edit_dialog(
                     "min-width: 98px; padding-left: 6px; padding-right: 6px; "
                     "font-size: 0.72rem;"
                 )
+                apply_component_button.props(
+                    'data-testid="dialog-apply-component-button"'
+                )
                 clear_component_button = ui.button(
                     "Clear Component",
                     on_click=lambda: _apply_selected_component_from_dialog(
@@ -803,6 +807,9 @@ def open_word_edit_dialog(
                 clear_component_button.style(
                     "min-width: 102px; padding-left: 6px; padding-right: 6px; "
                     "font-size: 0.72rem;"
+                )
+                clear_component_button.props(
+                    'data-testid="dialog-clear-component-button"'
                 )
 
             _render_tag_chips()

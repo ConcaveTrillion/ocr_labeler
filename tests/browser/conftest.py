@@ -134,7 +134,13 @@ def _browser_instance():
                 "Run: make install"
             )
         yield browser
-        browser.close()
+        try:
+            browser.close()
+        except RuntimeError:
+            # Playwright sync API may fail if the event loop was already
+            # torn down by pytest-asyncio at session end.  The process is
+            # exiting anyway, so swallowing the error is safe.
+            pass
     finally:
         playwright.stop()
 

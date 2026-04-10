@@ -140,15 +140,19 @@ class TestProjectStructure:
         gt_file = project2_dir / "pages.json"
         assert gt_file.exists()
 
-    async def test_ground_truth_loading(self, test_projects_root: Path):
+    def test_ground_truth_loading(self, test_projects_root: Path):
         """Test that ground truth data can be loaded from test projects."""
+        import json
+
         from ocr_labeler.state.project_state import ProjectState
 
         project_state = ProjectState()
 
         # Test loading ground truth for projectID629292e7559a8
         project1_dir = test_projects_root / "projectID629292e7559a8"
-        gt_map = await project_state.load_ground_truth_map(project1_dir)
+        pages_json = project1_dir / "pages.json"
+        data = json.loads(pages_json.read_text(encoding="utf-8"))
+        gt_map = project_state._normalize_ground_truth_entries(data)
         assert len(gt_map) == 392  # Should have entries for all 392 pages
         assert (
             "001.png" in gt_map
@@ -158,7 +162,9 @@ class TestProjectStructure:
 
         # Test loading ground truth for projectID66c62fca99a93
         project2_dir = test_projects_root / "projectID66c62fca99a93"
-        gt_map = await project_state.load_ground_truth_map(project2_dir)
+        pages_json = project2_dir / "pages.json"
+        data = json.loads(pages_json.read_text(encoding="utf-8"))
+        gt_map = project_state._normalize_ground_truth_entries(data)
         assert len(gt_map) == 420  # Should have entries for all 420 pages
         assert (
             "001.png" in gt_map

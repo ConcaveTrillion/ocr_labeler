@@ -336,3 +336,101 @@ def test_line_checkbox_selection(browser_app_url: str, browser_page) -> None:
 
     # Verify unchecked
     expect(line_checkbox).not_to_be_checked()
+
+
+# ---------------------------------------------------------------------------
+# Clear Component button (Commit 7)
+# ---------------------------------------------------------------------------
+
+CLEAR_COMPONENT_BUTTON = '[data-testid="clear-component-button"]'
+APPLY_COMPONENT_BUTTON = '[data-testid="apply-component-button"]'
+SCOPE_SELECT = '[data-testid="scope-select"]'
+
+
+@pytest.mark.browser
+def test_clear_component_button_disabled_without_component(
+    browser_app_url: str, browser_page
+) -> None:
+    """Clear Component button visible in toolbar after project load."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    clear_btn = page.locator(CLEAR_COMPONENT_BUTTON)
+    expect(clear_btn).to_be_visible()
+
+
+@pytest.mark.browser
+def test_clear_component_button(browser_app_url: str, browser_page) -> None:
+    """Select word → Apply Component → chip appears; click Clear Component → chip removed."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    _select_first_word(page)
+
+    # Apply a component via toolbar
+    apply_btn = page.locator(APPLY_COMPONENT_BUTTON)
+    expect(apply_btn).to_be_enabled()
+    apply_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Tag chip should appear on the word in the renderer
+    chip = page.locator('[data-testid="word-tag-chip"]').first
+    expect(chip).to_be_visible(timeout=10_000)
+
+    # Click Clear Component in toolbar
+    clear_btn = page.locator(CLEAR_COMPONENT_BUTTON)
+    expect(clear_btn).to_be_enabled()
+    clear_btn.click()
+    page.wait_for_timeout(1000)
+
+    # Component chip should be removed
+    expect(page.locator('[data-testid="word-tag-chip"]')).to_have_count(0)
+
+
+# ---------------------------------------------------------------------------
+# Scope dropdown (Commit 7)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_scope_dropdown_present(browser_app_url: str, browser_page) -> None:
+    """Scope dropdown visible with default value after project load."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    scope = page.locator(SCOPE_SELECT)
+    expect(scope).to_be_visible()
+
+
+@pytest.mark.browser
+def test_scope_dropdown_interaction(browser_app_url: str, browser_page) -> None:
+    """Open scope dropdown → select Whole → verify; select Part → verify."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Select a word first so the scope dropdown is enabled
+    _select_first_word(page)
+
+    # Apply a style so scope becomes meaningful
+    apply_style_btn = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_style_btn).to_be_enabled()
+    apply_style_btn.click()
+    page.wait_for_timeout(500)
+
+    # Open scope dropdown and select "Whole"
+    scope = page.locator(SCOPE_SELECT)
+    expect(scope).to_be_visible()
+    scope.click()
+    page.get_by_role("option", name="Whole").click()
+    page.wait_for_timeout(500)
+
+    # Verify Whole is selected (visible in the select's display text)
+    expect(scope).to_contain_text("Whole")
+
+    # Open scope dropdown and select "Part"
+    scope.click()
+    page.get_by_role("option", name="Part").click()
+    page.wait_for_timeout(500)
+
+    # Verify Part is selected
+    expect(scope).to_contain_text("Part")

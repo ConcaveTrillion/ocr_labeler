@@ -1086,6 +1086,33 @@ class WordMatchRenderer:
     # Validation toggle
     # ------------------------------------------------------------------
 
+    def _should_hide_line(self, line_match) -> bool:
+        """Return True if the current filter should exclude this line."""
+        mode = self._view.filter_mode
+        if mode == "Unvalidated Lines":
+            return line_match.is_fully_validated
+        if mode == "Mismatched Lines":
+            return all(
+                wm.match_status == MatchStatus.EXACT for wm in line_match.word_matches
+            )
+        return False
+
+    def _hide_line_card(self, line_index: int) -> None:
+        """Remove a single line card from the display."""
+        line_slot = self._line_card_refs.pop(line_index, None)
+        if line_slot is not None:
+            line_slot.delete()
+        # Invalidate cached signature so the next full rebuild is not skipped.
+        self._last_display_signature = None
+
+    def _rerender_or_hide_line(self, line_index: int) -> None:
+        """Rerender a line card, or hide it if the active filter excludes it."""
+        line_match = self._view._line_match_by_index(line_index)
+        if line_match is not None and self._should_hide_line(line_match):
+            self._hide_line_card(line_index)
+        else:
+            self.rerender_line_card(line_index)
+
     def _handle_toggle_word_validated(
         self,
         line_index: int,
@@ -1100,7 +1127,7 @@ class WordMatchRenderer:
         # Re-render line card to update both the word column and the header stats.
         # apply_word_validation_change (called via the event pipeline) updates the
         # in-memory model only; rendering is our responsibility.
-        self.rerender_line_card(line_index)
+        self._rerender_or_hide_line(line_index)
 
     def _handle_validate_line(self, line_match) -> None:
         """Validate or unvalidate all words in a line."""
@@ -1120,8 +1147,7 @@ class WordMatchRenderer:
                 callback(line_match.line_index, wi)
             elif not all_validated and not was_validated:
                 callback(line_match.line_index, wi)
-        # Re-render line card once after all toggles to update header stats
-        self.rerender_line_card(line_match.line_index)
+        self._rerender_or_hide_line(line_match.line_index)
 
     # ------------------------------------------------------------------
     # Local in-memory state updates

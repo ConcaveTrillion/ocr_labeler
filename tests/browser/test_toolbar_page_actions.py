@@ -36,6 +36,12 @@ def _setup(page: Page, url: str) -> None:
     wait_for_page_loaded(page)
 
 
+def _switch_to_all_lines(page: Page) -> None:
+    """Switch the filter toggle to 'All Lines' so all line cards render."""
+    page.get_by_text("All Lines").first.click()
+    page.wait_for_timeout(500)
+
+
 def _wait_for_notification(page: Page, timeout: int = 15_000) -> None:
     """Wait for a Quasar notification to appear."""
     page.locator(".q-notification").first.wait_for(state="visible", timeout=timeout)
@@ -168,6 +174,7 @@ def test_page_validate_all(browser_app_url: str, browser_page) -> None:
     """Click Validate all: all word validate buttons turn green."""
     page = browser_page
     _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
 
     page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)
     val_buttons = page.locator(WORD_VALIDATE_BUTTON)
@@ -191,6 +198,7 @@ def test_page_unvalidate_all(browser_app_url: str, browser_page) -> None:
     """Validate all first, then Unvalidate all: all buttons revert to grey."""
     page = browser_page
     _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
 
     # Wait for word buttons to render, then validate all
     page.locator(WORD_VALIDATE_BUTTON).first.wait_for(state="visible", timeout=15_000)

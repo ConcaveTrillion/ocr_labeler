@@ -192,6 +192,7 @@ def test_line_validate_toggle(browser_app_url: str, browser_page) -> None:
     """Click Validate on a line: per-word validate buttons turn green; Unvalidate reverts."""
     page = browser_page
     _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
 
     validate_btn = page.locator(LINE_VALIDATE).first
     expect(validate_btn).to_be_visible()
@@ -239,3 +240,34 @@ def test_line_delete(browser_app_url: str, browser_page) -> None:
 
     # Count should decrease by 1
     expect(page.locator(LINE_DELETE)).to_have_count(count_before - 1)
+
+
+# ---------------------------------------------------------------------------
+# Validate removes line from unvalidated filter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_validated_line_removed_from_unvalidated_filter(
+    browser_app_url: str, browser_page
+) -> None:
+    """After validating a line in 'Unvalidated Lines' view it should disappear."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Default filter is "Unvalidated Lines"
+    page.get_by_text("Unvalidated Lines").first.wait_for(
+        state="visible", timeout=10_000
+    )
+
+    # Count line cards before validation
+    page.locator(LINE_VALIDATE).first.wait_for(state="visible", timeout=15_000)
+    count_before = page.locator(LINE_VALIDATE).count()
+    assert count_before > 0, "Expected at least one unvalidated line"
+
+    # Validate the first line
+    page.locator(LINE_VALIDATE).first.click()
+    page.wait_for_timeout(1000)
+
+    # The validated line should have been removed from the view
+    expect(page.locator(LINE_VALIDATE)).to_have_count(count_before - 1)

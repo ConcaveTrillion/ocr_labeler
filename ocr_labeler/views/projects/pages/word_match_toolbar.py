@@ -601,9 +601,18 @@ class WordMatchToolbar:
             elif not validate and was_validated:
                 callback(line_idx, word_idx)
                 toggled_lines.add(line_idx)
-        # Rerender affected line cards once each
-        for line_idx in toggled_lines:
-            self._view.renderer.rerender_line_card(line_idx)
+        # When a filter is active, lines may need to appear or disappear.
+        # If any toggled line has no card ref it was hidden and needs to appear,
+        # so fall back to a full rebuild.  Otherwise hide/rerender per-line.
+        needs_rebuild = any(
+            line_idx not in self._view.renderer._line_card_refs
+            for line_idx in toggled_lines
+        )
+        if needs_rebuild:
+            self._view.renderer.update_lines_display()
+        else:
+            for line_idx in toggled_lines:
+                self._view.renderer._rerender_or_hide_line(line_idx)
 
     def _handle_validate_page(self) -> None:
         all_lines = self._view._get_all_line_indices()

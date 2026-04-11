@@ -28,6 +28,30 @@ page_timing_logger = logging.getLogger("ocr_labeler.page_timing")
 
 
 @dataclass
+class SaveProjectResult:
+    """Result of a bulk save-all-pages operation."""
+
+    saved_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    total_count: int = 0
+
+    @property
+    def summary(self) -> str:
+        """Human-readable summary for notification display."""
+        if self.total_count == 0:
+            return "No pages to save"
+        parts = []
+        if self.saved_count:
+            parts.append(f"{self.saved_count} saved")
+        if self.skipped_count:
+            parts.append(f"{self.skipped_count} skipped")
+        if self.failed_count:
+            parts.append(f"{self.failed_count} failed")
+        return f"Save Project: {', '.join(parts)} (of {self.total_count} pages)"
+
+
+@dataclass
 class ProjectState:
     """Project-specific state management.
 
@@ -1039,6 +1063,67 @@ class ProjectState:
                     self.set_page_source(self.current_page_index, "filesystem")
                     page_state.notify()
         logger.debug("save_current_page: completed, result=%s", result)
+        return result
+
+    def save_all_pages(
+        self,
+        save_directory: str | Path | None = None,
+        project_id: Optional[str] = None,
+    ) -> SaveProjectResult:
+        """Save all loaded pages that have an active PageState.
+
+        Iterates over pages that have been accessed during this session and
+        persists each one.  Pages that have never been navigated to (no
+        ``PageState`` exists) are skipped.
+
+        Args:
+            save_directory: Directory to save files.  When omitted, uses the
+                default user-local labeled-projects directory.
+            project_id: Project identifier.  If ``None``, derives from
+                project root directory name.
+
+        Returns:
+            :class:`SaveProjectResult` with per-page outcome counts.
+        """
+        resolved_save_directory = self._resolve_workspace_save_directory(save_directory)
+        indices = sorted(self.page_states.keys())
+        result = SaveProjectResult(total_count=len(indices))
+
+        logger.info(
+            "save_all_pages: saving %d loaded page(s) to %s",
+            len(indices),
+            resolved_save_directory,
+        )
+
+        for page_index in indices:
+            page_state = self.page_states[page_index]
+            page_model = page_state.get_page_model(page_index)
+            if page_model is None:
+                # Page was accessed but never loaded (e.g. load failed)
+                logger.debug(
+                    "save_all_pages: skipping index %d (no page model)", page_index
+                )
+                result.skipped_count += 1
+                continue
+
+            try:
+                success = page_state.persist_page_to_file(
+                    page_index=page_index,
+                    save_directory=resolved_save_directory,
+                    project_id=project_id,
+                )
+                if success:
+                    result.saved_count += 1
+                else:
+                    logger.warning(
+                        "save_all_pages: save returned False for index %d", page_index
+                    )
+                    result.failed_count += 1
+            except Exception:
+                logger.exception("save_all_pages: error saving index %d", page_index)
+                result.failed_count += 1
+
+        logger.info("save_all_pages: %s", result.summary)
         return result
 
     def load_current_page(

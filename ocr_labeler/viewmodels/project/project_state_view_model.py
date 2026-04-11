@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from nicegui import binding
 
 from ...state import ProjectState
+from ...state.project_state import SaveProjectResult
 from ..shared.base_viewmodel import BaseViewModel
 
 if TYPE_CHECKING:
@@ -326,6 +327,21 @@ class ProjectStateViewModel(BaseViewModel):
         except Exception as e:
             logger.exception(f"Error saving current page: {e}")
             return False
+
+    def command_save_project(self) -> SaveProjectResult:
+        """Command to save all loaded pages in the project.
+
+        Returns:
+            :class:`SaveProjectResult` with per-page outcome counts.
+        """
+        try:
+            if not self._project_state:
+                logger.error("No project state available for save project")
+                return SaveProjectResult()
+            return self._project_state.save_all_pages()
+        except Exception as e:
+            logger.exception(f"Error saving project: {e}")
+            return SaveProjectResult()
 
     def command_load_page(self) -> bool:
         """Command to load the current page from saved files.

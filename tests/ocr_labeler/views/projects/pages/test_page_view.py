@@ -43,6 +43,10 @@ class TestPageView:
         assert page_view.project_view_model is project_view_model
         assert page_view.page_state_view_model is not None
         assert page_view.page_action_callbacks.save_page == page_view._save_page_async
+        assert (
+            page_view.page_action_callbacks.save_project
+            == page_view._save_project_async
+        )
         assert page_view.page_action_callbacks.load_page == page_view._load_page_async
         assert (
             page_view.page_action_callbacks.refine_bboxes

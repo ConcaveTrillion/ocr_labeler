@@ -20,6 +20,7 @@ class PageActionCallbacks:
     """Structured async callbacks for page-level action workflows."""
 
     save_page: Optional[PageActionCallback] = None
+    save_project: Optional[PageActionCallback] = None
     load_page: Optional[PageActionCallback] = None
     refine_bboxes: Optional[PageActionCallback] = None
     expand_refine_bboxes: Optional[PageActionCallback] = None

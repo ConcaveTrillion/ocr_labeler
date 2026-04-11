@@ -6,8 +6,8 @@ Status: implementation-aligned snapshot.
 
 ## Current Focus
 
-- **Next:** Per-line validation state ([next-step.md](../next-step.md))
-- Editing-core wrap-up (remaining line/paragraph refinement and persistence details)
+- **Next:** Save Project — bulk page persist ([next-step.md](../next-step.md))
+- Editing-core wrap-up (remaining bbox/line refinement)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
 - Testing/documentation follow-through
 - Export UX wiring for training/validation workflows
@@ -26,9 +26,11 @@ Status: implementation-aligned snapshot.
 - Unified footnote marker behavior and migration to pd-book-tools label model
 - Ground truth PGDP preprocessing via `PGDPResults` at GT load time
 - Preserve per-word GT edits across save/load + explicit "Rematch GT" action
+- Per-word validation state with line/paragraph rollup and persistence
 
 ## Next Milestones
 
+- Save Project (bulk page persist)
 - Navigation and multi-page support (remaining ingestion gap)
 - Performance and polish (includes derived cache and performance-focused persistence)
 - Testing and documentation
@@ -37,7 +39,7 @@ Status: implementation-aligned snapshot.
 
 ## Integrated Sequence
 
-- Finish editing-core persistence details
+- Save Project (bulk page persist)
 - Close remaining navigation ingestion work
 - Performance/polish + deferred derived cache strategy
 - Testing/docs + export UI integration

@@ -51,6 +51,7 @@ class PageView:  # pragma: no cover - UI wrapper file
 
         self.page_action_callbacks = PageActionCallbacks(
             save_page=self._save_page_async,
+            save_project=self._save_project_async,
             load_page=self._load_page_async,
             refine_bboxes=self._refine_bboxes_async,
             expand_refine_bboxes=self._expand_refine_bboxes_async,
@@ -67,6 +68,9 @@ class PageView:  # pragma: no cover - UI wrapper file
             self.project_view_model,
             self.page_state_view_model,
             on_save_page=self.page_action_callbacks.save_page
+            if self.page_action_callbacks
+            else None,
+            on_save_project=self.page_action_callbacks.save_project
             if self.page_action_callbacks
             else None,
             on_load_page=self.page_action_callbacks.load_page
@@ -242,6 +246,33 @@ class PageView:  # pragma: no cover - UI wrapper file
             except Exception as exc:  # noqa: BLE001
                 logger.error("Save failed: %s", exc)
                 self._notify(f"Save failed: {exc}", "negative")
+
+    async def _save_project_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
+        """Save all loaded pages in the project asynchronously."""
+        if self.project_view_model.is_project_loading:
+            logger.debug("Save project blocked - currently loading")
+            return
+
+        async with self._action_context("Saving project...", show_spinner=True):
+            logger.debug("Starting async save for all loaded pages")
+            await asyncio.sleep(0.1)
+            try:
+                result = self.project_view_model.command_save_project()
+                if result.failed_count == 0 and result.saved_count > 0:
+                    logger.info("Project saved: %s", result.summary)
+                    self._notify(result.summary, "positive")
+                elif result.failed_count > 0:
+                    logger.warning("Project save had failures: %s", result.summary)
+                    self._notify(result.summary, "warning")
+                else:
+                    logger.info("Project save: %s", result.summary)
+                    self._notify(result.summary, "info")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Save project failed: %s", exc)
+                self._notify(f"Save project failed: {exc}", "negative")
 
     async def _load_page_async(
         self,

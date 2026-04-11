@@ -43,9 +43,10 @@ Status: planning snapshots that may not fully match current implementation.
 
 ## Immediate Next Step
 
-- [Per-Line Validation State](next-step.md)
+- [Save Project — Bulk Page Persist](next-step.md)
 
 ## Recently Completed
 
+- [Per-Word Validation State with Line/Paragraph Rollup](next-step.md) (Done)
 - [Preserve Per-Word GT Edits Across Save/Load](next-step.md) (Done)
 - [Ground Truth PGDP Preprocessing (Done)](next-step.md)

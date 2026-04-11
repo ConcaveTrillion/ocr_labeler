@@ -20,6 +20,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
         project_viewmodel: ProjectStateViewModel,
         page_viewmodel: PageStateViewModel,
         on_save_page: PageActionCallback | None = None,
+        on_save_project: PageActionCallback | None = None,
         on_load_page: PageActionCallback | None = None,
         on_reload_ocr: PageActionCallback | None = None,
         on_rematch_gt: PageActionCallback | None = None,
@@ -28,11 +29,13 @@ class PageActions:  # pragma: no cover - UI wrapper file
         self.project_viewmodel = project_viewmodel
         self.page_viewmodel = page_viewmodel
         self._on_save_page = on_save_page
+        self._on_save_project = on_save_project
         self._on_load_page = on_load_page
         self._on_reload_ocr = on_reload_ocr
         self._on_rematch_gt = on_rematch_gt
 
         self.save_button = None
+        self.save_project_button = None
         self.load_button = None
         self.reload_ocr_button = None
         self.rematch_gt_button = None
@@ -123,6 +126,12 @@ class PageActions:  # pragma: no cover - UI wrapper file
                 self.save_button = ui.button("Save Page", on_click=self._on_save_page)
                 style_action_button(self.save_button, size="md")
 
+            if self._on_save_project:
+                self.save_project_button = ui.button(
+                    "Save Project", on_click=self._on_save_project
+                ).tooltip("Save all loaded pages in this project")
+                style_action_button(self.save_project_button, size="md")
+
             if self._on_load_page:
                 self.load_button = ui.button("Load Page", on_click=self._on_load_page)
                 style_action_button(self.load_button, size="md")
@@ -178,6 +187,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
         buttons = [
             self.reload_ocr_button,
             self.save_button,
+            self.save_project_button,
             self.load_button,
             self.rematch_gt_button,
         ]
@@ -202,6 +212,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
         for button in (
             self.reload_ocr_button,
             self.save_button,
+            self.save_project_button,
             self.load_button,
             self.rematch_gt_button,
         ):

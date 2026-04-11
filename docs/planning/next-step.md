@@ -1,126 +1,91 @@
-# Next Step: Per-Word Validation State with Line/Paragraph Rollup
+# Next Step: Save Project — Bulk Page Persist
 
-Goal: let users mark individual words as reviewed/validated, with
-automatic rollup to line, paragraph, and page level so they can track
-labeling progress at every granularity.
+Goal: let users save all worked pages in a single action instead of
+saving each page individually.
 
 ## Problem
 
-When labeling a page with many words, there is no way to record which
-words have been reviewed and which still need attention.  Users must
-mentally track progress or work top-to-bottom every session.  There is
-also no persistence — closing and reopening a page loses any notion of
-"I already checked these words".
+Users can only save one page at a time via the "Save Page" button.
+After editing multiple pages across a labeling session, there is no way
+to persist all changes at once.  This is tedious and error-prone — users
+may forget to save some pages, losing work if the session ends.
 
 ## Desired Behavior
 
-- Each word carries an `is_validated` boolean (default `false`).
-- Users can toggle validation per-word from the word-match grid UI.
-- **Line rollup:** a line shows as validated when all its words are
-  validated.  Partial progress is also visible (e.g. "3/5 validated").
-- **Paragraph rollup:** a paragraph shows as validated when all its
-  lines are fully validated.
-- **Page summary:** page actions bar shows "N / M words validated"
-  for at-a-glance progress.
-- Validation state survives save/load round-trips.
-- Validation is independent of GT matching — a word can be validated
-  even if it has a GT mismatch (the user is asserting "I reviewed
-  this").
+- A "Save Project" button in the page actions bar persists all pages
+  that have been loaded and worked on in the current session.
+- Uses cached in-memory page versions where available.
+- Skips pages that have never been loaded (no `PageState` exists).
+- Surfaces progress and result via notification (e.g. "Saved 5/8 pages").
+- Does not re-run OCR or modify page source for pages that are already
+  in "filesystem" (user-saved) state unless they have been further
+  edited (auto-cached since last save).
+- Saves all pages to the same labeled-projects directory used by
+  "Save Page".
 
 ## Implementation Sketch
 
-### Persistence (extend existing `word_attributes` sidecar)
+### State Layer (`ProjectState`)
 
-1. **`word_attributes` dict** — add `"validated": true` to the existing
-   per-word attribute dict in `UserPagePayload`.  Keys are already
-   `"<line_index>:<word_index>"` strings.  No new sidecar field needed —
-   validation is just another boolean alongside `italic`, `small_caps`,
-   etc.
+1. Add `save_all_pages() -> SaveProjectResult` method that:
+   - Iterates `self.page_states` (pages that have been accessed).
+   - For each page with a loaded `PageState`, calls
+     `page_state.persist_page_to_file(page_index)`.
+   - Tracks success/failure counts.
+   - Returns a result object with counts.
 
-2. **`_collect_word_attributes` / `_apply_word_attributes_to_page`** —
-   extend to read/write `is_validated` on `Word` objects (via
-   `word.additional_word_attributes["is_validated"]` or a dedicated
-   property if pd-book-tools supports it, otherwise the sidecar handles
-   it).
+2. Add `SaveProjectResult` dataclass:
+   - `saved_count: int`
+   - `skipped_count: int`
+   - `failed_count: int`
+   - `total_count: int`
 
-3. No schema version bump needed — existing readers ignore unknown keys
-   in `word_attributes` values.
+### ViewModel Layer
 
-4. **Auto-cache persistence** — validation state must be included in
-   auto-save-to-cache writes, not only in explicit "Save Page".  Users
-   should not lose validation progress on session reload.  The existing
-   `_auto_save_to_cache` path already persists `word_attributes`, so
-   including `validated` in that dict means cache saves pick it up for
-   free.  Verify that `_auto_save_to_cache` calls
-   `_collect_word_attributes` (or equivalent) so validation state is
-   captured on every cache write.
+1. Wire `save_all_pages` through `ProjectStateViewModel` as an async
+   command, similar to existing `command_save_page`.
 
-### State layer
+### UI Layer (`PageActions`)
 
-1. **`PageState`** — add `toggle_word_validated(line_index, word_index)`
-   that flips the flag and triggers cache invalidation + notify.
-   Optionally add `validate_line(line_index)` and
-   `validate_all()` / `clear_all_validation()` bulk helpers.
+1. Add "Save Project" button next to existing "Save Page" button.
+2. Disable when no project is loaded.
+3. On click, call the save-all command and show a notification with
+   the result summary.
 
-2. **`WordMatch` model** — surface `is_validated: bool` so the grid can
-   bind to it.
+### Persistence
 
-3. **`LineMatch` model** — add computed properties:
-   - `validated_word_count: int`
-   - `total_word_count: int`
-   - `is_fully_validated: bool` (all words validated)
-
-### UI
-
-1. **Word-match grid** — add a toggle (checkbox or icon) per word.
-   Validated words get a visual indicator (checkmark, background tint,
-   or subtle border).
-
-2. **Line-level indicator** — each line row shows rollup status:
-   a checkmark when fully validated, or a fraction ("3/5") when
-   partially validated.
-
-3. **Paragraph-level indicator** — paragraph header shows validated
-   when all its lines are fully validated, otherwise shows fraction.
-
-4. **Page-level summary** — show "N / M words validated" in the page
-   actions bar for at-a-glance progress.
+No new persistence format needed — reuses existing `persist_page_to_file`
+and `PageOperations.save_page()` infrastructure.
 
 ## Edge Cases
 
-- Structural edits (word merge, split, line merge/split, paragraph
-  split) reset validation for affected words — the structure changed, so
-  prior review no longer applies.
-- Rematch GT clears validation **only for words whose GT actually
-  changed**.  Implementation: before rematch, snapshot each word's
-  `ground_truth_text`; after rematch, compare per-word and reset
-  `is_validated` only where the value differs.  Words whose GT is
-  unchanged keep their validation.
-- Words added by add-word start unvalidated.
-- Deleting a validated word updates the rollup counts.
+- Page that was never navigated to has no `PageState` — skip it.
+- Page load failed (page is None in project) — skip with warning.
+- Concurrent save while navigating — the save iterates a snapshot of
+  page indices; navigation during save is safe because each page's
+  `persist_page_to_file` is self-contained.
+- All pages already saved — notification says "All pages already saved"
+  or "Saved 0 pages (8 already up to date)".
 
 ## Tests
 
-- Unit: `toggle_word_validated` sets/clears the flag and notifies.
-- Unit: line rollup correctly computes partial and full validation.
-- Round-trip: save a page with some validated words, reload, assert
-  validation state is preserved.
-- Cache round-trip: validate words, trigger auto-save-to-cache, reload
-  from cache, assert validation state survives without explicit
-  "Save Page".
-- Structural edit: merge two words, assert merged word is unvalidated.
-- Structural edit: split a validated word, assert both halves are
-  unvalidated.
-- Rematch GT: validate all words, rematch where only some GT changes,
-  assert changed words lose validation while unchanged words keep it.
-- `WordMatch` / `LineMatch` models: `is_validated` and rollup properties
-  reflect underlying state.
+- Unit: `save_all_pages` with no loaded pages returns zero counts.
+- Unit: `save_all_pages` with multiple loaded pages saves all of them.
+- Unit: `save_all_pages` skips pages with no `PageState`.
+- Unit: failed page save increments `failed_count` without aborting.
+- Round-trip: save project, reload pages, verify content preserved.
 
 ## Done Criteria
 
-- Users can toggle validation per-word in the word-match grid.
-- Line, paragraph, and page rollups display correctly.
-- Validation state persists across save/load.
-- Structural edits reset validation for affected words.
-- At least one round-trip test validates the behavior.
-- No regression in existing tests.
+- Users can save all worked pages with a single button click.
+- Notification shows save summary (saved/skipped/failed counts).
+- No regression in existing per-page Save Page behavior.
+- At least one unit test validates the bulk save flow.
+
+---
+
+## Previously Completed Steps
+
+- Per-Word Validation State with Line/Paragraph Rollup (Done)
+- Preserve Per-Word GT Edits Across Save/Load (Done)
+- Ground Truth PGDP Preprocessing (Done)

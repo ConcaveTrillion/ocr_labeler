@@ -12,7 +12,7 @@ from ocr_labeler.operations.persistence.persistence_paths_operations import (
     PersistencePathsOperations,
 )
 from ocr_labeler.state import project_state as project_state_module
-from ocr_labeler.state.project_state import ProjectState
+from ocr_labeler.state.project_state import ProjectState, SaveProjectResult
 
 
 def test_project_state_initialization():
@@ -869,3 +869,194 @@ def test_expand_and_refine_all_bboxes_no_page(tmp_path):
 
         # Verify
         assert result is False
+
+
+# ------------------------------------------------------------------
+# SaveProjectResult & save_all_pages
+# ------------------------------------------------------------------
+
+
+class TestSaveProjectResult:
+    """Tests for the SaveProjectResult dataclass."""
+
+    def test_defaults(self):
+        result = SaveProjectResult()
+        assert result.saved_count == 0
+        assert result.skipped_count == 0
+        assert result.failed_count == 0
+        assert result.total_count == 0
+
+    def test_summary_no_pages(self):
+        result = SaveProjectResult()
+        assert result.summary == "No pages to save"
+
+    def test_summary_all_saved(self):
+        result = SaveProjectResult(saved_count=3, total_count=3)
+        assert "3 saved" in result.summary
+        assert "of 3 pages" in result.summary
+
+    def test_summary_with_failures(self):
+        result = SaveProjectResult(saved_count=2, failed_count=1, total_count=3)
+        assert "2 saved" in result.summary
+        assert "1 failed" in result.summary
+
+    def test_summary_with_skipped(self):
+        result = SaveProjectResult(saved_count=1, skipped_count=2, total_count=3)
+        assert "1 saved" in result.summary
+        assert "2 skipped" in result.summary
+
+
+class TestSaveAllPages:
+    """Tests for ProjectState.save_all_pages."""
+
+    def test_no_loaded_pages_returns_zero_counts(self, tmp_path):
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        result = state.save_all_pages()
+
+        assert result.total_count == 0
+        assert result.saved_count == 0
+        assert result.skipped_count == 0
+        assert result.failed_count == 0
+
+    def test_saves_all_loaded_pages(self, tmp_path):
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        # Create two page states with mock page models
+        for idx in [0, 2]:
+            ps = state.get_page_state(idx)
+            ps._project_root = tmp_path
+            mock_model = MagicMock(spec=PageModel)
+            ps.get_page_model = Mock(return_value=mock_model)
+            ps.persist_page_to_file = Mock(return_value=True)
+
+        result = state.save_all_pages(save_directory=str(tmp_path))
+
+        assert result.total_count == 2
+        assert result.saved_count == 2
+        assert result.skipped_count == 0
+        assert result.failed_count == 0
+
+        # Verify persist_page_to_file was called with correct args
+        state.page_states[0].persist_page_to_file.assert_called_once()
+        state.page_states[2].persist_page_to_file.assert_called_once()
+
+    def test_skips_pages_without_page_model(self, tmp_path):
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        # Page state exists but has no loaded page model
+        ps = state.get_page_state(0)
+        ps._project_root = tmp_path
+        ps.get_page_model = Mock(return_value=None)
+
+        result = state.save_all_pages(save_directory=str(tmp_path))
+
+        assert result.total_count == 1
+        assert result.skipped_count == 1
+        assert result.saved_count == 0
+
+    def test_failed_save_increments_failed_count(self, tmp_path):
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        ps = state.get_page_state(0)
+        ps._project_root = tmp_path
+        mock_model = MagicMock(spec=PageModel)
+        ps.get_page_model = Mock(return_value=mock_model)
+        ps.persist_page_to_file = Mock(return_value=False)
+
+        result = state.save_all_pages(save_directory=str(tmp_path))
+
+        assert result.total_count == 1
+        assert result.failed_count == 1
+        assert result.saved_count == 0
+
+    def test_exception_during_save_increments_failed_count(self, tmp_path):
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        ps = state.get_page_state(0)
+        ps._project_root = tmp_path
+        mock_model = MagicMock(spec=PageModel)
+        ps.get_page_model = Mock(return_value=mock_model)
+        ps.persist_page_to_file = Mock(side_effect=RuntimeError("disk full"))
+
+        result = state.save_all_pages(save_directory=str(tmp_path))
+
+        assert result.total_count == 1
+        assert result.failed_count == 1
+        assert result.saved_count == 0
+
+    def test_mixed_results(self, tmp_path):
+        """Test with a mix of successful, failed, and skipped pages."""
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        # Page 0: succeeds
+        ps0 = state.get_page_state(0)
+        ps0._project_root = tmp_path
+        ps0.get_page_model = Mock(return_value=MagicMock(spec=PageModel))
+        ps0.persist_page_to_file = Mock(return_value=True)
+
+        # Page 1: no model (skipped)
+        ps1 = state.get_page_state(1)
+        ps1._project_root = tmp_path
+        ps1.get_page_model = Mock(return_value=None)
+
+        # Page 2: fails
+        ps2 = state.get_page_state(2)
+        ps2._project_root = tmp_path
+        ps2.get_page_model = Mock(return_value=MagicMock(spec=PageModel))
+        ps2.persist_page_to_file = Mock(return_value=False)
+
+        result = state.save_all_pages(save_directory=str(tmp_path))
+
+        assert result.total_count == 3
+        assert result.saved_count == 1
+        assert result.skipped_count == 1
+        assert result.failed_count == 1
+
+
+# ------------------------------------------------------------------
+# ProjectStateViewModel.command_save_project
+# ------------------------------------------------------------------
+
+
+class TestCommandSaveProject:
+    """Tests for command_save_project in the view model layer."""
+
+    def test_command_save_project_delegates_to_state(self, tmp_path):
+        from ocr_labeler.viewmodels.project.project_state_view_model import (
+            ProjectStateViewModel,
+        )
+
+        state = ProjectState()
+        state.project_root = tmp_path
+
+        # Set up one loaded page that will save successfully
+        ps = state.get_page_state(0)
+        ps._project_root = tmp_path
+        ps.get_page_model = Mock(return_value=MagicMock(spec=PageModel))
+        ps.persist_page_to_file = Mock(return_value=True)
+
+        vm = ProjectStateViewModel(state)
+        result = vm.command_save_project()
+
+        assert result.saved_count == 1
+        assert result.total_count == 1
+
+    def test_command_save_project_without_state(self):
+        from ocr_labeler.viewmodels.project.project_state_view_model import (
+            ProjectStateViewModel,
+        )
+
+        state = ProjectState()
+        vm = ProjectStateViewModel(state)
+        # No pages loaded → empty result
+        result = vm.command_save_project()
+
+        assert result.total_count == 0
+        assert result.saved_count == 0

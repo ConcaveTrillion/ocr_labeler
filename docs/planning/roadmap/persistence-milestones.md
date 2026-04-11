@@ -17,8 +17,10 @@ This track captures persistence work that cuts across product roadmap milestones
 
 ## Planned Sequence
 
-- **Metadata + Session Baseline:** user metadata + session snapshot save/restore
-- **Save Project (bulk page persist):** extend per-page "Save Page" to a
+- ~~**Metadata + Session Baseline:**~~ (Deferred — user metadata schema design
+  exists but not yet prioritized; validation persistence landed via
+  word_attributes sidecar)
+- **Save Project (bulk page persist) — Next:** extend per-page "Save Page" to a
   "Save Project" action that persists all worked pages in a single
   operation. Should use cached in-memory page versions where available,
   fall back to already-persisted cache files for untouched pages, and

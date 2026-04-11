@@ -30,6 +30,8 @@
 - Ground truth PGDP preprocessing: raw `pages.json` text preprocessed via
   `PGDPResults` at load time (diacritics, dashes, footnotes, quotes, proofer
   notes)
+- Per-word validation state with line/paragraph rollup, UI toggle, and
+  persistence across save/load and auto-cache
 
 ## Block/Line Editing
 
@@ -52,4 +54,6 @@
 
 ## Ground Truth and State
 
-- Persist and restore line validation + word GT fields
+- ~~Persist and restore line validation + word GT fields~~ (Done — validation
+  persisted via `word_attributes` sidecar; GT fields round-trip through
+  save/load)

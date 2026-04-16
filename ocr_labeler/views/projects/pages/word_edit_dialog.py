@@ -820,10 +820,13 @@ def open_word_edit_dialog(
                 merge_previous_button = ui.button(
                     "Merge Prev",
                     icon="call_merge",
-                    on_click=lambda event: view.actions._handle_merge_word_left(
-                        line_index,
-                        split_word_index,
-                        event,
+                    on_click=lambda event: (
+                        view.actions._handle_merge_word_left(
+                            line_index,
+                            split_word_index,
+                            event,
+                        ),
+                        _rerender_dialog(),
                     ),
                 ).tooltip("Merge current word into previous word")
                 style_word_text_button(merge_previous_button, compact=True)
@@ -835,10 +838,13 @@ def open_word_edit_dialog(
                 merge_next_button = ui.button(
                     "Merge Next",
                     icon="call_merge",
-                    on_click=lambda event: view.actions._handle_merge_word_right(
-                        line_index,
-                        split_word_index,
-                        event,
+                    on_click=lambda event: (
+                        view.actions._handle_merge_word_right(
+                            line_index,
+                            split_word_index,
+                            event,
+                        ),
+                        _rerender_dialog(),
                     ),
                 ).tooltip("Merge with next word")
                 style_word_text_button(merge_next_button, compact=True)

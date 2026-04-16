@@ -9,6 +9,7 @@ from ...state.project_state import SaveProjectResult
 from ..shared.base_viewmodel import BaseViewModel
 
 if TYPE_CHECKING:
+    from ...operations.export.doctr_export import ExportStats, WordFilter
     from ..app.app_state_view_model import AppStateViewModel
 
 logger = logging.getLogger(__name__)
@@ -418,3 +419,68 @@ class ProjectStateViewModel(BaseViewModel):
         except Exception as e:
             logger.exception(f"Error reloading page with OCR: {e}")
             return False
+
+    def command_export_page(
+        self,
+        subfolder: str = "all",
+        word_filter: "WordFilter | None" = None,
+        label_formatter: object = None,
+    ) -> "ExportStats":
+        """Export the current validated page to DocTR training format.
+
+        Returns:
+            :class:`ExportStats` with export summary.
+
+        Raises:
+            ValueError: If the current page is not validated.
+        """
+        from ...operations.export.doctr_export import ExportStats as ExportStats_
+
+        if not self._project_state:
+            logger.error("No project state available for export")
+            return ExportStats_()
+        return self._project_state.export_current_page(
+            subfolder=subfolder,
+            word_filter=word_filter,
+            label_formatter=label_formatter,
+        )
+
+    def command_export_all_pages(
+        self,
+        subfolder: str = "all",
+        word_filter: "WordFilter | None" = None,
+        label_formatter: object = None,
+    ) -> "ExportStats":
+        """Export all validated pages to DocTR training format.
+
+        Returns:
+            :class:`ExportStats` with merged export summary.
+        """
+        from ...operations.export.doctr_export import ExportStats as ExportStats_
+
+        if not self._project_state:
+            logger.error("No project state available for export")
+            return ExportStats_()
+        return self._project_state.export_all_validated_pages(
+            subfolder=subfolder,
+            word_filter=word_filter,
+            label_formatter=label_formatter,
+        )
+
+    def get_available_styles(self) -> list[str]:
+        """Return sorted list of styles present on validated pages."""
+        if not self._project_state:
+            return []
+        return self._project_state.get_available_styles()
+
+    def get_current_page_styles(self) -> set[str]:
+        """Return set of styles present on the current page."""
+        if not self._project_state:
+            return set()
+        return self._project_state.get_current_page_styles()
+
+    def load_all_saved_pages(self) -> int:
+        """Load all saved/cached pages from disk into memory."""
+        if not self._project_state:
+            return 0
+        return self._project_state.load_all_saved_pages()

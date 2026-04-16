@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
-from typing import Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 from nicegui import background_tasks, run
 from pd_book_tools.ocr.page import Page
@@ -22,6 +22,9 @@ from ..operations.persistence.persistence_paths_operations import (
 )
 from ..operations.persistence.project_operations import ProjectOperations
 from .page_state import PageState
+
+if TYPE_CHECKING:
+    from ..operations.export.doctr_export import ExportStats, WordFilter
 
 logger = logging.getLogger(__name__)
 page_timing_logger = logging.getLogger("ocr_labeler.page_timing")
@@ -1125,6 +1128,315 @@ class ProjectState:
 
         logger.info("save_all_pages: %s", result.summary)
         return result
+
+    # ------------------------------------------------------------------
+    # DocTR export helpers (used by the GUI)
+    # ------------------------------------------------------------------
+
+    def export_current_page(
+        self,
+        subfolder: str = "all",
+        word_filter: "WordFilter | None" = None,
+        label_formatter: Any = None,
+    ) -> ExportStats:
+        """Save then export the current page to DocTR training format.
+
+        Parameters
+        ----------
+        subfolder : str
+            Subdirectory under the project export dir (e.g. ``"all"``,
+            ``"italics"``).
+        word_filter : WordFilter or None
+            Optional style/component filter.
+        label_formatter : callable or None
+            Optional label formatter for recognition labels.
+
+        Returns :class:`ExportStats` describing what was exported.
+        Raises a :class:`ValueError` if the page is not validated.
+        """
+        from ..operations.export.doctr_export import (
+            ExportStats as ExportStats_,
+        )
+        from ..operations.export.doctr_export import (
+            export_page_to_doctr,
+            page_is_validated,
+        )
+
+        project = self.project
+        idx = self.current_page_index
+        if idx < 0 or idx >= len(project.pages):
+            logger.error("export_current_page: invalid page index %d", idx)
+            return ExportStats_()
+
+        page = project.pages[idx]
+        if not page_is_validated(page):
+            raise ValueError(
+                "Current page is not validated (all words must be validated)"
+            )
+
+        # Ensure page is saved first
+        self.save_current_page()
+
+        image_path = getattr(page, "image_path", None)
+        if image_path is None:
+            logger.error("export_current_page: page has no image_path")
+            return ExportStats_(pages_scanned=1, pages_skipped_no_image=1)
+
+        output_dir = self._resolve_export_output_dir(subfolder)
+        prefix = project.project_id or self.project_root.name
+        page.page_index = idx  # Ensure pd-book-tools uses project-level index
+        stats = export_page_to_doctr(
+            page,
+            Path(image_path),
+            output_dir,
+            prefix=prefix,
+            word_filter=word_filter,
+            label_formatter=label_formatter,
+        )
+        logger.info("export_current_page: %s", stats.summary())
+        return stats
+
+    def load_all_saved_pages(self) -> int:
+        """Load all saved/cached pages from disk into memory.
+
+        Iterates every page slot.  For slots that are still ``None``,
+        attempts to load a user-saved or cache-saved page model from
+        disk (no OCR is performed).
+
+        Returns the number of pages newly loaded.
+        """
+        if self.project is None or self.project_root is None:
+            return 0
+
+        save_dir = self._resolve_workspace_save_directory(None)
+        cache_dir = self._resolve_workspace_cache_directory()
+        loaded_count = 0
+
+        for idx in range(len(self.project.pages)):
+            if self.project.pages[idx] is not None:
+                continue  # already in memory
+
+            img_path = Path(self.project.image_paths[idx])
+            page_number = idx + 1
+            loaded_page_model = None
+
+            # Try user-saved first
+            try:
+                info = self.page_ops.can_load_page(
+                    page_number=page_number,
+                    project_root=self.project_root,
+                    save_directory=save_dir,
+                    project_id=None,
+                )
+                if info.can_load:
+                    result = self.page_ops.load_page_model(
+                        page_number=page_number,
+                        project_root=self.project_root,
+                        save_directory=save_dir,
+                        project_id=None,
+                    )
+                    if result is not None:
+                        loaded_page_model, _ = result
+                        loaded_page_model.page_source = "filesystem"
+            except Exception:
+                logger.debug("load_all_saved_pages: failed user-saved for idx=%s", idx)
+
+            # Try cache
+            if loaded_page_model is None:
+                try:
+                    info = self.page_ops.can_load_page(
+                        page_number=page_number,
+                        project_root=self.project_root,
+                        save_directory=cache_dir,
+                        project_id=None,
+                    )
+                    if info.can_load:
+                        result = self.page_ops.load_page_model(
+                            page_number=page_number,
+                            project_root=self.project_root,
+                            save_directory=cache_dir,
+                            project_id=None,
+                        )
+                        if result is not None:
+                            loaded_page_model, _ = result
+                            loaded_page_model.page_source = "cached_ocr"
+                except Exception:
+                    logger.debug("load_all_saved_pages: failed cache for idx=%s", idx)
+
+            if loaded_page_model is not None:
+                page = loaded_page_model.page
+                if not hasattr(page, "image_path"):
+                    page.image_path = str(img_path)  # type: ignore[attr-defined]
+                if not hasattr(page, "name"):
+                    page.name = img_path.name  # type: ignore[attr-defined]
+                if not hasattr(page, "index"):
+                    page.index = idx  # type: ignore[attr-defined]
+                self.project.pages[idx] = page
+                self.page_models[idx] = loaded_page_model
+                loaded_count += 1
+
+        if loaded_count:
+            logger.info("load_all_saved_pages: loaded %d pages from disk", loaded_count)
+        return loaded_count
+
+    def export_all_validated_pages(
+        self,
+        subfolder: str = "all",
+        word_filter: "WordFilter | None" = None,
+        label_formatter: Any = None,
+    ) -> ExportStats:
+        """Save all pages then export every validated page to DocTR.
+
+        Parameters
+        ----------
+        subfolder : str
+            Subdirectory under the project export dir.
+        word_filter : WordFilter or None
+            Optional style/component filter.
+        label_formatter : callable or None
+            Optional label formatter for recognition labels.
+
+        Returns merged :class:`ExportStats` across all pages.
+        """
+        from ..operations.export.doctr_export import (
+            _MutableStats,
+            export_page_to_doctr,
+            page_is_validated,
+        )
+
+        # Save all loaded pages first
+        self.save_all_pages()
+
+        output_dir = self._resolve_export_output_dir(subfolder)
+        merged = _MutableStats()
+
+        for idx, page in enumerate(self.project.pages):
+            merged.pages_scanned += 1
+            if page is None or not page_is_validated(page):
+                merged.pages_skipped_not_validated += 1
+                continue
+
+            image_path = getattr(page, "image_path", None)
+            if image_path is None or not Path(image_path).exists():
+                merged.pages_skipped_no_image += 1
+                continue
+
+            prefix = self.project.project_id or self.project_root.name
+            page.page_index = idx  # Ensure pd-book-tools uses project-level index
+            page_stats = export_page_to_doctr(
+                page,
+                Path(image_path),
+                output_dir,
+                prefix=prefix,
+                word_filter=word_filter,
+                label_formatter=label_formatter,
+            )
+            merged.pages_exported += page_stats.pages_exported
+            merged.words_exported_detection += page_stats.words_exported_detection
+            merged.words_exported_recognition += page_stats.words_exported_recognition
+            merged.words_skipped_no_text += page_stats.words_skipped_no_text
+
+        result = merged.freeze()
+        logger.info("export_all_validated_pages: %s", result.summary())
+        return result
+
+    def _resolve_export_output_dir(self, subfolder: str = "all") -> Path:
+        """Return the default DocTR export output directory, scoped by project."""
+        project_id = self.project.project_id or self.project_root.name
+        return (
+            PersistencePathsOperations.get_data_root()
+            / "doctr-export"
+            / project_id
+            / subfolder
+        )
+
+    def get_available_styles(self) -> list[str]:
+        """Return sorted list of text_style_labels present on validated pages.
+
+        Only considers words that carry ``"validated"`` in their word_labels.
+        """
+        from ..operations.export.doctr_export import page_is_validated
+
+        styles: set[str] = set()
+        for page in self.project.pages:
+            if page is None or not page_is_validated(page):
+                continue
+            for word in page.words:
+                if "validated" not in (getattr(word, "word_labels", None) or []):
+                    continue
+                word_styles = getattr(word, "text_style_labels", None) or []
+                styles.update(word_styles)
+        styles.discard("regular")
+        return sorted(styles)
+
+    def get_current_page_styles(self) -> set[str]:
+        """Return set of text_style_labels on validated words of the current page."""
+        if self.current_page_index < 0 or not self.project.pages:
+            return set()
+        page = self.project.pages[self.current_page_index]
+        if page is None:
+            return set()
+        styles: set[str] = set()
+        for word in page.words:
+            if "validated" not in (getattr(word, "word_labels", None) or []):
+                continue
+            word_styles = getattr(word, "text_style_labels", None) or []
+            styles.update(word_styles)
+        styles.discard("regular")
+        return styles
+
+    def get_page_export_status(self, page_index: int | None = None) -> str:
+        """Return the export status for a page.
+
+        Parameters
+        ----------
+        page_index : int or None
+            Page index to check.  Defaults to :attr:`current_page_index`.
+
+        Returns
+        -------
+        str
+            One of ``ExportStatus.NOT_EXPORTED``, ``EXPORTED``, ``STALE``.
+        """
+        from ..operations.export.doctr_export import (
+            ExportStatus,
+            check_page_export_status,
+            page_is_validated,
+        )
+
+        if page_index is None:
+            page_index = self.current_page_index
+
+        project = self.project
+        if page_index < 0 or page_index >= len(project.pages):
+            return ExportStatus.NOT_EXPORTED
+
+        page = project.pages[page_index]
+        prefix = project.project_id or self.project_root.name
+        output_dir = self._resolve_export_output_dir()
+
+        # Resolve the saved JSON path for staleness detection
+        resolved_save_dir = self._resolve_workspace_save_directory(None)
+        project_id = project.project_id or self.project_root.name
+        page_number = page_index + 1
+        saved_json = Path(resolved_save_dir) / f"{project_id}_{page_number:03d}.json"
+
+        status = check_page_export_status(
+            output_dir=output_dir,
+            prefix=prefix,
+            page_index=page_index,
+            saved_json_path=saved_json,
+        )
+
+        # If export files exist but the page is not validated, mark as stale
+        if (
+            status == ExportStatus.EXPORTED
+            and page is not None
+            and not page_is_validated(page)
+        ):
+            return ExportStatus.STALE
+
+        return status
 
     def load_current_page(
         self,

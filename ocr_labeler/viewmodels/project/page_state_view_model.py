@@ -49,6 +49,7 @@ class PageStateViewModel(BaseViewModel):
     page_source: str = ""
     current_page_source_text: str = ""
     current_page_source_tooltip: str = ""
+    current_export_status_text: str = ""
 
     # Page state reference
     _page_state: Optional[PageState] = None
@@ -271,6 +272,7 @@ class PageStateViewModel(BaseViewModel):
         if not self._page_state:
             self.current_page_source_text = "(NO PAGE)"
             self.current_page_source_tooltip = ""
+            self.current_export_status_text = ""
             return
 
         try:
@@ -282,6 +284,14 @@ class PageStateViewModel(BaseViewModel):
             logger.debug("Failed to sync source badge from PageState", exc_info=True)
             self.current_page_source_text = "(NO PAGE)"
             self.current_page_source_tooltip = ""
+
+        try:
+            self.current_export_status_text = (
+                self._page_state.current_page_export_status
+            )
+        except Exception:
+            logger.debug("Failed to sync export status from PageState", exc_info=True)
+            self.current_export_status_text = ""
 
     def _schedule_image_update(self):
         """Schedule an async image update using NiceGUI's background task API.

@@ -32,6 +32,7 @@ all-dev = [
 
 [project.scripts]
 ocr-labeler-ui = "ocr_labeler.cli:main"
+ocr-labeler-export = "ocr_labeler.operations.export.cli:main"
 
 [build-system]
 requires = [

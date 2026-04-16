@@ -862,6 +862,28 @@ class PageState:
             page_model if page_model is not None else page
         )
 
+    @property
+    def current_page_export_status(self) -> str:
+        """Return export status display text for the current page."""
+        if not self._project_state:
+            return ""
+        if self._project_state.is_project_loading or self._project_state.is_navigating:
+            return ""
+        try:
+            from ..operations.export.doctr_export import ExportStatus
+
+            status = self._project_state.get_page_export_status(
+                self._current_page_index
+            )
+            if status == ExportStatus.EXPORTED:
+                return "EXPORTED"
+            elif status == ExportStatus.STALE:
+                return "EXPORT STALE"
+            return ""
+        except Exception:
+            logger.debug("Failed to check export status", exc_info=True)
+            return ""
+
     @notify_on_completion
     def reload_page_with_ocr(self, page_index: int) -> None:
         """Reload a specific page with OCR processing, bypassing any saved version.

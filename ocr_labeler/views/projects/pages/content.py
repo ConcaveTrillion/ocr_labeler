@@ -126,6 +126,24 @@ class ContentArea:
                 self._stats_label = ui.label("No matches to display").classes(
                     "text-sm text-gray-600"
                 )
+                self._export_status_sep = ui.label("•").classes("text-sm text-gray-400")
+                self._export_status_sep.bind_visibility_from(
+                    self.page_state_view_model,
+                    "current_export_status_text",
+                    backward=lambda t: bool(t),
+                )
+                self._export_status_label = ui.label("").classes(
+                    "text-sm font-semibold text-blue-700"
+                )
+                self._export_status_label.bind_text_from(
+                    self.page_state_view_model,
+                    "current_export_status_text",
+                )
+                self._export_status_label.bind_visibility_from(
+                    self.page_state_view_model,
+                    "current_export_status_text",
+                    backward=lambda t: bool(t),
+                )
 
             logger.debug("Adding page-level navigation spinner")
             # Page-level navigation spinner (smaller, inline)

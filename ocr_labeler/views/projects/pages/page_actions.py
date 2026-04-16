@@ -8,6 +8,7 @@ from ....viewmodels.project.page_state_view_model import PageStateViewModel
 from ....viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ...callbacks import PageActionCallback
 from ...shared.button_styles import style_action_button
+from .export_dialog import ExportDialog
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,12 @@ class PageActions:  # pragma: no cover - UI wrapper file
         self.load_button = None
         self.reload_ocr_button = None
         self.rematch_gt_button = None
+        self.export_button = None
         self.page_name_box = None
         self.page_source_label = None
         self.page_source_tooltip = None
+        self._export_dialog: ExportDialog | None = None
+
         self._notified_error_keys: set[str] = set()
 
     def _notify(self, message: str, type_: str = "warning") -> None:
@@ -115,6 +119,11 @@ class PageActions:  # pragma: no cover - UI wrapper file
 
     def build(self) -> ui.element:
         logger.debug("Building PageActions UI")
+
+        # Build dialog outside the row so it's at the top of the slot scope
+        self._export_dialog = ExportDialog(self.project_viewmodel, self._notify)
+        self._export_dialog.build()
+
         with ui.row().classes("items-center gap-2") as container:
             if self._on_reload_ocr:
                 self.reload_ocr_button = ui.button(
@@ -144,6 +153,13 @@ class PageActions:  # pragma: no cover - UI wrapper file
                     "replacing any per-word GT edits"
                 )
                 style_action_button(self.rematch_gt_button, size="md")
+
+            ui.separator().props("vertical")
+
+            self.export_button = ui.button(
+                "Export...", on_click=lambda _e: self._export_dialog.open()
+            ).tooltip("Export pages to DocTR training format")
+            style_action_button(self.export_button, size="md")
 
             ui.separator().props("vertical")
             self.page_name_box = ui.button("-", on_click=lambda _event: None).classes(
@@ -190,6 +206,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
             self.save_project_button,
             self.load_button,
             self.rematch_gt_button,
+            self.export_button,
         ]
 
         for button in buttons:
@@ -215,6 +232,7 @@ class PageActions:  # pragma: no cover - UI wrapper file
             self.save_project_button,
             self.load_button,
             self.rematch_gt_button,
+            self.export_button,
         ):
             if button is None:
                 continue

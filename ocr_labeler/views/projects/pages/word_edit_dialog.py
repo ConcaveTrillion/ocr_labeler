@@ -834,6 +834,7 @@ def open_word_edit_dialog(
                     "min-width: 96px; padding-left: 6px; padding-right: 6px;"
                 )
                 merge_previous_button.disabled = not can_merge_previous
+                merge_previous_button.props('data-testid="dialog-merge-prev-button"')
 
                 merge_next_button = ui.button(
                     "Merge Next",
@@ -852,6 +853,7 @@ def open_word_edit_dialog(
                     "min-width: 96px; padding-left: 6px; padding-right: 6px;"
                 )
                 merge_next_button.disabled = not can_merge_next
+                merge_next_button.props('data-testid="dialog-merge-next-button"')
 
                 split_button = ui.button(
                     "H",
@@ -874,6 +876,7 @@ def open_word_edit_dialog(
                     line_index,
                     split_word_index,
                 )
+                split_button.props('data-testid="dialog-split-h-button"')
 
                 vertical_split_button = ui.button(
                     "V",
@@ -900,6 +903,7 @@ def open_word_edit_dialog(
                         split_word_index,
                     )
                 )
+                vertical_split_button.props('data-testid="dialog-split-v-button"')
 
                 delete_button = ui.button(
                     icon="delete",
@@ -913,6 +917,7 @@ def open_word_edit_dialog(
                 delete_button.disabled = (
                     view.delete_words_callback is None or split_word_index < 0
                 )
+                delete_button.props('data-testid="dialog-delete-word-button"')
 
             ui.separator()
             ui.label("Bounding Box").classes("text-caption text-grey-7")
@@ -1176,21 +1181,25 @@ def open_word_edit_dialog(
                         on_click=lambda _event: _stage_crop_to_marker("above"),
                     ).tooltip("Stage removal above horizontal marker")
                     style_word_text_button(crop_above_button, compact=True)
+                    crop_above_button.props('data-testid="dialog-crop-above-button"')
                     crop_below_button = ui.button(
                         "Crop Below",
                         on_click=lambda _event: _stage_crop_to_marker("below"),
                     ).tooltip("Stage removal below horizontal marker")
                     style_word_text_button(crop_below_button, compact=True)
+                    crop_below_button.props('data-testid="dialog-crop-below-button"')
                     crop_left_button = ui.button(
                         "Crop Left",
                         on_click=lambda _event: _stage_crop_to_marker("left"),
                     ).tooltip("Stage removal left of vertical marker")
                     style_word_text_button(crop_left_button, compact=True)
+                    crop_left_button.props('data-testid="dialog-crop-left-button"')
                     crop_right_button = ui.button(
                         "Crop Right",
                         on_click=lambda _event: _stage_crop_to_marker("right"),
                     ).tooltip("Stage removal right of vertical marker")
                     style_word_text_button(crop_right_button, compact=True)
+                    crop_right_button.props('data-testid="dialog-crop-right-button"')
 
                 def _stage_refine_preview(*, expand: bool) -> None:
                     nonlocal pending_bbox_deltas
@@ -1219,6 +1228,9 @@ def open_word_edit_dialog(
                     refine_preview_button.disabled = (
                         view.refine_words_callback is None or split_word_index < 0
                     )
+                    refine_preview_button.props(
+                        'data-testid="dialog-refine-preview-button"'
+                    )
                     expand_refine_preview_button = ui.button(
                         "Expand + Refine",
                         icon="unfold_more",
@@ -1228,6 +1240,9 @@ def open_word_edit_dialog(
                     expand_refine_preview_button.disabled = (
                         view.expand_then_refine_words_callback is None
                         or split_word_index < 0
+                    )
+                    expand_refine_preview_button.props(
+                        'data-testid="dialog-expand-refine-preview-button"'
                     )
 
                 with ui.row().classes("items-center gap-1"):
@@ -1340,6 +1355,7 @@ def open_word_edit_dialog(
                         on_click=lambda _event: _reset_pending_bbox_nudges(),
                     ).tooltip("Reset pending bbox edits")
                     style_word_text_button(reset_button, compact=True)
+                    reset_button.props('data-testid="dialog-reset-nudges-button"')
                     apply_button = ui.button(
                         "Apply",
                         on_click=lambda _event: _apply_pending_bbox_nudges(
@@ -1347,6 +1363,7 @@ def open_word_edit_dialog(
                         ),
                     ).tooltip("Apply pending bbox edits")
                     style_word_text_button(apply_button, compact=True)
+                    apply_button.props('data-testid="dialog-apply-nudges-button"')
                     apply_refine_button = ui.button(
                         "Apply + Refine",
                         on_click=lambda _event: _apply_pending_bbox_nudges(
@@ -1354,6 +1371,9 @@ def open_word_edit_dialog(
                         ),
                     ).tooltip("Apply pending bbox edits and refine")
                     style_word_text_button(apply_refine_button, compact=True)
+                    apply_refine_button.props(
+                        'data-testid="dialog-apply-refine-nudges-button"'
+                    )
 
     def _cleanup() -> None:
         view._word_split_button_refs.pop(split_key, None)

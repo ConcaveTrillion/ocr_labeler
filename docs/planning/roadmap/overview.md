@@ -2,13 +2,12 @@
 
 Development roadmap for OCR Labeler.
 
-Status: implementation-aligned snapshot (updated 2026-04-16).
+Status: implementation-aligned snapshot (updated 2026-04-17).
 
 ## Current Focus
 
 - Editing-core wrap-up (remaining: add-word workflow, expand-bbox action)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
-- Browser test coverage expansion (currently ~28% of 107 buttons; target 97%)
 - Persistence metadata schema alignment and session restore
 
 ## Completed
@@ -33,13 +32,15 @@ Status: implementation-aligned snapshot (updated 2026-04-16).
 - Provenance tracking via `UserPageEnvelope` (schema v2.1)
 - OS-aware persistence paths (XDG, macOS Library, Windows APPDATA)
 - Local state cleanup utilities
+- Browser test coverage expansion: 97% of 107 UI buttons covered via
+  14-commit phased plan (`make test-browser`: 157 passed)
 
 ## Next Milestones
 
 - Navigation and multi-page support (remaining ingestion gap)
 - Editing-core remainder (add-word, expand-bbox)
-- Browser test coverage expansion (14-commit phased plan)
 - Persistence metadata schema + session restore
+- Save/load round-trip browser tests
 - Performance and polish (derived cache, debounced updates)
 - Distribution strategy
 
@@ -47,8 +48,8 @@ Status: implementation-aligned snapshot (updated 2026-04-16).
 
 1. Close remaining navigation ingestion work
 2. Remaining editing-core (add-word, expand-bbox)
-3. Browser test coverage + save/load round-trip tests
-4. Persistence metadata schema + session restore
+3. Persistence metadata schema + session restore
+4. Save/load round-trip browser tests
 5. Performance/polish + derived cache strategy
 6. Distribution strategy
 

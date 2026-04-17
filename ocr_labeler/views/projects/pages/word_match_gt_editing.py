@@ -42,7 +42,7 @@ class WordMatchGtEditing:
                 initial_value = str(word_match.ground_truth_text or "")
                 input_element = (
                     ui.input(value=initial_value)
-                    .props("dense outlined")
+                    .props('dense outlined data-testid="gt-text-input"')
                     .classes("monospace")
                 )
                 current_key = (line_index, word_index)

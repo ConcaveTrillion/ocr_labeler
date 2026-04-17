@@ -705,7 +705,7 @@ class WordMatchRenderer:
                     f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}"
                 )
 
-                with ui.column() as word_column:
+                with ui.column().props('data-testid="word-column"') as word_column:
                     # Image cell
                     split_word_index = (
                         word_match.word_index

@@ -41,22 +41,40 @@ Current Capabilities
   mismatches -- where available from the underlying OCR lib).
 - Show OCR text and (optional) ground truth text side by side.
 - Auto-populate ground truth text from an optional `pages.json` file mapping
-  image filename -> ground truth string.
+  image filename -> ground truth string. Raw PGDP text is preprocessed
+  via `PGDPResults` at load time (diacritics, dashes, footnotes, quotes,
+  proofer notes).
 - Save current page edits to JSON and image files for persistence.
-- Word-level editing: merge, split, delete, rebox, and per-word GT inline editing.
-- Word tag editing: assign text style labels (italics, bold, small caps, etc.),
-  style scopes (whole/part), and word components (footnote markers, etc.) via
-  toolbar controls and a word edit dialog.
+- Save Project: bulk-persist all worked pages in a single action.
+- Word-level editing: merge, split, delete, rebox, and per-word GT inline
+  editing with Tab/Shift-Tab keyboard navigation.
+- Word tag editing: assign text style labels (italics, bold, small caps,
+  blackletter, etc.), style scopes (whole/part), and word components
+  (footnote markers, etc.) via toolbar controls and a word edit dialog.
+- Word edit dialog with interactive zoom slider (0.5x--2.0x) for image
+  inspection.
 - Paragraph actions: merge, delete, split-after-line, split-by-selected-lines.
+- Per-word validation state with line/paragraph rollup, UI toggle, and
+  persistence across save/load and auto-cache.
+- GT rematch + overlay/cache refresh after structural edits.
+- Bbox refinement: rebox workflow, rebox auto-refine, selection refine
+  actions for word/line/paragraph scopes.
+- DocTR training/validation export dialog with scope selection (current
+  page / all validated pages) and style-based filtering.
 - Backend project export formats (json/jsonl/csv).
+- Provenance tracking: user page envelope with app version, toolchain
+  versions, OCR engine metadata, and image fingerprint.
+- OS-aware persistence paths (XDG on Linux, Library on macOS, APPDATA on
+  Windows).
 
 Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
 --------------------------------------------------------------
 
 - Bounding box refinement: add-word workflow, expand-bbox action
-- Image zoom controls
-- Training / validation export UX wiring
-- Line & word validation state persistence
+- Merge multiple JSON project files with page index offsets
+- Full persistence metadata schema with session restore
+- Derived word/line cache optimization
+- Performance polish (debounced GT edits, graceful fallbacks)
 
 Quick Start
 -----------
@@ -331,9 +349,16 @@ Development Notes
 -----------------
 
 - See `docs/planning/README.md` for roadmap & phased feature list.
-- `AppState` in `ocr_labeler/state/app_state.py` handles app-level project discovery/selection and session notifications.
+- `AppState` in `ocr_labeler/state/app_state.py` handles app-level project
+  discovery/selection and session notifications.
 - `ProjectState` in `ocr_labeler/state/project_state.py` handles page
-  navigation, lazy OCR loading, and page persistence actions.
+  navigation, lazy OCR loading, page persistence, and bulk save.
+- `PageState` in `ocr_labeler/state/page_state.py` handles per-page image
+  caching and word style tracking.
+- ViewModel layer (`ocr_labeler/viewmodels/`) provides MVVM binding between
+  state and NiceGUI views.
+- Operations layer (`ocr_labeler/operations/`) contains business logic for
+  persistence, OCR processing, export, and word/line operations.
 - UI composition lives in modular components under `ocr_labeler/views/`.
 - Minimal wrapper `NiceGuiLabeler` is in `ocr_labeler/app.py`.
 
@@ -341,9 +366,10 @@ Future Enhancements (Short List)
 --------------------------------
 
 - Add-word and expand-bbox workflows
-- Image zoom controls for inspection/editing
-- Training / validation dataset export UX
-- Line & word validation state persistence
+- Multi-JSON project file merge with page index offsets
+- Full persistence metadata schema and session restore
+- Derived word/line cache optimization
+- GPU backend strategy and distribution packaging
 
 License
 -------

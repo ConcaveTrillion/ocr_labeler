@@ -2,15 +2,14 @@
 
 Development roadmap for OCR Labeler.
 
-Status: implementation-aligned snapshot.
+Status: implementation-aligned snapshot (updated 2026-04-16).
 
 ## Current Focus
 
-- **Next:** Save Project — bulk page persist ([next-step.md](../next-step.md))
-- Editing-core wrap-up (remaining bbox/line refinement)
+- Editing-core wrap-up (remaining: add-word workflow, expand-bbox action)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
-- Testing/documentation follow-through
-- Export UX wiring for training/validation workflows
+- Browser test coverage expansion (currently ~28% of 107 buttons; target 97%)
+- Persistence metadata schema alignment and session restore
 
 ## Completed
 
@@ -27,23 +26,31 @@ Status: implementation-aligned snapshot.
 - Ground truth PGDP preprocessing via `PGDPResults` at GT load time
 - Preserve per-word GT edits across save/load + explicit "Rematch GT" action
 - Per-word validation state with line/paragraph rollup and persistence
+- Save Project — bulk page persist (all worked pages in one action)
+- DocTR training/validation export dialog with scope and style-based filtering
+- Rebox workflow, rebox auto-refine, selection refine actions
+- Word edit dialog with interactive zoom slider
+- Provenance tracking via `UserPageEnvelope` (schema v2.1)
+- OS-aware persistence paths (XDG, macOS Library, Windows APPDATA)
+- Local state cleanup utilities
 
 ## Next Milestones
 
-- Save Project (bulk page persist)
 - Navigation and multi-page support (remaining ingestion gap)
-- Performance and polish (includes derived cache and performance-focused persistence)
-- Testing and documentation
-- Training and validation export
+- Editing-core remainder (add-word, expand-bbox)
+- Browser test coverage expansion (14-commit phased plan)
+- Persistence metadata schema + session restore
+- Performance and polish (derived cache, debounced updates)
 - Distribution strategy
 
 ## Integrated Sequence
 
-- Save Project (bulk page persist)
-- Close remaining navigation ingestion work
-- Performance/polish + deferred derived cache strategy
-- Testing/docs + export UI integration
-- Distribution strategy
+1. Close remaining navigation ingestion work
+2. Remaining editing-core (add-word, expand-bbox)
+3. Browser test coverage + save/load round-trip tests
+4. Persistence metadata schema + session restore
+5. Performance/polish + derived cache strategy
+6. Distribution strategy
 
 ## References
 

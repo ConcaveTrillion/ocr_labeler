@@ -15,17 +15,19 @@ This track captures persistence work that cuts across product roadmap milestones
   performance/polish work after core behavior and metadata schema are
   stable.
 
+## Completed
+
+- ~~**Page Cache Baseline:**~~ Per-page save/load with provenance tracking via
+  `UserPageEnvelope` (schema v2.1). Includes `word_attributes` sidecar for
+  validation state and GT edits.
+- ~~**Save Project (bulk page persist):**~~ `save_all_pages()` in
+  `ProjectState` persists all worked pages in a single operation with
+  progress/result notification via `SaveProjectResult`.
+
 ## Planned Sequence
 
-- ~~**Metadata + Session Baseline:**~~ (Deferred — user metadata schema design
-  exists but not yet prioritized; validation persistence landed via
-  word_attributes sidecar)
-- **Save Project (bulk page persist) — Next:** extend per-page "Save Page" to a
-  "Save Project" action that persists all worked pages in a single
-  operation. Should use cached in-memory page versions where available,
-  fall back to already-persisted cache files for untouched pages, and
-  skip pages that have never been loaded. Wire a UI action (toolbar or
-  menu) and surface progress/result via notification.
+- **Metadata + Session Baseline:** user metadata schema design exists but
+  not yet prioritized; session restore not yet implemented.
 - **Disconnect/Prewarm Reliability:** disconnect flush + optional cache prewarm
 - **Derived Cache Optimization (later):** derived word/line cache strategy and performance-focused persistence
 

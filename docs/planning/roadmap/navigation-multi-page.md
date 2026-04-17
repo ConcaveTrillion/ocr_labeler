@@ -3,6 +3,14 @@
 **Priority:** Medium
 **Status:** In Progress
 
-## Scope
+## Completed
 
-- Merge multiple JSON files with page index offsets
+- Multi-page navigation controls (Prev / Next / direct page number input)
+- Route and page index synchronization
+- Lazy per-page OCR loading with three-tier fallback (user-saved → cached → live OCR)
+- Force-OCR override tracking per page index
+- Project discovery and listing via `ProjectDiscoveryOperations`
+
+## Remaining
+
+- Merge multiple JSON project files with page index offsets

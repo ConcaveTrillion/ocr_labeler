@@ -1,7 +1,7 @@
 # Roadmap Phase 3: Word and Line-Level Editing Core
 
 **Priority:** High
-**Status:** In Progress
+**Status:** Mostly Complete
 
 ## Recently Completed
 
@@ -32,25 +32,19 @@
   notes)
 - Per-word validation state with line/paragraph rollup, UI toggle, and
   persistence across save/load and auto-cache
+- Word edit dialog with interactive zoom slider (0.5x--2.0x) for image
+  inspection and split marker alignment
 
-## Block/Line Editing
-
-- Additional line/paragraph refinement workflows
-
-## Word Editing Infrastructure
-
-### Editing State
-
-- Persist/restore validation-focused per-line editing state where missing
+## Remaining
 
 ### BBox Editing
 
 - Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)
 - Expand-bbox action for selected word(s)
 
-## Image Interaction
+### Block/Line Editing
 
-- Zoom controls for image inspection/editing (zoom in, zoom out, reset)
+- Additional line/paragraph refinement workflows
 
 ## Ground Truth and State
 

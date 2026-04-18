@@ -10,7 +10,7 @@ wheels/
 .venv
 
 # Tests
-.coverage
+.coverage*
 htmlcov**
 .pytest_cache**
 .ruff_cache**
@@ -24,4 +24,3 @@ logs/
 
 # local data
 local-data**
-.coverage

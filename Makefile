@@ -7,8 +7,8 @@ help: ## Show this help message
 install: ## Install dependencies and set up development environment
 	@echo "📦 Installing dependencies..."
 	uv sync --group all-dev
-	@echo "🌐 Installing Playwright Chromium browser..."
-	uv run playwright install chromium
+	@echo "🌐 Installing Playwright Chromium browser and system dependencies..."
+	uv run playwright install --with-deps chromium
 	@echo "🪝 Setting up pre-commit hooks..."
 	uv run pre-commit install
 	@echo "✅ Installation complete!"

@@ -110,6 +110,8 @@ cd ocr_labeler
 Install Dependencies
 --------------------
 
+First, follow instructions for uv and CUDA support in the pd-book-tools readme.
+
 Using the Makefile (recommended):
 
 ```bash

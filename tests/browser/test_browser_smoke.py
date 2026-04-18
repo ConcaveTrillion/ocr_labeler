@@ -110,6 +110,7 @@ def browser_page():
             )
 
         context = browser.new_context()
+        context.set_default_navigation_timeout(60_000)
         page = context.new_page()
         yield page
         context.close()

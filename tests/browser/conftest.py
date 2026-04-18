@@ -127,7 +127,23 @@ def _browser_instance():
     playwright = sync_playwright().start()
     try:
         try:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-animations",
+                    "--disable-background-timer-throttling",
+                    "--disable-renderer-backgrounding",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-features=TranslateUI",
+                    "--disable-extensions",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                ],
+            )
         except Exception:
             raise RuntimeError(
                 "Playwright Chromium is required but could not be launched. "
@@ -148,7 +164,10 @@ def _browser_instance():
 @pytest.fixture
 def browser_page(_browser_instance):
     """Provide a fresh Playwright page in an isolated context per test."""
-    context = _browser_instance.new_context()
+    context = _browser_instance.new_context(reduced_motion="reduce")
+    # Containers can be slower; 60 s gives headroom at the end of long runs.
+    context.set_default_navigation_timeout(60_000)
+    context.set_default_timeout(30_000)
     page = context.new_page()
     yield page
     context.close()
@@ -157,6 +176,7 @@ def browser_page(_browser_instance):
 @pytest.fixture
 def browser_context(_browser_instance):
     """Provide a Playwright browser context for multi-tab tests."""
-    context = _browser_instance.new_context()
+    context = _browser_instance.new_context(reduced_motion="reduce")
+    context.set_default_navigation_timeout(60_000)
     yield context
     context.close()

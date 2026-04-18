@@ -6,9 +6,9 @@ Status: implementation-aligned snapshot (updated 2026-04-17).
 
 ## Current Focus
 
-- Editing-core wrap-up (remaining: add-word workflow, expand-bbox action)
 - Remaining navigation ingestion gap (multi-JSON merge with page index offsets)
 - Persistence metadata schema alignment and session restore
+- Save/load round-trip browser tests
 
 ## Completed
 
@@ -34,11 +34,15 @@ Status: implementation-aligned snapshot (updated 2026-04-17).
 - Local state cleanup utilities
 - Browser test coverage expansion: 97% of 107 UI buttons covered via
   14-commit phased plan (`make test-browser`: 157 passed)
+- Editing-core complete: expand-bbox (word/line/paragraph scope), add-word,
+  line/paragraph refinement workflows
+- Save/load round-trip unit tests (12 tests covering structure, word
+  attributes, original page, and edge cases)
 
 ## Next Milestones
 
 - Navigation and multi-page support (remaining ingestion gap)
-- Editing-core remainder (add-word, expand-bbox)
+- Editing-core remainder (add-word, expand-bbox) ✅
 - Persistence metadata schema + session restore
 - Save/load round-trip browser tests
 - Performance and polish (derived cache, debounced updates)

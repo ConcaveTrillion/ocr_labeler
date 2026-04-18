@@ -501,6 +501,21 @@ class TextTabs:
                 logger.debug("Expand-then-refine words operation result: %s", result)
                 return result
 
+        expand_word_bboxes_callback = None
+        if page_state and hasattr(page_state, "expand_word_bboxes"):
+
+            def expand_word_bboxes_callback(
+                word_keys: list[tuple[int, int]],
+            ) -> bool:
+                logger.debug(
+                    "Expanding bboxes for selected words %s on page %d",
+                    word_keys,
+                    page_index,
+                )
+                result = page_state.expand_word_bboxes(page_index, word_keys)
+                logger.debug("Expand word bboxes operation result: %s", result)
+                return result
+
         refine_lines_callback = None
         if page_state and hasattr(page_state, "refine_lines"):
 
@@ -525,6 +540,19 @@ class TextTabs:
                 )
                 result = page_state.expand_then_refine_lines(page_index, line_indices)
                 logger.debug("Expand-then-refine lines operation result: %s", result)
+                return result
+
+        expand_line_bboxes_callback = None
+        if page_state and hasattr(page_state, "expand_line_bboxes"):
+
+            def expand_line_bboxes_callback(line_indices: list[int]) -> bool:
+                logger.debug(
+                    "Expanding bboxes for selected lines %s on page %d",
+                    line_indices,
+                    page_index,
+                )
+                result = page_state.expand_line_bboxes(page_index, line_indices)
+                logger.debug("Expand line bboxes operation result: %s", result)
                 return result
 
         refine_paragraphs_callback = None
@@ -557,6 +585,23 @@ class TextTabs:
                 logger.debug(
                     "Expand-then-refine paragraphs operation result: %s", result
                 )
+                return result
+
+        expand_paragraph_bboxes_callback = None
+        if page_state and hasattr(page_state, "expand_paragraph_bboxes"):
+
+            def expand_paragraph_bboxes_callback(
+                paragraph_indices: list[int],
+            ) -> bool:
+                logger.debug(
+                    "Expanding bboxes for selected paragraphs %s on page %d",
+                    paragraph_indices,
+                    page_index,
+                )
+                result = page_state.expand_paragraph_bboxes(
+                    page_index, paragraph_indices
+                )
+                logger.debug("Expand paragraph bboxes operation result: %s", result)
                 return result
 
         split_line_with_selected_words_callback = None
@@ -743,10 +788,13 @@ class TextTabs:
             nudge_word_bbox_callback=nudge_word_bbox_callback,
             refine_words_callback=refine_words_callback,
             expand_then_refine_words_callback=expand_then_refine_words_callback,
+            expand_word_bboxes_callback=expand_word_bboxes_callback,
             refine_lines_callback=refine_lines_callback,
             expand_then_refine_lines_callback=expand_then_refine_lines_callback,
+            expand_line_bboxes_callback=expand_line_bboxes_callback,
             refine_paragraphs_callback=refine_paragraphs_callback,
             expand_then_refine_paragraphs_callback=expand_then_refine_paragraphs_callback,
+            expand_paragraph_bboxes_callback=expand_paragraph_bboxes_callback,
             split_line_with_selected_words_callback=split_line_with_selected_words_callback,
             split_lines_into_selected_unselected_callback=split_lines_into_selected_unselected_callback,
             group_selected_words_into_paragraph_callback=group_selected_words_into_paragraph_callback,

@@ -81,10 +81,13 @@ class WordMatchView:
         nudge_word_bbox_callback: NudgeAction | None = None,
         refine_words_callback: WordKeysAction | None = None,
         expand_then_refine_words_callback: WordKeysAction | None = None,
+        expand_word_bboxes_callback: WordKeysAction | None = None,
         refine_lines_callback: LineIndicesAction | None = None,
         expand_then_refine_lines_callback: LineIndicesAction | None = None,
+        expand_line_bboxes_callback: LineIndicesAction | None = None,
         refine_paragraphs_callback: ParagraphIndicesAction | None = None,
         expand_then_refine_paragraphs_callback: ParagraphIndicesAction | None = None,
+        expand_paragraph_bboxes_callback: ParagraphIndicesAction | None = None,
         split_line_with_selected_words_callback: WordKeysAction | None = None,
         split_lines_into_selected_unselected_callback: WordKeysAction | None = None,
         group_selected_words_into_paragraph_callback: WordKeysAction | None = None,
@@ -134,12 +137,15 @@ class WordMatchView:
         self.nudge_word_bbox_callback = nudge_word_bbox_callback
         self.refine_words_callback = refine_words_callback
         self.expand_then_refine_words_callback = expand_then_refine_words_callback
+        self.expand_word_bboxes_callback = expand_word_bboxes_callback
         self.refine_lines_callback = refine_lines_callback
         self.expand_then_refine_lines_callback = expand_then_refine_lines_callback
+        self.expand_line_bboxes_callback = expand_line_bboxes_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
         self.expand_then_refine_paragraphs_callback = (
             expand_then_refine_paragraphs_callback
         )
+        self.expand_paragraph_bboxes_callback = expand_paragraph_bboxes_callback
         self.split_line_with_selected_words_callback = (
             split_line_with_selected_words_callback
         )

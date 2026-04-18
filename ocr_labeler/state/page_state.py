@@ -1892,6 +1892,40 @@ class PageState:
             logger.exception("Error expand-then-refining words %s: %s", word_keys, e)
             return False
 
+    def expand_word_bboxes(
+        self,
+        page_index: int,
+        word_keys: list[tuple[int, int]],
+        padding_px: float = 2.0,
+    ) -> bool:
+        """Expand selected word bboxes by uniform pixel padding on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            word_keys: Selected (line_index, word_index) tuples.
+            padding_px: Pixels to add on each edge.
+
+        Returns:
+            bool: True if expand succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-bbox")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_word_bboxes(page, word_keys, padding_px=padding_px)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error expanding word bboxes %s: %s", word_keys, e)
+            return False
+
     def refine_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Refine selected lines on the current page.
 
@@ -2019,6 +2053,82 @@ class PageState:
         except Exception as e:
             logger.exception(
                 "Error expand-then-refining paragraphs %s: %s",
+                paragraph_indices,
+                e,
+            )
+            return False
+
+    def expand_line_bboxes(
+        self,
+        page_index: int,
+        line_indices: list[int],
+        padding_px: float = 2.0,
+    ) -> bool:
+        """Expand all word bboxes in selected lines by uniform pixel padding.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            line_indices: Selected line indices.
+            padding_px: Pixels to add on each edge.
+
+        Returns:
+            bool: True if expand succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-line-bboxes")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_line_bboxes(
+                page, line_indices, padding_px=padding_px
+            )
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error expanding line bboxes %s: %s", line_indices, e)
+            return False
+
+    def expand_paragraph_bboxes(
+        self,
+        page_index: int,
+        paragraph_indices: list[int],
+        padding_px: float = 2.0,
+    ) -> bool:
+        """Expand all word bboxes in selected paragraphs by uniform pixel padding.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            paragraph_indices: Selected paragraph indices.
+            padding_px: Pixels to add on each edge.
+
+        Returns:
+            bool: True if expand succeeded, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for expand-paragraph-bboxes")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.expand_paragraph_bboxes(
+                page, paragraph_indices, padding_px=padding_px
+            )
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception(
+                "Error expanding paragraph bboxes %s: %s",
                 paragraph_indices,
                 e,
             )

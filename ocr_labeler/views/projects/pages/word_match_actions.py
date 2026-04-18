@@ -1000,6 +1000,52 @@ class WordMatchActions:
                 f"Error expand-then-refining words: {e}", type_="negative"
             )
 
+    def _handle_expand_bbox_selected_words(self, _event: ClickEvent = None) -> None:
+        """Expand selected word bounding boxes by uniform padding."""
+        if self._view.expand_word_bboxes_callback is None:
+            self._view._safe_notify(
+                "Expand bbox function not available", type_="warning"
+            )
+            return
+
+        selected_words = sorted(self._view.selection.selected_word_indices)
+        if not selected_words:
+            self._view._safe_notify(
+                "Select at least one word to expand", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self._view.selection.selected_line_indices)
+        previous_word_selection = set(self._view.selection.selected_word_indices)
+        self._view.selection.selected_line_indices.clear()
+        self._view.selection.selected_word_indices.clear()
+        self._view.toolbar.update_button_state()
+        self._view.selection.emit_selection_changed()
+        try:
+            success = self._view.expand_word_bboxes_callback(selected_words)
+            if success:
+                self._view._safe_notify(
+                    f"Expanded bboxes for {len(selected_words)} words",
+                    type_="positive",
+                )
+            else:
+                self._view.selection.selected_line_indices = previous_line_selection
+                self._view.selection.selected_word_indices = previous_word_selection
+                self._view.toolbar.update_button_state()
+                self._view.selection.emit_selection_changed()
+                self._view._safe_notify(
+                    "Failed to expand selected word bboxes", type_="warning"
+                )
+        except Exception as e:
+            self._view.selection.selected_line_indices = previous_line_selection
+            self._view.selection.selected_word_indices = previous_word_selection
+            self._view.toolbar.update_button_state()
+            self._view.selection.emit_selection_changed()
+            logger.exception("Error expanding word bboxes %s: %s", selected_words, e)
+            self._view._safe_notify(
+                f"Error expanding word bboxes: {e}", type_="negative"
+            )
+
     def _handle_expand_then_refine_selected_lines(
         self, _event: ClickEvent = None
     ) -> None:
@@ -1048,6 +1094,52 @@ class WordMatchActions:
             )
             self._view._safe_notify(
                 f"Error expand-then-refining lines: {e}", type_="negative"
+            )
+
+    def _handle_expand_bbox_selected_lines(self, _event: ClickEvent = None) -> None:
+        """Expand selected line bounding boxes by uniform padding."""
+        if self._view.expand_line_bboxes_callback is None:
+            self._view._safe_notify(
+                "Expand line bboxes function not available", type_="warning"
+            )
+            return
+
+        selected_lines = self._view._get_effective_selected_lines()
+        if not selected_lines:
+            self._view._safe_notify(
+                "Select at least one line to expand", type_="warning"
+            )
+            return
+
+        previous_line_selection = set(self._view.selection.selected_line_indices)
+        previous_word_selection = set(self._view.selection.selected_word_indices)
+        self._view.selection.selected_line_indices.clear()
+        self._view.selection.selected_word_indices.clear()
+        self._view.toolbar.update_button_state()
+        self._view.selection.emit_selection_changed()
+        try:
+            success = self._view.expand_line_bboxes_callback(selected_lines)
+            if success:
+                self._view._safe_notify(
+                    f"Expanded bboxes in {len(selected_lines)} lines",
+                    type_="positive",
+                )
+            else:
+                self._view.selection.selected_line_indices = previous_line_selection
+                self._view.selection.selected_word_indices = previous_word_selection
+                self._view.toolbar.update_button_state()
+                self._view.selection.emit_selection_changed()
+                self._view._safe_notify(
+                    "Failed to expand selected line bboxes", type_="warning"
+                )
+        except Exception as e:
+            self._view.selection.selected_line_indices = previous_line_selection
+            self._view.selection.selected_word_indices = previous_word_selection
+            self._view.toolbar.update_button_state()
+            self._view.selection.emit_selection_changed()
+            logger.exception("Error expanding line bboxes %s: %s", selected_lines, e)
+            self._view._safe_notify(
+                f"Error expanding line bboxes: {e}", type_="negative"
             )
 
     def _handle_expand_then_refine_selected_paragraphs(
@@ -1099,6 +1191,55 @@ class WordMatchActions:
             )
             self._view._safe_notify(
                 f"Error expand-then-refining paragraphs: {e}", type_="negative"
+            )
+
+    def _handle_expand_bbox_selected_paragraphs(
+        self, _event: ClickEvent = None
+    ) -> None:
+        """Expand selected paragraph bounding boxes by uniform padding."""
+        if self._view.expand_paragraph_bboxes_callback is None:
+            self._view._safe_notify(
+                "Expand paragraph bboxes function not available", type_="warning"
+            )
+            return
+
+        selected_paragraphs = sorted(self._view.selection.selected_paragraph_indices)
+        if not selected_paragraphs:
+            self._view._safe_notify(
+                "Select at least one paragraph to expand", type_="warning"
+            )
+            return
+
+        previous_selection = set(self._view.selection.selected_paragraph_indices)
+        self._view.selection.selected_paragraph_indices.clear()
+        self._view.toolbar.update_button_state()
+        self._view.selection.emit_paragraph_selection_changed()
+        try:
+            success = self._view.expand_paragraph_bboxes_callback(selected_paragraphs)
+            if success:
+                self._view._safe_notify(
+                    f"Expanded bboxes in {len(selected_paragraphs)} paragraphs",
+                    type_="positive",
+                )
+            else:
+                self._view.selection.selected_paragraph_indices = previous_selection
+                self._view.toolbar.update_button_state()
+                self._view.selection.emit_paragraph_selection_changed()
+                self._view._safe_notify(
+                    "Failed to expand selected paragraph bboxes",
+                    type_="warning",
+                )
+        except Exception as e:
+            self._view.selection.selected_paragraph_indices = previous_selection
+            self._view.toolbar.update_button_state()
+            self._view.selection.emit_paragraph_selection_changed()
+            logger.exception(
+                "Error expanding paragraph bboxes %s: %s",
+                selected_paragraphs,
+                e,
+            )
+            self._view._safe_notify(
+                f"Error expanding paragraph bboxes: {e}", type_="negative"
             )
 
     # ------------------------------------------------------------------

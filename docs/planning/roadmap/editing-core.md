@@ -1,7 +1,7 @@
 # Roadmap Phase 3: Word and Line-Level Editing Core
 
 **Priority:** High
-**Status:** Mostly Complete
+**Status:** Complete
 
 ## Recently Completed
 
@@ -41,11 +41,15 @@
 
 - ~~Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)~~
   (Done — `LineOperations.add_word_to_page`, `PageState.add_word`, toolbar "Add Word" button, image-tab draw mode)
-- Expand-bbox action for selected word(s)
+- ~~Expand-bbox action for selected word(s)~~
+  (Done — `LineOperations.expand_word_bboxes`, plus line/paragraph scope
+  variants; toolbar buttons wired through all 6 layers)
 
 ### Block/Line Editing
 
-- Additional line/paragraph refinement workflows
+- ~~Additional line/paragraph refinement workflows~~
+  (Done — expand-bbox at line and paragraph scope via
+  `expand_line_bboxes` / `expand_paragraph_bboxes`)
 
 ## Ground Truth and State
 

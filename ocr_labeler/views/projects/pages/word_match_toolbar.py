@@ -39,10 +39,12 @@ class WordMatchToolbar:
         self.copy_ocr_to_gt_words_button = None
         self.refine_lines_button = None
         self.expand_then_refine_lines_button = None
+        self.expand_line_bboxes_button = None
         self.merge_paragraphs_button = None
         self.delete_paragraphs_button = None
         self.refine_paragraphs_button = None
         self.expand_then_refine_paragraphs_button = None
+        self.expand_paragraph_bboxes_button = None
         self.split_paragraph_after_line_button = None
         self.split_paragraph_by_selection_button = None
         self.split_line_after_word_button = None
@@ -52,6 +54,7 @@ class WordMatchToolbar:
         self.delete_words_button = None
         self.refine_words_button = None
         self.expand_then_refine_words_button = None
+        self.expand_word_bboxes_button = None
         self.group_selected_words_into_paragraph_button = None
         self.validate_page_button = None
         self.unvalidate_page_button = None
@@ -82,10 +85,11 @@ class WordMatchToolbar:
     def build_actions_toolbar(self):
         """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
         # Operations grid: columns = scope label | Merge | Refine | Expand+Refine |
-        # Split After | Split Select | Word Select | To Paragraph | GT->OCR | OCR->GT | Validate | Unvalidate | Delete
+        # Expand Bboxes | Split After | Split Select | Word Select | To Paragraph |
+        # GT->OCR | OCR->GT | Validate | Unvalidate | Delete
         with (
             ui.grid(
-                columns="auto auto auto auto auto auto auto auto auto auto auto auto auto"
+                columns="auto auto auto auto auto auto auto auto auto auto auto auto auto auto"
             )
             .classes("items-center justify-items-center w-auto pl-2")
             .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
@@ -115,6 +119,7 @@ class WordMatchToolbar:
                 style_word_icon_button(self.expand_refine_bboxes_button)
             else:
                 ui.element("div")
+            ui.element("div")  # no Expand Bboxes for page
             ui.element("div")  # no Split After for page
             ui.element("div")  # no Split Select for page
             ui.element("div")  # no Word Select for page
@@ -176,6 +181,14 @@ class WordMatchToolbar:
                 'data-testid="paragraph-expand-refine-bboxes-button"'
             )
             style_word_icon_button(self.expand_then_refine_paragraphs_button)
+            self.expand_paragraph_bboxes_button = ui.button(
+                icon="open_in_full",
+                on_click=self._view.actions._handle_expand_bbox_selected_paragraphs,
+            ).tooltip("Expand selected paragraph bboxes")
+            self.expand_paragraph_bboxes_button.props(
+                'data-testid="paragraph-expand-bboxes-button"'
+            )
+            style_word_icon_button(self.expand_paragraph_bboxes_button)
             self.split_paragraph_after_line_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_paragraph_after_selected_line,
@@ -253,6 +266,14 @@ class WordMatchToolbar:
                 'data-testid="line-expand-refine-bboxes-button"'
             )
             style_word_icon_button(self.expand_then_refine_lines_button)
+            self.expand_line_bboxes_button = ui.button(
+                icon="open_in_full",
+                on_click=self._view.actions._handle_expand_bbox_selected_lines,
+            ).tooltip("Expand selected line bboxes")
+            self.expand_line_bboxes_button.props(
+                'data-testid="line-expand-bboxes-button"'
+            )
+            style_word_icon_button(self.expand_line_bboxes_button)
             self.split_line_after_word_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_line_after_selected_word,
@@ -342,6 +363,14 @@ class WordMatchToolbar:
                 'data-testid="word-expand-refine-bboxes-button"'
             )
             style_word_icon_button(self.expand_then_refine_words_button)
+            self.expand_word_bboxes_button = ui.button(
+                icon="open_in_full",
+                on_click=self._view.actions._handle_expand_bbox_selected_words,
+            ).tooltip("Expand selected word bboxes")
+            self.expand_word_bboxes_button.props(
+                'data-testid="word-expand-bboxes-button"'
+            )
+            style_word_icon_button(self.expand_word_bboxes_button)
             ui.element("div")  # no Split After for word
             ui.element("div")  # no Split Select for word
             self.extract_line_from_selection_button = ui.button(
@@ -707,6 +736,12 @@ class WordMatchToolbar:
                 and len(selected_lines) >= 1
             )
 
+        if self.expand_line_bboxes_button is not None:
+            self.expand_line_bboxes_button.enabled = (
+                self._view.expand_line_bboxes_callback is not None
+                and len(selected_lines) >= 1
+            )
+
         if self.merge_paragraphs_button is not None:
             self.merge_paragraphs_button.enabled = (
                 self._view.merge_paragraphs_callback is not None
@@ -728,6 +763,12 @@ class WordMatchToolbar:
         if self.expand_then_refine_paragraphs_button is not None:
             self.expand_then_refine_paragraphs_button.enabled = (
                 self._view.expand_then_refine_paragraphs_callback is not None
+                and len(self._view.selection.selected_paragraph_indices) >= 1
+            )
+
+        if self.expand_paragraph_bboxes_button is not None:
+            self.expand_paragraph_bboxes_button.enabled = (
+                self._view.expand_paragraph_bboxes_callback is not None
                 and len(self._view.selection.selected_paragraph_indices) >= 1
             )
 
@@ -788,6 +829,12 @@ class WordMatchToolbar:
         if self.expand_then_refine_words_button is not None:
             self.expand_then_refine_words_button.enabled = (
                 self._view.expand_then_refine_words_callback is not None
+                and len(self._view.selection.selected_word_indices) >= 1
+            )
+
+        if self.expand_word_bboxes_button is not None:
+            self.expand_word_bboxes_button.enabled = (
+                self._view.expand_word_bboxes_callback is not None
                 and len(self._view.selection.selected_word_indices) >= 1
             )
 

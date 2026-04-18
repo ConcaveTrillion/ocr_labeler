@@ -31,6 +31,8 @@
 
 ## Scope (Remaining)
 
-- Save/load round-trip tests
+- ~~Save/load round-trip tests~~ (Done — 12 unit tests covering structure,
+  word attributes, original page, and edge cases; browser-level round-trip
+  tests still pending)
 - Filtering behavior tests
 - README refresh and developer/troubleshooting docs (partially done)

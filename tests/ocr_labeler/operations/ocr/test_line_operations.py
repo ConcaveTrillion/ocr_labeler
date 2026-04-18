@@ -1363,3 +1363,87 @@ class TestLineOperations:
             )
             in paragraph_line_signatures
         )
+
+
+class TestAddWordToPage:
+    """Tests for LineOperations.add_word_to_page, including 2D nearest-line selection."""
+
+    @pytest.fixture
+    def operations(self):
+        return LineOperations()
+
+    def _make_line(self, words, x1, y1, x2, y2):
+        """Helper to build a line with an explicit bounding box."""
+        return Block(
+            items=words,
+            bounding_box=BoundingBox(Point(x1, y1), Point(x2, y2), is_normalized=False),
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
+
+    def test_add_word_inserts_into_only_line(self, operations):
+        """A word drawn over the single line should be inserted into it."""
+        line = self._make_line([_word("hello", "Hello", 0)], 0, 0, 100, 10)
+        page = Page(width=200, height=100, page_index=0, items=[line])
+
+        result = operations.add_word_to_page(page, 50, 0, 80, 10, text="new")
+
+        assert result is True
+        word_texts = [w.text for w in page.lines[0].words]
+        assert "new" in word_texts
+
+    def test_add_word_selects_line_by_y_range(self, operations):
+        """center_y inside line2's Y range but not line1's → goes to line2."""
+        line1 = self._make_line([_word("top", "Top", 0)], 0, 0, 100, 10)
+        line2 = self._make_line([_word("bottom", "Bottom", 0)], 0, 50, 100, 60)
+        page = Page(width=200, height=100, page_index=0, items=[line1, line2])
+
+        # center_y=55 is within line2's Y range (50–60) but not line1's (0–10)
+        result = operations.add_word_to_page(page, 10, 53, 40, 57, text="near")
+
+        assert result is True
+        line2_texts = [w.text for w in page.lines[1].words]
+        assert "near" in line2_texts
+        line1_texts = [w.text for w in page.lines[0].words]
+        assert "near" not in line1_texts
+
+    def test_add_word_parallel_columns_x_breaks_tie(self, operations):
+        """Parallel columns at same Y: both are Y-range candidates, X breaks the tie."""
+        # left column x 0–80, right column x 120–200, both span y 40–60
+        left_line = self._make_line([_word("left", "Left", 5)], 0, 40, 80, 60)
+        right_line = self._make_line([_word("right", "Right", 125)], 120, 40, 200, 60)
+        page = Page(width=200, height=100, page_index=0, items=[left_line, right_line])
+
+        # center (160, 50): both lines contain y=50; right column center (160) is closer
+        result = operations.add_word_to_page(page, 150, 45, 170, 55, text="col")
+
+        assert result is True
+        lines = list(page.lines)
+        right_words = [w.text for w in lines[1].words]
+        left_words = [w.text for w in lines[0].words]
+        assert "col" in right_words
+        assert "col" not in left_words
+
+    def test_add_word_x_breaks_tie_when_both_lines_contain_center_y(self, operations):
+        """Both lines span center_y; the one with the nearer center X wins."""
+        line_a = self._make_line([_word("a", "A", 0)], 0, 30, 60, 50)  # centre x=30
+        line_b = self._make_line(
+            [_word("b", "B", 140)], 140, 30, 200, 50
+        )  # centre x=170
+        page = Page(width=200, height=100, page_index=0, items=[line_a, line_b])
+
+        # center (10, 40): both lines contain y=40; line_a center x=30 is closer to x=10
+        result = operations.add_word_to_page(page, 5, 38, 15, 42, text="near_a")
+
+        assert result is True
+        lines = list(page.lines)
+        line_a_words = [w.text for w in lines[0].words]
+        assert "near_a" in line_a_words
+
+    def test_add_word_no_page_returns_false(self, operations):
+        assert operations.add_word_to_page(None, 0, 0, 10, 10) is False
+
+    def test_add_word_no_lines_returns_false(self, operations):
+        page = MagicMock(spec=Page)
+        page.lines = []
+        assert operations.add_word_to_page(page, 0, 0, 10, 10) is False

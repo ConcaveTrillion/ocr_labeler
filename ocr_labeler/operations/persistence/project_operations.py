@@ -1,8 +1,6 @@
 """Project operations for OCR labeling tasks.
 
-This module contains operations that can be performed on    async def create_project(
-        self, directory: Path, images: list[Path], ground_truth_map: Optional[dict[str, str]] = None
-    ) -> "Project":projects, such as saving,
+This module contains operations that can be performed on projects, such as saving,
 loading, exporting, and other project-level persistence functionality. These operations
 are separated from state management to maintain clear architectural boundaries.
 """
@@ -11,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -318,30 +317,7 @@ class ProjectOperations:
             )
             return
 
-        pages_json = Path(project_root) / "pages.json"
-        new_map: dict[str, str] = {}
-
-        if pages_json.exists():
-            try:
-                raw_data = json.loads(pages_json.read_text(encoding="utf-8"))
-                if isinstance(raw_data, dict):
-                    new_map = self._normalize_ground_truth_entries(raw_data)
-                    logger.info(
-                        "Reloaded %d ground truth entries from %s",
-                        len(new_map),
-                        pages_json,
-                    )
-                else:
-                    logger.warning(
-                        "pages.json root is not an object (dict): %s", pages_json
-                    )
-            except Exception as exc:
-                logger.warning("Failed to reload pages.json (%s): %s", pages_json, exc)
-        else:
-            logger.info(
-                "No pages.json found in %s; clearing ground truth map", project_root
-            )
-
+        new_map = self.load_ground_truth_from_directory(Path(project_root))
         project.ground_truth_map = new_map
 
         invalidate_cache = getattr(state, "_invalidate_text_cache", None)
@@ -351,3 +327,182 @@ class ProjectOperations:
         notify = getattr(state, "notify", None)
         if callable(notify):
             notify()
+
+    # ------------------------------------------------------------------
+    # Multi-JSON ground truth merge
+    # ------------------------------------------------------------------
+
+    PAGES_MANIFEST_FILENAME = "pages_manifest.json"
+
+    def load_ground_truth_from_directory(self, directory: Path) -> dict[str, str]:
+        """Load and merge ground truth data from a project directory.
+
+        Checks for a ``pages_manifest.json`` first.  If found, loads and
+        merges each listed source file with its declared page index offset.
+        Falls back to a single ``pages.json`` when no manifest is present.
+
+        Parameters
+        ----------
+        directory : Path
+            Project root directory.
+
+        Returns
+        -------
+        dict[str, str]
+            Normalized and merged ground truth mapping.
+        """
+        manifest_path = directory / self.PAGES_MANIFEST_FILENAME
+        if manifest_path.exists():
+            try:
+                merged = self._load_ground_truth_from_manifest(manifest_path)
+                logger.info(
+                    "Loaded %d ground truth entries from manifest %s",
+                    len(merged),
+                    manifest_path,
+                )
+                return merged
+            except Exception as exc:
+                logger.warning(
+                    "Failed to load pages_manifest.json (%s); falling back to pages.json: %s",
+                    manifest_path,
+                    exc,
+                )
+
+        # Single pages.json fallback
+        pages_json = directory / "pages.json"
+        if not pages_json.exists():
+            logger.info("No pages.json found in %s", directory)
+            return {}
+        try:
+            raw_data = json.loads(pages_json.read_text(encoding="utf-8"))
+            if isinstance(raw_data, dict):
+                norm = self._normalize_ground_truth_entries(raw_data)
+                logger.info(
+                    "Loaded %d ground truth entries from %s", len(norm), pages_json
+                )
+                return norm
+            logger.warning("pages.json root is not an object (dict): %s", pages_json)
+        except Exception as exc:
+            logger.warning("Failed to load pages.json (%s): %s", pages_json, exc)
+        return {}
+
+    def _load_ground_truth_from_manifest(self, manifest_path: Path) -> dict[str, str]:
+        """Parse ``pages_manifest.json`` and merge source files with offsets.
+
+        Manifest schema::
+
+            {
+                "schema": "ocr_labeler.pages_manifest",
+                "version": "1.0",
+                "sources": [
+                    {"file": "pages_r1.json", "offset": 0},
+                    {"file": "pages_r2.json", "offset": 100}
+                ]
+            }
+
+        The ``offset`` value is added to the numeric prefix extracted from each
+        key in the source file.  For example, key ``"042.png"`` with offset 100
+        becomes ``"142.png"``.  If the key does not have a numeric prefix, it is
+        included verbatim (no offset applied).
+
+        Parameters
+        ----------
+        manifest_path : Path
+            Path to the manifest JSON file.
+
+        Returns
+        -------
+        dict[str, str]
+            Merged normalized ground truth mapping.
+        """
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("pages_manifest.json must be a JSON object")
+
+        sources = raw.get("sources")
+        if not isinstance(sources, list):
+            raise ValueError("pages_manifest.json must have a 'sources' list")
+
+        base_dir = manifest_path.parent
+        merged: dict[str, str] = {}
+
+        for entry in sources:
+            if not isinstance(entry, dict):
+                logger.warning("Skipping invalid manifest entry: %r", entry)
+                continue
+
+            file_name = entry.get("file")
+            if not isinstance(file_name, str) or not file_name:
+                logger.warning("Skipping manifest entry with missing 'file': %r", entry)
+                continue
+
+            offset = int(entry.get("offset", 0))
+
+            source_path = base_dir / file_name
+            if not source_path.exists():
+                logger.warning("Manifest source file not found: %s", source_path)
+                continue
+
+            try:
+                source_data = json.loads(source_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.warning(
+                    "Failed to read manifest source %s: %s", source_path, exc
+                )
+                continue
+
+            if not isinstance(source_data, dict):
+                logger.warning(
+                    "Manifest source %s is not a JSON object; skipping", source_path
+                )
+                continue
+
+            # If offset > 0, remap numeric keys before normalizing
+            if offset != 0:
+                source_data = self._apply_page_index_offset(source_data, offset)
+
+            partial = self._normalize_ground_truth_entries(source_data)
+            merged.update(partial)
+            logger.debug(
+                "Merged %d entries from %s (offset=%d)",
+                len(partial),
+                source_path.name,
+                offset,
+            )
+
+        return merged
+
+    _NUMERIC_STEM_RE = re.compile(r"^(\d+)(\.\w+)?$")
+
+    def _apply_page_index_offset(self, data: dict, offset: int) -> dict:
+        """Return a copy of *data* with numeric stems in keys shifted by *offset*.
+
+        Keys whose stems are not purely numeric are passed through unchanged.
+        For example, ``"042.png"`` with offset 100 → ``"142.png"``.
+
+        Parameters
+        ----------
+        data : dict
+            Raw key→text mapping from a pages JSON file.
+        offset : int
+            Integer to add to each numeric stem.
+
+        Returns
+        -------
+        dict
+            New mapping with shifted keys.
+        """
+        result: dict = {}
+        for key, value in data.items():
+            if not isinstance(key, str):
+                result[key] = value
+                continue
+            m = self._NUMERIC_STEM_RE.match(key)
+            if m:
+                new_num = int(m.group(1)) + offset
+                ext = m.group(2) or ""
+                new_key = f"{new_num:03d}{ext}"
+                result[new_key] = value
+            else:
+                result[key] = value
+        return result

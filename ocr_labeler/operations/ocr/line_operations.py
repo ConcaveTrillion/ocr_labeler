@@ -1741,6 +1741,132 @@ class LineOperations:
             )
             return False
 
+    def add_word_to_page(
+        self,
+        page: "Page",
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        text: str = "",
+    ) -> bool:
+        """Insert a new word with the given bounding box into the nearest line.
+
+        The target line is chosen by minimum vertical distance between the
+        midpoint of the drawn bbox and each line's midpoint.  The new word is
+        inserted at the position sorted by its left edge so the line ordering
+        remains consistent.
+
+        Args:
+            page: Page to insert the word into.
+            x1: Left x-coordinate in page pixel space.
+            y1: Top y-coordinate in page pixel space.
+            x2: Right x-coordinate in page pixel space.
+            y2: Bottom y-coordinate in page pixel space.
+            text: Optional initial OCR text for the new word (default "").
+
+        Returns:
+            bool: True when insertion succeeds, False otherwise.
+        """
+        if not page:
+            logger.warning("No page provided for add_word_to_page")
+            return False
+
+        try:
+            rx1, ry1 = min(float(x1), float(x2)), min(float(y1), float(y2))
+            rx2, ry2 = max(float(x1), float(x2)), max(float(y1), float(y2))
+            if rx2 <= rx1 or ry2 <= ry1:
+                logger.warning(
+                    "Invalid add-word rectangle: (%.2f, %.2f, %.2f, %.2f)",
+                    rx1,
+                    ry1,
+                    rx2,
+                    ry2,
+                )
+                return False
+
+            lines = list(page.lines)
+            if not lines:
+                logger.warning("No lines found in page for add_word_to_page")
+                return False
+
+            # Determine bbox normalization from the first word found.
+            is_normalized = self._detect_page_normalization(page)
+            page_width, page_height = 0.0, 0.0
+
+            from pd_book_tools.geometry.bounding_box import BoundingBox
+            from pd_book_tools.geometry.point import Point
+            from pd_book_tools.ocr.word import Word
+
+            if is_normalized:
+                page_width, page_height = self._resolve_page_dimensions(page)
+                if page_width <= 0.0 or page_height <= 0.0:
+                    logger.warning("Unable to resolve page dimensions for add_word")
+                    return False
+                new_bbox = BoundingBox(
+                    Point(rx1 / page_width, ry1 / page_height),
+                    Point(rx2 / page_width, ry2 / page_height),
+                    is_normalized=True,
+                )
+            else:
+                new_bbox = BoundingBox(
+                    Point(rx1, ry1),
+                    Point(rx2, ry2),
+                    is_normalized=False,
+                )
+
+            new_word = Word(
+                text=text,
+                bounding_box=new_bbox,
+                ocr_confidence=None,
+            )
+
+            # Find the nearest line using fuzzy vertical matching:
+            # prefer any line whose Y range contains the drawn bbox centre,
+            # then break ties by horizontal distance to handle parallel columns.
+            # Falls back to closest vertical midpoint when no line spans center_y.
+            cx = (rx1 + rx2) / 2.0
+            cy = (ry1 + ry2) / 2.0
+            if is_normalized:
+                cx = cx / page_width
+                cy = cy / page_height
+
+            target_line = self._closest_line_by_y_range_then_x(
+                lines,
+                cx,
+                cy,
+                lines[0],
+            )
+
+            if not self._add_word_to_line(target_line, new_word):
+                logger.warning("Failed to add new word to target line")
+                return False
+
+            self._finalize_page_structure(page)
+
+            logger.info(
+                "Added new word to page bbox=(%.2f, %.2f, %.2f, %.2f)",
+                rx1,
+                ry1,
+                rx2,
+                ry2,
+            )
+            return True
+
+        except Exception as e:
+            logger.exception("Error adding word to page: %s", e)
+            return False
+
+    def _detect_page_normalization(self, page: object) -> bool:
+        """Return True if existing word bboxes on the page are normalized."""
+        for line in list(getattr(page, "lines", []) or []):
+            words = list(getattr(line, "items", []) or [])
+            for word in words:
+                bbox = getattr(word, "bounding_box", None)
+                if bbox is not None:
+                    return bool(getattr(bbox, "is_normalized", False))
+        return False
+
     def refine_words(self, page: "Page", word_keys: list[tuple[int, int]]) -> bool:
         """Refine selected word bounding boxes.
 
@@ -3304,6 +3430,110 @@ class LineOperations:
     def _word_vertical_midpoint(self, word: object) -> float | None:
         """Return vertical midpoint for a word bounding box."""
         return self._bbox_vertical_midpoint(getattr(word, "bounding_box", None))
+
+    def _bbox_horizontal_midpoint(self, bbox: object | None) -> float | None:
+        """Return horizontal midpoint for a bbox-like object, when available."""
+        if bbox is None:
+            return None
+
+        min_x = getattr(bbox, "minX", None)
+        max_x = getattr(bbox, "maxX", None)
+        if min_x is not None and max_x is not None:
+            return (float(min_x) + float(max_x)) / 2.0
+
+        top_left = getattr(bbox, "top_left", None)
+        bottom_right = getattr(bbox, "bottom_right", None)
+        if top_left is not None and bottom_right is not None:
+            left_x = getattr(top_left, "x", None)
+            right_x = getattr(bottom_right, "x", None)
+            if left_x is not None and right_x is not None:
+                return (float(left_x) + float(right_x)) / 2.0
+
+        min_x = getattr(bbox, "x", None)
+        width = getattr(bbox, "width", None)
+        if min_x is not None and width is not None:
+            return float(min_x) + (float(width) / 2.0)
+
+        return None
+
+    def _line_horizontal_midpoint(self, line: object) -> float | None:
+        """Return horizontal midpoint for a line bounding box."""
+        return self._bbox_horizontal_midpoint(getattr(line, "bounding_box", None))
+
+    def _bbox_y_range(self, bbox: object | None) -> tuple[float, float] | None:
+        """Return (min_y, max_y) for a bbox-like object, or None if unavailable."""
+        if bbox is None:
+            return None
+
+        min_y = getattr(bbox, "minY", None)
+        max_y = getattr(bbox, "maxY", None)
+        if min_y is not None and max_y is not None:
+            return float(min_y), float(max_y)
+
+        top_left = getattr(bbox, "top_left", None)
+        bottom_right = getattr(bbox, "bottom_right", None)
+        if top_left is not None and bottom_right is not None:
+            top_y = getattr(top_left, "y", None)
+            bottom_y = getattr(bottom_right, "y", None)
+            if top_y is not None and bottom_y is not None:
+                return float(min(top_y, bottom_y)), float(max(top_y, bottom_y))
+
+        min_y = getattr(bbox, "y", None)
+        height = getattr(bbox, "height", None)
+        if min_y is not None and height is not None:
+            return float(min_y), float(min_y) + float(height)
+
+        return None
+
+    def _line_y_range(self, line: object) -> tuple[float, float] | None:
+        """Return (min_y, max_y) for a line bounding box."""
+        return self._bbox_y_range(getattr(line, "bounding_box", None))
+
+    def _closest_line_by_y_range_then_x(
+        self,
+        lines: list[object],
+        center_x: float,
+        center_y: float,
+        fallback_line: object,
+    ) -> object:
+        """Choose the best line for a point at (center_x, center_y).
+
+        Strategy:
+        1. Collect all lines whose Y range contains center_y (fuzzy vertical match).
+        2. If any such lines exist, pick the one with the smallest horizontal
+           distance from its center X to center_x — this correctly breaks ties
+           between parallel columns or side-notes at the same Y.
+        3. If no line's Y range contains center_y, fall back to the line whose
+           vertical midpoint is closest (pure vertical distance).
+        """
+        # Step 1: Y-range candidates.
+        y_candidates: list[object] = []
+        for line in lines:
+            y_range = self._line_y_range(line)
+            if y_range is not None and y_range[0] <= center_y <= y_range[1]:
+                y_candidates.append(line)
+
+        if y_candidates:
+            # Step 2: break ties by horizontal distance.
+            best_line = y_candidates[0]
+            best_x_dist = float("inf")
+            for line in y_candidates:
+                lx = self._line_horizontal_midpoint(line)
+                if lx is None:
+                    continue
+                x_dist = abs(lx - center_x)
+                if x_dist < best_x_dist:
+                    best_x_dist = x_dist
+                    best_line = line
+            return best_line
+
+        # Step 3: fall back to closest vertical midpoint.
+        line_midpoints = {
+            id(line): self._line_vertical_midpoint(line) for line in lines
+        }
+        return self._closest_line_by_midpoint(
+            lines, line_midpoints, center_y, fallback_line
+        )
 
     def _closest_line_by_midpoint(
         self,

@@ -13,6 +13,7 @@ from ..operations.persistence.config_operations import ConfigOperations
 from ..operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
 )
+from ..operations.persistence.session_state_operations import SessionStateOperations
 from .project_state import ProjectState
 
 logger = logging.getLogger(__name__)
@@ -159,6 +160,18 @@ class AppState:
 
             if manage_loading_state:
                 self.queue_notification(f"Loaded {project_key}", "positive")
+
+            # Persist session state so next startup can restore this project/page.
+            try:
+                page_idx = self.projects[project_key].current_page_index
+                SessionStateOperations.save_session_state(
+                    project_path=directory,
+                    page_index=max(0, page_idx),
+                )
+            except Exception:
+                logger.debug(
+                    "Failed to persist session state after project load", exc_info=True
+                )
         finally:
             # Clear project-level loading state (page-level loading continues via navigation spinner logic)
             if manage_loading_state:

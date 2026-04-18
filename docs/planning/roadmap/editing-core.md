@@ -39,7 +39,8 @@
 
 ### BBox Editing
 
-- Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)
+- ~~Add-word workflow: draw a bbox on the image to insert a new word (default target: nearest line/paragraph)~~
+  (Done — `LineOperations.add_word_to_page`, `PageState.add_word`, toolbar "Add Word" button, image-tab draw mode)
 - Expand-bbox action for selected word(s)
 
 ### Block/Line Editing

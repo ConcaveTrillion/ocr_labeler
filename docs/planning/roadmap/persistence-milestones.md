@@ -23,11 +23,15 @@ This track captures persistence work that cuts across product roadmap milestones
 - ~~**Save Project (bulk page persist):**~~ `save_all_pages()` in
   `ProjectState` persists all worked pages in a single operation with
   progress/result notification via `SaveProjectResult`.
+- ~~**Metadata + Session Baseline (Phase B — Session Restore):**~~ `SessionState`
+  dataclass + `SessionStateOperations` for save/load/clear; saved on every
+  successful project load; restored at startup when no CLI project or URL
+  is provided (`app.py` `_try_restore_session`).
 
 ## Planned Sequence
 
-- **Metadata + Session Baseline:** user metadata schema design exists but
-  not yet prioritized; session restore not yet implemented.
+- **Metadata + Session Baseline (Phase A):** user metadata schema design exists but
+  not yet prioritized.
 - **Disconnect/Prewarm Reliability:** disconnect flush + optional cache prewarm
 - **Derived Cache Optimization (later):** derived word/line cache strategy and performance-focused persistence
 

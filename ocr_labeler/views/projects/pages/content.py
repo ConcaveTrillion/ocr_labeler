@@ -42,6 +42,7 @@ class ContentArea:
             on_words_selected=self._on_words_selected,
             on_paragraphs_selected=self._on_paragraphs_selected,
             on_word_rebox_drawn=self._on_word_rebox_drawn,
+            on_word_add_drawn=self._on_word_add_drawn,
         )
         self.text_tabs.word_match_view.set_selection_change_callback(
             self._on_right_panel_words_selected
@@ -51,6 +52,9 @@ class ContentArea:
         )
         self.text_tabs.word_match_view.set_rebox_request_callback(
             self._on_right_panel_word_rebox_requested
+        )
+        self.text_tabs.word_match_view.set_add_word_request_callback(
+            self._on_right_panel_add_word_requested
         )
         self.text_tabs.word_match_view.set_summary_callback(self._update_stats_label)
         if callbacks.refine_bboxes:
@@ -102,6 +106,10 @@ class ContentArea:
         _ = (line_index, word_index)
         self.image_tabs.enable_word_rebox_mode()
 
+    def _on_right_panel_add_word_requested(self) -> None:
+        """Enable image-side add-word drawing mode."""
+        self.image_tabs.enable_word_add_mode()
+
     def _on_word_rebox_drawn(
         self,
         x1: float,
@@ -110,7 +118,17 @@ class ContentArea:
         y2: float,
     ) -> None:
         """Apply drawn image rectangle to the pending word rebox target."""
-        self.text_tabs.word_match_view.apply_rebox_bbox(x1, y1, x2, y2)
+        self.text_tabs.word_match_view.bbox.apply_rebox_bbox(x1, y1, x2, y2)
+
+    def _on_word_add_drawn(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> None:
+        """Apply drawn image rectangle as a new word insertion."""
+        self.text_tabs.word_match_view.apply_add_word_bbox(x1, y1, x2, y2)
 
     def _on_word_view_image_ready(self, page_index: int, _source: str) -> None:
         """Notify text tabs when the page-matched word image source becomes available."""

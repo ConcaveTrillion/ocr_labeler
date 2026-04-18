@@ -69,6 +69,7 @@ class WordMatchToolbar:
         self.apply_component_button = None
         self.clear_component_button = None
         self._selected_component_value: str | None = None
+        self.add_word_button = None
 
     def set_refine_bboxes_callback(self, callback: Callable | None) -> None:
         """Register callback for the page-level Refine Bboxes action."""
@@ -404,6 +405,7 @@ class WordMatchToolbar:
             )
 
         self._build_apply_style_toolbar()
+        self._build_add_word_toolbar()
 
     def _build_apply_style_toolbar(self) -> None:
         """Build a dedicated immediate-apply style toolbar for selected words."""
@@ -498,6 +500,25 @@ class WordMatchToolbar:
         # Apply the current selection state immediately so controls are correctly
         # gated when the toolbar first renders.
         self.update_button_state()
+
+    def _build_add_word_toolbar(self) -> None:
+        """Build a toolbar row with add-word action."""
+        if self._view.add_word_callback is None:
+            return
+        with (
+            ui.row()
+            .classes("items-center gap-2 pl-2 pt-1 flex-wrap")
+            .style("max-width: 100%;")
+        ):
+            self.add_word_button = ui.button(
+                "Add Word",
+                icon="add_box",
+                on_click=self._view.bbox.handle_start_add_word,
+            ).tooltip(
+                "Draw a bounding box on the image to insert a new word into the nearest line"
+            )
+            self.add_word_button.props('data-testid="word-add-button"')
+            style_word_text_button(self.add_word_button)
 
     def _display_label(self, value: str) -> str:
         return str(value).title()

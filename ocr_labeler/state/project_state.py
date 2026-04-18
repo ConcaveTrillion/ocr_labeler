@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from collections import deque
@@ -1640,36 +1639,32 @@ class ProjectState:
         return ProjectOperations()._normalize_ground_truth_entries(data)
 
     async def load_ground_truth_map(self, directory: Path) -> dict[str, str]:
-        """Load and normalize ground truth data from pages.json file.
+        """Load and normalize ground truth data from pages.json or pages_manifest.json.
+
+        Checks for ``pages_manifest.json`` first (multi-source merge with page
+        index offsets), then falls back to a single ``pages.json``.
 
         Parameters
         ----------
         directory : Path
-            Directory containing pages.json file
+            Directory containing pages.json or pages_manifest.json
 
         Returns
         -------
         dict[str, str]
-            Normalized ground truth mapping, empty dict if file not found or invalid
+            Normalized ground truth mapping, empty dict if no file found or invalid
         """
-        pages_json = directory / "pages.json"
-        exists = await run.io_bound(pages_json.exists)
-        if not exists:
-            logger.info("No pages.json found in %s", directory)
-            return {}
         try:
-            raw_text = await run.io_bound(pages_json.read_text, encoding="utf-8")
-            data = await run.io_bound(json.loads, raw_text)
-            if isinstance(data, dict):
-                norm = self._normalize_ground_truth_entries(data)
-                logger.info(
-                    "Loaded %d ground truth entries from %s", len(norm), pages_json
-                )
-                return norm
-            logger.warning("pages.json root is not an object (dict): %s", pages_json)
+            norm = await run.io_bound(
+                ProjectOperations().load_ground_truth_from_directory, directory
+            )
+            logger.info(
+                "load_ground_truth_map: loaded %d entries from %s", len(norm), directory
+            )
+            return norm
         except Exception as exc:  # pragma: no cover - robustness
-            logger.warning("Failed to load pages.json (%s): %s", pages_json, exc)
-        return {}
+            logger.warning("load_ground_truth_map: failed for %s: %s", directory, exc)
+            return {}
 
     def find_ground_truth_text(
         self, name: str, ground_truth_map: dict[str, str]

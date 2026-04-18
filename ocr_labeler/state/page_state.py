@@ -1726,6 +1726,46 @@ class PageState:
             )
             return False
 
+    def add_word(
+        self,
+        page_index: int,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        text: str = "",
+    ) -> bool:
+        """Insert a new word into the nearest line on the current page.
+
+        Args:
+            page_index: Zero-based page index (kept for API consistency).
+            x1: Left x-coordinate in page pixel space.
+            y1: Top y-coordinate in page pixel space.
+            x2: Right x-coordinate in page pixel space.
+            y2: Bottom y-coordinate in page pixel space.
+            text: Optional initial OCR text for the new word (default "").
+
+        Returns:
+            bool: True if the word was added successfully, False otherwise.
+        """
+        _ = page_index
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for add_word")
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = line_ops.add_word_to_page(page, x1, y1, x2, y2, text=text)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error adding word to page: %s", e)
+            return False
+
     def nudge_word_bbox(
         self,
         page_index: int,

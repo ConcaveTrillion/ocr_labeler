@@ -31,6 +31,7 @@ class WordMatchBbox:
         self._bbox_nudge_step_px: int = 5
         self._pending_rebox_word_key: WordKey | None = None
         self._rebox_request_callback: ReboxRequestCallback | None = None
+        self._add_word_request_callback: Callable[[], None] | None = None
         self._original_image_source_provider: Callable[[], str] | None = None
         self._last_word_view_source: str = ""
 
@@ -445,6 +446,13 @@ class WordMatchBbox:
         """Register callback invoked when user starts a word rebox request."""
         self._rebox_request_callback = callback
 
+    def set_add_word_request_callback(
+        self,
+        callback: Callable[[], None] | None,
+    ) -> None:
+        """Register callback invoked when user requests to start an add-word draw."""
+        self._add_word_request_callback = callback
+
     def handle_start_rebox_word(
         self,
         line_index: int,
@@ -531,6 +539,40 @@ class WordMatchBbox:
                 e,
             )
             self._view._safe_notify(f"Error reboxing word: {e}", type_="negative")
+
+    # ------------------------------------------------------------------
+    # Add-word
+    # ------------------------------------------------------------------
+
+    def handle_start_add_word(self, _event=None) -> None:
+        """Enter add-word draw mode: user will draw a bbox on the image."""
+        if self._view.add_word_callback is None:
+            self._view._safe_notify("Add-word function not available", type_="warning")
+            return
+        if self._add_word_request_callback is not None:
+            try:
+                self._add_word_request_callback()
+            except Exception:
+                logger.debug("Add-word request callback failed", exc_info=True)
+        self._view._safe_notify(
+            "Add word: draw a rectangle around the new word on the Words image",
+            type_="info",
+        )
+
+    def apply_add_word_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
+        """Apply a drawn bbox as a new word insertion."""
+        if self._view.add_word_callback is None:
+            self._view._safe_notify("Add-word function not available", type_="warning")
+            return
+        try:
+            success = self._view.add_word_callback(x1, y1, x2, y2)
+            if success:
+                self._view._safe_notify("Word added", type_="positive")
+            else:
+                self._view._safe_notify("Failed to add word", type_="warning")
+        except Exception as e:
+            logger.exception("Error applying add-word bbox: %s", e)
+            self._view._safe_notify(f"Error adding word: {e}", type_="negative")
 
     # ------------------------------------------------------------------
     # Fine-tune / nudge

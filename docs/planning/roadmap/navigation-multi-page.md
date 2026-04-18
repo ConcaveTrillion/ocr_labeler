@@ -10,7 +10,10 @@
 - Lazy per-page OCR loading with three-tier fallback (user-saved → cached → live OCR)
 - Force-OCR override tracking per page index
 - Project discovery and listing via `ProjectDiscoveryOperations`
+- ~~Merge multiple JSON project files with page index offsets~~ (Done — `pages_manifest.json` support
+  in `ProjectOperations.load_ground_truth_from_directory`; manifest lists source files with optional
+  numeric page-key offsets)
 
 ## Remaining
 
-- Merge multiple JSON project files with page index offsets
+No remaining items at this time.

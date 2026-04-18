@@ -25,6 +25,25 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Session Restore (Done)
+
+`SessionStateOperations` saves project path and page index on every
+project load; at startup, when no CLI project is provided, the saved
+session is restored via `_try_restore_session` in `app.py`.
+
+### Multi-JSON Ground Truth Merge (Done)
+
+`pages_manifest.json` support in `ProjectOperations.load_ground_truth_from_directory`.
+Manifest lists source files with optional numeric page-key offsets (e.g. `{"file": "pages_r2.json", "offset": 100}`).
+Fell back gracefully to `pages.json` when no manifest exists.
+
+### Add-Word Workflow (Done)
+
+`LineOperations.add_word_to_page` inserts a new `Word` with drawn bbox into the
+nearest line. `PageState.add_word` exposes it through the state layer. Toolbar
+"Add Word" button triggers image-tab draw mode; drawn rectangle is propagated
+back via `ContentArea` callbacks to `WordMatchBbox.apply_add_word_bbox`.
+
 ### Save Project — Bulk Page Persist (Done)
 
 Implemented `save_all_pages()` in `ProjectState` with `SaveProjectResult`

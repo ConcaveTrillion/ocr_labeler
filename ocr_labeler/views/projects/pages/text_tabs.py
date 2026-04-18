@@ -416,6 +416,27 @@ class TextTabs:
                 logger.debug("Rebox word operation result: %s", result)
                 return result
 
+        add_word_callback = None
+        if page_state and hasattr(page_state, "add_word"):
+
+            def add_word_callback(
+                x1: float,
+                y1: float,
+                x2: float,
+                y2: float,
+            ) -> bool:
+                logger.debug(
+                    "Adding word with bbox=(%s, %s, %s, %s) on page %d",
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    page_index,
+                )
+                result = page_state.add_word(page_index, x1, y1, x2, y2)
+                logger.debug("Add word operation result: %s", result)
+                return result
+
         nudge_word_bbox_callback = None
         if page_state and hasattr(page_state, "nudge_word_bbox"):
 
@@ -718,6 +739,7 @@ class TextTabs:
             split_word_callback=split_word_callback,
             split_word_vertical_closest_line_callback=split_word_vertical_closest_line_callback,
             rebox_word_callback=rebox_word_callback,
+            add_word_callback=add_word_callback,
             nudge_word_bbox_callback=nudge_word_bbox_callback,
             refine_words_callback=refine_words_callback,
             expand_then_refine_words_callback=expand_then_refine_words_callback,

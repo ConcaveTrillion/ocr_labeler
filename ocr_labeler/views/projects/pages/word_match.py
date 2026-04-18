@@ -77,6 +77,7 @@ class WordMatchView:
         split_word_callback: SplitWordAction | None = None,
         split_word_vertical_closest_line_callback: SplitWordAction | None = None,
         rebox_word_callback: ReboxAction | None = None,
+        add_word_callback: Callable[[float, float, float, float], bool] | None = None,
         nudge_word_bbox_callback: NudgeAction | None = None,
         refine_words_callback: WordKeysAction | None = None,
         expand_then_refine_words_callback: WordKeysAction | None = None,
@@ -127,6 +128,9 @@ class WordMatchView:
             split_word_vertical_closest_line_callback
         )
         self.rebox_word_callback = rebox_word_callback
+        self.add_word_callback: Callable[[float, float, float, float], bool] | None = (
+            add_word_callback
+        )
         self.nudge_word_bbox_callback = nudge_word_bbox_callback
         self.refine_words_callback = refine_words_callback
         self.expand_then_refine_words_callback = expand_then_refine_words_callback
@@ -385,6 +389,17 @@ class WordMatchView:
     ) -> None:
         """Register callback invoked when user starts a word rebox request."""
         self.bbox.set_rebox_request_callback(callback)
+
+    def set_add_word_request_callback(
+        self,
+        callback: Callable[[], None] | None,
+    ) -> None:
+        """Register callback invoked when user requests to start an add-word draw."""
+        self.bbox.set_add_word_request_callback(callback)
+
+    def apply_add_word_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
+        """Forward drawn add-word rectangle to bbox handler."""
+        self.bbox.apply_add_word_bbox(x1, y1, x2, y2)
 
     def set_summary_callback(
         self,

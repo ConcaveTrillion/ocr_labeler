@@ -17,6 +17,7 @@ from .operations.persistence.persistence_paths_operations import (
 from .operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
 )
+from .operations.persistence.session_state_operations import SessionStateOperations
 from .routing import (
     resolve_project_path,
     resolve_project_route_from_path,
@@ -306,6 +307,9 @@ class NiceGuiLabeler:
                 ):
                     logger.info(f"Auto-loading CLI project: {self.project_root}")
                     background_tasks.create(state.load_project(self.project_root))
+            elif auto_load_cli_project and not self.project_root:
+                # No CLI project — try to restore the last session transparently.
+                self._try_restore_session(state)
 
             logger.info(
                 f"{log_label} tab session initialized successfully: {session_id}"
@@ -429,6 +433,40 @@ class NiceGuiLabeler:
             )
         except Exception:
             logger.exception("Failed to register word image cache static route")
+
+    def _try_restore_session(self, state: "AppState") -> None:
+        """Restore the last session transparently when no CLI project is set.
+
+        Reads the persisted session snapshot and, if the saved project
+        directory still exists, enqueues a background load to restore it.
+        Failures are silently swallowed so the app continues to the normal
+        project-picker view.
+        """
+        try:
+            saved = SessionStateOperations.load_session_state()
+            if saved is None or not saved.last_project_path:
+                return
+            project_path = Path(saved.last_project_path)
+            if not ProjectDiscoveryOperations.validate_project_directory(project_path):
+                logger.debug(
+                    "_try_restore_session: saved project %s no longer valid; skipping",
+                    project_path,
+                )
+                return
+            logger.info(
+                "_try_restore_session: restoring last session project=%s page=%s",
+                project_path,
+                saved.last_page_index,
+            )
+            background_tasks.create(
+                state.load_project(
+                    project_path, initial_page_index=saved.last_page_index
+                )
+            )
+        except Exception:
+            logger.debug(
+                "_try_restore_session: unexpected error; skipping", exc_info=True
+            )
 
     def _get_request_path(self) -> str | None:
         """Safely retrieve the current request path from NiceGUI context."""

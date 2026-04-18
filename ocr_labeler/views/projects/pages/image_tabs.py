@@ -65,6 +65,7 @@ class ImageTabs:
         on_words_selected: Callable[[set[tuple[int, int]]], None] | None = None,
         on_paragraphs_selected: Callable[[set[int]], None] | None = None,
         on_word_rebox_drawn: Callable[[float, float, float, float], None] | None = None,
+        on_word_add_drawn: Callable[[float, float, float, float], None] | None = None,
     ):
         logger.debug("Initializing ImageTabs unified viewport")
         self.images: dict[str, ui.image] = {}
@@ -78,12 +79,14 @@ class ImageTabs:
         self._on_words_selected = on_words_selected
         self._on_paragraphs_selected = on_paragraphs_selected
         self._on_word_rebox_drawn = on_word_rebox_drawn
+        self._on_word_add_drawn = on_word_add_drawn
         self._drag_start: tuple[float, float] | None = None
         self._drag_current: tuple[float, float] | None = None
         self._drag_target_tab: str | None = None
         self._drag_remove_mode = False
         self._drag_add_mode = False
         self._word_rebox_mode = False
+        self._word_add_mode = False
         self._selected_word_indices: set[tuple[int, int]] = set()
         self._selected_paragraph_indices: set[int] = set()
         self._selected_word_boxes: list[tuple[float, float, float, float]] = []
@@ -236,14 +239,18 @@ class ImageTabs:
         return self.images.get(tab_name)
 
     def _handle_viewport_mouse(self, event: events.MouseEventArguments) -> None:
-        target = "Words" if self._word_rebox_mode else self._selection_mode_tab()
+        target = (
+            "Words"
+            if (self._word_rebox_mode or self._word_add_mode)
+            else self._selection_mode_tab()
+        )
         self._handle_drag_mouse(target, event)
 
     def _handle_drag_mouse(
         self, tab_name: str, event: events.MouseEventArguments
     ) -> None:
         """Handle drag selection gestures on an interactive image tab."""
-        if tab_name == "Words" and self._word_rebox_mode:
+        if tab_name == "Words" and (self._word_rebox_mode or self._word_add_mode):
             self._handle_word_rebox_drag(event)
             return
 
@@ -308,13 +315,17 @@ class ImageTabs:
 
         if event_type == "mouseup":
             self._drag_current = (x, y)
-            self._emit_word_rebox_bbox()
+            if self._word_add_mode:
+                self._emit_word_add_bbox()
+            else:
+                self._emit_word_rebox_bbox()
             self._drag_start = None
             self._drag_current = None
             self._drag_target_tab = None
             self._drag_remove_mode = False
             self._drag_add_mode = False
             self._word_rebox_mode = False
+            self._word_add_mode = False
             self._render_selection_overlay("Words")
             return
 
@@ -353,6 +364,36 @@ class ImageTabs:
     def enable_word_rebox_mode(self) -> None:
         """Enable drag-to-rebox mode on the Words image tab."""
         self._word_rebox_mode = True
+
+    def enable_word_add_mode(self) -> None:
+        """Enable drag-to-add-word mode on the Words image tab."""
+        self._word_add_mode = True
+
+    def _emit_word_add_bbox(self) -> None:
+        """Emit a drawn add-word rectangle in source image coordinates."""
+        if self._on_word_add_drawn is None:
+            return
+        if self._drag_start is None or self._drag_current is None:
+            return
+
+        page_state = getattr(self.page_state_view_model, "_page_state", None)
+        page = getattr(page_state, "current_page", None) if page_state else None
+        if page is None:
+            return
+
+        x1, y1, x2, y2 = self._normalized_rect(*self._drag_start, *self._drag_current)
+        scale_x, scale_y = self._get_display_scale(page, tab_name="Words")
+        if scale_x <= 0.0 or scale_y <= 0.0:
+            return
+
+        sx1 = x1 / scale_x
+        sy1 = y1 / scale_y
+        sx2 = x2 / scale_x
+        sy2 = y2 / scale_y
+        if sx2 <= sx1 or sy2 <= sy1:
+            return
+
+        self._on_word_add_drawn(sx1, sy1, sx2, sy2)
 
     def _render_drag_overlay(self, tab_name: str) -> None:
         """Render selection overlay while drag is in progress."""
@@ -567,6 +608,7 @@ class ImageTabs:
         self._drag_remove_mode = False
         self._drag_add_mode = False
         self._word_rebox_mode = False
+        self._word_add_mode = False
         if "Viewport" not in self.images:
             self._clear_drag_overlay(self._selection_mode_tab())
         self._render_selection_overlay(self._selection_mode_tab())

@@ -110,7 +110,7 @@ class OCRService:
             The processed page object, or None if processing failed.
         """
         try:
-            logger.debug(f"Processing page: {image_path}")
+            logger.debug("Processing page: %s", image_path)
 
             # Process the image with the selected OCR engine
             if self.ocr_engine == OCREngine.DOCTR:
@@ -143,11 +143,11 @@ class OCRService:
 
             self._reorganize_page_if_available(page_obj)
 
-            logger.info(f"Successfully processed page: {image_path}")
+            logger.info("Successfully processed page: %s", image_path)
             return page_obj
 
-        except Exception as e:
-            logger.exception(f"Error processing page {image_path}: {e}")
+        except Exception:
+            logger.exception("Error processing page %s", image_path)
             return None
 
     async def process_pages_batch(self, image_paths: list[Path]) -> list[Page | None]:
@@ -166,7 +166,9 @@ class OCRService:
 
         successful = sum(1 for r in results if r is not None)
         logger.info(
-            f"Batch processing complete: {successful}/{len(image_paths)} pages successful"
+            "Batch processing complete: %s/%s pages successful",
+            successful,
+            len(image_paths),
         )
         return results
 

@@ -10,6 +10,7 @@ from nicegui import events, ui
 from ...routing import sync_url_from_project_state
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..shared.base_view import BaseView
+from ..shared.view_helpers import NotificationMixin
 from .pages.page_view import PageView
 from .project_navigation_controls import ProjectNavigationControls
 
@@ -17,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class ProjectView(
-    BaseView[ProjectStateViewModel]
+    NotificationMixin,
+    BaseView[ProjectStateViewModel],
 ):  # pragma: no cover - heavy UI wiring
     """Project-specific view handling navigation, content display, and page operations."""
 
@@ -30,6 +32,8 @@ class ProjectView(
         logger.debug("Initializing ProjectView with ProjectStateViewModel")
         super().__init__(viewmodel)
 
+        self._app_state_view_model = getattr(viewmodel, "_app_state_model", None)
+        self._notified_error_keys: set[str] = set()
         self.navigation_controls: ProjectNavigationControls | None = None
         self.page_view: PageView | None = None
         self.content = None
@@ -122,16 +126,6 @@ class ProjectView(
                 self.navigation_controls.set_page(1, 0)
             self.navigation_controls.sync_control_states()
 
-    def _notify(self, message: str, type_: str = "info"):
-        """Route notifications through per-session queue with UI fallback."""
-        app_state_model = getattr(self.viewmodel, "_app_state_model", None)
-        app_state = getattr(app_state_model, "_app_state", None)
-        if app_state is not None:
-            app_state.queue_notification(message, type_)
-            return
-
-        ui.notify(message, type=type_)
-
     @contextlib.asynccontextmanager
     async def _action_context(self, message: str, show_spinner: bool = False):
         """Context manager to show a notification and overlay during an action.
@@ -141,7 +135,9 @@ class ProjectView(
             show_spinner: Whether to show a full-page spinner overlay.
         """
         logger.debug(
-            f"_action_context called with message={message}, show_spinner={show_spinner}"
+            "_action_context called with message=%s, show_spinner=%s",
+            message,
+            show_spinner,
         )
         # Record old spinner state
         old_spinner = getattr(self, "_show_busy_spinner", False)
@@ -149,7 +145,7 @@ class ProjectView(
             self._show_busy_spinner = True
 
         self._notify(message, "info")
-        logger.info(f"[BLUR] Activating busy overlay for action: {message}")
+        logger.info("[BLUR] Activating busy overlay for action: %s", message)
         self.viewmodel.set_action_busy(True, message)
         # Yield control to allow NiceGUI to update the UI
         await asyncio.sleep(0.1)
@@ -157,7 +153,7 @@ class ProjectView(
         try:
             yield
         finally:
-            logger.info(f"[BLUR] Deactivating busy overlay after action: {message}")
+            logger.info("[BLUR] Deactivating busy overlay after action: %s", message)
             self.viewmodel.set_action_busy(False)
             if show_spinner:
                 self._show_busy_spinner = old_spinner
@@ -351,7 +347,7 @@ class ProjectView(
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""
-        logger.debug(f"View model property changed: {property_name} = {value}")
+        logger.debug("View model property changed: %s = %s", property_name, value)
         # If view hasn't been built yet, defer the refresh to avoid spurious
         # UI operations and websocket sends. The build() method will apply a
         # deferred refresh after marking the view built.

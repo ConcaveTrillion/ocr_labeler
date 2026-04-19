@@ -110,8 +110,11 @@ class AppState:
     # --------------- Notification ---------------
     def notify(self):
         """Notify listeners of state changes."""
-        for listener in self.on_change:
-            listener()
+        for listener in list(self.on_change or []):
+            try:
+                listener()
+            except Exception:
+                logger.exception("AppState.notify: listener callback failed")
 
     # --------------- Project Loading ---------------
     async def load_project(
@@ -124,7 +127,7 @@ class AppState:
 
         Manages application-level loading state and project selection synchronization.
         """
-        logger.debug(f"Loading project from directory: {directory}")
+        logger.debug("Loading project from directory: %s", directory)
 
         directory = Path(directory)
         if not await run.io_bound(directory.exists):

@@ -274,8 +274,21 @@ class PageStateViewModel(BaseViewModel):
             self.current_export_status_text = ""
             return
 
+        _source_display_map = {
+            "filesystem": "LABELED",
+            "cached_ocr": "CACHED OCR",
+        }
+
         try:
-            self.current_page_source_text = self._page_state.current_page_source_text
+            source = self._page_state.current_page_source
+            if source is None:
+                self.current_page_source_text = "(NO PAGE)"
+            elif source == "loading":
+                self.current_page_source_text = "LOADING..."
+            else:
+                self.current_page_source_text = _source_display_map.get(
+                    source, "RAW OCR"
+                )
             self.current_page_source_tooltip = (
                 self._page_state.current_page_source_tooltip
             )
@@ -285,9 +298,15 @@ class PageStateViewModel(BaseViewModel):
             self.current_page_source_tooltip = ""
 
         try:
-            self.current_export_status_text = (
-                self._page_state.current_page_export_status
-            )
+            from ocr_labeler.operations.export.doctr_export import ExportStatus
+
+            status = self._page_state.current_page_export_status_enum
+            if status == ExportStatus.EXPORTED:
+                self.current_export_status_text = "EXPORTED"
+            elif status == ExportStatus.STALE:
+                self.current_export_status_text = "EXPORT STALE"
+            else:
+                self.current_export_status_text = ""
         except Exception:
             logger.debug("Failed to sync export status from PageState", exc_info=True)
             self.current_export_status_text = ""
@@ -683,7 +702,7 @@ class PageStateViewModel(BaseViewModel):
             except Exception:
                 current_page = None
 
-        logger.debug(f"_get_current_page_or_clear: Current page: {current_page}")
+        logger.debug("_get_current_page_or_clear: Current page: %s", current_page)
         # If we are navigating and don't yet have a page object, avoid triggering
         # synchronous loads from ProjectState; keep existing images until the
         # navigation completes and the background load finishes.
@@ -703,7 +722,9 @@ class PageStateViewModel(BaseViewModel):
                         try:
                             current_page = proj.pages[idx]
                             logger.debug(
-                                f"_get_current_page_or_clear: got page from project.pages[{idx}]: {current_page}"
+                                "_get_current_page_or_clear: got page from project.pages[%s]: %s",
+                                idx,
+                                current_page,
                             )
                         except Exception:
                             current_page = None
@@ -728,7 +749,8 @@ class PageStateViewModel(BaseViewModel):
             return None
 
         logger.debug(
-            f"_get_current_page_or_clear: Updating image sources for page: {getattr(current_page, 'name', 'unknown')}"
+            "_get_current_page_or_clear: Updating image sources for page: %s",
+            getattr(current_page, "name", "unknown"),
         )
 
         # Expose page metadata for UI bindings
@@ -747,7 +769,9 @@ class PageStateViewModel(BaseViewModel):
             self.page_source = ""
 
         logger.debug(
-            f"_get_current_page_or_clear: Page metadata - index: {self.page_index}, source: {self.page_source}"
+            "_get_current_page_or_clear: Page metadata - index: %s, source: %s",
+            self.page_index,
+            self.page_source,
         )
         return current_page
 
@@ -807,7 +831,9 @@ class PageStateViewModel(BaseViewModel):
                 except TypeError:
                     value_size = 1 if new_value is not None else 0
                 logger.debug(
-                    f"_apply_encoded_results: Stored {prop_name} (length: {value_size})"
+                    "_apply_encoded_results: Stored %s (length: %s)",
+                    prop_name,
+                    value_size,
                 )
 
         if self._word_view_image_ready_callback:

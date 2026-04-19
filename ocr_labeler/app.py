@@ -128,7 +128,7 @@ class NiceGuiLabeler:
         ]  # Include microseconds
 
         if not self.enable_session_logging or self.logs_dir is None:
-            logger.debug(f"Session logging disabled for session {session_id}")
+            logger.debug("Session logging disabled for session %s", session_id)
             return None, session_id
 
         log_filename = self.logs_dir / f"session_{session_id}.log"
@@ -156,8 +156,8 @@ class NiceGuiLabeler:
             if not existing_logger.propagate:  # Only add if propagation is disabled
                 existing_logger.addHandler(file_handler)
 
-        logger.info(f"Session logging initialized: {log_filename}")
-        logger.info(f"Session ID: {session_id}")
+        logger.info("Session logging initialized: %s", log_filename)
+        logger.info("Session ID: %s", session_id)
 
         return file_handler, session_id
 
@@ -173,7 +173,7 @@ class NiceGuiLabeler:
         if file_handler is None:
             return
 
-        logger.info(f"Cleaning up session logging: {session_id}")
+        logger.info("Cleaning up session logging: %s", session_id)
 
         # Remove from root logger
         root_logger = logging.getLogger()
@@ -212,7 +212,7 @@ class NiceGuiLabeler:
         # Set up per-session logging
         session_handler, session_id = self._setup_session_logging()
         logger.info("=" * 80)
-        logger.info(f"NEW {log_label} TAB SESSION STARTED - ID: {session_id}")
+        logger.info("NEW %s TAB SESSION STARTED - ID: %s", log_label, session_id)
         logger.info("=" * 80)
 
         ui.page_title(page_title)
@@ -241,7 +241,7 @@ class NiceGuiLabeler:
             logger.debug("Failed setting page reconnect_timeout", exc_info=True)
 
         try:
-            logger.debug(f"Creating {log_label.lower()} session instance")
+            logger.debug("Creating %s session instance", log_label.lower())
 
             # Create fresh state for this session/tab
             state = AppState(
@@ -305,19 +305,19 @@ class NiceGuiLabeler:
                 if ProjectDiscoveryOperations.validate_project_directory(
                     self.project_root
                 ):
-                    logger.info(f"Auto-loading CLI project: {self.project_root}")
+                    logger.info("Auto-loading CLI project: %s", self.project_root)
                     background_tasks.create(state.load_project(self.project_root))
             elif auto_load_cli_project and not self.project_root:
                 # No CLI project — try to restore the last session transparently.
                 self._try_restore_session(state)
 
             logger.info(
-                f"{log_label} tab session initialized successfully: {session_id}"
+                "%s tab session initialized successfully: %s", log_label, session_id
             )
 
             # Set up cleanup on disconnect
             def on_disconnect():
-                logger.info(f"{log_label} tab session disconnecting: {session_id}")
+                logger.info("%s tab session disconnecting: %s", log_label, session_id)
 
                 # Stop periodic UI work for this session.
                 try:
@@ -349,9 +349,9 @@ class NiceGuiLabeler:
                     exc_info=True,
                 )
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                f"Error during {log_label.lower()} tab session initialization: {e}"
+                "Error during %s tab session initialization", log_label.lower()
             )
             self._cleanup_session_logging(session_handler, session_id)
             raise
@@ -543,7 +543,7 @@ class NiceGuiLabeler:
 
         try:
             logger.info(
-                f"Initializing from URL: project_id={project_id}, page_id={page_id}"
+                "Initializing from URL: project_id=%s, page_id=%s", project_id, page_id
             )
 
             # Find the project directory
@@ -660,10 +660,10 @@ class NiceGuiLabeler:
             # Update browser URL to reflect the resolved state
             sync_url_to_state(state)
 
-            logger.info(f"URL initialization complete for session {session_id}")
+            logger.info("URL initialization complete for session %s", session_id)
 
         except Exception as e:
-            logger.exception(f"Error initializing from URL: {e}")
+            logger.exception("Error initializing from URL")
             notify(f"Error loading project: {e}", "negative")
 
     def run(self, host: str = "127.0.0.1", port: int = 8080, **uvicorn_kwargs):

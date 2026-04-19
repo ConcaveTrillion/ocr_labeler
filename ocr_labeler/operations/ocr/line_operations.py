@@ -63,14 +63,14 @@ class LineOperations:
             lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
-                    f"Line index {line_index} out of range (0-{len(lines) - 1})"
+                    "Line index %s out of range (0-%s)", line_index, len(lines) - 1
                 )
                 return False
 
             line = lines[line_index]
             words = line.words
             if not words:
-                logger.info(f"No words found in line {line_index}")
+                logger.info("No words found in line %s", line_index)
                 return False
 
             modified_count = 0
@@ -81,20 +81,23 @@ class LineOperations:
                     word.text = gt_text
                     modified_count += 1
                     logger.debug(
-                        f"Copied GT→OCR for word {word_idx} in line {line_index}: '{gt_text}'"
+                        "Copied GT→OCR for word %s in line %s: '%s'",
+                        word_idx,
+                        line_index,
+                        gt_text,
                     )
 
             if modified_count > 0:
                 logger.info(
-                    f"Copied GT→OCR for {modified_count} words in line {line_index}"
+                    "Copied GT→OCR for %s words in line %s", modified_count, line_index
                 )
                 return True
             else:
-                logger.info(f"No ground truth text found to copy in line {line_index}")
+                logger.info("No ground truth text found to copy in line %s", line_index)
                 return False
 
-        except Exception as e:
-            logger.exception(f"Error copying GT→OCR for line {line_index}: {e}")
+        except Exception:
+            logger.exception("Error copying GT→OCR for line %s", line_index)
             return False
 
     def copy_ocr_to_ground_truth(self, page: "Page", line_index: int) -> bool:
@@ -115,14 +118,14 @@ class LineOperations:
             lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
-                    f"Line index {line_index} out of range (0-{len(lines) - 1})"
+                    "Line index %s out of range (0-%s)", line_index, len(lines) - 1
                 )
                 return False
 
             line = lines[line_index]
             words = line.words
             if not words:
-                logger.info(f"No words found in line {line_index}")
+                logger.info("No words found in line %s", line_index)
                 return False
 
             modified_count = 0
@@ -133,20 +136,23 @@ class LineOperations:
                     word.ground_truth_text = ocr_text
                     modified_count += 1
                     logger.debug(
-                        f"Copied OCR→GT for word {word_idx} in line {line_index}: '{ocr_text}'"
+                        "Copied OCR→GT for word %s in line %s: '%s'",
+                        word_idx,
+                        line_index,
+                        ocr_text,
                     )
 
             if modified_count > 0:
                 logger.info(
-                    f"Copied OCR→GT for {modified_count} words in line {line_index}"
+                    "Copied OCR→GT for %s words in line %s", modified_count, line_index
                 )
                 return True
             else:
-                logger.info(f"No OCR text found to copy in line {line_index}")
+                logger.info("No OCR text found to copy in line %s", line_index)
                 return False
 
-        except Exception as e:
-            logger.exception(f"Error copying OCR→GT for line {line_index}: {e}")
+        except Exception:
+            logger.exception("Error copying OCR→GT for line %s", line_index)
             return False
 
     def copy_selected_words_ocr_to_ground_truth(
@@ -227,14 +233,14 @@ class LineOperations:
             lines = page.lines
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
-                    f"Line index {line_index} out of range (0-{len(lines) - 1})"
+                    "Line index %s out of range (0-%s)", line_index, len(lines) - 1
                 )
                 return False
 
             line = lines[line_index]
             words = line.words
             if not words:
-                logger.info(f"No words found in line {line_index}")
+                logger.info("No words found in line %s", line_index)
                 return False
 
             modified_count = 0
@@ -242,19 +248,23 @@ class LineOperations:
                 if word.ground_truth_text:
                     word.ground_truth_text = ""
                     modified_count += 1
-                    logger.debug(f"Cleared GT for word {word_idx} in line {line_index}")
+                    logger.debug(
+                        "Cleared GT for word %s in line %s", word_idx, line_index
+                    )
 
             if modified_count > 0:
                 logger.info(
-                    f"Cleared GT for {modified_count} words in line {line_index}"
+                    "Cleared GT for %s words in line %s", modified_count, line_index
                 )
                 return True
             else:
-                logger.info(f"No ground truth text found to clear in line {line_index}")
+                logger.info(
+                    "No ground truth text found to clear in line %s", line_index
+                )
                 return False
 
-        except Exception as e:
-            logger.exception(f"Error clearing GT for line {line_index}: {e}")
+        except Exception:
+            logger.exception("Error clearing GT for line %s", line_index)
             return False
 
     def update_word_ground_truth(
@@ -520,7 +530,7 @@ class LineOperations:
             }
 
         except Exception as e:
-            logger.exception(f"Error validating line {line_index}: {e}")
+            logger.exception("Error validating line %s", line_index)
             return {"valid": False, "error": str(e)}
 
     def merge_lines(self, page: "Page", line_indices: list[int]) -> bool:

@@ -248,30 +248,13 @@ class SelectedWordOperationsProcessor:
         if word_object is None:
             return WordOperationResult(0, "Select a valid word", "warning")
 
-        style_labels = list(getattr(word_object, "text_style_labels", []) or [])
-        candidate_styles = [label for label in style_labels if label != "regular"]
-        if not candidate_styles:
+        if not self._word_ops.clear_all_scopes(word_object):
             return WordOperationResult(
                 0,
                 "Failed to clear scope; select a word with an existing style",
                 "warning",
             )
 
-        try:
-            scopes = dict(getattr(word_object, "text_style_label_scopes", {}) or {})
-        except Exception:
-            scopes = {}
-
-        changed = False
-        for style_label in candidate_styles:
-            if style_label in scopes:
-                scopes.pop(style_label, None)
-                changed = True
-
-        if not changed:
-            return WordOperationResult(0, "Scope already cleared", "warning")
-
-        word_object.text_style_label_scopes = scopes
         self._refresh_word_callback(line_index, word_index)
         return WordOperationResult(1, "Cleared scope on 1 word(s)", "positive")
 

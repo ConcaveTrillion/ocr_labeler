@@ -11,6 +11,7 @@ from pd_book_tools.ocr.page import Page
 
 from ...models.line_match_model import LineMatch
 from ...models.word_match_model import MatchStatus, WordMatch
+from ...operations.ocr.word_operations import WordOperations
 from ..shared.base_viewmodel import BaseViewModel
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class WordMatchViewModel(BaseViewModel):
             # Defensive logging for test compatibility with Mock objects
             try:
                 line_count = len(lines)
-                logger.debug(f"Found {line_count} lines in page")
+                logger.debug("Found %s lines in page", line_count)
             except (TypeError, AttributeError):
                 logger.debug("Found lines in page (count unavailable)")
 
@@ -95,8 +96,8 @@ class WordMatchViewModel(BaseViewModel):
                 if line_match:
                     new_line_matches.append(line_match)
 
-        except Exception as e:
-            logger.exception(f"Error updating word match view model: {e}")
+        except Exception:
+            logger.exception("Error updating word match view model")
 
         # Assign the new list (triggers NiceGUI binding)
         self.line_matches = new_line_matches
@@ -114,17 +115,21 @@ class WordMatchViewModel(BaseViewModel):
             # Create enhanced word matches that include unmatched GT words
             word_matches = self._create_enhanced_word_matches(line)
             logger.debug(
-                f"Line {line_idx} has {len(word_matches)} word matches after enhancement"
+                "Line %s has %s word matches after enhancement",
+                line_idx,
+                len(word_matches),
             )
 
             # Only skip the line if there are neither OCR words nor unmatched GT words
             if not word_matches:
-                logger.debug(f"No words or unmatched GT words found in line {line_idx}")
+                logger.debug(
+                    "No words or unmatched GT words found in line %s", line_idx
+                )
                 return None
 
             page_image = getattr(page, "cv2_numpy_page_image", None) if page else None
             if page_image is None:
-                logger.debug(f"No page image available for line {line_idx}")
+                logger.debug("No page image available for line %s", line_idx)
 
             return LineMatch(
                 line_index=line_idx,
@@ -136,8 +141,8 @@ class WordMatchViewModel(BaseViewModel):
                 line_object=line,  # Pass line object for bbox access
             )
 
-        except Exception as e:
-            logger.exception(f"Error creating line match for line {line_idx}: {e}")
+        except Exception:
+            logger.exception("Error creating line match for line %s", line_idx)
             return None
 
     def _build_line_paragraph_lookup(self, page: Page) -> dict[int, int]:
@@ -167,19 +172,21 @@ class WordMatchViewModel(BaseViewModel):
         unmatched_gt_words = getattr(line, "unmatched_ground_truth_words", [])
 
         logger.debug(
-            f"Processing line with {len(words)} OCR words and {len(unmatched_gt_words) if unmatched_gt_words else 0} unmatched GT words"
+            "Processing line with %s OCR words and %s unmatched GT words",
+            len(words),
+            len(unmatched_gt_words) if unmatched_gt_words else 0,
         )
 
         # Create a list to track insertion points for unmatched GT words
         # unmatched_gt_words is list[tuple[int, str]] where int is insertion index
         insertion_map = {}
         if unmatched_gt_words:
-            logger.debug(f"Unmatched GT words: {unmatched_gt_words}")
+            logger.debug("Unmatched GT words: %s", unmatched_gt_words)
             for insert_idx, gt_word in unmatched_gt_words:
                 if insert_idx not in insertion_map:
                     insertion_map[insert_idx] = []
                 insertion_map[insert_idx].append(gt_word)
-            logger.debug(f"Insertion map: {insertion_map}")
+            logger.debug("Insertion map: %s", insertion_map)
 
         # Create word matches for OCR words, inserting unmatched GT words at appropriate positions
         for word_idx, word in enumerate(words):
@@ -214,7 +221,16 @@ class WordMatchViewModel(BaseViewModel):
                 enhanced_matches.append(unmatched_gt_match)
 
         logger.debug(
-            f"Created {len(enhanced_matches)} enhanced matches: {[(wm.ocr_text or '[none]', wm.ground_truth_text or '[none]', wm.match_status.value) for wm in enhanced_matches]}"
+            "Created %s enhanced matches: %s",
+            len(enhanced_matches),
+            [
+                (
+                    wm.ocr_text or "[none]",
+                    wm.ground_truth_text or "[none]",
+                    wm.match_status.value,
+                )
+                for wm in enhanced_matches
+            ],
         )
         return enhanced_matches
 
@@ -226,47 +242,9 @@ class WordMatchViewModel(BaseViewModel):
             word_labels = set(getattr(word, "word_labels", []) or [])
             is_validated = "validated" in word_labels
 
-            # If no ground truth, mark as unmatched OCR
-            if not ground_truth_text:
-                return WordMatch(
-                    ocr_text=ocr_text,
-                    ground_truth_text="",
-                    match_status=MatchStatus.UNMATCHED_OCR,
-                    word_index=word_idx,
-                    word_object=word,
-                    is_validated=is_validated,
-                )
-
-            # First, do a strict exact text comparison - this is the ONLY way to be marked as exact
-            if ocr_text.strip() == ground_truth_text.strip():
-                return WordMatch(
-                    ocr_text=ocr_text,
-                    ground_truth_text=ground_truth_text,
-                    match_status=MatchStatus.EXACT,
-                    fuzz_score=1.0,
-                    word_index=word_idx,
-                    word_object=word,
-                    is_validated=is_validated,
-                )
-
-            # If not exact, compute fuzzy score for non-exact matches
-            fuzz_score = None
-            if hasattr(word, "fuzz_score_against") and callable(
-                getattr(word, "fuzz_score_against")
-            ):
-                try:
-                    fuzz_score = word.fuzz_score_against(ground_truth_text)
-                except Exception as e:
-                    logger.debug(f"Error computing fuzz score for word {word_idx}: {e}")
-
-            # For non-exact matches, determine if it's fuzzy or mismatch based on score
-            if fuzz_score is not None and fuzz_score >= self.fuzz_threshold:
-                match_status = MatchStatus.FUZZY
-            else:
-                match_status = MatchStatus.MISMATCH
-                # Set fuzz_score to 0.0 if it wasn't computed or is below threshold
-                if fuzz_score is None:
-                    fuzz_score = 0.0
+            match_status, fuzz_score = WordOperations.classify_match_status(
+                ocr_text, ground_truth_text, self.fuzz_threshold, word
+            )
 
             return WordMatch(
                 ocr_text=ocr_text,
@@ -278,8 +256,8 @@ class WordMatchViewModel(BaseViewModel):
                 is_validated=is_validated,
             )
 
-        except Exception as e:
-            logger.exception(f"Error creating word match for word {word_idx}: {e}")
+        except Exception:
+            logger.exception("Error creating word match for word %s", word_idx)
             return None
 
     def _update_statistics(self):

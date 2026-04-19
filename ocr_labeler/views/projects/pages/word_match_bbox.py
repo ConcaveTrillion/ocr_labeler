@@ -150,7 +150,7 @@ class WordMatchBbox:
             }
 
         except Exception as e:
-            logger.debug(f"Error creating word image: {e}")
+            logger.debug("Error creating word image: %s", e)
             return None
 
     def preview_bbox_for_word(
@@ -992,7 +992,7 @@ class WordMatchBbox:
         Returns:
             Base64 data URL string for the cropped line image, or None if unavailable.
         """
-        logger.debug(f"Getting line image for line {line_match.line_index}")
+        logger.debug("Getting line image for line %s", line_match.line_index)
         try:
             # Get cropped image from line match
             try:
@@ -1005,7 +1005,7 @@ class WordMatchBbox:
                     cropped_img.shape if hasattr(cropped_img, "shape") else "unknown",
                 )
             except Exception as e:
-                logger.debug(f"Error cropping line image: {e}")
+                logger.debug("Error cropping line image: %s", e)
                 return None
 
             # Convert to base64 data URL for display in browser
@@ -1025,7 +1025,7 @@ class WordMatchBbox:
             return data_url
 
         except Exception as e:
-            logger.debug(f"Error creating line image: {e}")
+            logger.debug("Error creating line image: %s", e)
             return None
 
     # ------------------------------------------------------------------

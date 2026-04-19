@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock
 
-import ocr_labeler.views.projects.project_navigation_controls as nav_module
+import ocr_labeler.views.shared.view_helpers as view_helpers_module
 from ocr_labeler.views.projects.project_navigation_controls import (
     ProjectNavigationControls,
 )
@@ -65,7 +65,7 @@ class TestProjectNavigationControls:
         def failing_bind_from(*_args, **_kwargs):
             raise RuntimeError("bind failed")
 
-        monkeypatch.setattr(nav_module.binding, "bind_from", failing_bind_from)
+        monkeypatch.setattr(view_helpers_module.binding, "bind_from", failing_bind_from)
         notify_mock = MagicMock()
         monkeypatch.setattr(controls, "_notify", notify_mock)
 

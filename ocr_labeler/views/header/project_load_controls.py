@@ -4,17 +4,18 @@ import logging
 import os
 from pathlib import Path
 
-from nicegui import binding, events, ui
+from nicegui import events, ui
 
 from ...routing import build_project_url
 from ...viewmodels.app.app_state_view_model import AppStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..shared.button_styles import style_action_button
+from ..shared.view_helpers import NotificationMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ProjectLoadControls:
+class ProjectLoadControls(NotificationMixin):
     """Project selection + path label row.
 
     Responsibilities:
@@ -28,6 +29,7 @@ class ProjectLoadControls:
         project_state_model: ProjectStateViewModel,
     ):
         self.app_state_model = app_state_model
+        self._app_state_view_model = app_state_model
         self.project_state_model = project_state_model
         self._notified_error_keys: set[str] = set()
         self._source_folder_dialog: ui.dialog | None = None
@@ -36,103 +38,6 @@ class ProjectLoadControls:
         self._path_picker_current_label: ui.label | None = None
         self._path_picker_breadcrumbs: ui.row | None = None
         self._path_picker_list_container: ui.column | None = None
-
-    def _notify(self, message: str, type_: str = "info"):
-        """Route notifications through per-session queue with UI fallback."""
-        app_state = getattr(self.app_state_model, "_app_state", None)
-        if app_state is not None:
-            app_state.queue_notification(message, type_)
-            return
-
-        ui.notify(message, type=type_)
-
-    def _notify_once(self, key: str, message: str, type_: str = "warning") -> None:
-        """Emit a notification once per key to avoid repeated toasts."""
-        if key in self._notified_error_keys:
-            return
-        self._notified_error_keys.add(key)
-        self._notify(message, type_)
-
-    def _bind_from_safe(
-        self,
-        target: object,
-        target_property: str,
-        source: object,
-        source_property: str,
-        *,
-        key: str,
-        message: str,
-    ) -> None:
-        """Bind with user-visible warning if binding setup fails."""
-        try:
-            binding.bind_from(
-                target,
-                target_property,
-                source,
-                source_property,
-            )
-        except Exception:
-            logger.exception(
-                "Binding failed: %s.%s <- %s.%s",
-                type(target).__name__,
-                target_property,
-                type(source).__name__,
-                source_property,
-            )
-            self._notify_once(key, message, type_="warning")
-
-    def _bind_safe(
-        self,
-        target: object,
-        target_property: str,
-        source: object,
-        source_property: str,
-        *,
-        key: str,
-        message: str,
-    ) -> None:
-        """Two-way bind with user-visible warning if setup fails."""
-        try:
-            binding.bind(
-                target,
-                target_property,
-                source,
-                source_property,
-            )
-        except Exception:
-            logger.exception(
-                "Two-way binding failed: %s.%s <-> %s.%s",
-                type(target).__name__,
-                target_property,
-                type(source).__name__,
-                source_property,
-            )
-            self._notify_once(key, message, type_="warning")
-
-    def _bind_disabled_from_safe(
-        self,
-        target: object,
-        source: object,
-        source_property: str,
-        *,
-        key: str,
-        message: str,
-    ) -> None:
-        """Bind a disabled flag onto NiceGUI's enabled property safely."""
-        try:
-            target.bind_enabled_from(  # type: ignore[attr-defined]
-                source,
-                source_property,
-                backward=lambda disabled: not bool(disabled),
-            )
-        except Exception:
-            logger.exception(
-                "Disabled binding failed: %s.enabled <- not %s.%s",
-                type(target).__name__,
-                type(source).__name__,
-                source_property,
-            )
-            self._notify_once(key, message, type_="warning")
 
     def build(self) -> ui.element:
         with (
@@ -284,10 +189,10 @@ class ProjectLoadControls:
             # Update browser URL to reflect the loaded project
             url = build_project_url(key)
             ui.navigate.history.replace(url)
-            logger.debug(f"Browser URL updated to: {url}")
+            logger.debug("Browser URL updated to: %s", url)
         except Exception as exc:  # noqa: BLE001
             self._notify(f"Load failed: {exc}", "negative")
-            logger.error(f"Failed to load project '{key}': {exc}")
+            logger.error("Failed to load project '%s': %s", key, exc)
 
     async def _open_source_folder_dialog(
         self,

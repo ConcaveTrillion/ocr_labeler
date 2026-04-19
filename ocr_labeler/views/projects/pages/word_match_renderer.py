@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable
 from nicegui import events, ui
 
 from ....models.word_match_model import MatchStatus, WordMatch
+from ....operations.ocr.word_operations import WordOperations
 from ...shared.button_styles import (
     ButtonVariant,
     style_action_button,
@@ -194,7 +195,7 @@ class WordMatchRenderer:
             return
 
         # Display filtered line matches in collapsible paragraph sections
-        logger.info(f"Displaying {len(lines_to_display)} line matches")
+        logger.info("Displaying %s line matches", len(lines_to_display))
         with self._view.lines_container:
             for (
                 paragraph_index,
@@ -343,9 +344,9 @@ class WordMatchRenderer:
     def _filter_lines_for_display(self):
         """Filter lines based on current filter setting."""
         filter_mode = self._view.filter_mode
-        logger.debug(f"Filtering lines. Filter mode: {filter_mode}")
+        logger.debug("Filtering lines. Filter mode: %s", filter_mode)
         logger.debug(
-            f"Total line matches available: {len(self._view.view_model.line_matches)}"
+            "Total line matches available: %s", len(self._view.view_model.line_matches)
         )
 
         if filter_mode == "All Lines":
@@ -357,7 +358,7 @@ class WordMatchRenderer:
                 for lm in self._view.view_model.line_matches
                 if not lm.is_fully_validated
             ]
-            logger.debug(f"Filtered to {len(filtered_lines)} unvalidated lines")
+            logger.debug("Filtered to %s unvalidated lines", len(filtered_lines))
             return filtered_lines
         else:
             # Mismatched Lines: any word that's not an exact match
@@ -366,7 +367,7 @@ class WordMatchRenderer:
                 for lm in self._view.view_model.line_matches
                 if any(wm.match_status != MatchStatus.EXACT for wm in lm.word_matches)
             ]
-            logger.debug(f"Filtered to {len(filtered_lines)} lines with mismatches")
+            logger.debug("Filtered to %s lines with mismatches", len(filtered_lines))
             return filtered_lines
 
     def _group_lines_by_paragraph(self, line_matches: list["LineMatch"]):
@@ -475,7 +476,11 @@ class WordMatchRenderer:
 
                     # Right side: Action buttons
                     logger.debug(
-                        f"Line {line_match.line_index}: status={line_match.overall_match_status}, gt_to_ocr_callback={self._view.copy_gt_to_ocr_callback is not None}, ocr_to_gt_callback={self._view.copy_ocr_to_gt_callback is not None}"
+                        "Line %s: status=%s, gt_to_ocr_callback=%s, ocr_to_gt_callback=%s",
+                        line_match.line_index,
+                        line_match.overall_match_status,
+                        self._view.copy_gt_to_ocr_callback is not None,
+                        self._view.copy_ocr_to_gt_callback is not None,
                     )
                     with ui.row().classes("items-center"):
                         if (
@@ -483,7 +488,8 @@ class WordMatchRenderer:
                             and self._view.copy_gt_to_ocr_callback
                         ):
                             logger.debug(
-                                f"Adding GT\u2192OCR button for line {line_match.line_index}"
+                                "Adding GT\u2192OCR button for line %s",
+                                line_match.line_index,
                             )
                             gt_to_ocr_button = ui.button(
                                 "GT\u2192OCR",
@@ -506,7 +512,8 @@ class WordMatchRenderer:
                             and self._view.copy_ocr_to_gt_callback
                         ):
                             logger.debug(
-                                f"Adding OCR\u2192GT button for line {line_match.line_index}"
+                                "Adding OCR\u2192GT button for line %s",
+                                line_match.line_index,
                             )
                             ocr_to_gt_button = ui.button(
                                 "OCR\u2192GT",
@@ -691,18 +698,23 @@ class WordMatchRenderer:
             return
 
         logger.debug(
-            f"Creating word comparison table with {len(line_match.word_matches)} word matches"
+            "Creating word comparison table with %s word matches",
+            len(line_match.word_matches),
         )
 
         # Debug: Log the match statuses we're displaying
         match_statuses = [wm.match_status.value for wm in line_match.word_matches]
-        logger.debug(f"Word match statuses: {match_statuses}")
+        logger.debug("Word match statuses: %s", match_statuses)
 
         with ui.row():
             # Create a column for each word
             for word_idx, word_match in enumerate(line_match.word_matches):
                 logger.debug(
-                    f"Creating column {word_idx} for word match: OCR='{word_match.ocr_text}', GT='{word_match.ground_truth_text}', Status={word_match.match_status.value}"
+                    "Creating column %s for word match: OCR='%s', GT='%s', Status=%s",
+                    word_idx,
+                    word_match.ocr_text,
+                    word_match.ground_truth_text,
+                    word_match.match_status.value,
                 )
 
                 with ui.column().props('data-testid="word-column"') as word_column:
@@ -857,7 +869,7 @@ class WordMatchRenderer:
                         bbox_preview_deltas=bbox_preview_deltas,
                     )
                 except Exception as e:
-                    logger.error(f"Error getting word image: {e}")
+                    logger.error("Error getting word image: %s", e)
                     word_image_slice = None
                     ui.icon("error").classes("text-red-600").style("height: 2.25em")
                     self._view._safe_notify_once(
@@ -1176,47 +1188,14 @@ class WordMatchRenderer:
         target_word_match.ground_truth_text = normalized_gt
         ocr_text = str(target_word_match.ocr_text or "")
 
-        if not normalized_gt:
-            target_word_match.match_status = MatchStatus.UNMATCHED_OCR
-            target_word_match.fuzz_score = None
-            return
-
-        if ocr_text.strip() == normalized_gt.strip():
-            target_word_match.match_status = MatchStatus.EXACT
-            target_word_match.fuzz_score = 1.0
-            return
-
-        fuzz_score = None
-        word_object = getattr(target_word_match, "word_object", None)
-        if (
-            word_object is not None
-            and hasattr(word_object, "fuzz_score_against")
-            and callable(getattr(word_object, "fuzz_score_against"))
-        ):
-            try:
-                fuzz_score = word_object.fuzz_score_against(normalized_gt)
-            except Exception:
-                logger.debug(
-                    "Failed to compute fuzz score for line=%s word=%s",
-                    line_index,
-                    word_index,
-                    exc_info=True,
-                )
-                self._view._safe_notify_once(
-                    "word-fuzz-compute",
-                    "Unable to compute some fuzzy scores; using fallback matching",
-                    type_="warning",
-                )
-
-        if (
-            fuzz_score is not None
-            and fuzz_score >= self._view.view_model.fuzz_threshold
-        ):
-            target_word_match.match_status = MatchStatus.FUZZY
-            target_word_match.fuzz_score = fuzz_score
-        else:
-            target_word_match.match_status = MatchStatus.MISMATCH
-            target_word_match.fuzz_score = 0.0 if fuzz_score is None else fuzz_score
+        match_status, fuzz_score = WordOperations.classify_match_status(
+            ocr_text,
+            normalized_gt,
+            self._view.view_model.fuzz_threshold,
+            getattr(target_word_match, "word_object", None),
+        )
+        target_word_match.match_status = match_status
+        target_word_match.fuzz_score = fuzz_score
 
     def _build_word_match_from_word_object(
         self,
@@ -1227,63 +1206,18 @@ class WordMatchRenderer:
         ocr_text = str(getattr(word_object, "text", "") or "")
         ground_truth_text = str(getattr(word_object, "ground_truth_text", "") or "")
 
-        if not ground_truth_text:
-            return WordMatch(
-                ocr_text=ocr_text,
-                ground_truth_text="",
-                match_status=MatchStatus.UNMATCHED_OCR,
-                fuzz_score=None,
-                word_index=word_index,
-                word_object=word_object,
-            )
-
-        if ocr_text.strip() == ground_truth_text.strip():
-            return WordMatch(
-                ocr_text=ocr_text,
-                ground_truth_text=ground_truth_text,
-                match_status=MatchStatus.EXACT,
-                fuzz_score=1.0,
-                word_index=word_index,
-                word_object=word_object,
-            )
-
-        fuzz_score = None
-        if hasattr(word_object, "fuzz_score_against") and callable(
-            getattr(word_object, "fuzz_score_against")
-        ):
-            try:
-                fuzz_score = word_object.fuzz_score_against(ground_truth_text)
-            except Exception:
-                logger.debug(
-                    "Failed to compute fuzz score for local word match rebuild line=%s word=%s",
-                    getattr(word_object, "line_index", None),
-                    word_index,
-                    exc_info=True,
-                )
-                self._view._safe_notify_once(
-                    "word-local-fuzz-rebuild",
-                    "Unable to compute some fuzzy scores during refresh",
-                    type_="warning",
-                )
-
-        if (
-            fuzz_score is not None
-            and fuzz_score >= self._view.view_model.fuzz_threshold
-        ):
-            return WordMatch(
-                ocr_text=ocr_text,
-                ground_truth_text=ground_truth_text,
-                match_status=MatchStatus.FUZZY,
-                fuzz_score=fuzz_score,
-                word_index=word_index,
-                word_object=word_object,
-            )
+        match_status, fuzz_score = WordOperations.classify_match_status(
+            ocr_text,
+            ground_truth_text,
+            self._view.view_model.fuzz_threshold,
+            word_object,
+        )
 
         return WordMatch(
             ocr_text=ocr_text,
             ground_truth_text=ground_truth_text,
-            match_status=MatchStatus.MISMATCH,
-            fuzz_score=0.0 if fuzz_score is None else fuzz_score,
+            match_status=match_status,
+            fuzz_score=fuzz_score,
             word_index=word_index,
             word_object=word_object,
         )

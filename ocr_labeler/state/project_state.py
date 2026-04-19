@@ -123,8 +123,11 @@ class ProjectState:
 
     def notify(self):
         """Notify listeners of state changes."""
-        for listener in self.on_change:
-            listener()
+        for listener in list(self.on_change or []):
+            try:
+                listener()
+            except Exception:
+                logger.exception("ProjectState.notify: listener callback failed")
 
     def _log_page_load_timing(
         self,
@@ -335,7 +338,7 @@ class ProjectState:
         logger.debug("next_page: called, current_index=%s", self.current_page_index)
 
         result = NavigationOperations.next_page(
-            self.current_page_index, self.project.page_count() - 1
+            self.current_page_index, self.project.page_count - 1
         )
         if result:
             self.current_page_index += 1
@@ -365,7 +368,7 @@ class ProjectState:
         logger.debug("goto_page_number: called with number=%s", number)
 
         result, target_index = NavigationOperations.goto_page_number(
-            number, self.project.page_count()
+            number, self.project.page_count
         )
         if result:
             self.goto_page_index(target_index)
@@ -383,7 +386,7 @@ class ProjectState:
             raise ValueError("No pages available to navigate")
 
         result, clamped_index = NavigationOperations.goto_page_index(
-            index, self.project.page_count() - 1
+            index, self.project.page_count - 1
         )
         if result:
             # Invalidate cache if page index actually changed
@@ -905,7 +908,7 @@ class ProjectState:
             "[_navigate] Entry - Thread: %s, Current page index: %s, Total pages: %s",
             threading.current_thread().name,
             self.current_page_index,
-            self.project.page_count(),
+            self.project.page_count,
         )
         self.is_navigating = True
         self.notify()

@@ -290,10 +290,10 @@ class WordMatchView:
             if self._is_disposed_ui_error(e):
                 logger.debug("Skipping word match update during UI disposal: %s", e)
                 return
-            logger.exception(f"Error updating word match view: {e}")
+            logger.exception("Error updating word match view")
             self._safe_notify("Failed to update word matches", type_="negative")
-        except Exception as e:
-            logger.exception(f"Error updating word match view: {e}")
+        except Exception:
+            logger.exception("Error updating word match view")
             self._safe_notify("Failed to update word matches", type_="negative")
 
     def _update_summary(self):
@@ -1031,10 +1031,10 @@ class WordMatchView:
 
     def _on_filter_change(self, event: events.ValueChangeEventArguments) -> None:
         """Handle filter selection change."""
-        logger.debug(f"Filter change event triggered: {event}")
-        logger.debug(f"Filter selector value: {self.filter_selector.value}")
+        logger.debug("Filter change event triggered: %s", event)
+        logger.debug("Filter selector value: %s", self.filter_selector.value)
         self.filter_mode = self.filter_selector.value
-        logger.debug(f"Filter mode set to: {self.filter_mode}")
+        logger.debug("Filter mode set to: %s", self.filter_mode)
         self._update_lines_display()
         logger.debug("Filter change handling complete")
 

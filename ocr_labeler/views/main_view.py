@@ -108,7 +108,9 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         # Show/hide project view vs placeholder based on view model state
         show_project_view = self.viewmodel.show_project_view
         logger.debug(
-            f"Show project view: {show_project_view}, ProjectView exists: {self.project_view is not None}"
+            "Show project view: %s, ProjectView exists: %s",
+            show_project_view,
+            self.project_view is not None,
         )
 
         # If the loaded project's root changed, drop the existing ProjectView so it rebuilds cleanly
@@ -174,12 +176,8 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
         if app_vm is None:
             return
 
-        app_state = getattr(app_vm, "_app_state", None)
-        if app_state is None:
-            return
-
         for _ in range(10):
-            notification = app_state.pop_notification()
+            notification = app_vm.pop_notification()
             if notification is None:
                 return
 
@@ -192,7 +190,9 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
     def _on_viewmodel_property_changed(self, property_name: str, value):
         """Handle view model property changes."""
         logger.debug(
-            f"LabelerView handling viewmodel property change: {property_name} = {value}"
+            "LabelerView handling viewmodel property change: %s = %s",
+            property_name,
+            value,
         )
 
         # Refresh when relevant properties change

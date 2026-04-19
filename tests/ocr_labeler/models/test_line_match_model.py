@@ -236,25 +236,15 @@ class TestLineMatchImageCropping:
 
     def test_get_cropped_image_normalized_bbox(self):
         """Test get_cropped_image with normalized bounding box."""
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+        from pd_book_tools.geometry.point import Point
+
         # Create a 100x100 test image with white rectangle in middle
         page_image = np.zeros((100, 100, 3), dtype=np.uint8)
         page_image[20:40, 10:90] = 255  # White rectangle
 
-        # Create mock bounding box (normalized coordinates)
-        bbox = MagicMock()
-        bbox.is_normalized = True
-        bbox.minX = 0.1
-        bbox.minY = 0.2
-        bbox.maxX = 0.9
-        bbox.maxY = 0.4
-
-        # Mock the scale method to return pixel bbox
-        pixel_bbox = MagicMock()
-        pixel_bbox.minX = 10.0
-        pixel_bbox.minY = 20.0
-        pixel_bbox.maxX = 90.0
-        pixel_bbox.maxY = 40.0
-        bbox.scale.return_value = pixel_bbox
+        # Create real bounding box (normalized coordinates)
+        bbox = BoundingBox(Point(0.1, 0.2), Point(0.9, 0.4))
 
         line_object = MagicMock()
         line_object.bounding_box = bbox
@@ -270,26 +260,21 @@ class TestLineMatchImageCropping:
 
         result = line_match.get_cropped_image()
 
-        # Verify scale was called with image dimensions
-        bbox.scale.assert_called_once_with(100, 100)
-
         # Verify cropped image has correct shape
         assert result is not None
         assert result.shape == (20, 80, 3)  # height=40-20, width=90-10
 
     def test_get_cropped_image_pixel_bbox(self):
         """Test get_cropped_image with pixel bounding box."""
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+        from pd_book_tools.geometry.point import Point
+
         # Create a 200x200 test image with white rectangle
         page_image = np.zeros((200, 200, 3), dtype=np.uint8)
         page_image[50:100, 20:180] = 255  # White rectangle
 
-        # Create mock bounding box (pixel coordinates)
-        bbox = MagicMock()
-        bbox.is_normalized = False
-        bbox.minX = 20.0
-        bbox.minY = 50.0
-        bbox.maxX = 180.0
-        bbox.maxY = 100.0
+        # Create real bounding box (pixel coordinates)
+        bbox = BoundingBox(Point(20.0, 50.0), Point(180.0, 100.0))
 
         line_object = MagicMock()
         line_object.bounding_box = bbox
@@ -314,16 +299,14 @@ class TestLineMatchImageCropping:
 
     def test_get_cropped_image_with_custom_page_image(self):
         """Test get_cropped_image with custom page_image parameter."""
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+        from pd_book_tools.geometry.point import Point
+
         # Create two different images
         stored_image = np.zeros((100, 100, 3), dtype=np.uint8)
         custom_image = np.ones((100, 100, 3), dtype=np.uint8) * 127
 
-        bbox = MagicMock()
-        bbox.is_normalized = False
-        bbox.minX = 10.0
-        bbox.minY = 10.0
-        bbox.maxX = 50.0
-        bbox.maxY = 50.0
+        bbox = BoundingBox(Point(10.0, 10.0), Point(50.0, 50.0))
 
         line_object = MagicMock()
         line_object.bounding_box = bbox
@@ -346,15 +329,13 @@ class TestLineMatchImageCropping:
 
     def test_get_cropped_image_clamping(self):
         """Test get_cropped_image clamps coordinates to image bounds."""
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+        from pd_book_tools.geometry.point import Point
+
         page_image = np.zeros((100, 100, 3), dtype=np.uint8)
 
-        # Bbox that extends beyond image bounds
-        bbox = MagicMock()
-        bbox.is_normalized = False
-        bbox.minX = -10.0
-        bbox.minY = -5.0
-        bbox.maxX = 110.0
-        bbox.maxY = 105.0
+        # Bbox that extends beyond image bounds (but non-negative)
+        bbox = BoundingBox(Point(0.0, 0.0), Point(110.0, 105.0))
 
         line_object = MagicMock()
         line_object.bounding_box = bbox
@@ -375,16 +356,12 @@ class TestLineMatchImageCropping:
         assert result.shape == (100, 100, 3)
 
     def test_get_cropped_image_invalid_bbox(self):
-        """Test get_cropped_image returns None for invalid bbox (x1 >= x2)."""
+        """Test get_cropped_image returns None when crop_image returns None."""
         page_image = np.zeros((100, 100, 3), dtype=np.uint8)
 
-        # Invalid bbox where min > max
+        # Mock bbox whose crop_image returns None (e.g. degenerate region)
         bbox = MagicMock()
-        bbox.is_normalized = False
-        bbox.minX = 90.0
-        bbox.minY = 50.0
-        bbox.maxX = 10.0  # maxX < minX (invalid)
-        bbox.maxY = 60.0
+        bbox.crop_image.return_value = None
 
         line_object = MagicMock()
         line_object.bounding_box = bbox

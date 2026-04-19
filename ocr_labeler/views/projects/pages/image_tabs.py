@@ -4,6 +4,7 @@ from typing import Callable, Literal
 from nicegui import events, ui
 
 from ....viewmodels.project.page_state_view_model import PageStateViewModel
+from ...shared.view_helpers import NotificationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ _DRAG_JS_HANDLER = """
 """
 
 
-class ImageTabs:
+class ImageTabs(NotificationMixin):
     """Left side image tabs showing progressively processed page imagery."""
 
     def __init__(
@@ -76,6 +77,11 @@ class ImageTabs:
         }
         self.selection_mode: Literal["paragraph", "line", "word"] = "word"
         self.page_state_view_model = page_state_view_model
+        # Wire up notification mixin through the ViewModel chain
+        project_state = getattr(page_state_view_model, "_project_state", None)
+        self._app_state_view_model = (
+            getattr(project_state, "_app_state_model", None) if project_state else None
+        )
         self._on_words_selected = on_words_selected
         self._on_paragraphs_selected = on_paragraphs_selected
         self._on_word_rebox_drawn = on_word_rebox_drawn
@@ -101,23 +107,6 @@ class ImageTabs:
         # Register callback for direct image updates (bypasses data binding)
         self.page_state_view_model.set_image_update_callback(self._on_images_updated)
         logger.debug("ImageTabs initialization complete with callback registered")
-
-    def _notify(self, message: str, type_: str = "warning") -> None:
-        """Send UI notification through app-state queue with direct UI fallback."""
-        project_state = getattr(self.page_state_view_model, "_project_state", None)
-        app_state_model = getattr(project_state, "_app_state_model", None)
-        app_state = getattr(app_state_model, "_app_state", None)
-        if app_state is not None:
-            app_state.queue_notification(message, type_)
-            return
-        ui.notify(message, type=type_)
-
-    def _notify_once(self, key: str, message: str, type_: str = "warning") -> None:
-        """Emit a notification once per key to avoid repeated toasts."""
-        if key in self._notified_error_keys:
-            return
-        self._notified_error_keys.add(key)
-        self._notify(message, type_)
 
     def build(self):
         logger.debug("Building ImageTabs UI components")

@@ -72,5 +72,5 @@ class BaseViewModel(ABC):
                     )
                     continue
                 logger.exception(
-                    f"Error in property change callback for {property_name}: {e}"
+                    "Error in property change callback for %s", property_name
                 )

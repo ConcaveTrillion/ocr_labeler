@@ -609,7 +609,7 @@ def test_save_current_page_updates_source_label(tmp_path):
     ):
         # 2. Verify initial status is RAW OCR (via get_page to initialize PageState)
         state.get_or_load_page_model(0)
-        assert state.current_page_state.current_page_source_text == "RAW OCR"
+        assert state.current_page_state.current_page_source == "ocr"
 
         # 3. Perform save
         save_dir = tmp_path / "labeled"
@@ -617,7 +617,7 @@ def test_save_current_page_updates_source_label(tmp_path):
 
         # 4. Verify save was successful and label changed
         assert success is True
-        assert state.current_page_state.current_page_source_text == "LABELED"
+        assert state.current_page_state.current_page_source == "filesystem"
         assert mock_page.page_source == "filesystem"
 
 

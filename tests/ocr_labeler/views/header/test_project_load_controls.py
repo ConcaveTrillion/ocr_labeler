@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock
 
-import ocr_labeler.views.header.project_load_controls as plc_module
+import ocr_labeler.views.shared.view_helpers as view_helpers_module
 from ocr_labeler.views.header.project_load_controls import ProjectLoadControls
 
 
@@ -20,7 +20,7 @@ class TestProjectLoadControls:
         def failing_bind_from(*_args, **_kwargs):
             raise RuntimeError("bind_from failed")
 
-        monkeypatch.setattr(plc_module.binding, "bind_from", failing_bind_from)
+        monkeypatch.setattr(view_helpers_module.binding, "bind_from", failing_bind_from)
         notify_mock = MagicMock()
         monkeypatch.setattr(controls, "_notify", notify_mock)
 
@@ -52,7 +52,7 @@ class TestProjectLoadControls:
         def failing_bind(*_args, **_kwargs):
             raise RuntimeError("bind failed")
 
-        monkeypatch.setattr(plc_module.binding, "bind", failing_bind)
+        monkeypatch.setattr(view_helpers_module.binding, "bind", failing_bind)
         notify_mock = MagicMock()
         monkeypatch.setattr(controls, "_notify", notify_mock)
 

@@ -3,8 +3,13 @@
 Prioritized implementation plan for code review findings. Grouped into
 phases, ordered by impact and risk.
 
-**Status**: Phases 1, 2 (partial), 3.7, 5.1, and 5.2 completed. All
-881 tests pass.
+**Status**: Phases 1–3.7, 5.1–5.6, 2.1–2.8, and 6.1 completed.
+Phase 3.2/3.3 (presentation strings moved to viewmodel),
+Phase 3.5 (match-status classification extracted to operations),
+Phase 6.0 (Page metadata), and crop_image delegation done.
+Remaining: 3.4 (image cache extraction), 4.x (structural), 5.7,
+6.2–6.4 (pd-book-tools structural migration).
+All 710 ocr-labeler tests and 491 pd-book-tools tests pass.
 
 ## Phase 1: Bug Fixes and Quick Wins
 

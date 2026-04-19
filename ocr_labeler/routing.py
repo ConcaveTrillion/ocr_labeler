@@ -91,7 +91,7 @@ def sync_url_to_state(state: "AppState") -> None:
 
         url = build_project_url(project_key, page_index)
         ui.navigate.history.replace(url)
-        logger.debug(f"Browser URL synced to: {url}")
+        logger.debug("Browser URL synced to: %s", url)
     except Exception:
         logger.debug("Failed to sync browser URL", exc_info=True)
 
@@ -116,7 +116,7 @@ def sync_url_from_project_state(
         project_key = project_root.resolve().name
         url = build_project_url(project_key, current_page_index)
         ui.navigate.history.replace(url)
-        logger.debug(f"Browser URL synced to: {url}")
+        logger.debug("Browser URL synced to: %s", url)
     except Exception:
         logger.debug("Failed to sync browser URL", exc_info=True)
 

@@ -48,7 +48,8 @@ class ProjectStateViewModel(BaseViewModel):
         app_state_model: "AppStateViewModel | None" = None,
     ):
         logger.debug(
-            f"Initializing ProjectStateViewModel with project_state: {project_state.project.project_id is not None}"
+            "Initializing ProjectStateViewModel with project_state: %s",
+            project_state.project.project_id is not None,
         )
 
         if project_state is not None and isinstance(project_state, ProjectState):
@@ -90,7 +91,7 @@ class ProjectStateViewModel(BaseViewModel):
             is_busy: Whether the action is busy.
             message: Optional message to display during the busy state.
         """
-        logger.debug(f"Setting action busy to {is_busy} with message: {message}")
+        logger.debug("Setting action busy to %s with message: %s", is_busy, message)
         self.is_action_busy = is_busy
         self.update()
         self._update_navigation_properties()
@@ -108,7 +109,7 @@ class ProjectStateViewModel(BaseViewModel):
                 self.page_total = 0
                 self.current_page_index = -1
             else:
-                self.page_total = project.page_count()
+                self.page_total = project.page_count
                 self.current_page_index = self._project_state.current_page_index
             self.is_navigating = self._project_state.is_navigating
             self.is_project_loading = self._project_state.is_project_loading
@@ -133,17 +134,17 @@ class ProjectStateViewModel(BaseViewModel):
             self._update_navigation_properties()
 
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Project page total: {self.page_total}")
-                logger.debug(f"Current page index: {self.current_page_index}")
-                logger.debug(f"Is navigating: {self.is_navigating}")
-                logger.debug(f"Is project loading: {self.is_project_loading}")
-                logger.debug(f"Loading status: {self.loading_status}")
-                logger.debug(f"Is busy: {self.is_busy}")
-                logger.debug(f"Project root: {self.project_root}")
-                logger.debug(f"Project root resolved: {self.project_root_resolved}")
-                logger.debug(f"Can navigate: {self.can_navigate}")
-                logger.debug(f"Can navigate prev: {self.can_navigate_prev}")
-                logger.debug(f"Can navigate next: {self.can_navigate_next}")
+                logger.debug("Project page total: %s", self.page_total)
+                logger.debug("Current page index: %s", self.current_page_index)
+                logger.debug("Is navigating: %s", self.is_navigating)
+                logger.debug("Is project loading: %s", self.is_project_loading)
+                logger.debug("Loading status: %s", self.loading_status)
+                logger.debug("Is busy: %s", self.is_busy)
+                logger.debug("Project root: %s", self.project_root)
+                logger.debug("Project root resolved: %s", self.project_root_resolved)
+                logger.debug("Can navigate: %s", self.can_navigate)
+                logger.debug("Can navigate prev: %s", self.can_navigate_prev)
+                logger.debug("Can navigate next: %s", self.can_navigate_next)
                 logger.debug("ProjectStateViewModel update complete")
         else:
             logger.error(
@@ -219,7 +220,7 @@ class ProjectStateViewModel(BaseViewModel):
 
             if not (0 <= page_index < self.page_total):
                 logger.warning(
-                    f"Page index {page_index} out of range [0, {self.page_total})"
+                    "Page index %s out of range [0, %s)", page_index, self.page_total
                 )
                 return False
 
@@ -227,8 +228,8 @@ class ProjectStateViewModel(BaseViewModel):
             self._project_state.goto_page_index(page_index)
             return True
 
-        except Exception as e:
-            logger.exception(f"Error navigating to page {page_index}: {e}")
+        except Exception:
+            logger.exception("Error navigating to page %s", page_index)
             return False
 
     def command_navigate_next(self) -> bool:
@@ -275,8 +276,8 @@ class ProjectStateViewModel(BaseViewModel):
                 "can_navigate_to": self.can_navigate and 0 <= idx < self.page_total,
             }
             return page_info
-        except Exception as e:
-            logger.exception(f"Error getting page display info for page {idx}: {e}")
+        except Exception:
+            logger.exception("Error getting page display info for page %s", idx)
             return {
                 "index": idx,
                 "display_number": idx + 1,
@@ -325,8 +326,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.error("No project state available for save")
                 return False
             return self._project_state.save_current_page()
-        except Exception as e:
-            logger.exception(f"Error saving current page: {e}")
+        except Exception:
+            logger.exception("Error saving current page")
             return False
 
     def command_save_project(self) -> SaveProjectResult:
@@ -340,8 +341,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.error("No project state available for save project")
                 return SaveProjectResult()
             return self._project_state.save_all_pages()
-        except Exception as e:
-            logger.exception(f"Error saving project: {e}")
+        except Exception:
+            logger.exception("Error saving project")
             return SaveProjectResult()
 
     def command_load_page(self) -> bool:
@@ -355,8 +356,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.error("No project state available for load")
                 return False
             return self._project_state.load_current_page()
-        except Exception as e:
-            logger.exception(f"Error loading current page: {e}")
+        except Exception:
+            logger.exception("Error loading current page")
             return False
 
     def command_refine_bboxes(self) -> bool:
@@ -370,8 +371,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.error("No project state available for bbox refinement")
                 return False
             return self._project_state.refine_all_bboxes()
-        except Exception as e:
-            logger.exception(f"Error refining bboxes: {e}")
+        except Exception:
+            logger.exception("Error refining bboxes")
             return False
 
     def command_expand_refine_bboxes(self) -> bool:
@@ -385,8 +386,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.warning("No project state available for bbox expand & refine")
                 return False
             return self._project_state.expand_and_refine_all_bboxes()
-        except Exception as e:
-            logger.exception(f"Error expanding and refining bboxes: {e}")
+        except Exception:
+            logger.exception("Error expanding and refining bboxes")
             return False
 
     def command_rematch_gt(self) -> bool:
@@ -400,8 +401,8 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.warning("No project state available for GT rematch")
                 return False
             return self._project_state.rematch_ground_truth()
-        except Exception as e:
-            logger.exception(f"Error re-matching ground truth: {e}")
+        except Exception:
+            logger.exception("Error re-matching ground truth")
             return False
 
     def command_reload_page_with_ocr(self) -> bool:
@@ -416,8 +417,8 @@ class ProjectStateViewModel(BaseViewModel):
                 return False
             self._project_state.reload_current_page_with_ocr()
             return True
-        except Exception as e:
-            logger.exception(f"Error reloading page with OCR: {e}")
+        except Exception:
+            logger.exception("Error reloading page with OCR")
             return False
 
     def command_export_page(

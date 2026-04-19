@@ -124,7 +124,8 @@ class ProjectOperations:
             logger.info("No ground truth mapping provided, using empty mapping")
         else:
             logger.info(
-                f"Using provided ground truth mapping with {len(ground_truth_map)} entries"
+                "Using provided ground truth mapping with %s entries",
+                len(ground_truth_map),
             )
 
         # Create placeholder pages (will be lazily loaded)
@@ -142,7 +143,7 @@ class ProjectOperations:
             total_pages=len(images),
         )
 
-        logger.info(f"Created project with {len(images)} images")
+        logger.info("Created project with %s images", len(images))
         return project
 
     def load_project_metadata(self, project_directory: Path) -> dict | None:
@@ -157,7 +158,7 @@ class ProjectOperations:
         try:
             project_json_path = project_directory / "project.json"
             if not project_json_path.exists():
-                logger.error(f"Project metadata not found: {project_json_path}")
+                logger.error("Project metadata not found: %s", project_json_path)
                 return None
 
             with open(project_json_path, "r", encoding="utf-8") as f:
@@ -170,16 +171,16 @@ class ProjectOperations:
                 # This will raise an exception if metadata is invalid
                 Project.from_dict(metadata)
             except Exception as e:
-                logger.warning(f"Invalid project metadata structure: {e}")
+                logger.warning("Invalid project metadata structure: %s", e)
                 # Continue anyway, as we don't want to break existing projects
 
             logger.info(
-                f"Loaded project metadata for: {metadata.get('project_id', 'unknown')}"
+                "Loaded project metadata for: %s", metadata.get("project_id", "unknown")
             )
             return metadata
 
-        except Exception as e:
-            logger.exception(f"Failed to load project metadata: {e}")
+        except Exception:
+            logger.exception("Failed to load project metadata")
             return None
 
     def backup_project(
@@ -225,11 +226,11 @@ class ProjectOperations:
             # Copy entire directory tree
             shutil.copytree(source_directory, backup_path, dirs_exist_ok=False)
 
-            logger.info(f"Created project backup: {backup_path}")
+            logger.info("Created project backup: %s", backup_path)
             return True
 
-        except Exception as e:
-            logger.exception(f"Failed to backup project: {e}")
+        except Exception:
+            logger.exception("Failed to backup project")
             return False
 
     def list_saved_projects(
@@ -263,8 +264,8 @@ class ProjectOperations:
                     metadata["directory_path"] = str(project_dir)
                     saved_projects.append(metadata)
 
-        except Exception as e:
-            logger.exception(f"Failed to list saved projects: {e}")
+        except Exception:
+            logger.exception("Failed to list saved projects")
 
         return saved_projects
 

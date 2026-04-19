@@ -14,6 +14,8 @@ from pd_book_tools.ocr.label_normalization import (
     normalize_word_component,
 )
 
+from ocr_labeler.models.word_match_model import MatchStatus
+
 logger = logging.getLogger(__name__)
 
 STYLE_LABEL_BY_ATTR = {
@@ -190,6 +192,60 @@ class WordOperations:
             for label in ordered_labels
         }
         return True
+
+    def clear_all_scopes(self, word: object) -> bool:
+        """Remove all scope assignments from a word's text style labels.
+
+        Returns True if at least one scope was removed, False otherwise.
+        """
+        style_labels = self._read_text_style_labels(word)
+        candidate_styles = [label for label in style_labels if label != "regular"]
+        if not candidate_styles:
+            return False
+
+        scopes = self._read_text_style_label_scopes(word)
+        changed = False
+        for style_label in candidate_styles:
+            if style_label in scopes:
+                scopes.pop(style_label)
+                changed = True
+
+        if changed:
+            word.text_style_label_scopes = scopes
+        return changed
+
+    @staticmethod
+    def classify_match_status(
+        ocr_text: str,
+        ground_truth_text: str,
+        fuzz_threshold: float,
+        word_object: object | None = None,
+    ) -> tuple[MatchStatus, float | None]:
+        """Classify match status between OCR text and ground truth.
+
+        Returns (match_status, fuzz_score).
+        """
+        if not ground_truth_text:
+            return MatchStatus.UNMATCHED_OCR, None
+
+        if ocr_text.strip() == ground_truth_text.strip():
+            return MatchStatus.EXACT, 1.0
+
+        fuzz_score = None
+        if (
+            word_object is not None
+            and hasattr(word_object, "fuzz_score_against")
+            and callable(getattr(word_object, "fuzz_score_against"))
+        ):
+            try:
+                fuzz_score = word_object.fuzz_score_against(ground_truth_text)
+            except Exception:
+                logger.debug("Error computing fuzz score", exc_info=True)
+
+        if fuzz_score is not None and fuzz_score >= fuzz_threshold:
+            return MatchStatus.FUZZY, fuzz_score
+
+        return MatchStatus.MISMATCH, 0.0 if fuzz_score is None else fuzz_score
 
     def _read_text_style_labels(self, word: object) -> list[str]:
         try:

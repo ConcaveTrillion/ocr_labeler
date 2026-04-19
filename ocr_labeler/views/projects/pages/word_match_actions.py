@@ -13,6 +13,38 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _SelectionSnapshot:
+    """Captures and can restore line/word/paragraph selection state."""
+
+    __slots__ = ("_view", "lines", "words", "paragraphs")
+
+    def __init__(self, view: WordMatchView) -> None:
+        self._view = view
+        self.lines = set(view.selection.selected_line_indices)
+        self.words = set(view.selection.selected_word_indices)
+        self.paragraphs = set(view.selection.selected_paragraph_indices)
+
+    def clear(self) -> None:
+        """Clear all selections and emit events."""
+        sel = self._view.selection
+        sel.selected_line_indices.clear()
+        sel.selected_word_indices.clear()
+        sel.selected_paragraph_indices.clear()
+        self._view.toolbar.update_button_state()
+        sel.emit_selection_changed()
+        sel.emit_paragraph_selection_changed()
+
+    def restore(self) -> None:
+        """Restore previously saved selections and emit events."""
+        sel = self._view.selection
+        sel.selected_line_indices = self.lines
+        sel.selected_word_indices = self.words
+        sel.selected_paragraph_indices = self.paragraphs
+        self._view.toolbar.update_button_state()
+        sel.emit_selection_changed()
+        sel.emit_paragraph_selection_changed()
+
+
 class WordMatchActions:
     """Stateless handler class for bulk action methods on WordMatchView."""
 
@@ -42,17 +74,8 @@ class WordMatchActions:
             self._view._safe_notify(no_selection_message, type_="warning")
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         success_count = 0
         for line_index in selected_lines:
@@ -74,12 +97,7 @@ class WordMatchActions:
             )
             return
 
-        self._view.selection.selected_line_indices = previous_line_selection
-        self._view.selection.selected_word_indices = previous_word_selection
-        self._view.selection.selected_paragraph_indices = previous_paragraph_selection
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot.restore()
         self._view._safe_notify(no_text_message, type_="warning")
 
     def _delete_lines(
@@ -90,12 +108,8 @@ class WordMatchActions:
         failure_message: str,
     ) -> None:
         """Execute line deletion and keep selection state consistent on failure."""
-        previously_selected = set(self._view.selection.selected_line_indices)
-        previously_selected_words = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Delete requested for lines: %s", line_indices)
         try:
             success = self._view.delete_lines_callback(line_indices)
@@ -107,16 +121,10 @@ class WordMatchActions:
             if success:
                 self._view._safe_notify(success_message, type_="positive")
             else:
-                self._view.selection.selected_line_indices = previously_selected
-                self._view.selection.selected_word_indices = previously_selected_words
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(failure_message, type_="warning")
         except Exception as e:
-            self._view.selection.selected_line_indices = previously_selected
-            self._view.selection.selected_word_indices = previously_selected_words
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error deleting lines %s: %s", line_indices, e)
             self._view._safe_notify(f"Error deleting lines: {e}", type_="negative")
 
@@ -213,17 +221,8 @@ class WordMatchActions:
             self._view._safe_notify("Select at least one word to copy", type_="warning")
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         try:
             success = self._view.copy_selected_words_ocr_to_gt_callback(selected_words)
@@ -242,12 +241,7 @@ class WordMatchActions:
             )
             return
 
-        self._view.selection.selected_line_indices = previous_line_selection
-        self._view.selection.selected_word_indices = previous_word_selection
-        self._view.selection.selected_paragraph_indices = previous_paragraph_selection
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot.restore()
         self._view._safe_notify("No OCR text found to copy", type_="warning")
 
     # ------------------------------------------------------------------
@@ -267,17 +261,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Merge requested for selected lines: %s", selected_indices)
         try:
             success = self._view.merge_lines_callback(selected_indices)
@@ -291,26 +276,12 @@ class WordMatchActions:
                     f"Merged {len(selected_indices)} lines", type_="positive"
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to merge selected lines", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
             self._view._safe_notify(
                 f"Error merging selected lines: {e}", type_="negative"
@@ -331,12 +302,8 @@ class WordMatchActions:
             )
             return
 
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Merge requested for selected paragraphs: %s", selected_indices)
         try:
             success = self._view.merge_paragraphs_callback(selected_indices)
@@ -350,20 +317,12 @@ class WordMatchActions:
                     f"Merged {len(selected_indices)} paragraphs", type_="positive"
                 )
             else:
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to merge selected paragraphs", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error merging selected paragraphs %s: %s",
                 selected_indices,
@@ -389,12 +348,8 @@ class WordMatchActions:
             )
             return
 
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Delete requested for selected paragraphs: %s", selected_indices)
         try:
             success = self._view.delete_paragraphs_callback(selected_indices)
@@ -408,21 +363,13 @@ class WordMatchActions:
                     f"Deleted {len(selected_indices)} paragraphs", type_="positive"
                 )
             else:
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to delete selected paragraphs",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error deleting selected paragraphs %s: %s",
                 selected_indices,
@@ -452,17 +399,8 @@ class WordMatchActions:
             return
 
         selected_line_index = selected_line_indices[0]
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Split requested after selected line: %s", selected_line_index)
         try:
             success = self._view.split_paragraph_after_line_callback(
@@ -479,24 +417,10 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify("Failed to split paragraph", type_="warning")
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error splitting paragraph after line %s: %s",
                 selected_line_index,
@@ -532,18 +456,9 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.debug("[split_by_selection] handler.selection_cleared")
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
         logger.info(
             "[split_by_selection] handler.requested lines=%s", selected_line_indices
         )
@@ -569,27 +484,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to form new paragraph from selected lines",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error splitting paragraph by selected lines %s: %s",
                 selected_line_indices,
@@ -619,17 +520,8 @@ class WordMatchActions:
             return
 
         line_index, word_index = next(iter(self._view.selection.selected_word_indices))
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info(
             "Split line requested after selected word: line=%s word=%s",
             line_index,
@@ -649,24 +541,10 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify("Failed to split line", type_="warning")
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error splitting line after word line=%s word=%s: %s",
                 line_index,
@@ -709,12 +587,8 @@ class WordMatchActions:
             )
             return
 
-        previously_selected_lines = set(self._view.selection.selected_line_indices)
-        previously_selected_words = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         logger.info("Delete requested for selected words: %s", selected_words)
         try:
             success = self._view.delete_words_callback(selected_words)
@@ -729,18 +603,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previously_selected_lines
-                self._view.selection.selected_word_indices = previously_selected_words
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to delete selected words", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previously_selected_lines
-            self._view.selection.selected_word_indices = previously_selected_words
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error deleting words %s: %s", selected_words, e)
             self._view._safe_notify(f"Error deleting words: {e}", type_="negative")
 
@@ -770,12 +638,8 @@ class WordMatchActions:
         base_word_index = selected_words[0][1]
         merge_count = len(selected_words) - 1
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         logger.info("Merge requested for selected words: %s", selected_words)
         try:
@@ -793,18 +657,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to merge selected words", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error merging selected words %s: %s", selected_words, e)
             self._view._safe_notify(
                 f"Error merging selected words: {e}", type_="negative"
@@ -829,12 +687,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.refine_words_callback(selected_words)
             if success:
@@ -843,18 +697,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to refine selected words", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error refining words %s: %s", selected_words, e)
             self._view._safe_notify(f"Error refining words: {e}", type_="negative")
 
@@ -873,12 +721,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.refine_lines_callback(selected_lines)
             if success:
@@ -887,18 +731,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to refine selected lines", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error refining lines %s: %s", selected_lines, e)
             self._view._safe_notify(f"Error refining lines: {e}", type_="negative")
 
@@ -917,10 +755,8 @@ class WordMatchActions:
             )
             return
 
-        previous_selection = set(self._view.selection.selected_paragraph_indices)
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.refine_paragraphs_callback(selected_paragraphs)
             if success:
@@ -929,16 +765,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_paragraph_indices = previous_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to refine selected paragraphs", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_paragraph_indices = previous_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error refining paragraphs %s: %s",
                 selected_paragraphs,
@@ -967,12 +799,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_then_refine_words_callback(selected_words)
             if success:
@@ -981,18 +809,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand-then-refine selected words", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error expand-then-refining words %s: %s", selected_words, e
             )
@@ -1015,12 +837,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_word_bboxes_callback(selected_words)
             if success:
@@ -1029,18 +847,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand selected word bboxes", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error expanding word bboxes %s: %s", selected_words, e)
             self._view._safe_notify(
                 f"Error expanding word bboxes: {e}", type_="negative"
@@ -1063,12 +875,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_then_refine_lines_callback(selected_lines)
             if success:
@@ -1077,18 +885,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand-then-refine selected lines", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error expand-then-refining lines %s: %s", selected_lines, e
             )
@@ -1111,12 +913,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_line_bboxes_callback(selected_lines)
             if success:
@@ -1125,18 +923,12 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand selected line bboxes", type_="warning"
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception("Error expanding line bboxes %s: %s", selected_lines, e)
             self._view._safe_notify(
                 f"Error expanding line bboxes: {e}", type_="negative"
@@ -1159,10 +951,8 @@ class WordMatchActions:
             )
             return
 
-        previous_selection = set(self._view.selection.selected_paragraph_indices)
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_then_refine_paragraphs_callback(
                 selected_paragraphs
@@ -1173,17 +963,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_paragraph_indices = previous_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand-then-refine selected paragraphs",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_paragraph_indices = previous_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error expand-then-refining paragraphs %s: %s",
                 selected_paragraphs,
@@ -1210,10 +996,8 @@ class WordMatchActions:
             )
             return
 
-        previous_selection = set(self._view.selection.selected_paragraph_indices)
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_paragraph_bboxes_callback(selected_paragraphs)
             if success:
@@ -1222,17 +1006,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_paragraph_indices = previous_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to expand selected paragraph bboxes",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_paragraph_indices = previous_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error expanding paragraph bboxes %s: %s",
                 selected_paragraphs,
@@ -1263,17 +1043,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         try:
             success = self._view.split_line_with_selected_words_callback(selected_words)
@@ -1283,27 +1054,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to form a new line from selected words",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error forming new line from selected words %s: %s",
                 selected_words,
@@ -1334,17 +1091,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         try:
             success = self._view.split_lines_into_selected_unselected_callback(
@@ -1356,27 +1104,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to split line(s) into selected and unselected words",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error splitting lines into selected/unselected words %s: %s",
                 selected_words,
@@ -1407,17 +1141,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        previous_paragraph_selection = set(
-            self._view.selection.selected_paragraph_indices
-        )
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.selection.selected_paragraph_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
-        self._view.selection.emit_paragraph_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
 
         try:
             success = self._view.group_selected_words_into_paragraph_callback(
@@ -1429,27 +1154,13 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.selection.selected_paragraph_indices = (
-                    previous_paragraph_selection
-                )
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
-                self._view.selection.emit_paragraph_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     "Failed to group selected words into paragraph",
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.selection.selected_paragraph_indices = (
-                previous_paragraph_selection
-            )
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
-            self._view.selection.emit_paragraph_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error grouping selected words %s into paragraph: %s",
                 selected_words,
@@ -1482,12 +1193,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.refine_words_callback([(line_index, word_index)])
             if success:
@@ -1497,10 +1204,7 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     (
                         f"Could not refine line {line_index + 1}, word {word_index + 1}; "
@@ -1509,10 +1213,7 @@ class WordMatchActions:
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error refining word (%s, %s): %s",
                 line_index,
@@ -1543,12 +1244,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.expand_then_refine_words_callback(
                 [(line_index, word_index)]
@@ -1563,10 +1260,7 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     (
                         f"Could not expand-then-refine line {line_index + 1}, "
@@ -1575,10 +1269,7 @@ class WordMatchActions:
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error expand-then-refining word (%s, %s): %s",
                 line_index,
@@ -1607,12 +1298,8 @@ class WordMatchActions:
             return
 
         word_key = (line_index, word_index)
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.delete_words_callback([word_key])
             if success:
@@ -1626,10 +1313,7 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     (
                         f"Could not delete line {line_index + 1}, word {word_index + 1}; "
@@ -1638,10 +1322,7 @@ class WordMatchActions:
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error deleting single word (%s, %s): %s",
                 line_index,
@@ -1669,12 +1350,8 @@ class WordMatchActions:
             self._view._safe_notify("No left word to merge into", type_="warning")
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.merge_word_left_callback(line_index, word_index)
             if success:
@@ -1688,10 +1365,7 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     (
                         f"Could not merge line {line_index + 1}, word {word_index + 1} "
@@ -1700,10 +1374,7 @@ class WordMatchActions:
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error merge-word-left (%s, %s): %s",
                 line_index,
@@ -1728,12 +1399,8 @@ class WordMatchActions:
             )
             return
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.merge_word_right_callback(line_index, word_index)
             if success:
@@ -1747,10 +1414,7 @@ class WordMatchActions:
                     type_="positive",
                 )
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     (
                         f"Could not merge line {line_index + 1}, word {word_index + 1} "
@@ -1759,10 +1423,7 @@ class WordMatchActions:
                     type_="warning",
                 )
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error merge-word-right (%s, %s): %s",
                 line_index,
@@ -1803,12 +1464,8 @@ class WordMatchActions:
             )
             return False
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.split_word_callback(
                 line_index, word_index, split_fraction
@@ -1831,10 +1488,7 @@ class WordMatchActions:
                 )
                 return True
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     self._view._split_failure_reason(
                         line_index,
@@ -1846,10 +1500,7 @@ class WordMatchActions:
                 )
                 return False
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error split-word (%s, %s): %s",
                 line_index,
@@ -1888,12 +1539,8 @@ class WordMatchActions:
             )
             return False
 
-        previous_line_selection = set(self._view.selection.selected_line_indices)
-        previous_word_selection = set(self._view.selection.selected_word_indices)
-        self._view.selection.selected_line_indices.clear()
-        self._view.selection.selected_word_indices.clear()
-        self._view.toolbar.update_button_state()
-        self._view.selection.emit_selection_changed()
+        snapshot = _SelectionSnapshot(self._view)
+        snapshot.clear()
         try:
             success = self._view.split_word_vertical_closest_line_callback(
                 line_index,
@@ -1928,10 +1575,7 @@ class WordMatchActions:
                 )
                 return True
             else:
-                self._view.selection.selected_line_indices = previous_line_selection
-                self._view.selection.selected_word_indices = previous_word_selection
-                self._view.toolbar.update_button_state()
-                self._view.selection.emit_selection_changed()
+                snapshot.restore()
                 self._view._safe_notify(
                     self._view._split_failure_reason(
                         line_index,
@@ -1943,10 +1587,7 @@ class WordMatchActions:
                 )
                 return False
         except Exception as e:
-            self._view.selection.selected_line_indices = previous_line_selection
-            self._view.selection.selected_word_indices = previous_word_selection
-            self._view.toolbar.update_button_state()
-            self._view.selection.emit_selection_changed()
+            snapshot.restore()
             logger.exception(
                 "Error split-word-vertical (%s, %s): %s",
                 line_index,
@@ -2036,7 +1677,7 @@ class WordMatchActions:
                         type_="warning",
                     )
             except Exception as e:
-                logger.exception(f"Error copying GT->OCR for line {line_index}: {e}")
+                logger.exception("Error copying GT->OCR for line %s", line_index)
                 self._view._safe_notify(f"Error copying GT->OCR: {e}", type_="negative")
         else:
             logger.debug("No copy_gt_to_ocr_callback available")
@@ -2065,7 +1706,7 @@ class WordMatchActions:
                         type_="warning",
                     )
             except Exception as e:
-                logger.exception(f"Error copying OCR->GT for line {line_index}: {e}")
+                logger.exception("Error copying OCR->GT for line %s", line_index)
                 self._view._safe_notify(f"Error copying OCR->GT: {e}", type_="negative")
         else:
             logger.debug("No copy_ocr_to_gt_callback available")

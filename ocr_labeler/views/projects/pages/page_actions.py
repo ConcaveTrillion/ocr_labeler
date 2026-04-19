@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import logging
 
-from nicegui import binding, ui
+from nicegui import ui
 
 from ....viewmodels.project.page_state_view_model import PageStateViewModel
 from ....viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ...callbacks import PageActionCallback
 from ...shared.button_styles import style_action_button
+from ...shared.view_helpers import NotificationMixin
 from .export_dialog import ExportDialog
 
 logger = logging.getLogger(__name__)
 
 
-class PageActions:  # pragma: no cover - UI wrapper file
+class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
     """Page-level actions independent from project-level navigation."""
 
     def __init__(
@@ -28,6 +29,9 @@ class PageActions:  # pragma: no cover - UI wrapper file
     ):
         logger.debug("Initializing PageActions")
         self.project_viewmodel = project_viewmodel
+        self._app_state_view_model = getattr(
+            project_viewmodel, "_app_state_model", None
+        )
         self.page_viewmodel = page_viewmodel
         self._on_save_page = on_save_page
         self._on_save_project = on_save_project
@@ -47,75 +51,6 @@ class PageActions:  # pragma: no cover - UI wrapper file
         self._export_dialog: ExportDialog | None = None
 
         self._notified_error_keys: set[str] = set()
-
-    def _notify(self, message: str, type_: str = "warning") -> None:
-        """Route notifications through session queue with UI fallback."""
-        app_state_model = getattr(self.project_viewmodel, "_app_state_model", None)
-        app_state = getattr(app_state_model, "_app_state", None)
-        if app_state is not None:
-            app_state.queue_notification(message, type_)
-            return
-        ui.notify(message, type=type_)
-
-    def _notify_once(self, key: str, message: str, type_: str = "warning") -> None:
-        """Emit a notification once per key to avoid toast spam."""
-        if key in self._notified_error_keys:
-            return
-        self._notified_error_keys.add(key)
-        self._notify(message, type_)
-
-    def _bind_from_safe(
-        self,
-        target: object,
-        target_property: str,
-        source: object,
-        source_property: str,
-        *,
-        key: str,
-        message: str,
-    ) -> None:
-        """Bind with user-visible warning if binding setup fails."""
-        try:
-            binding.bind_from(
-                target,
-                target_property,
-                source,
-                source_property,
-            )
-        except Exception:
-            logger.exception(
-                "Binding failed: %s.%s <- %s.%s",
-                type(target).__name__,
-                target_property,
-                type(source).__name__,
-                source_property,
-            )
-            self._notify_once(key, message, type_="warning")
-
-    def _bind_disabled_from_safe(
-        self,
-        target: object,
-        source: object,
-        source_property: str,
-        *,
-        key: str,
-        message: str,
-    ) -> None:
-        """Bind a disabled flag onto NiceGUI's enabled property safely."""
-        try:
-            target.bind_enabled_from(  # type: ignore[attr-defined]
-                source,
-                source_property,
-                backward=lambda disabled: not bool(disabled),
-            )
-        except Exception:
-            logger.exception(
-                "Disabled binding failed: %s.enabled <- not %s.%s",
-                type(target).__name__,
-                type(source).__name__,
-                source_property,
-            )
-            self._notify_once(key, message, type_="warning")
 
     def build(self) -> ui.element:
         logger.debug("Building PageActions UI")

@@ -333,7 +333,7 @@ class PageOperations:
             # Copy image file
             image_dest = save_dir / image_filename
             shutil.copy2(image_path, image_dest)
-            logger.info(f"Copied image to: {image_dest}")
+            logger.info("Copied image to: %s", image_dest)
 
             # Create JSON metadata with relative path (fallback to filename if not relative)
             try:
@@ -356,14 +356,14 @@ class PageOperations:
             json_dest = save_dir / json_filename
             with open(json_dest, "w", encoding="utf-8") as f:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Saved JSON metadata to: {json_dest}")
+            logger.info("Saved JSON metadata to: %s", json_dest)
 
             self._store_saved_provenance(page_model, envelope.provenance.to_dict())
 
             return True
 
-        except Exception as e:
-            logger.exception(f"Failed to save page: {e}")
+        except Exception:
+            logger.exception("Failed to save page")
             return False
 
     def update_cached_images_in_json(
@@ -490,7 +490,7 @@ class PageOperations:
 
             save_dir = self._resolve_save_directory(project_root, save_directory)
             if not save_dir.exists():
-                logger.info(f"Save directory does not exist: {save_dir}")
+                logger.info("Save directory does not exist: %s", save_dir)
                 return None
 
             file_prefix = f"{project_id}_{page_number:03d}"
@@ -498,7 +498,7 @@ class PageOperations:
             json_path = save_dir / json_filename
 
             if not json_path.exists():
-                logger.info(f"Saved page not found: {json_path}")
+                logger.info("Saved page not found: %s", json_path)
                 return None
 
             # Load JSON metadata
@@ -507,17 +507,17 @@ class PageOperations:
 
             # Validate JSON structure
             if not isinstance(json_data, dict):
-                logger.error(f"Invalid JSON structure in {json_path}")
+                logger.error("Invalid JSON structure in %s", json_path)
                 return None
 
             page_dict = self._extract_page_dict(json_data)
             if not isinstance(page_dict, dict):
-                logger.error(f"Invalid page data structure in {json_path}")
+                logger.error("Invalid page data structure in %s", json_path)
                 return None
 
             # Reconstruct Page object from dictionary
             page = Page.from_dict(page_dict)
-            logger.info(f"Successfully loaded page from: {json_path}")
+            logger.info("Successfully loaded page from: %s", json_path)
 
             if is_user_page_envelope(json_data):
                 envelope = UserPageEnvelope.from_dict(json_data)
@@ -530,10 +530,10 @@ class PageOperations:
             source_path = self._extract_source_path(json_data)
             if source_path:
                 page.image_path = project_root / source_path  # type: ignore[attr-defined]
-                logger.debug(f"Restored image_path: {page.image_path}")
+                logger.debug("Restored image_path: %s", page.image_path)
             else:
                 logger.warning(
-                    f"No source_path found in {json_path}, checking for saved image"
+                    "No source_path found in %s, checking for saved image", json_path
                 )
 
             # Load the corresponding image file and attach it to the page
@@ -549,10 +549,10 @@ class PageOperations:
             if not hasattr(page, "image_path") or page.image_path is None:
                 if image_path:
                     page.image_path = image_path  # type: ignore[attr-defined]
-                    logger.debug(f"Using saved image as image_path: {image_path}")
+                    logger.debug("Using saved image as image_path: %s", image_path)
                 else:
                     logger.warning(
-                        f"No image_path available for loaded page from {json_path}"
+                        "No image_path available for loaded page from %s", json_path
                     )
 
             if image_path:
@@ -563,14 +563,14 @@ class PageOperations:
                     if img is not None:
                         page.cv2_numpy_page_image = img
                         logger.debug(
-                            f"Attached cv2 image for loaded page: {image_path}"
+                            "Attached cv2 image for loaded page: %s", image_path
                         )
                     else:
-                        logger.warning(f"Failed to load image from: {image_path}")
+                        logger.warning("Failed to load image from: %s", image_path)
                 except Exception as e:
-                    logger.warning(f"Error loading image {image_path}: {e}")
+                    logger.warning("Error loading image %s: %s", image_path, e)
             else:
-                logger.warning(f"No image file found for prefix: {file_prefix}")
+                logger.warning("No image file found for prefix: %s", file_prefix)
 
             page_model = PageModel(page=page)
             self._attach_loaded_provenance(page_model=page_model, json_data=json_data)
@@ -613,8 +613,8 @@ class PageOperations:
 
             return page_model, original_page_dict
 
-        except Exception as e:
-            logger.exception(f"Failed to load page {page_number}: {e}")
+        except Exception:
+            logger.exception("Failed to load page %s", page_number)
             return None
 
     def refine_all_bboxes(self, page: PageModel | Page, padding_px: int = 2) -> bool:
@@ -634,7 +634,7 @@ class PageOperations:
             if page_obj is None:
                 logger.warning("No page provided to refine_all_bboxes")
                 return False
-            logger.debug(f"Refining bboxes for page with padding_px={padding_px}")
+            logger.debug("Refining bboxes for page with padding_px=%s", padding_px)
             page_obj.refine_bounding_boxes(padding_px=padding_px)
 
             # Refresh page images after bbox changes
@@ -652,7 +652,7 @@ class PageOperations:
                     e,
                 )
                 return self.expand_and_refine_all_bboxes(page, padding_px=padding_px)
-            logger.exception(f"Failed to refine bboxes for page: {e}")
+            logger.exception("Failed to refine bboxes for page")
             return False
 
     def expand_and_refine_all_bboxes(
@@ -676,7 +676,7 @@ class PageOperations:
                 logger.warning("No page provided to expand_and_refine_all_bboxes")
                 return False
             logger.debug(
-                f"Expanding and refining bboxes for page with padding_px={padding_px}"
+                "Expanding and refining bboxes for page with padding_px=%s", padding_px
             )
 
             # Iterate through all words and prefer BoundingBox.refine(expand_beyond_original=True)
@@ -755,8 +755,8 @@ class PageOperations:
 
             logger.info("Successfully expanded and refined bboxes for page")
             return True
-        except Exception as e:
-            logger.exception(f"Failed to expand and refine bboxes for page: {e}")
+        except Exception:
+            logger.exception("Failed to expand and refine bboxes for page")
             return False
 
     def can_load_page(
@@ -825,10 +825,12 @@ class PageOperations:
                         json_data
                     ):
                         can_load = False
-                        logger.warning(f"Invalid JSON structure in {json_path}")
+                        logger.warning("Invalid JSON structure in %s", json_path)
                 except Exception as e:
                     can_load = False
-                    logger.warning(f"Cannot read or parse JSON file {json_path}: {e}")
+                    logger.warning(
+                        "Cannot read or parse JSON file %s: %s", json_path, e
+                    )
 
             return PageLoadInfo(
                 can_load=can_load,
@@ -837,8 +839,8 @@ class PageOperations:
                 file_prefix=file_prefix,
             )
 
-        except Exception as e:
-            logger.exception(f"Failed to check page {page_number} availability: {e}")
+        except Exception:
+            logger.exception("Failed to check page %s availability", page_number)
             # Return a safe default with the computed paths
             file_prefix = f"{project_id or project_root.name}_{page_number:03d}"
             json_filename = f"{file_prefix}.json"
@@ -918,8 +920,8 @@ class PageOperations:
             else:
                 logger.warning("Page object has no native refresh_page_images method")
                 return False
-        except Exception as e:
-            logger.exception(f"Failed to refresh page images: {e}")
+        except Exception:
+            logger.exception("Failed to refresh page images")
             return False
 
     def reset_ocr(
@@ -951,7 +953,7 @@ class PageOperations:
             )
         """
         try:
-            logger.info(f"Resetting OCR for page: {image_path}")
+            logger.info("Resetting OCR for page: %s", image_path)
 
             # Use the page parser to perform fresh OCR
             page = self.page_parser(
@@ -961,14 +963,14 @@ class PageOperations:
             )
 
             if page is None:
-                logger.error(f"Failed to reset OCR for {image_path}")
+                logger.error("Failed to reset OCR for %s", image_path)
                 return None
 
-            logger.info(f"Successfully reset OCR for {image_path}")
+            logger.info("Successfully reset OCR for %s", image_path)
             return page
 
-        except Exception as e:
-            logger.exception(f"Error resetting OCR for {image_path}: {e}")
+        except Exception:
+            logger.exception("Error resetting OCR for %s", image_path)
             return None
 
     def find_ground_truth_text(

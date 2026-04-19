@@ -46,7 +46,7 @@ class TestProject:
     def test_page_count(self):
         """Test page_count method."""
         vm = Project()
-        assert vm.page_count() == 0
+        assert vm.page_count == 0
 
         vm = Project(image_paths=[Path("1.png"), Path("2.png")], pages=[None, None])
-        assert vm.page_count() == 2
+        assert vm.page_count == 2

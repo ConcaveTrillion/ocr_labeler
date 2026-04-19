@@ -40,43 +40,10 @@ def crop_image_to_bbox(
         return None
 
     try:
-        height, width = page_image.shape[:2]
-
-        if bbox.is_normalized:
-            pixel_bbox = bbox.scale(width, height)
-        else:
-            pixel_bbox = bbox
-
-        x1 = int(pixel_bbox.minX)
-        y1 = int(pixel_bbox.minY)
-        x2 = int(pixel_bbox.maxX)
-        y2 = int(pixel_bbox.maxY)
-
-        if x1 >= x2 or y1 >= y2:
-            logger.debug(
-                "Invalid bbox coordinates for %s: (%s, %s, %s, %s)",
-                label,
-                x1,
-                y1,
-                x2,
-                y2,
-            )
-            return None
-
-        # Clamp to image bounds
-        x1 = max(0, min(x1, width - 1))
-        y1 = max(0, min(y1, height - 1))
-        x2 = max(x1 + 1, min(x2, width))
-        y2 = max(y1 + 1, min(y2, height))
-
-        cropped = page_image[y1:y2, x1:x2]
-
-        if cropped.size == 0:
-            logger.debug("Empty crop for %s at (%s, %s, %s, %s)", label, x1, y1, x2, y2)
-            return None
-
+        cropped = bbox.crop_image(page_image)
+        if cropped is None:
+            logger.debug("Empty crop for %s", label)
         return cropped
-
     except Exception as e:
         logger.debug("Error cropping image for %s: %s", label, e)
         return None

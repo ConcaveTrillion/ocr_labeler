@@ -31,7 +31,7 @@ class NotificationService:
 
                 self._ui_framework = ui
             except ImportError as e:
-                logger.warning(f"Could not import nicegui.ui: {e}")
+                logger.warning("Could not import nicegui.ui: %s", e)
                 # Create a mock UI for testing or when UI is not available
                 self._ui_framework = self._create_mock_ui()
         return self._ui_framework
@@ -41,7 +41,7 @@ class NotificationService:
 
         class MockUI:
             def notify(self, message, type="info", **kwargs):
-                logger.info(f"Mock notification [{type}]: {message}")
+                logger.info("Mock notification [%s]: %s", type, message)
 
         return MockUI()
 
@@ -54,7 +54,7 @@ class NotificationService:
         """
         if self._notifications_enabled:
             self.ui.notify(message, type="positive", **kwargs)
-            logger.debug(f"Success notification: {message}")
+            logger.debug("Success notification: %s", message)
 
     def error(self, message: str, **kwargs):
         """Show error notification.
@@ -65,7 +65,7 @@ class NotificationService:
         """
         if self._notifications_enabled:
             self.ui.notify(message, type="negative", **kwargs)
-            logger.error(f"Error notification: {message}")
+            logger.error("Error notification: %s", message)
 
     def warning(self, message: str, **kwargs):
         """Show warning notification.
@@ -76,7 +76,7 @@ class NotificationService:
         """
         if self._notifications_enabled:
             self.ui.notify(message, type="warning", **kwargs)
-            logger.warning(f"Warning notification: {message}")
+            logger.warning("Warning notification: %s", message)
 
     def info(self, message: str, **kwargs):
         """Show info notification.
@@ -87,7 +87,7 @@ class NotificationService:
         """
         if self._notifications_enabled:
             self.ui.notify(message, **kwargs)
-            logger.info(f"Info notification: {message}")
+            logger.info("Info notification: %s", message)
 
     # TODO: Wire disable/enable to a UI toggle (settings or toolbar).
     def disable_notifications(self):

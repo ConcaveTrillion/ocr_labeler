@@ -34,6 +34,7 @@ class Project:
     include_images: bool = True
     copied_images: int = 0
 
+    @property
     def page_count(self) -> int:
         """Return the number of pages in this project."""
         return len(self.pages)

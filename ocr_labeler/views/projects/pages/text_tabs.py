@@ -27,7 +27,7 @@ class TextTabsModel:
 
     def __init__(self, page_state: PageState | None = None):
         logger.debug(
-            f"Initializing TextTabsModel with page_state: {page_state is not None}"
+            "Initializing TextTabsModel with page_state: %s", page_state is not None
         )
         self._page_state = page_state
         if self._page_state:
@@ -42,10 +42,10 @@ class TextTabsModel:
     #     """Intercept attribute changes to propagate to PageState."""
     #     super().__setattr__(name, value)
     #     if name == "gt_text" and self._page_state:
-    #         logger.debug(f"Propagating GT text change to PageState: '{value[:50]}...'")
+    #         logger.debug("Propagating GT text change to PageState: '%s...'", value[:50])
     #         self._page_state.current_gt_text = value
     #     elif name == "ocr_text" and self._page_state:
-    #         logger.debug(f"Propagating OCR text change to PageState: '{value[:50]}...'")
+    #         logger.debug("Propagating OCR text change to PageState: '%s...'", value[:50])
     #         self._page_state.current_ocr_text = value
 
     def update(self):
@@ -54,8 +54,8 @@ class TextTabsModel:
         if self._page_state:
             self.gt_text = self._page_state.current_gt_text
             self.ocr_text = self._page_state.current_ocr_text
-            logger.debug(f"GT text updated to: '{self.gt_text[:50]}...'")
-            logger.debug(f"OCR text updated to: '{self.ocr_text[:50]}...'")
+            logger.debug("GT text updated to: '%s...'", self.gt_text[:50])
+            logger.debug("OCR text updated to: '%s...'", self.ocr_text[:50])
         else:
             logger.debug("No page state available, clearing text")
             self.gt_text = ""
@@ -67,8 +67,9 @@ class TextTabsModel:
         self.update()
         # Notify TextTabs that state changed so it can update word matches
         logger.debug(
-            f"Checking for callback: hasattr={hasattr(self, '_on_state_change_callback')}, "
-            f"is_set={getattr(self, '_on_state_change_callback', None) is not None}"
+            "Checking for callback: hasattr=%s, is_set=%s",
+            hasattr(self, "_on_state_change_callback"),
+            getattr(self, "_on_state_change_callback", None) is not None,
         )
         if (
             hasattr(self, "_on_state_change_callback")
@@ -93,8 +94,8 @@ class TextTabs:
         on_save_page=None,
         on_load_page=None,
     ):
-        logger.info(f"Initializing TextTabs for page {page_index}")
-        logger.debug(f"Page state provided: {page_state is not None}")
+        logger.info("Initializing TextTabs for page %s", page_index)
+        logger.debug("Page state provided: %s", page_state is not None)
         self.page_state = page_state
         self.page_index = page_index
         self._disposed = False
@@ -112,7 +113,7 @@ class TextTabs:
         # Set the page index on the page_state so it knows which page to cache
         if page_state:
             page_state._current_page_index = page_index
-            logger.debug(f"Set current page index to {page_index}")
+            logger.debug("Set current page index to %s", page_index)
 
         self._register_state_listeners()
 
@@ -124,10 +125,10 @@ class TextTabs:
             # Create a wrapper that passes the current page index
             def copy_gt_callback(line_index: int) -> bool:
                 logger.debug(
-                    f"Copying GT to OCR for line {line_index} on page {page_index}"
+                    "Copying GT to OCR for line %s on page %s", line_index, page_index
                 )
                 result = page_state.copy_ground_truth_to_ocr(page_index, line_index)
-                logger.debug(f"Copy operation result: {result}")
+                logger.debug("Copy operation result: %s", result)
                 return result
 
             copy_callback = copy_gt_callback
@@ -137,10 +138,12 @@ class TextTabs:
 
                 def copy_ocr_callback(line_index: int) -> bool:
                     logger.debug(
-                        f"Copying OCR to GT for line {line_index} on page {page_index}"
+                        "Copying OCR to GT for line %s on page %s",
+                        line_index,
+                        page_index,
                     )
                     result = page_state.copy_ocr_to_ground_truth(page_index, line_index)
-                    logger.debug(f"OCR to GT copy operation result: {result}")
+                    logger.debug("OCR to GT copy operation result: %s", result)
                     return result
 
                 copy_ocr_to_gt_callback = copy_ocr_callback
@@ -986,7 +989,7 @@ class TextTabs:
         self._update_text_editors()
         if self.page_state and hasattr(self.page_state, "current_page"):
             page = self.page_state.current_page
-            logger.debug(f"Current page available: {page is not None}")
+            logger.debug("Current page available: %s", page is not None)
             self.update_word_matches(page)
         else:
             logger.debug("No page state or current_page available")
@@ -1104,7 +1107,7 @@ class TextTabs:
                 and 0 <= index < len(project.pages)
             ):
                 page = project.pages[index]
-            logger.debug(f"Current page from ProjectState: {page is not None}")
+            logger.debug("Current page from ProjectState: %s", page is not None)
             # Update the PageState's current_page reference so both are in sync
             if page is not None:
                 self.page_state.current_page = page

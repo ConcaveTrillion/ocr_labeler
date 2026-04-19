@@ -69,7 +69,7 @@ class BaseView(ABC, Generic[TViewModel]):
             property_name: Name of the property that changed.
             value: New value of the property.
         """
-        logger.debug(f"View model property changed: {property_name} = {value}")
+        logger.debug("View model property changed: %s = %s", property_name, value)
         # Default implementation does nothing - subclasses should override
         pass
 

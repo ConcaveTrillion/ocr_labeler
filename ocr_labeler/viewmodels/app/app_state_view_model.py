@@ -40,7 +40,7 @@ class AppStateViewModel(BaseViewModel):
 
     def __init__(self, app_state: AppState):
         logger.debug(
-            f"Initializing AppStateViewModel with app_state: {app_state is not None}"
+            "Initializing AppStateViewModel with app_state: %s", app_state is not None
         )
 
         if app_state is not None and isinstance(app_state, AppState):
@@ -82,12 +82,12 @@ class AppStateViewModel(BaseViewModel):
             self.is_project_loaded = bool(self._app_state.current_project_key)
 
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Is Loading: {self.is_loading}")
-                logger.debug(f"Is Project Loading: {self.is_project_loading}")
-                logger.debug(f"Project Keys: {self.project_keys}")
-                logger.debug(f"Selected Project Key: {self.selected_project_key}")
-                logger.debug(f"Selected Project Path: {self.selected_project_path}")
-                logger.debug(f"Is Project Loaded: {self.is_project_loaded}")
+                logger.debug("Is Loading: %s", self.is_loading)
+                logger.debug("Is Project Loading: %s", self.is_project_loading)
+                logger.debug("Project Keys: %s", self.project_keys)
+                logger.debug("Selected Project Key: %s", self.selected_project_key)
+                logger.debug("Selected Project Path: %s", self.selected_project_path)
+                logger.debug("Is Project Loaded: %s", self.is_project_loaded)
                 logger.debug("AppStateViewModel update complete")
 
         else:
@@ -124,15 +124,15 @@ class AppStateViewModel(BaseViewModel):
                 old_key = self.selected_project_key
                 self._app_state.selected_project_key = key
                 logger.debug(
-                    f"Selected project key changed from '{old_key}' to '{key}'"
+                    "Selected project key changed from '%s' to '%s'", old_key, key
                 )
                 self._app_state.notify()
                 return True
             else:
-                logger.warning(f"Project key '{key}' not found in available projects")
+                logger.warning("Project key '%s' not found in available projects", key)
                 return False
-        except Exception as e:
-            logger.exception(f"Error selecting project '{key}': {e}")
+        except Exception:
+            logger.exception("Error selecting project '%s'", key)
             return False
 
     async def command_load_selected_project(self) -> bool:
@@ -156,8 +156,8 @@ class AppStateViewModel(BaseViewModel):
 
             await self._app_state.load_selected_project()
             return True
-        except Exception as e:
-            logger.exception(f"Error loading selected project: {e}")
+        except Exception:
+            logger.exception("Error loading selected project")
             return False
 
     async def command_set_source_projects_root(self, path_str: str) -> bool:
@@ -203,10 +203,8 @@ class AppStateViewModel(BaseViewModel):
             if project_path:
                 return project_path.name
             return project_key
-        except Exception as e:
-            logger.exception(
-                f"Error getting display name for project '{project_key}': {e}"
-            )
+        except Exception:
+            logger.exception("Error getting display name for project '%s'", project_key)
             return project_key
 
     def command_is_project_available(self, key: str) -> bool:
@@ -219,3 +217,14 @@ class AppStateViewModel(BaseViewModel):
             True if project is available, False otherwise.
         """
         return key in self._app_state.available_projects
+
+    def queue_notification(self, message: str, kind: str = "info") -> None:
+        """Queue a user-facing notification through the underlying AppState."""
+        if self._app_state:
+            self._app_state.queue_notification(message, kind)
+
+    def pop_notification(self) -> tuple[str, str] | None:
+        """Pop one queued notification for paced UI delivery."""
+        if self._app_state:
+            return self._app_state.pop_notification()
+        return None

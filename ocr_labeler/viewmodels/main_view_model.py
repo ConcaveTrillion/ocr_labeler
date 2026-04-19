@@ -61,7 +61,7 @@ class MainViewModel(BaseViewModel):
 
     def _on_app_state_changed(self, property_name: str, value):
         """Handle app state view model property changes."""
-        logger.debug(f"App state changed: {property_name} = {value}")
+        logger.debug("App state changed: %s = %s", property_name, value)
 
         if property_name == "is_project_loading":
             # Surface loading-state transitions to the top-level view so it can
@@ -119,7 +119,7 @@ class MainViewModel(BaseViewModel):
 
     def _on_project_state_changed(self, property_name: str, value):
         """Handle project state view model property changes."""
-        logger.debug(f"Project state changed: {property_name} = {value}")
+        logger.debug("Project state changed: %s = %s", property_name, value)
 
         # Update derived properties when relevant project state changes
         if property_name in ["page_total", "current_page_index"]:
@@ -174,9 +174,12 @@ class MainViewModel(BaseViewModel):
                 self.notify_property_changed("show_placeholder", self.show_placeholder)
 
             logger.debug(
-                f"Updated derived properties: has_project={self.has_project}, "
-                f"show_project_view={self.show_project_view}, "
-                f"show_placeholder={self.show_placeholder}"
+                "Updated derived properties: has_project=%s, "
+                "show_project_view=%s, "
+                "show_placeholder=%s",
+                self.has_project,
+                self.show_project_view,
+                self.show_placeholder,
             )
 
     # Delegate commands to appropriate child view models

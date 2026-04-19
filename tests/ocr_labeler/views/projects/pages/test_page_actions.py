@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock
 
-import ocr_labeler.views.projects.pages.page_actions as page_actions_module
+import ocr_labeler.views.shared.view_helpers as view_helpers_module
 from ocr_labeler.views.projects.pages.page_actions import PageActions
 
 
@@ -59,7 +59,7 @@ class TestPageActions:
             raise RuntimeError("bind failed")
 
         monkeypatch.setattr(
-            page_actions_module.binding,
+            view_helpers_module.binding,
             "bind_from",
             failing_bind_from,
         )
@@ -91,7 +91,7 @@ class TestPageActions:
         notify_mock = MagicMock()
         monkeypatch.setattr(controls, "_notify", notify_mock)
         monkeypatch.setattr(
-            page_actions_module.binding, "bind_from", lambda *_args, **_kwargs: None
+            view_helpers_module.binding, "bind_from", lambda *_args, **_kwargs: None
         )
 
         controls._bind_from_safe(
@@ -107,10 +107,8 @@ class TestPageActions:
 
     def test_bind_from_safe_failure_queues_expected_notification(self, monkeypatch):
         """Binding failure should emit expected notification content via queue path."""
-        app_state = Mock()
-        app_state.queue_notification = MagicMock()
         app_state_model = Mock()
-        app_state_model._app_state = app_state
+        app_state_model.queue_notification = MagicMock()
 
         project_viewmodel = Mock()
         project_viewmodel._app_state_model = app_state_model
@@ -123,7 +121,7 @@ class TestPageActions:
         def failing_bind_from(*_args, **_kwargs):
             raise RuntimeError("bind failed")
 
-        monkeypatch.setattr(page_actions_module.binding, "bind_from", failing_bind_from)
+        monkeypatch.setattr(view_helpers_module.binding, "bind_from", failing_bind_from)
 
         controls._bind_from_safe(
             object(),
@@ -134,7 +132,7 @@ class TestPageActions:
             message="Page source label may not update automatically",
         )
 
-        app_state.queue_notification.assert_called_once_with(
+        app_state_model.queue_notification.assert_called_once_with(
             "Page source label may not update automatically",
             "warning",
         )

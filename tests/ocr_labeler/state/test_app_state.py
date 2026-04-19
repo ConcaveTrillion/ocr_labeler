@@ -79,6 +79,7 @@ class DummyProject:
             return None
         return f"page-{index}"
 
+    @property
     def page_count(self) -> int:
         return len(self.image_paths) if self.image_paths else 0
 

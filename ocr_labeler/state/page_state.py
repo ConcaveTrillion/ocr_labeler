@@ -96,6 +96,7 @@ class PageState:
     _cached_ocr_text: str = field(default="", init=False)
     _cached_gt_text: str = field(default="", init=False)
     _overlay_refresh_nonce_counter: int = field(default=0, init=False)
+    _page_index: int = field(default=0, init=False)
 
     def notify(self):
         """Notify listeners of state changes."""
@@ -161,7 +162,9 @@ class PageState:
             new_index = self._project_state.current_page_index
             if new_index != self._current_page_index:
                 logger.debug(
-                    f"PageState: Syncing page index from ProjectState: {self._current_page_index} -> {new_index}"
+                    "PageState: Syncing page index from ProjectState: %s -> %s",
+                    self._current_page_index,
+                    new_index,
                 )
                 self._current_page_index = new_index
                 # Force update of text cache for the new page
@@ -288,8 +291,8 @@ class PageState:
                 self.notify()
 
             return result
-        except Exception as e:
-            logger.exception(f"Error in GT→OCR copy for line {line_index}: {e}")
+        except Exception:
+            logger.exception("Error in GT→OCR copy for line %s", line_index)
             return False
 
     def copy_ocr_to_ground_truth(self, page_index: int, line_index: int) -> bool:
@@ -322,8 +325,8 @@ class PageState:
                 self.notify()
 
             return result
-        except Exception as e:
-            logger.exception(f"Error in OCR→GT copy for line {line_index}: {e}")
+        except Exception:
+            logger.exception("Error in OCR→GT copy for line %s", line_index)
             return False
 
     def update_word_ground_truth(
@@ -701,7 +704,9 @@ class PageState:
                     logger.debug("Injected ground truth for loaded page %s", page_index)
                 except Exception as e:
                     logger.warning(
-                        f"Failed to add ground truth to loaded page {page_index}: {e}"
+                        "Failed to add ground truth to loaded page %s: %s",
+                        page_index,
+                        e,
                     )
 
         # Replace the page in the project
@@ -718,12 +723,12 @@ class PageState:
             # Set original page if available
             if original_page_dict:
                 self.original_page = Page.from_dict(original_page_dict)
-            logger.info(f"Successfully loaded page at index {page_index}")
+            logger.info("Successfully loaded page at index %s", page_index)
             # Invalidate cache since page content changed
             self._invalidate_text_cache()
             return True
         else:
-            logger.error(f"Page index {page_index} out of range for project pages")
+            logger.error("Page index %s out of range for project pages", page_index)
             return False
 
     def find_ground_truth_text(
@@ -786,12 +791,17 @@ class PageState:
         return ""
 
     @property
-    def current_page_source_text(self) -> str:
-        """Get source text for the current page from page-domain state."""
+    def current_page_source(self) -> str | None:
+        """Get raw source identifier for the current page.
+
+        Returns:
+            None when no page is available, "loading" when loading/navigating,
+            or the raw page_source string ("filesystem", "cached_ocr", "ocr", "fallback").
+        """
         if self._project_state and (
             self._project_state.is_project_loading or self._project_state.is_navigating
         ):
-            return "LOADING..."
+            return "loading"
 
         if (
             not self._project
@@ -799,11 +809,11 @@ class PageState:
             or self._current_page_index < 0
             or self._current_page_index >= len(self._project.pages)
         ):
-            return "(NO PAGE)"
+            return None
 
         page = self._project.pages[self._current_page_index]
         if page is None:
-            return "(NO PAGE)"
+            return None
 
         page_source = "ocr"
         if self._project_state and hasattr(self._project_state, "get_page_model"):
@@ -813,13 +823,7 @@ class PageState:
             else:
                 page_source = str(getattr(page, "page_source", "ocr"))
 
-        if page_source == "filesystem":
-            return "LABELED"
-        if page_source == "cached_ocr":
-            return "CACHED OCR"
-        if page_source == "fallback":
-            return "RAW OCR"
-        return "RAW OCR"
+        return page_source
 
     @property
     def current_page_source_tooltip(self) -> str:
@@ -853,26 +857,22 @@ class PageState:
         )
 
     @property
-    def current_page_export_status(self) -> str:
-        """Return export status display text for the current page."""
-        if not self._project_state:
-            return ""
-        if self._project_state.is_project_loading or self._project_state.is_navigating:
-            return ""
-        try:
-            from ..operations.export.doctr_export import ExportStatus
+    def current_page_export_status_enum(self) -> str | None:
+        """Return the raw export status value for the current page.
 
-            status = self._project_state.get_page_export_status(
-                self._current_page_index
-            )
-            if status == ExportStatus.EXPORTED:
-                return "EXPORTED"
-            elif status == ExportStatus.STALE:
-                return "EXPORT STALE"
-            return ""
+        Returns:
+            The ExportStatus string constant (e.g. "exported", "stale",
+            "not_exported"), or None when not applicable.
+        """
+        if not self._project_state:
+            return None
+        if self._project_state.is_project_loading or self._project_state.is_navigating:
+            return None
+        try:
+            return self._project_state.get_page_export_status(self._current_page_index)
         except Exception:
             logger.debug("Failed to check export status", exc_info=True)
-            return ""
+            return None
 
     @notify_on_completion
     def reload_page_with_ocr(self, page_index: int) -> None:
@@ -2307,7 +2307,7 @@ class PageState:
             if page and hasattr(page, "name"):
                 self._project.ground_truth_map[page.name] = value
                 self._invalidate_text_cache()
-                logger.debug(f"Updated ground truth for page {page.name}")
+                logger.debug("Updated ground truth for page %s", page.name)
 
     def _invalidate_text_cache(self):
         """Invalidate the cached text values when page content changes."""
@@ -2559,23 +2559,25 @@ class PageState:
                 and self._project.pages[self._current_page_index] is not None
             ):
                 logger.debug(
-                    f"Updating text cache for page index {self._current_page_index}"
+                    "Updating text cache for page index %s", self._current_page_index
                 )
                 self._cached_ocr_text, self._cached_gt_text = self.get_page_texts(
                     self._current_page_index
                 )
                 self._cached_page_index = self._current_page_index
                 logger.debug(
-                    f"Updated text cache for page index {self._current_page_index}"
+                    "Updated text cache for page index %s", self._current_page_index
                 )
             else:
                 logger.debug(
-                    f"Page at index {self._current_page_index} not loaded; cannot update text cache"
+                    "Page at index %s not loaded; cannot update text cache",
+                    self._current_page_index,
                 )
                 # Page not loaded yet, keep old cache or set to loading
                 if self._cached_page_index == -1 or force:
                     logger.debug(
-                        f"Setting text cache to 'Loading...' for page index {self._current_page_index}"
+                        "Setting text cache to 'Loading...' for page index %s",
+                        self._current_page_index,
                     )
                     self._cached_ocr_text = "Loading..."
                     self._cached_gt_text = "Loading..."
@@ -2584,13 +2586,12 @@ class PageState:
 
     @property
     def _current_page_index(self) -> int:
-        """Get the current page index (this would need to be set by the caller)."""
-        # For now, return 0 as a default - this should be set by the component using page_state
-        return getattr(self, "_page_index", 0)
+        """Get the current page index."""
+        return self._page_index
 
     @_current_page_index.setter
     def _current_page_index(self, value: int):
         """Set the current page index."""
-        if getattr(self, "_page_index", None) != value:
+        if self._page_index != value:
             self._invalidate_text_cache()
         self._page_index = value

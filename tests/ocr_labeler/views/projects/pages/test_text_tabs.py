@@ -66,7 +66,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     )
 
     text_tabs = TextTabs(page_state=page_state)
-    text_tabs.word_match_view.apply_word_style_change = MagicMock()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change = MagicMock()
 
     assert text_tabs.model._on_page_state_change in page_state.on_change
     page_state.on_word_style_change.emit(
@@ -81,7 +81,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
             right_footnote=False,
         )
     )
-    text_tabs.word_match_view.apply_word_style_change.assert_called_once()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change.assert_called_once()
     assert text_tabs._on_project_state_changed in project_state.on_change
 
     text_tabs.container = _DeletedContainer()
@@ -91,7 +91,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
     assert text_tabs.model._on_page_state_change not in page_state.on_change
     assert text_tabs._on_project_state_changed not in project_state.on_change
 
-    text_tabs.word_match_view.apply_word_style_change.reset_mock()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change.reset_mock()
     page_state.on_word_style_change.emit(
         WordStyleChangedEvent(
             page_index=0,
@@ -104,7 +104,7 @@ def test_text_tabs_detaches_stale_listeners_when_ui_is_disposed():
             right_footnote=False,
         )
     )
-    text_tabs.word_match_view.apply_word_style_change.assert_not_called()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change.assert_not_called()
 
 
 def test_text_tabs_skips_duplicate_word_match_update_for_same_page_payload():
@@ -535,7 +535,7 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=0)
-    text_tabs.word_match_view.apply_word_style_change = MagicMock()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change = MagicMock()
     text_tabs.word_match_view.update_from_page = MagicMock()
 
     result = text_tabs.word_match_view.set_word_attributes_callback(
@@ -548,7 +548,7 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
         False,
     )
     assert result is True
-    text_tabs.word_match_view.apply_word_style_change.assert_called_once_with(
+    text_tabs.word_match_view.gt_editing.apply_word_style_change.assert_called_once_with(
         4,
         1,
         False,
@@ -597,13 +597,13 @@ def test_text_tabs_word_gt_event_routes_to_targeted_view_update():
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=0)
-    text_tabs.word_match_view.apply_word_ground_truth_change = MagicMock()
+    text_tabs.word_match_view.gt_editing.apply_word_ground_truth_change = MagicMock()
     text_tabs.word_match_view.update_from_page = MagicMock()
 
     result = text_tabs.word_match_view.edit_word_ground_truth_callback(0, 0, "edited")
 
     assert result is True
-    text_tabs.word_match_view.apply_word_ground_truth_change.assert_called_once_with(
+    text_tabs.word_match_view.gt_editing.apply_word_ground_truth_change.assert_called_once_with(
         2,
         3,
         "edited",
@@ -682,7 +682,7 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=0)
-    text_tabs.word_match_view.apply_word_style_change = MagicMock()
+    text_tabs.word_match_view.gt_editing.apply_word_style_change = MagicMock()
     text_tabs.word_match_view.update_from_page = MagicMock()
 
     text_tabs.update_word_matches(page_one)
@@ -760,7 +760,7 @@ def test_text_tabs_word_gt_event_coalesces_only_same_page_refresh():
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=0)
-    text_tabs.word_match_view.apply_word_ground_truth_change = MagicMock()
+    text_tabs.word_match_view.gt_editing.apply_word_ground_truth_change = MagicMock()
     text_tabs.word_match_view.update_from_page = MagicMock()
 
     text_tabs.update_word_matches(page_one)

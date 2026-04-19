@@ -9,7 +9,6 @@ from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
 
 from ....models.line_match_model import LineMatch
-from ....models.word_match_model import WordMatch
 from ....operations.ocr.word_operations import WordOperations
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
 from .word_match_actions import WordMatchActions
@@ -34,7 +33,6 @@ NotifyCallback: TypeAlias = Callable[[str, str], None]
 SelectionChangeCallback: TypeAlias = Callable[[set[WordKey]], None]
 ParagraphSelectionCallback: TypeAlias = Callable[[set[int]], None]
 ReboxRequestCallback: TypeAlias = Callable[[int, int], None]
-ClickEvent: TypeAlias = events.ClickEventArguments | None
 
 SingleLineAction: TypeAlias = Callable[[int], bool]
 LineIndicesAction: TypeAlias = Callable[[list[int]], bool]
@@ -255,10 +253,6 @@ class WordMatchView:
         logger.debug("WordMatchView UI build complete, container created")
         return container
 
-    def build_actions_toolbar(self):
-        """Build the scope-action icon grid (Page/Paragraph/Line/Word operations)."""
-        self.toolbar.build_actions_toolbar()
-
     def update_from_page(self, page: Page) -> None:
         """Update the view with matches from a page."""
         try:
@@ -325,14 +319,6 @@ class WordMatchView:
             return
         logger.debug("Updated summary text: %s", text)
 
-    def _update_lines_display(self):
-        """Update the lines display with word matches."""
-        self.renderer.update_lines_display()
-
-    def _compute_display_signature(self):
-        """Return a stable signature for visible line-match content."""
-        return self.renderer._compute_display_signature()
-
     def _word_match_bbox_signature(self, word_match: object) -> str:
         """Return a stable bbox signature for a word-match object."""
         word_object = getattr(word_match, "word_object", None)
@@ -358,48 +344,12 @@ class WordMatchView:
         is_validated = getattr(word_match, "is_validated", False)
         return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}:{int(is_validated)}"
 
-    def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
-        """Group line matches by paragraph index, keeping unassigned lines last."""
-        return self.renderer._group_lines_by_paragraph(line_matches)
-
     @staticmethod
     def _format_paragraph_label(paragraph_index: int | None) -> str:
         """Return a user-facing label for a paragraph index."""
         if paragraph_index is None:
             return "Paragraph Unassigned"
         return f"Paragraph {paragraph_index + 1}"
-
-    def set_selection_change_callback(
-        self,
-        callback: SelectionChangeCallback | None,
-    ) -> None:
-        """Register callback invoked when selected words change."""
-        self.selection.set_selection_change_callback(callback)
-
-    def set_paragraph_selection_change_callback(
-        self,
-        callback: ParagraphSelectionCallback | None,
-    ) -> None:
-        """Register callback invoked when selected paragraphs change."""
-        self.selection.set_paragraph_selection_change_callback(callback)
-
-    def set_rebox_request_callback(
-        self,
-        callback: ReboxRequestCallback | None,
-    ) -> None:
-        """Register callback invoked when user starts a word rebox request."""
-        self.bbox.set_rebox_request_callback(callback)
-
-    def set_add_word_request_callback(
-        self,
-        callback: Callable[[], None] | None,
-    ) -> None:
-        """Register callback invoked when user requests to start an add-word draw."""
-        self.bbox.set_add_word_request_callback(callback)
-
-    def apply_add_word_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
-        """Forward drawn add-word rectangle to bbox handler."""
-        self.bbox.apply_add_word_bbox(x1, y1, x2, y2)
 
     def set_summary_callback(
         self,
@@ -468,72 +418,6 @@ class WordMatchView:
             type(checkbox).__name__,
         )
 
-    def _create_line_card(self, line_match):
-        """Create a card display for a single line match."""
-        self.renderer._create_line_card(line_match)
-
-    def _build_word_match_from_word_object(
-        self,
-        word_index: int,
-        word_object: object,
-    ) -> WordMatch:
-        """Build a WordMatch from a line word object using current fuzz settings."""
-        return self.renderer._build_word_match_from_word_object(word_index, word_object)
-
-    def _refresh_local_line_match_from_line_object(self, line_index: int) -> bool:
-        """Refresh one LineMatch from its line object for targeted line rerender."""
-        return self.renderer.refresh_local_line_match_from_line_object(line_index)
-
-    def _create_word_comparison_table(self, line_match):
-        """Create a table layout with each column representing one complete word item."""
-        self.renderer._create_word_comparison_table(line_match)
-
-    def _create_word_selection_cell(
-        self,
-        line_index: int,
-        word_index: int,
-        split_word_index: int,
-        word_count: int,
-        word_match,
-    ) -> None:
-        """Create compact per-word controls for fast initial rendering."""
-        self.renderer._create_word_selection_cell(
-            line_index,
-            word_index,
-            split_word_index,
-            word_count,
-            word_match,
-        )
-
-    def _open_word_edit_dialog(
-        self,
-        line_index: int,
-        word_index: int,
-        split_word_index: int,
-        word_match,
-    ) -> None:
-        """Open the extracted word edit dialog module."""
-        self.renderer._open_word_edit_dialog(
-            line_index,
-            word_index,
-            split_word_index,
-            word_match,
-        )
-
-    def _handle_crop_word_to_marker(
-        self,
-        line_index: int,
-        word_index: int,
-        direction: str,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Trim current word bbox on the named side using marker-based fraction."""
-        self.bbox.handle_crop_word_to_marker(line_index, word_index, direction, _event)
-
-    def _create_ocr_cell(self, word_match):
-        """Create OCR text cell for a word."""
-        self.renderer._create_ocr_cell(word_match)
-
     def _word_style_flags(
         self, word_match: object
     ) -> tuple[bool, bool, bool, bool, bool]:
@@ -563,61 +447,6 @@ class WordMatchView:
         )
         return italic, small_caps, blackletter, footnote_marker, footnote_marker
 
-    def _handle_set_word_attributes(
-        self,
-        line_index: int,
-        word_index: int,
-        italic: bool,
-        small_caps: bool,
-        blackletter: bool,
-        left_footnote: bool,
-        right_footnote: bool,
-    ) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._handle_set_word_attributes(
-            line_index,
-            word_index,
-            italic,
-            small_caps,
-            blackletter,
-            left_footnote,
-            right_footnote,
-        )
-
-    def apply_word_style_change(
-        self,
-        line_index: int,
-        word_index: int,
-        italic: bool,
-        small_caps: bool,
-        blackletter: bool,
-        left_footnote: bool,
-        right_footnote: bool,
-    ) -> None:
-        """Apply a targeted style-only update from state event routing."""
-        self.gt_editing.apply_word_style_change(
-            line_index,
-            word_index,
-            italic,
-            small_caps,
-            blackletter,
-            left_footnote,
-            right_footnote,
-        )
-
-    def apply_word_ground_truth_change(
-        self,
-        line_index: int,
-        word_index: int,
-        ground_truth_text: str,
-    ) -> None:
-        """Apply a targeted GT-only update from state event routing."""
-        self.gt_editing.apply_word_ground_truth_change(
-            line_index,
-            word_index,
-            ground_truth_text,
-        )
-
     def apply_word_validation_change(
         self,
         line_index: int,
@@ -641,83 +470,6 @@ class WordMatchView:
         self.view_model._update_statistics()
         self._update_summary()
 
-    def _set_word_style_button_states(self, **kwargs) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._set_word_style_button_states(**kwargs)
-
-    def _apply_local_word_style_update(self, **kwargs) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._apply_local_word_style_update(**kwargs)
-
-    def _handle_toggle_word_attribute(
-        self,
-        line_index: int,
-        word_index: int,
-        attribute: str,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._handle_toggle_word_attribute(
-            line_index,
-            word_index,
-            attribute,
-            _event,
-        )
-
-    def _handle_word_gt_edit(
-        self,
-        line_index: int,
-        word_index: int,
-        ground_truth_text: str,
-    ) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._handle_word_gt_edit(
-            line_index,
-            word_index,
-            ground_truth_text,
-        )
-
-    def _commit_word_gt_input_change(
-        self,
-        line_index: int,
-        word_index: int,
-        input_element,
-    ) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._commit_word_gt_input_change(
-            line_index,
-            word_index,
-            input_element,
-        )
-
-    def _next_word_gt_key(
-        self,
-        current_key: tuple[int, int],
-        reverse: bool = False,
-    ) -> tuple[int, int] | None:
-        """Delegate to gt_editing."""
-        return self.gt_editing._next_word_gt_key(current_key, reverse=reverse)
-
-    def _word_gt_input_width_chars(self, value: str, fallback_text: str) -> int:
-        """Delegate to gt_editing."""
-        return self.gt_editing._word_gt_input_width_chars(value, fallback_text)
-
-    def _handle_word_gt_keydown(self, event, current_key: tuple[int, int]) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._handle_word_gt_keydown(event, current_key)
-
-    def _handle_word_gt_tab_navigation(
-        self,
-        current_key: tuple[int, int],
-        is_reverse: bool,
-    ) -> None:
-        """Delegate to gt_editing."""
-        self.gt_editing._handle_word_gt_tab_navigation(current_key, is_reverse)
-
-    def _create_status_cell(self, word_match):
-        """Create status cell for a word."""
-        self.renderer._create_status_cell(word_match)
-
     def _line_word_match_by_ocr_index(
         self,
         line_index: int,
@@ -730,10 +482,6 @@ class WordMatchView:
             if word_match.word_index == word_index:
                 return word_match
         return None
-
-    def _refresh_open_word_dialog_for(self, line_index: int, word_index: int) -> None:
-        """Refresh an open word-edit dialog in-place for the active key."""
-        self.renderer.refresh_open_word_dialog_for(line_index, word_index)
 
     def _is_split_action_enabled(self, line_index: int, word_index: int) -> bool:
         if self.split_word_callback is None or word_index < 0:
@@ -809,10 +557,6 @@ class WordMatchView:
                 "try a different marker position"
             )
         return "Unable to split word at the selected position; try a different marker"
-
-    def _create_word_text_display(self, word_matches, text_type):
-        """Create a display of words with appropriate coloring."""
-        self.renderer._create_word_text_display(word_matches, text_type)
 
     def _create_word_tooltip(self, word_match):
         """Create tooltip content for a word match."""
@@ -954,48 +698,6 @@ class WordMatchView:
 
         return False
 
-    def _get_original_image_source(self) -> str:
-        """Return encoded original image source for client-side slice rendering."""
-        return self.bbox._get_original_image_source()
-
-    def on_image_sources_updated(self, image_dict: dict[str, str]) -> None:
-        """React to state image updates and rerender if word-view source changed."""
-        self.bbox.on_image_sources_updated(image_dict)
-
-    def _compute_encoded_dimensions(
-        self,
-        width: int,
-        height: int,
-        *,
-        max_dimension: int = 1200,
-    ) -> tuple[int, int]:
-        """Mirror page image encoding resize logic for precise client-side slices."""
-        return self.bbox.compute_encoded_dimensions(
-            width, height, max_dimension=max_dimension
-        )
-
-    def _build_slice_placeholder_source(self, width: int, height: int) -> str:
-        """Build tiny transparent SVG source that preserves interactive-image geometry."""
-        return self.bbox._build_slice_placeholder_source(width, height)
-
-    def _preview_bbox_for_word(
-        self,
-        word_match,
-        page_image,
-        *,
-        line_index: int,
-        word_index: int,
-        bbox_preview_deltas: tuple[float, float, float, float] | None = None,
-    ) -> tuple[int, int, int, int] | None:
-        """Build clamped preview bbox in pixel coordinates for a word image crop."""
-        return self.bbox.preview_bbox_for_word(
-            word_match,
-            page_image,
-            line_index=line_index,
-            word_index=word_index,
-            bbox_preview_deltas=bbox_preview_deltas,
-        )
-
     def _get_status_icon(self, status: str) -> str:
         """Get icon for match status."""
         icon_map = {
@@ -1065,14 +767,6 @@ class WordMatchView:
             {line_index for line_index, _ in self.selection.selected_word_indices}
         )
 
-    def set_selected_words(self, selection: set[tuple[int, int]]) -> None:
-        """Set selected words externally (e.g., box selection integration)."""
-        self.selection.set_selected_words(selection)
-
-    def set_selected_paragraphs(self, selection: set[int]) -> None:
-        """Set selected paragraphs externally (e.g., image box selection)."""
-        self.selection.set_selected_paragraphs(selection)
-
     def refresh_after_selection_change(self) -> None:
         """Centralized post-selection-change refresh."""
         self.toolbar.update_button_state()
@@ -1093,108 +787,9 @@ class WordMatchView:
     ) -> None:
         """Refresh local UI after direct word-object style mutations."""
         self.renderer.rerender_line_card(line_index)
-        self._refresh_open_word_dialog_for(line_index, word_index)
+        self.renderer.refresh_open_word_dialog_for(line_index, word_index)
         self._update_summary()
         self.refresh_after_action()
-
-    def _update_action_button_state(self) -> None:
-        """Enable/disable line and paragraph action buttons based on selection."""
-        self.toolbar.update_button_state()
-
-    def _copy_lines(
-        self,
-        line_indices: list[int],
-        callback: Callable[[int], bool] | None,
-        *,
-        direction_label: str,
-        no_selection_message: str,
-        no_text_message: str,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._copy_lines(
-            line_indices,
-            callback,
-            direction_label=direction_label,
-            no_selection_message=no_selection_message,
-            no_text_message=no_text_message,
-        )
-
-    def _handle_copy_page_gt_to_ocr(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_page_gt_to_ocr(_event)
-
-    def _handle_copy_page_ocr_to_gt(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_page_ocr_to_gt(_event)
-
-    def _handle_copy_selected_paragraphs_gt_to_ocr(
-        self, _event: ClickEvent = None
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_paragraphs_gt_to_ocr(_event)
-
-    def _handle_copy_selected_paragraphs_ocr_to_gt(
-        self, _event: ClickEvent = None
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_paragraphs_ocr_to_gt(_event)
-
-    def _handle_copy_selected_lines_gt_to_ocr(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_lines_gt_to_ocr(_event)
-
-    def _handle_copy_selected_lines_ocr_to_gt(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_lines_ocr_to_gt(_event)
-
-    def _handle_copy_selected_words_gt_to_ocr(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_words_gt_to_ocr(_event)
-
-    def _handle_copy_selected_words_ocr_to_gt(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_copy_selected_words_ocr_to_gt(_event)
-
-    def _handle_merge_selected_lines(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_merge_selected_lines(_event)
-
-    def _handle_merge_selected_paragraphs(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_merge_selected_paragraphs(_event)
-
-    def _handle_delete_selected_paragraphs(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_delete_selected_paragraphs(_event)
-
-    def _handle_split_paragraph_after_selected_line(
-        self,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_split_paragraph_after_selected_line(_event)
-
-    def _handle_split_paragraph_by_selected_lines(
-        self,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_split_paragraph_by_selected_lines(_event)
-
-    def _handle_split_line_after_selected_word(
-        self,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_split_line_after_selected_word(_event)
-
-    def _handle_delete_selected_lines(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_delete_selected_lines(_event)
-
-    def _handle_delete_selected_words(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_delete_selected_words(_event)
 
     def _can_merge_selected_words(self) -> bool:
         """Return True when current selected words can be merged as one block."""
@@ -1209,215 +804,6 @@ class WordMatchView:
         word_indices = [word_index for _, word_index in selected_words]
         expected_indices = list(range(word_indices[0], word_indices[-1] + 1))
         return word_indices == expected_indices
-
-    def _handle_merge_selected_words(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_merge_selected_words(_event)
-
-    def _handle_refine_selected_words(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_refine_selected_words(_event)
-
-    def _handle_refine_selected_lines(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_refine_selected_lines(_event)
-
-    def _handle_refine_selected_paragraphs(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_refine_selected_paragraphs(_event)
-
-    def _handle_expand_then_refine_selected_words(
-        self, _event: ClickEvent = None
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_expand_then_refine_selected_words(_event)
-
-    def _handle_expand_then_refine_selected_lines(
-        self, _event: ClickEvent = None
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_expand_then_refine_selected_lines(_event)
-
-    def _handle_expand_then_refine_selected_paragraphs(
-        self, _event: ClickEvent = None
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_expand_then_refine_selected_paragraphs(_event)
-
-    def _handle_split_line_by_selected_words(self, _event: ClickEvent = None) -> None:
-        """Delegate to actions."""
-        self.actions._handle_split_line_by_selected_words(_event)
-
-    def _handle_split_lines_into_selected_unselected_words(
-        self,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_split_lines_into_selected_unselected_words(_event)
-
-    def _handle_group_selected_words_into_new_paragraph(
-        self,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_group_selected_words_into_new_paragraph(_event)
-
-    def _handle_refine_single_word(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_refine_single_word(line_index, word_index, _event)
-
-    def _handle_expand_then_refine_single_word(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_expand_then_refine_single_word(
-            line_index, word_index, _event
-        )
-
-    def _handle_delete_single_word(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_delete_single_word(line_index, word_index, _event)
-
-    def _handle_merge_word_left(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_merge_word_left(line_index, word_index, _event)
-
-    def _handle_merge_word_right(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_merge_word_right(line_index, word_index, _event)
-
-    def _handle_split_word(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> bool:
-        """Delegate to actions."""
-        return self.actions._handle_split_word(line_index, word_index, _event)
-
-    def _handle_split_word_vertical_closest_line(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> bool:
-        """Delegate to actions."""
-        return self.actions._handle_split_word_vertical_closest_line(
-            line_index, word_index, _event
-        )
-
-    def _handle_start_rebox_word(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_start_rebox_word(line_index, word_index, _event)
-
-    def _toggle_bbox_fine_tune(
-        self,
-        line_index: int,
-        word_index: int,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Toggle fine-tune controls for a single word bbox."""
-        self.bbox.toggle_bbox_fine_tune(line_index, word_index, _event)
-
-    def _set_bbox_nudge_step(self, value: object) -> None:
-        """Set active bbox nudge step in pixels."""
-        self.bbox.set_bbox_nudge_step(value)
-
-    def _handle_nudge_single_word_bbox(
-        self,
-        line_index: int,
-        word_index: int,
-        *,
-        left_units: float,
-        right_units: float,
-        top_units: float,
-        bottom_units: float,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._handle_nudge_single_word_bbox(
-            line_index,
-            word_index,
-            left_units=left_units,
-            right_units=right_units,
-            top_units=top_units,
-            bottom_units=bottom_units,
-            _event=_event,
-        )
-
-    def _apply_pending_single_word_bbox_nudge(
-        self,
-        line_index: int,
-        word_index: int,
-        refine_after: bool = True,
-        _event: ClickEvent = None,
-    ) -> None:
-        """Apply pending bbox deltas for a single word."""
-        self.bbox.apply_pending_single_word_bbox_nudge(
-            line_index, word_index, refine_after, _event
-        )
-
-    def apply_rebox_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
-        """Apply a drawn bbox to the currently pending rebox word target."""
-        self.bbox.apply_rebox_bbox(x1, y1, x2, y2)
-
-    def _handle_delete_line(self, line_index: int) -> None:
-        """Delegate to actions."""
-        self.actions._handle_delete_line(line_index)
-
-    def _delete_lines(
-        self,
-        line_indices: list[int],
-        *,
-        success_message: str,
-        failure_message: str,
-    ) -> None:
-        """Delegate to actions."""
-        self.actions._delete_lines(
-            line_indices,
-            success_message=success_message,
-            failure_message=failure_message,
-        )
-
-    def _filter_lines_for_display(self):
-        """Filter lines based on current filter setting."""
-        return self.renderer._filter_lines_for_display()
-
-    def _handle_copy_gt_to_ocr(self, line_index: int):
-        """Delegate to actions."""
-        self.actions._handle_copy_gt_to_ocr(line_index)
-
-    def _handle_copy_ocr_to_gt(self, line_index: int):
-        """Delegate to actions."""
-        self.actions._handle_copy_ocr_to_gt(line_index)
 
     def clear(self):
         """Clear the display."""

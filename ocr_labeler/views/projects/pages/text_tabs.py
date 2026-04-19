@@ -468,7 +468,7 @@ class TextTabs:
         with ui.column().classes("full-width full-height gap-0") as col:
             # Actions toolbar row - right-aligned, above the tabs
             with ui.row().classes("full-width justify-start"):
-                self.word_match_view.build_actions_toolbar()
+                self.word_match_view.toolbar.build_actions_toolbar()
             logger.debug("Creating tabs container")
             with ui.tabs() as text_tabs:
                 ui.tab("Matches")
@@ -565,7 +565,7 @@ class TextTabs:
             event.line_index,
             event.word_index,
         )
-        self.word_match_view.apply_word_ground_truth_change(
+        self.word_match_view.gt_editing.apply_word_ground_truth_change(
             event.line_index,
             event.word_index,
             event.ground_truth_text,
@@ -595,7 +595,7 @@ class TextTabs:
             event.line_index,
             event.word_index,
         )
-        self.word_match_view.apply_word_style_change(
+        self.word_match_view.gt_editing.apply_word_style_change(
             event.line_index,
             event.word_index,
             event.italic,

@@ -15,9 +15,9 @@ Phase 4.3 (word_edit_dialog converted from closure function to class;
 follow-up: `open_word_edit_dialog()` wrapper removed),
 Phase 4.5 (text_tabs callback factory — 24 closures replaced),
 Phase 4.6 (BaseView teardown lifecycle added).
-Phase 4.1 (split LineOperations 4048→1823 lines via mixin pattern).
-Remaining: 4.4 (word_match delegation — deferred),
-6.2–6.4 (pd-book-tools structural migration).
+Phase 4.1 (split LineOperations 4048→1823 lines via mixin pattern),
+Phase 4.4 (word_match delegation — 80 wrappers removed, 1448→834 lines).
+Remaining: 6.2–6.4 (pd-book-tools structural migration).
 All 715 ocr-labeler tests and 491 pd-book-tools tests pass.
 
 ## Phase 1: Bug Fixes and Quick Wins
@@ -262,6 +262,11 @@ Larger refactoring to address god objects and file size issues.
 - Renderer and toolbar call `self._view.actions.*` directly
 - **Risk**: Medium
 - **Effort**: Medium
+- **Status**: Done — Removed ~80 pure delegation methods (1448→834 lines).
+  Updated callers in content.py, text_tabs.py, word_edit_dialog.py,
+  and test_word_match.py to access sub-components directly
+  (`.actions.*`, `.selection.*`, `.bbox.*`, `.gt_editing.*`,
+  `.renderer.*`, `.toolbar.*`).
 
 ### 4.5 Refactor `text_tabs.py` callback closures
 

@@ -44,16 +44,16 @@ class ContentArea:
             on_word_rebox_drawn=self._on_word_rebox_drawn,
             on_word_add_drawn=self._on_word_add_drawn,
         )
-        self.text_tabs.word_match_view.set_selection_change_callback(
+        self.text_tabs.word_match_view.selection.set_selection_change_callback(
             self._on_right_panel_words_selected
         )
-        self.text_tabs.word_match_view.set_paragraph_selection_change_callback(
+        self.text_tabs.word_match_view.selection.set_paragraph_selection_change_callback(
             self._on_right_panel_paragraphs_selected
         )
-        self.text_tabs.word_match_view.set_rebox_request_callback(
+        self.text_tabs.word_match_view.bbox.set_rebox_request_callback(
             self._on_right_panel_word_rebox_requested
         )
-        self.text_tabs.word_match_view.set_add_word_request_callback(
+        self.text_tabs.word_match_view.bbox.set_add_word_request_callback(
             self._on_right_panel_add_word_requested
         )
         self.text_tabs.word_match_view.set_summary_callback(self._update_stats_label)
@@ -79,11 +79,11 @@ class ContentArea:
     def _on_images_updated(self, image_dict: dict[str, str]) -> None:
         """Fan out image updates to left image tabs and right word-match slices."""
         self.image_tabs._on_images_updated(image_dict)
-        self.text_tabs.word_match_view.on_image_sources_updated(image_dict)
+        self.text_tabs.word_match_view.bbox.on_image_sources_updated(image_dict)
 
     def _on_words_selected(self, selection: set[tuple[int, int]]) -> None:
         """Propagate image-driven word selection to the Matches view."""
-        self.text_tabs.word_match_view.set_selected_words(selection)
+        self.text_tabs.word_match_view.selection.set_selected_words(selection)
 
     def _on_right_panel_words_selected(self, selection: set[tuple[int, int]]) -> None:
         """Propagate right-panel word selection to image overlay."""
@@ -91,7 +91,7 @@ class ContentArea:
 
     def _on_paragraphs_selected(self, selection: set[int]) -> None:
         """Propagate image-driven paragraph selection to the Matches view."""
-        self.text_tabs.word_match_view.set_selected_paragraphs(selection)
+        self.text_tabs.word_match_view.selection.set_selected_paragraphs(selection)
 
     def _on_right_panel_paragraphs_selected(self, selection: set[int]) -> None:
         """Propagate right-panel paragraph selection to image overlay."""
@@ -128,7 +128,7 @@ class ContentArea:
         y2: float,
     ) -> None:
         """Apply drawn image rectangle as a new word insertion."""
-        self.text_tabs.word_match_view.apply_add_word_bbox(x1, y1, x2, y2)
+        self.text_tabs.word_match_view.bbox.apply_add_word_bbox(x1, y1, x2, y2)
 
     def _on_word_view_image_ready(self, page_index: int, _source: str) -> None:
         """Notify text tabs when the page-matched word image source becomes available."""

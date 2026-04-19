@@ -830,7 +830,9 @@ class WordEditDialog:
             )
             if success:
                 self._pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
-                view._refresh_local_line_match_from_line_object(self._line_index)
+                view.renderer.refresh_local_line_match_from_line_object(
+                    self._line_index
+                )
                 view._update_summary()
                 view.renderer.rerender_word_column(
                     self._line_index, self._split_word_index
@@ -1000,7 +1002,7 @@ class WordEditDialog:
                         )
                         gt_input.on(
                             "blur",
-                            lambda _event: view._commit_word_gt_input_change(
+                            lambda _event: view.gt_editing._commit_word_gt_input_change(
                                 line_index,
                                 split_word_index,
                                 gt_input,
@@ -1008,7 +1010,7 @@ class WordEditDialog:
                         )
                         gt_input.on(
                             "keydown.enter",
-                            lambda _event: view._commit_word_gt_input_change(
+                            lambda _event: view.gt_editing._commit_word_gt_input_change(
                                 line_index,
                                 split_word_index,
                                 gt_input,

@@ -26,7 +26,7 @@ def test_merge_clears_selection_before_callback(monkeypatch):
         return True
 
     view.merge_lines_callback = merge_callback
-    view._handle_merge_selected_lines()
+    view.actions._handle_merge_selected_lines()
 
     assert seen["indices"] == [1, 2, 3]
     assert seen["selection_during_callback"] == []
@@ -39,7 +39,7 @@ def test_merge_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.merge_lines_callback = lambda _indices: False
-    view._handle_merge_selected_lines()
+    view.actions._handle_merge_selected_lines()
 
     assert view.selection.selected_line_indices == {4, 5}
 
@@ -57,7 +57,7 @@ def test_delete_clears_selection_before_callback(monkeypatch):
         return True
 
     view.delete_lines_callback = delete_callback
-    view._handle_delete_selected_lines()
+    view.actions._handle_delete_selected_lines()
 
     assert seen["indices"] == [1, 2]
     assert seen["selection_during_callback"] == []
@@ -70,7 +70,7 @@ def test_delete_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_lines_callback = lambda _indices: False
-    view._handle_delete_selected_lines()
+    view.actions._handle_delete_selected_lines()
 
     assert view.selection.selected_line_indices == {6}
 
@@ -88,7 +88,7 @@ def test_delete_single_line_callback_invoked(monkeypatch):
         return True
 
     view.delete_lines_callback = delete_callback
-    view._handle_delete_line(5)
+    view.actions._handle_delete_line(5)
 
     assert seen["indices"] == [5]
     assert seen["selection_during_callback"] == []
@@ -101,7 +101,7 @@ def test_delete_single_line_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_lines_callback = lambda _indices: False
-    view._handle_delete_line(7)
+    view.actions._handle_delete_line(7)
 
     assert view.selection.selected_line_indices == {3}
 
@@ -117,7 +117,7 @@ def test_copy_ocr_to_gt_success(monkeypatch):
 
     monkeypatch.setattr(view, "_safe_notify", capture_notify)
 
-    view._handle_copy_ocr_to_gt(2)
+    view.actions._handle_copy_ocr_to_gt(2)
 
     assert seen["type"] == "positive"
     assert "Copied OCR to ground truth text" in seen["message"]
@@ -134,7 +134,7 @@ def test_copy_ocr_to_gt_no_ocr_text(monkeypatch):
 
     monkeypatch.setattr(view, "_safe_notify", capture_notify)
 
-    view._handle_copy_ocr_to_gt(0)
+    view.actions._handle_copy_ocr_to_gt(0)
 
     assert seen["type"] == "warning"
     assert "No OCR text found" in seen["message"]
@@ -168,7 +168,7 @@ def test_top_grid_copy_page_gt_to_ocr_uses_all_lines(monkeypatch):
         return True
 
     view.copy_gt_to_ocr_callback = copy_callback
-    view._handle_copy_page_gt_to_ocr()
+    view.actions._handle_copy_page_gt_to_ocr()
 
     assert seen["calls"] == [0, 1, 2]
     assert seen["line_selection_during_callback"] == []
@@ -193,7 +193,7 @@ def test_top_grid_copy_paragraph_ocr_to_gt_uses_selected_paragraph_lines(monkeyp
         return True
 
     view.copy_ocr_to_gt_callback = copy_callback
-    view._handle_copy_selected_paragraphs_ocr_to_gt()
+    view.actions._handle_copy_selected_paragraphs_ocr_to_gt()
 
     assert seen["calls"] == [1, 3]
 
@@ -211,7 +211,7 @@ def test_top_grid_copy_lines_gt_to_ocr_uses_effective_selected_lines(monkeypatch
         return True
 
     view.copy_gt_to_ocr_callback = copy_callback
-    view._handle_copy_selected_lines_gt_to_ocr()
+    view.actions._handle_copy_selected_lines_gt_to_ocr()
 
     assert seen["calls"] == [2, 4]
 
@@ -235,7 +235,7 @@ def test_top_grid_copy_words_ocr_to_gt_uses_selected_words_only(monkeypatch):
 
     view.copy_ocr_to_gt_callback = should_not_be_used
     view.copy_selected_words_ocr_to_gt_callback = selected_words_callback
-    view._handle_copy_selected_words_ocr_to_gt()
+    view.actions._handle_copy_selected_words_ocr_to_gt()
 
     assert seen["calls"] == [(1, 0), (1, 1), (5, 2), (5, 3)]
     assert seen["selection_during_callback"] == []
@@ -259,7 +259,7 @@ def test_merge_uses_word_selection_when_no_line_checkboxes(monkeypatch):
         return True
 
     view.merge_lines_callback = merge_callback
-    view._handle_merge_selected_lines()
+    view.actions._handle_merge_selected_lines()
 
     assert seen["indices"] == [1, 3]
     assert seen["line_selection_during_callback"] == []
@@ -282,7 +282,7 @@ def test_merge_lines_clears_paragraph_selection_before_callback(monkeypatch):
         return True
 
     view.merge_lines_callback = merge_callback
-    view._handle_merge_selected_lines()
+    view.actions._handle_merge_selected_lines()
 
     assert seen["indices"] == [1, 2]
     assert seen["paragraph_selection_during_callback"] == []
@@ -296,7 +296,7 @@ def test_merge_lines_restores_paragraph_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.merge_lines_callback = lambda _indices: False
-    view._handle_merge_selected_lines()
+    view.actions._handle_merge_selected_lines()
 
     assert view.selection.selected_paragraph_indices == {1}
 
@@ -307,7 +307,7 @@ def test_delete_restores_word_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_lines_callback = lambda _indices: False
-    view._handle_delete_selected_lines()
+    view.actions._handle_delete_selected_lines()
 
     assert view.selection.selected_word_indices == {(2, 1), (4, 0)}
 
@@ -343,11 +343,11 @@ def test_set_selected_words_emits_selection_callback():
         SimpleNamespace(line_index=0, word_matches=[object()])
     ]
     seen = {}
-    view.set_selection_change_callback(
+    view.selection.set_selection_change_callback(
         lambda selection: seen.setdefault("s", selection)
     )
 
-    view.set_selected_words({(0, 0)})
+    view.selection.set_selected_words({(0, 0)})
 
     assert seen["s"] == {(0, 0)}
 
@@ -361,7 +361,7 @@ def test_group_lines_by_paragraph_orders_unassigned_last():
         SimpleNamespace(line_index=3, paragraph_index=0),
     ]
 
-    grouped = view._group_lines_by_paragraph(line_matches)
+    grouped = view.renderer._group_lines_by_paragraph(line_matches)
 
     assert [paragraph_index for paragraph_index, _ in grouped] == [0, 1, None]
     assert [line.line_index for line in grouped[0][1]] == [1, 3]
@@ -376,11 +376,11 @@ def test_set_selected_paragraphs_emits_selection_callback():
         SimpleNamespace(line_index=1, paragraph_index=1, word_matches=[object()]),
     ]
     seen = {}
-    view.set_paragraph_selection_change_callback(
+    view.selection.set_paragraph_selection_change_callback(
         lambda selection: seen.setdefault("p", selection)
     )
 
-    view.set_selected_paragraphs({0, 2})
+    view.selection.set_selected_paragraphs({0, 2})
 
     assert seen["p"] == {0}
     assert view.selection.selected_paragraph_indices == {0}
@@ -406,7 +406,7 @@ def test_set_selected_paragraphs_selects_all_lines_and_words():
         ),
     ]
 
-    view.set_selected_paragraphs({0})
+    view.selection.set_selected_paragraphs({0})
 
     assert view.selection.selected_paragraph_indices == {0}
     assert view.selection.selected_line_indices == {0, 1}
@@ -500,7 +500,7 @@ def test_merge_paragraphs_clears_selection_before_callback(monkeypatch):
         return True
 
     view.merge_paragraphs_callback = merge_callback
-    view._handle_merge_selected_paragraphs()
+    view.actions._handle_merge_selected_paragraphs()
 
     assert seen["indices"] == [1, 2, 3]
     assert seen["selection_during_callback"] == []
@@ -514,7 +514,7 @@ def test_split_paragraph_after_line_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.split_paragraph_after_line_callback = lambda _line_index: False
-    view._handle_split_paragraph_after_selected_line()
+    view.actions._handle_split_paragraph_after_selected_line()
 
     assert view.selection.selected_line_indices == {4}
     assert view.selection.selected_word_indices == {(4, 0)}
@@ -532,7 +532,7 @@ def test_split_paragraph_after_line_requires_single_selected_line(monkeypatch):
     view.split_paragraph_after_line_callback = lambda _line_index: True
     view.selection.selected_line_indices = {1, 2}
 
-    view._handle_split_paragraph_after_selected_line()
+    view.actions._handle_split_paragraph_after_selected_line()
 
     assert seen["type"] == "warning"
     assert "exactly one line" in seen["message"]
@@ -556,7 +556,7 @@ def test_split_paragraph_by_selected_lines_uses_selected_line_checkboxes(monkeyp
         return True
 
     view.split_paragraph_with_selected_lines_callback = split_callback
-    view._handle_split_paragraph_by_selected_lines()
+    view.actions._handle_split_paragraph_by_selected_lines()
 
     assert seen["indices"] == [1, 3]
     assert seen["line_selection_during_callback"] == []
@@ -575,7 +575,7 @@ def test_split_paragraph_by_selected_lines_requires_line_selection(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", notify)
     view.split_paragraph_with_selected_lines_callback = lambda _indices: True
 
-    view._handle_split_paragraph_by_selected_lines()
+    view.actions._handle_split_paragraph_by_selected_lines()
 
     assert seen["type"] == "warning"
     assert "Select one or more lines" in seen["message"]
@@ -588,7 +588,7 @@ def test_split_paragraph_by_selected_lines_restores_selection_on_failure(monkeyp
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.split_paragraph_with_selected_lines_callback = lambda _indices: False
-    view._handle_split_paragraph_by_selected_lines()
+    view.actions._handle_split_paragraph_by_selected_lines()
 
     assert view.selection.selected_line_indices == {2}
     assert view.selection.selected_word_indices == {(2, 0)}
@@ -606,7 +606,7 @@ def test_split_line_after_selected_word_requires_single_word(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", notify)
     view.split_line_after_word_callback = lambda _line_index, _word_index: True
 
-    view._handle_split_line_after_selected_word()
+    view.actions._handle_split_line_after_selected_word()
 
     assert seen["type"] == "warning"
     assert "exactly one word" in seen["message"]
@@ -630,7 +630,7 @@ def test_split_line_after_selected_word_clears_selection_before_callback(monkeyp
         return True
 
     view.split_line_after_word_callback = split_callback
-    view._handle_split_line_after_selected_word()
+    view.actions._handle_split_line_after_selected_word()
 
     assert seen["args"] == (1, 2)
     assert seen["selection_during_callback"] == ([], [], [])
@@ -647,7 +647,7 @@ def test_split_line_after_selected_word_restores_selection_on_failure(monkeypatc
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.split_line_after_word_callback = lambda _line_index, _word_index: False
-    view._handle_split_line_after_selected_word()
+    view.actions._handle_split_line_after_selected_word()
 
     assert view.selection.selected_line_indices == {3}
     assert view.selection.selected_word_indices == {(3, 1)}
@@ -675,7 +675,7 @@ def test_group_selected_words_into_new_paragraph_clears_selection_before_callbac
         return True
 
     view.group_selected_words_into_paragraph_callback = group_callback
-    view._handle_group_selected_words_into_new_paragraph()
+    view.actions._handle_group_selected_words_into_new_paragraph()
 
     assert seen["word_keys"] == [(1, 1), (2, 0)]
     assert seen["selection_during_callback"] == ([], [], [])
@@ -694,7 +694,7 @@ def test_group_selected_words_into_new_paragraph_restores_selection_on_failure(
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.group_selected_words_into_paragraph_callback = lambda _word_keys: False
-    view._handle_group_selected_words_into_new_paragraph()
+    view.actions._handle_group_selected_words_into_new_paragraph()
 
     assert view.selection.selected_line_indices == {4}
     assert view.selection.selected_word_indices == {(4, 0)}
@@ -716,7 +716,7 @@ def test_delete_paragraphs_clears_selection_before_callback(monkeypatch):
         return True
 
     view.delete_paragraphs_callback = delete_callback
-    view._handle_delete_selected_paragraphs()
+    view.actions._handle_delete_selected_paragraphs()
 
     assert seen["indices"] == [1, 3]
     assert seen["selection_during_callback"] == []
@@ -729,7 +729,7 @@ def test_delete_paragraphs_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_paragraphs_callback = lambda _indices: False
-    view._handle_delete_selected_paragraphs()
+    view.actions._handle_delete_selected_paragraphs()
 
     assert view.selection.selected_paragraph_indices == {2}
 
@@ -753,7 +753,7 @@ def test_delete_words_clears_selection_before_callback(monkeypatch):
         return True
 
     view.delete_words_callback = delete_callback
-    view._handle_delete_selected_words()
+    view.actions._handle_delete_selected_words()
 
     assert seen["word_keys"] == [(1, 0), (2, 1)]
     assert seen["line_selection_during_callback"] == []
@@ -769,7 +769,7 @@ def test_delete_words_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_words_callback = lambda _word_keys: False
-    view._handle_delete_selected_words()
+    view.actions._handle_delete_selected_words()
 
     assert view.selection.selected_line_indices == {3}
     assert view.selection.selected_word_indices == {(3, 0)}
@@ -794,7 +794,7 @@ def test_merge_word_left_clears_selection_before_callback(monkeypatch):
         return True
 
     view.merge_word_left_callback = merge_callback
-    view._handle_merge_word_left(1, 2)
+    view.actions._handle_merge_word_left(1, 2)
 
     assert seen["args"] == (1, 2)
     assert seen["line_selection_during_callback"] == []
@@ -816,7 +816,7 @@ def test_merge_word_left_success_rerenders_target_line(monkeypatch):
         lambda line_index: seen["rerendered"].append(line_index),
     )
 
-    view._handle_merge_word_left(1, 1)
+    view.actions._handle_merge_word_left(1, 1)
 
     assert seen["refreshed"] == [1]
     assert seen["rerendered"] == [1]
@@ -829,7 +829,7 @@ def test_merge_word_left_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.merge_word_left_callback = lambda _line_index, _word_index: False
-    view._handle_merge_word_left(2, 1)
+    view.actions._handle_merge_word_left(2, 1)
 
     assert view.selection.selected_line_indices == {2}
     assert view.selection.selected_word_indices == {(2, 1)}
@@ -854,7 +854,7 @@ def test_merge_word_right_clears_selection_before_callback(monkeypatch):
         return True
 
     view.merge_word_right_callback = merge_callback
-    view._handle_merge_word_right(1, 0)
+    view.actions._handle_merge_word_right(1, 0)
 
     assert seen["args"] == (1, 0)
     assert seen["line_selection_during_callback"] == []
@@ -878,7 +878,7 @@ def test_merge_word_right_success_rerenders_target_line(monkeypatch):
         lambda line_index: seen["rerendered"].append(line_index),
     )
 
-    view._handle_merge_word_right(1, 0)
+    view.actions._handle_merge_word_right(1, 0)
 
     assert seen["refreshed"] == [1]
     assert seen["rerendered"] == [1]
@@ -891,7 +891,7 @@ def test_merge_word_right_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.merge_word_right_callback = lambda _line_index, _word_index: False
-    view._handle_merge_word_right(4, 0)
+    view.actions._handle_merge_word_right(4, 0)
 
     assert view.selection.selected_line_indices == {4}
     assert view.selection.selected_word_indices == {(4, 0)}
@@ -909,7 +909,7 @@ def test_merge_selected_words_requires_contiguous_words_single_line(monkeypatch)
 
     monkeypatch.setattr(view, "_safe_notify", capture_notify)
 
-    view._handle_merge_selected_words()
+    view.actions._handle_merge_selected_words()
 
     assert seen["type"] == "warning"
     assert "single line" in seen["message"]
@@ -931,7 +931,7 @@ def test_merge_selected_words_uses_repeated_merge_right(monkeypatch):
         return True
 
     view.merge_word_right_callback = merge_callback
-    view._handle_merge_selected_words()
+    view.actions._handle_merge_selected_words()
 
     assert seen["calls"] == [(1, 1), (1, 1)]
     assert seen["selection_during_callback"] == ([], [])
@@ -946,7 +946,7 @@ def test_merge_selected_words_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.merge_word_right_callback = lambda _line_index, _word_index: False
-    view._handle_merge_selected_words()
+    view.actions._handle_merge_selected_words()
 
     assert view.selection.selected_line_indices == {2}
     assert view.selection.selected_word_indices == {(2, 0), (2, 1)}
@@ -958,11 +958,11 @@ def test_merge_selected_words_button_state(monkeypatch):
     view.merge_word_right_callback = lambda _line_index, _word_index: True
 
     view.selection.selected_word_indices = {(0, 0), (0, 1)}
-    view._update_action_button_state()
+    view.toolbar.update_button_state()
     assert view.toolbar.merge_words_button.enabled is True
 
     view.selection.selected_word_indices = {(0, 0), (0, 2)}
-    view._update_action_button_state()
+    view.toolbar.update_button_state()
     assert view.toolbar.merge_words_button.enabled is False
 
 
@@ -985,7 +985,7 @@ def test_delete_single_word_clears_selection_before_callback(monkeypatch):
         return True
 
     view.delete_words_callback = delete_callback
-    view._handle_delete_single_word(2, 1)
+    view.actions._handle_delete_single_word(2, 1)
 
     assert seen["word_keys"] == [(2, 1)]
     assert seen["line_selection_during_callback"] == []
@@ -1007,7 +1007,7 @@ def test_delete_single_word_success_rerenders_target_line(monkeypatch):
         lambda line_index: seen["rerendered"].append(line_index),
     )
 
-    view._handle_delete_single_word(2, 1)
+    view.actions._handle_delete_single_word(2, 1)
 
     assert seen["refreshed"] == [2]
     assert seen["rerendered"] == [2]
@@ -1020,7 +1020,7 @@ def test_delete_single_word_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.delete_words_callback = lambda _word_keys: False
-    view._handle_delete_single_word(5, 0)
+    view.actions._handle_delete_single_word(5, 0)
 
     assert view.selection.selected_line_indices == {5}
     assert view.selection.selected_word_indices == {(5, 0)}
@@ -1046,7 +1046,7 @@ def test_split_word_clears_selection_before_callback(monkeypatch):
         return True
 
     view.split_word_callback = split_callback
-    view._handle_split_word(1, 2)
+    view.actions._handle_split_word(1, 2)
 
     assert seen["args"] == (1, 2, 0.5)
     assert seen["line_selection_during_callback"] == []
@@ -1071,7 +1071,7 @@ def test_split_word_success_rerenders_target_line(monkeypatch):
         lambda line_index: seen["rerendered"].append(line_index),
     )
 
-    view._handle_split_word(3, 1)
+    view.actions._handle_split_word(3, 1)
 
     assert seen["refreshed"] == [3]
     assert seen["rerendered"] == [3]
@@ -1085,7 +1085,7 @@ def test_split_word_restores_selection_on_failure(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     view.split_word_callback = lambda _line_index, _word_index, _split_fraction: False
-    view._handle_split_word(3, 1)
+    view.actions._handle_split_word(3, 1)
 
     assert view.selection.selected_line_indices == {3}
     assert view.selection.selected_word_indices == {(3, 1)}
@@ -1102,7 +1102,7 @@ def test_split_word_requires_selected_marker(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", notify)
     view.split_word_callback = lambda _line_index, _word_index, _split_fraction: True
 
-    view._handle_split_word(0, 0)
+    view.actions._handle_split_word(0, 0)
 
     assert seen["type"] == "warning"
     assert "choose split position" in seen["message"]
@@ -1132,7 +1132,7 @@ def test_split_word_vertical_closest_line_clears_selection_before_callback(
         return True
 
     view.split_word_vertical_closest_line_callback = split_callback
-    view._handle_split_word_vertical_closest_line(1, 2)
+    view.actions._handle_split_word_vertical_closest_line(1, 2)
 
     assert seen["args"] == (1, 2, 0.5)
     assert seen["line_selection_during_callback"] == []
@@ -1152,7 +1152,7 @@ def test_split_word_vertical_closest_line_requires_selected_marker(monkeypatch):
         lambda _line_index, _word_index, _split_fraction: True
     )
 
-    view._handle_split_word_vertical_closest_line(0, 0)
+    view.actions._handle_split_word_vertical_closest_line(0, 0)
 
     assert seen["type"] == "warning"
     assert "choose split position" in seen["message"]
@@ -1260,10 +1260,10 @@ def test_crop_word_to_marker_prefers_stored_y_fraction(monkeypatch):
         "refresh_open_word_dialog_for",
         lambda _line_index, _word_index: None,
     )
-    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view.toolbar, "update_button_state", lambda: None)
     monkeypatch.setattr(view.selection, "emit_selection_changed", lambda: None)
 
-    view._handle_crop_word_to_marker(1, 2, "above")
+    view.bbox.handle_crop_word_to_marker(1, 2, "above")
 
     assert seen["args"] == (1, 2, 0.0, 0.0, -30.0, 0.0, False)
 
@@ -1315,10 +1315,10 @@ def test_crop_word_to_marker_uses_marker_y_when_fraction_missing(monkeypatch):
         "refresh_open_word_dialog_for",
         lambda _line_index, _word_index: None,
     )
-    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view.toolbar, "update_button_state", lambda: None)
     monkeypatch.setattr(view.selection, "emit_selection_changed", lambda: None)
 
-    view._handle_crop_word_to_marker(1, 2, "below")
+    view.bbox.handle_crop_word_to_marker(1, 2, "below")
 
     assert seen["args"] == (1, 2, 0.0, 0.0, 0.0, -30.0, False)
 
@@ -1369,10 +1369,10 @@ def test_crop_above_works_with_only_y_marker(monkeypatch):
         "refresh_open_word_dialog_for",
         lambda _line_index, _word_index: None,
     )
-    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view.toolbar, "update_button_state", lambda: None)
     monkeypatch.setattr(view.selection, "emit_selection_changed", lambda: None)
 
-    view._handle_crop_word_to_marker(2, 3, "above")
+    view.bbox.handle_crop_word_to_marker(2, 3, "above")
 
     assert seen["args"] == (2, 3, 0.0, 0.0, -10.0, 0.0, False)
 
@@ -1423,10 +1423,10 @@ def test_crop_left_works_with_only_x_marker(monkeypatch):
         "refresh_open_word_dialog_for",
         lambda _line_index, _word_index: None,
     )
-    monkeypatch.setattr(view, "_update_action_button_state", lambda: None)
+    monkeypatch.setattr(view.toolbar, "update_button_state", lambda: None)
     monkeypatch.setattr(view.selection, "emit_selection_changed", lambda: None)
 
-    view._handle_crop_word_to_marker(2, 3, "left")
+    view.bbox.handle_crop_word_to_marker(2, 3, "left")
 
     assert seen["args"] == (2, 3, -20.0, 0.0, 0.0, 0.0, False)
 
@@ -1452,13 +1452,13 @@ def test_start_rebox_word_sets_pending_and_requests_image_mode(monkeypatch):
     seen = {}
     view = WordMatchView(rebox_word_callback=lambda *_args: True)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
-    view.set_rebox_request_callback(
+    view.bbox.set_rebox_request_callback(
         lambda line_index, word_index: seen.setdefault(
             "target", (line_index, word_index)
         )
     )
 
-    view._handle_start_rebox_word(2, 4)
+    view.actions._handle_start_rebox_word(2, 4)
 
     assert seen["target"] == (2, 4)
     assert view.bbox._pending_rebox_word_key == (2, 4)
@@ -1488,7 +1488,7 @@ def test_apply_rebox_bbox_clears_selection_before_callback(monkeypatch):
     view.bbox._pending_rebox_word_key = (1, 2)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view.apply_rebox_bbox(10.0, 11.0, 20.0, 21.0)
+    view.bbox.apply_rebox_bbox(10.0, 11.0, 20.0, 21.0)
 
     assert seen["args"] == (1, 2, 10.0, 11.0, 20.0, 21.0)
     assert seen["selection_during_callback"] == ([], [])
@@ -1502,7 +1502,7 @@ def test_apply_rebox_bbox_restores_selection_on_failure(monkeypatch):
     view.bbox._pending_rebox_word_key = (3, 0)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view.apply_rebox_bbox(1.0, 2.0, 3.0, 4.0)
+    view.bbox.apply_rebox_bbox(1.0, 2.0, 3.0, 4.0)
 
     assert view.selection.selected_line_indices == {3}
     assert view.selection.selected_word_indices == {(3, 0)}
@@ -1525,7 +1525,7 @@ def test_refine_selected_words_clears_selection_before_callback(monkeypatch):
     view.selection.selected_word_indices = {(1, 0), (1, 1)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_refine_selected_words()
+    view.actions._handle_refine_selected_words()
 
     assert seen["word_keys"] == [(1, 0), (1, 1)]
     assert seen["selection_during_callback"] == ([], [])
@@ -1547,7 +1547,7 @@ def test_refine_selected_lines_clears_selection_before_callback(monkeypatch):
     view.selection.selected_word_indices = {(2, 0)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_refine_selected_lines()
+    view.actions._handle_refine_selected_lines()
 
     assert seen["line_indices"] == [2]
     assert seen["selection_during_callback"] == ([], [])
@@ -1567,7 +1567,7 @@ def test_refine_selected_paragraphs_clears_selection_before_callback(monkeypatch
     view.selection.selected_paragraph_indices = {0, 2}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_refine_selected_paragraphs()
+    view.actions._handle_refine_selected_paragraphs()
 
     assert seen["paragraph_indices"] == [0, 2]
     assert seen["selection_during_callback"] == []
@@ -1589,7 +1589,7 @@ def test_refine_single_word_clears_selection_before_callback(monkeypatch):
     view.selection.selected_word_indices = {(4, 1)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_refine_single_word(4, 1)
+    view.actions._handle_refine_single_word(4, 1)
 
     assert seen["word_keys"] == [(4, 1)]
     assert seen["selection_during_callback"] == ([], [])
@@ -1605,10 +1605,10 @@ def test_toggle_bbox_fine_tune_opens_and_closes_editor(monkeypatch):
         lambda line_index, word_index: rerendered.append((line_index, word_index)),
     )
 
-    view._toggle_bbox_fine_tune(1, 2)
+    view.bbox.toggle_bbox_fine_tune(1, 2)
     assert (1, 2) in view.bbox._bbox_editor_open_keys
 
-    view._toggle_bbox_fine_tune(1, 2)
+    view.bbox.toggle_bbox_fine_tune(1, 2)
     assert (1, 2) not in view.bbox._bbox_editor_open_keys
     assert rerendered == [(1, 2), (1, 2)]
 
@@ -1646,7 +1646,7 @@ def test_nudge_single_word_bbox_accumulates_pending_without_callback(monkeypatch
     view.selection.selected_word_indices = {(2, 1)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_nudge_single_word_bbox(
+    view.actions._handle_nudge_single_word_bbox(
         2,
         1,
         left_units=-1.0,
@@ -1694,7 +1694,7 @@ def test_apply_pending_single_word_bbox_clears_selection_before_callback(monkeyp
     view.bbox._bbox_pending_deltas[(2, 1)] = (-5.0, 5.0, 0.0, 5.0)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._apply_pending_single_word_bbox_nudge(2, 1)
+    view.bbox.apply_pending_single_word_bbox_nudge(2, 1)
 
     assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0, True)
     assert seen["selection_during_callback"] == ([], [])
@@ -1733,7 +1733,7 @@ def test_apply_pending_single_word_bbox_without_refine(monkeypatch):
         lambda message, type_="info": notifications.append((message, type_)),
     )
 
-    view._apply_pending_single_word_bbox_nudge(2, 1, refine_after=False)
+    view.bbox.apply_pending_single_word_bbox_nudge(2, 1, refine_after=False)
 
     assert seen["args"] == (2, 1, -5.0, 5.0, 0.0, 5.0, False)
     assert notifications[-1] == ("Applied bbox fine-tune edits", "positive")
@@ -1757,7 +1757,7 @@ def test_expand_then_refine_single_word_clears_selection_before_callback(monkeyp
     view.selection.selected_word_indices = {(4, 1)}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_expand_then_refine_single_word(4, 1)
+    view.actions._handle_expand_then_refine_single_word(4, 1)
 
     assert seen["word_keys"] == [(4, 1)]
     assert seen["selection_during_callback"] == ([], [])
@@ -1773,7 +1773,7 @@ def test_set_bbox_nudge_step_updates_step_and_refreshes(monkeypatch):
         lambda line_index, word_index: seen.append((line_index, word_index)),
     )
 
-    view._set_bbox_nudge_step("10")
+    view.bbox.set_bbox_nudge_step("10")
 
     assert view.bbox._bbox_nudge_step_px == 10
     assert seen == [(2, 1), (3, 0)]
@@ -1812,9 +1812,9 @@ def test_display_signature_changes_when_word_bbox_changes():
     )
     view.view_model.line_matches = [line_match]
 
-    before = view._compute_display_signature()
+    before = view.renderer._compute_display_signature()
     bbox.maxX = 35.0
-    after = view._compute_display_signature()
+    after = view.renderer._compute_display_signature()
 
     assert before != after
 
@@ -1832,7 +1832,7 @@ def test_preview_bbox_for_word_applies_pending_deltas():
     word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
     page_image = SimpleNamespace(shape=(100, 200, 3))
 
-    preview_bbox = view._preview_bbox_for_word(
+    preview_bbox = view.bbox.preview_bbox_for_word(
         word_match,
         page_image,
         line_index=1,
@@ -1856,7 +1856,7 @@ def test_preview_bbox_for_word_handles_normalized_bbox():
     word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
     page_image = SimpleNamespace(shape=(100, 200, 3))
 
-    preview_bbox = view._preview_bbox_for_word(
+    preview_bbox = view.bbox.preview_bbox_for_word(
         word_match,
         page_image,
         line_index=0,
@@ -1877,7 +1877,7 @@ def test_word_gt_edit_invokes_callback(monkeypatch):
     view = WordMatchView(edit_word_ground_truth_callback=update_callback)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_word_gt_edit(1, 3, "new-gt")
+    view.gt_editing._handle_word_gt_edit(1, 3, "new-gt")
 
     assert seen["args"] == (1, 3, "new-gt")
 
@@ -1895,7 +1895,7 @@ def test_word_gt_edit_warns_on_failure(monkeypatch):
 
     monkeypatch.setattr(view, "_safe_notify", notify)
 
-    view._handle_word_gt_edit(0, 0, "x")
+    view.gt_editing._handle_word_gt_edit(0, 0, "x")
 
     assert seen["type"] == "warning"
     assert "Failed to update word ground truth" in seen["message"]
@@ -1927,7 +1927,7 @@ def test_word_attribute_edit_invokes_callback(monkeypatch):
     view = WordMatchView(set_word_attributes_callback=update_callback)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
-    view._handle_set_word_attributes(1, 3, True, False, True, False, False)
+    view.gt_editing._handle_set_word_attributes(1, 3, True, False, True, False, False)
 
     assert seen["args"] == (1, 3, True, False, True, False, False)
 
@@ -1944,17 +1944,17 @@ def test_word_attribute_edit_does_not_rerender_word_column(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        view,
+        view.gt_editing,
         "_set_word_style_button_states",
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
-        view,
+        view.gt_editing,
         "_apply_local_word_style_update",
         lambda **_kwargs: None,
     )
 
-    view._handle_set_word_attributes(1, 3, True, False, True, False, False)
+    view.gt_editing._handle_set_word_attributes(1, 3, True, False, True, False, False)
 
     assert seen["rerendered"] == 0
 
@@ -1992,7 +1992,7 @@ def test_toggle_word_attribute_uses_current_flags(monkeypatch):
         ),
     )
 
-    view._handle_toggle_word_attribute(2, 5, "small_caps")
+    view.gt_editing._handle_toggle_word_attribute(2, 5, "small_caps")
 
     assert seen["args"] == (2, 5, False, False, False, False, False)
 
@@ -2518,7 +2518,7 @@ def test_apply_component_toolbar_buttons_disable_without_selection():
 def test_word_gt_input_width_prefers_current_value():
     view = WordMatchView()
 
-    width = view._word_gt_input_width_chars("alphabet", "ocr")
+    width = view.gt_editing._word_gt_input_width_chars("alphabet", "ocr")
 
     assert width == len("alphabet") + 3
 
@@ -2526,7 +2526,7 @@ def test_word_gt_input_width_prefers_current_value():
 def test_word_gt_input_width_falls_back_to_ocr_word():
     view = WordMatchView()
 
-    width = view._word_gt_input_width_chars("", "token")
+    width = view.gt_editing._word_gt_input_width_chars("", "token")
 
     assert width == len("token") + 3
 
@@ -2534,7 +2534,7 @@ def test_word_gt_input_width_falls_back_to_ocr_word():
 def test_word_gt_input_width_has_minimum():
     view = WordMatchView()
 
-    width = view._word_gt_input_width_chars("", "")
+    width = view.gt_editing._word_gt_input_width_chars("", "")
 
     assert width == 6
 
@@ -2549,7 +2549,7 @@ def test_word_gt_commit_uses_input_value_on_blur(monkeypatch):
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
 
     input_stub = SimpleNamespace(value="updated-on-blur")
-    view._commit_word_gt_input_change(2, 4, input_stub)
+    view.gt_editing._commit_word_gt_input_change(2, 4, input_stub)
 
     assert seen["args"] == (2, 4, "updated-on-blur")
 
@@ -2562,9 +2562,9 @@ def test_next_word_gt_key_forward_ordering():
         (1, 0): object(),
     }
 
-    assert view._next_word_gt_key((0, 0), reverse=False) == (0, 1)
-    assert view._next_word_gt_key((0, 1), reverse=False) == (1, 0)
-    assert view._next_word_gt_key((1, 0), reverse=False) is None
+    assert view.gt_editing._next_word_gt_key((0, 0), reverse=False) == (0, 1)
+    assert view.gt_editing._next_word_gt_key((0, 1), reverse=False) == (1, 0)
+    assert view.gt_editing._next_word_gt_key((1, 0), reverse=False) is None
 
 
 def test_next_word_gt_key_reverse_ordering():
@@ -2575,9 +2575,9 @@ def test_next_word_gt_key_reverse_ordering():
         (1, 0): object(),
     }
 
-    assert view._next_word_gt_key((1, 0), reverse=True) == (0, 1)
-    assert view._next_word_gt_key((0, 1), reverse=True) == (0, 0)
-    assert view._next_word_gt_key((0, 0), reverse=True) is None
+    assert view.gt_editing._next_word_gt_key((1, 0), reverse=True) == (0, 1)
+    assert view.gt_editing._next_word_gt_key((0, 1), reverse=True) == (0, 0)
+    assert view.gt_editing._next_word_gt_key((0, 0), reverse=True) is None
 
 
 def test_word_gt_keydown_ignores_non_tab(monkeypatch):
@@ -2591,7 +2591,7 @@ def test_word_gt_keydown_ignores_non_tab(monkeypatch):
     )
 
     event = SimpleNamespace(args={"key": "Enter", "shiftKey": False})
-    view._handle_word_gt_keydown(event, (0, 0))
+    view.gt_editing._handle_word_gt_keydown(event, (0, 0))
 
     assert seen["called"] is False
 
@@ -2606,11 +2606,11 @@ def test_word_gt_keydown_routes_tab_and_shift_tab(monkeypatch):
         lambda key, reverse: seen.append((key, reverse)),
     )
 
-    view._handle_word_gt_keydown(
+    view.gt_editing._handle_word_gt_keydown(
         SimpleNamespace(args={"key": "Tab", "shiftKey": False}),
         (0, 1),
     )
-    view._handle_word_gt_keydown(
+    view.gt_editing._handle_word_gt_keydown(
         SimpleNamespace(args={"key": "Tab", "shiftKey": True}),
         (0, 1),
     )

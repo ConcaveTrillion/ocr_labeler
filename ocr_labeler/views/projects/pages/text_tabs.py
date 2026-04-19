@@ -84,11 +84,10 @@ class TextTabsModel:
 
 def _make_page_callback(
     page_state: PageState | None,
-    page_index: int,
     method_name: str,
     description: str | None = None,
 ):
-    """Create a callback that delegates to ``page_state.<method>(page_index, *args)``.
+    """Create a callback that delegates to ``page_state.<method>(*args)``.
 
     Returns ``None`` when *page_state* is ``None`` or does not have *method_name*.
     """
@@ -98,8 +97,8 @@ def _make_page_callback(
     label = description or method_name
 
     def callback(*args, **kwargs) -> bool:
-        logger.debug("%s on page %d", label, page_index)
-        result = method(page_index, *args, **kwargs)
+        logger.debug("%s", label)
+        result = method(*args, **kwargs)
         logger.debug("%s result: %s", label, result)
         return result
 
@@ -143,33 +142,31 @@ class TextTabs:
 
         # Create callback for GT→OCR copy functionality
         copy_callback = _make_page_callback(
-            page_state, page_index, "copy_ground_truth_to_ocr", "Copy GT to OCR"
+            page_state, "copy_ground_truth_to_ocr", "Copy GT to OCR"
         )
         copy_ocr_to_gt_callback = _make_page_callback(
-            page_state, page_index, "copy_ocr_to_ground_truth", "Copy OCR to GT"
+            page_state, "copy_ocr_to_ground_truth", "Copy OCR to GT"
         )
         copy_selected_words_ocr_to_gt_callback = _make_page_callback(
             page_state,
-            page_index,
             "copy_selected_words_ocr_to_ground_truth",
             "Copy selected words OCR to GT",
         )
 
         merge_lines_callback = _make_page_callback(
-            page_state, page_index, "merge_lines", "Merge selected lines"
+            page_state, "merge_lines", "Merge selected lines"
         )
         delete_lines_callback = _make_page_callback(
-            page_state, page_index, "delete_lines", "Delete selected lines"
+            page_state, "delete_lines", "Delete selected lines"
         )
         merge_paragraphs_callback = _make_page_callback(
-            page_state, page_index, "merge_paragraphs", "Merge selected paragraphs"
+            page_state, "merge_paragraphs", "Merge selected paragraphs"
         )
         delete_paragraphs_callback = _make_page_callback(
-            page_state, page_index, "delete_paragraphs", "Delete selected paragraphs"
+            page_state, "delete_paragraphs", "Delete selected paragraphs"
         )
         split_paragraph_after_line_callback = _make_page_callback(
             page_state,
-            page_index,
             "split_paragraph_after_line",
             "Split paragraph after line",
         )
@@ -186,18 +183,15 @@ class TextTabs:
                     else None
                 )
                 logger.debug(
-                    "[split_by_selection] callback.start page=%d lines=%s last_key_head=%s",
-                    page_index,
+                    "[split_by_selection] callback.start lines=%s last_key_head=%s",
                     line_indices,
                     previous_key_head,
                 )
                 result = page_state.split_paragraph_with_selected_lines(
-                    page_index,
                     line_indices,
                 )
                 logger.debug(
-                    "[split_by_selection] callback.done page=%d success=%s last_key_head_now=%s",
-                    page_index,
+                    "[split_by_selection] callback.done success=%s last_key_head_now=%s",
                     result,
                     (
                         self._last_word_match_page_key[:4]
@@ -208,114 +202,99 @@ class TextTabs:
                 return result
 
         split_line_after_word_callback = _make_page_callback(
-            page_state, page_index, "split_line_after_word", "Split line after word"
+            page_state, "split_line_after_word", "Split line after word"
         )
 
         delete_words_callback = _make_page_callback(
-            page_state, page_index, "delete_words", "Delete selected words"
+            page_state, "delete_words", "Delete selected words"
         )
         merge_word_left_callback = _make_page_callback(
-            page_state, page_index, "merge_word_left", "Merge word left"
+            page_state, "merge_word_left", "Merge word left"
         )
         merge_word_right_callback = _make_page_callback(
-            page_state, page_index, "merge_word_right", "Merge word right"
+            page_state, "merge_word_right", "Merge word right"
         )
         split_word_callback = _make_page_callback(
-            page_state, page_index, "split_word", "Split word"
+            page_state, "split_word", "Split word"
         )
         split_word_vertical_closest_line_callback = _make_page_callback(
             page_state,
-            page_index,
             "split_word_vertically_and_assign_to_closest_line",
             "Split word vertical closest-line",
         )
         rebox_word_callback = _make_page_callback(
-            page_state, page_index, "rebox_word", "Rebox word"
+            page_state, "rebox_word", "Rebox word"
         )
-        add_word_callback = _make_page_callback(
-            page_state, page_index, "add_word", "Add word"
-        )
+        add_word_callback = _make_page_callback(page_state, "add_word", "Add word")
         nudge_word_bbox_callback = _make_page_callback(
-            page_state, page_index, "nudge_word_bbox", "Nudge word bbox"
+            page_state, "nudge_word_bbox", "Nudge word bbox"
         )
         refine_words_callback = _make_page_callback(
-            page_state, page_index, "refine_words", "Refine selected words"
+            page_state, "refine_words", "Refine selected words"
         )
         expand_then_refine_words_callback = _make_page_callback(
             page_state,
-            page_index,
             "expand_then_refine_words",
             "Expand-then-refine selected words",
         )
         expand_word_bboxes_callback = _make_page_callback(
             page_state,
-            page_index,
             "expand_word_bboxes",
             "Expand word bboxes",
         )
         refine_lines_callback = _make_page_callback(
-            page_state, page_index, "refine_lines", "Refine selected lines"
+            page_state, "refine_lines", "Refine selected lines"
         )
         expand_then_refine_lines_callback = _make_page_callback(
             page_state,
-            page_index,
             "expand_then_refine_lines",
             "Expand-then-refine selected lines",
         )
         expand_line_bboxes_callback = _make_page_callback(
-            page_state, page_index, "expand_line_bboxes", "Expand line bboxes"
+            page_state, "expand_line_bboxes", "Expand line bboxes"
         )
         refine_paragraphs_callback = _make_page_callback(
             page_state,
-            page_index,
             "refine_paragraphs",
             "Refine selected paragraphs",
         )
         expand_then_refine_paragraphs_callback = _make_page_callback(
             page_state,
-            page_index,
             "expand_then_refine_paragraphs",
             "Expand-then-refine selected paragraphs",
         )
         expand_paragraph_bboxes_callback = _make_page_callback(
             page_state,
-            page_index,
             "expand_paragraph_bboxes",
             "Expand paragraph bboxes",
         )
         split_line_with_selected_words_callback = _make_page_callback(
             page_state,
-            page_index,
             "split_line_with_selected_words",
             "Create line from selected words",
         )
         split_lines_into_selected_unselected_callback = _make_page_callback(
             page_state,
-            page_index,
             "split_lines_into_selected_and_unselected_words",
             "Split lines into selected/unselected words",
         )
         group_selected_words_into_paragraph_callback = _make_page_callback(
             page_state,
-            page_index,
             "group_selected_words_into_new_paragraph",
             "Group selected words into paragraph",
         )
         edit_word_ground_truth_callback = _make_page_callback(
             page_state,
-            page_index,
             "update_word_ground_truth",
             "Update word GT",
         )
         set_word_attributes_callback = _make_page_callback(
             page_state,
-            page_index,
             "update_word_attributes",
             "Update word attributes",
         )
         toggle_word_validated_callback = _make_page_callback(
             page_state,
-            page_index,
             "toggle_word_validated",
             "Toggle word validated",
         )

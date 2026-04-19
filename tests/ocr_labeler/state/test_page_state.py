@@ -142,7 +142,7 @@ def test_merge_lines_reapplies_ground_truth_after_merge(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.merge_lines(0, [0, 1])
+    result = page_state.merge_lines([0, 1])
 
     assert result is True
     assert page.removed_gt is True
@@ -233,7 +233,7 @@ def test_merge_lines_reapplies_gt_via_project_image_path_when_page_name_missing(
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.merge_lines(0, [0, 1])
+    result = page_state.merge_lines([0, 1])
 
     assert result is True
     assert page_state.current_page.removed_gt is True
@@ -266,7 +266,7 @@ def test_merge_lines_rematches_ground_truth_on_merged_line():
     )()
     page_state._current_page_index = 0
 
-    assert page_state.merge_lines(0, [0, 1]) is True
+    assert page_state.merge_lines([0, 1]) is True
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha beta"
     assert page.lines[0].ground_truth_text == "alpha beta"
@@ -312,7 +312,7 @@ def test_delete_lines_reapplies_ground_truth_after_delete(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.delete_lines(0, [1])
+    result = page_state.delete_lines([1])
 
     assert result is True
     assert page.removed_gt is True
@@ -346,7 +346,7 @@ def test_merge_paragraphs_rematches_ground_truth_on_merged_paragraph():
     )()
     page_state._current_page_index = 0
 
-    assert page_state.merge_paragraphs(0, [0, 1]) is True
+    assert page_state.merge_paragraphs([0, 1]) is True
     assert len(page.paragraphs) == 1
     assert page.paragraphs[0].text == "alpha\nbeta"
 
@@ -391,7 +391,7 @@ def test_delete_paragraphs_reapplies_ground_truth_after_delete(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.delete_paragraphs(0, [0])
+    result = page_state.delete_paragraphs([0])
 
     assert result is True
     assert page.removed_gt is True
@@ -440,7 +440,7 @@ def test_delete_words_reapplies_ground_truth_after_delete(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.delete_words(0, [(0, 1)])
+    result = page_state.delete_words([(0, 1)])
 
     assert result is True
     assert page.removed_gt is True
@@ -489,7 +489,7 @@ def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.merge_word_left(0, 0, 1)
+    result = page_state.merge_word_left(0, 1)
 
     assert result is True
     assert page.removed_gt is True
@@ -538,7 +538,7 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.merge_word_right(0, 0, 0)
+    result = page_state.merge_word_right(0, 0)
 
     assert result is True
     assert page.removed_gt is True
@@ -587,7 +587,7 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.split_word(0, 0, 0, 0.5)
+    result = page_state.split_word(0, 0, 0.5)
 
     assert result is True
     assert page.removed_gt is True
@@ -636,7 +636,7 @@ def test_split_word_vertical_closest_line_reapplies_ground_truth(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.split_word_vertically_and_assign_to_closest_line(0, 0, 0, 0.5)
+    result = page_state.split_word_vertically_and_assign_to_closest_line(0, 0, 0.5)
 
     assert result is True
     assert page.removed_gt is True
@@ -669,7 +669,7 @@ def test_rebox_word_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.rebox_word(0, 0, 1, 10.0, 11.0, 20.0, 21.0)
+    result = page_state.rebox_word(0, 1, 10.0, 11.0, 20.0, 21.0)
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -709,7 +709,7 @@ def test_rebox_word_invalidates_overlay_cache_before_refresh(monkeypatch):
     page = PageStub()
     page_state.current_page = page
 
-    result = page_state.rebox_word(0, 0, 1, 10.0, 11.0, 20.0, 21.0)
+    result = page_state.rebox_word(0, 1, 10.0, 11.0, 20.0, 21.0)
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -742,7 +742,7 @@ def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.nudge_word_bbox(0, 0, 1, 1.0, 1.0, -1.0, -1.0)
+    result = page_state.nudge_word_bbox(0, 1, 1.0, 1.0, -1.0, -1.0)
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -773,7 +773,7 @@ def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.refine_words(0, [(0, 1)])
+    result = page_state.refine_words([(0, 1)])
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -804,7 +804,7 @@ def test_expand_then_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.expand_then_refine_words(0, [(0, 1)])
+    result = page_state.expand_then_refine_words([(0, 1)])
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -835,7 +835,7 @@ def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.refine_lines(0, [0])
+    result = page_state.refine_lines([0])
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -866,7 +866,7 @@ def test_refine_paragraphs_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.refine_paragraphs(0, [0])
+    result = page_state.refine_paragraphs([0])
 
     assert result is True
     assert page.overlay_refresh_called is True
@@ -892,7 +892,7 @@ def test_update_word_ground_truth_notifies_on_success(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.update_word_ground_truth(0, 1, 2, "edited")
+    result = page_state.update_word_ground_truth(1, 2, "edited")
 
     assert result is True
     assert notified == ["changed"]
@@ -917,12 +917,12 @@ def test_update_word_ground_truth_emits_typed_event_on_success(monkeypatch):
     seen: list[WordGroundTruthChangedEvent] = []
     page_state.on_word_ground_truth_change.subscribe(lambda event: seen.append(event))
 
-    result = page_state.update_word_ground_truth(4, 3, 2, "edited")
+    result = page_state.update_word_ground_truth(3, 2, "edited")
 
     assert result is True
     assert seen == [
         WordGroundTruthChangedEvent(
-            page_index=4,
+            page_index=0,
             line_index=3,
             word_index=2,
             ground_truth_text="edited",
@@ -951,7 +951,7 @@ def test_update_word_attributes_notifies_on_success(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    result = page_state.update_word_attributes(0, 1, 2, True, False, True, False, False)
+    result = page_state.update_word_attributes(1, 2, True, False, True, False, False)
 
     assert result is True
     assert notified == ["changed"]
@@ -978,12 +978,12 @@ def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
     seen: list[WordStyleChangedEvent] = []
     page_state.on_word_style_change.subscribe(lambda event: seen.append(event))
 
-    result = page_state.update_word_attributes(3, 1, 2, True, False, True, False, False)
+    result = page_state.update_word_attributes(1, 2, True, False, True, False, False)
 
     assert result is True
     assert seen == [
         WordStyleChangedEvent(
-            page_index=3,
+            page_index=0,
             line_index=1,
             word_index=2,
             italic=True,
@@ -1021,7 +1021,7 @@ def test_split_paragraph_after_line_splits_containing_paragraph_at_line():
     )()
     page_state._current_page_index = 0
 
-    assert page_state.split_paragraph_after_line(0, 0) is True
+    assert page_state.split_paragraph_after_line(0) is True
     assert len(page.paragraphs) == 2
     assert all(len(paragraph.lines) == 1 for paragraph in page.paragraphs)
 
@@ -1053,7 +1053,7 @@ def test_split_paragraph_with_selected_lines_splits_selected_vs_unselected():
     )()
     page_state._current_page_index = 0
 
-    assert page_state.split_paragraph_with_selected_lines(0, [0, 2]) is True
+    assert page_state.split_paragraph_with_selected_lines([0, 2]) is True
     assert len(page.paragraphs) == 2
     assert [line.text for line in page.paragraphs[0].lines] == ["alpha", "gamma"]
     assert [line.text for line in page.paragraphs[1].lines] == ["beta"]
@@ -1084,7 +1084,7 @@ def test_split_line_after_word_splits_line_into_two_lines():
     )()
     page_state._current_page_index = 0
 
-    assert page_state.split_line_after_word(0, 0, 0) is True
+    assert page_state.split_line_after_word(0, 0) is True
     assert len(page.lines) == 2
     assert [word.text for word in page.lines[0].words] == ["alpha"]
     assert [word.text for word in page.lines[1].words] == ["beta", "gamma"]
@@ -1137,9 +1137,7 @@ def test_split_line_with_selected_words_creates_one_new_line_from_selection():
     )()
     page_state._current_page_index = 0
 
-    assert (
-        page_state.split_line_with_selected_words(0, [(0, 1), (1, 0), (1, 2)]) is True
-    )
+    assert page_state.split_line_with_selected_words([(0, 1), (1, 0), (1, 2)]) is True
     assert len(page.lines) == 3
     line_signatures = [tuple(word.text for word in line.words) for line in page.lines]
     assert ("alpha", "gamma") in line_signatures
@@ -1177,9 +1175,7 @@ def test_group_selected_words_into_new_paragraph_moves_selected_words():
     )()
     page_state._current_page_index = 0
 
-    assert (
-        page_state.group_selected_words_into_new_paragraph(0, [(0, 1), (1, 0)]) is True
-    )
+    assert page_state.group_selected_words_into_new_paragraph([(0, 1), (1, 0)]) is True
     assert len(page.paragraphs) == 2
     assert [word.text for word in page.paragraphs[0].lines[0].words] == [
         "alpha",
@@ -1235,7 +1231,7 @@ def test_group_selected_words_into_new_paragraph_across_multiple_paragraphs():
             if word.text in {"beta", "delta"}:
                 selected_keys.append((line_index, word_index))
 
-    assert page_state.group_selected_words_into_new_paragraph(0, selected_keys) is True
+    assert page_state.group_selected_words_into_new_paragraph(selected_keys) is True
     assert len(page.paragraphs) == 3
     paragraph_line_signatures = [
         sorted(tuple(word.text for word in line.words) for line in paragraph.lines)

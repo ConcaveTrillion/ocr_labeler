@@ -364,13 +364,13 @@ class WordEditDialog:
         self._dialog.close()
         ui.timer(
             0,
-            lambda: open_word_edit_dialog(
+            lambda: WordEditDialog(
                 self._view,
                 line_index=self._line_index,
                 word_index=self._word_index,
                 split_word_index=self._split_word_index,
                 word_match=self._latest_word_match(),
-            ),
+            ).open(),
             once=True,
         )
 
@@ -1434,25 +1434,3 @@ class WordEditDialog:
             )
         self._dialog.on("hide", lambda _event: self._cleanup())
         self._dialog.open()
-
-
-def open_word_edit_dialog(
-    view: Any,
-    *,
-    line_index: int,
-    word_index: int,
-    split_word_index: int,
-    word_match: Any,
-) -> None:
-    """Build and open the per-word edit dialog.
-
-    The view object is expected to be WordMatchView-like and provide the methods
-    and attributes referenced below.
-    """
-    WordEditDialog(
-        view,
-        line_index=line_index,
-        word_index=word_index,
-        split_word_index=split_word_index,
-        word_match=word_match,
-    ).open()

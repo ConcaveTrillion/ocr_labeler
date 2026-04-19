@@ -15,8 +15,8 @@ from ...shared.button_styles import (
     style_word_icon_button,
 )
 from .word_edit_dialog import (
+    WordEditDialog,
     handle_word_image_mouse,
-    open_word_edit_dialog,
     render_word_split_marker,
 )
 
@@ -833,13 +833,13 @@ class WordMatchRenderer:
         word_match,
     ) -> None:
         """Open the extracted word edit dialog module."""
-        open_word_edit_dialog(
+        WordEditDialog(
             self._view,
             line_index=line_index,
             word_index=word_index,
             split_word_index=split_word_index,
             word_match=word_match,
-        )
+        ).open()
 
     def create_image_cell(
         self,

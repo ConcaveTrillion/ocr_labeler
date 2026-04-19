@@ -406,16 +406,14 @@ def test_text_tabs_ocr_to_gt_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        copy_ocr_to_ground_truth=lambda page_index, line_index: (
-            calls.append((page_index, line_index)) or True
-        ),
+        copy_ocr_to_ground_truth=lambda line_index: calls.append((line_index,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=3)
     result = text_tabs.word_match_view.copy_ocr_to_gt_callback(7)
 
     assert result is True
-    assert calls == [(3, 7)]
+    assert calls == [(7,)]
 
 
 def test_text_tabs_edit_word_gt_callback_invokes_page_state_method():
@@ -434,8 +432,8 @@ def test_text_tabs_edit_word_gt_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        update_word_ground_truth=lambda page_index, line_index, word_index, text: (
-            calls.append((page_index, line_index, word_index, text)) or True
+        update_word_ground_truth=lambda line_index, word_index, text: (
+            calls.append((line_index, word_index, text)) or True
         ),
     )
 
@@ -447,7 +445,7 @@ def test_text_tabs_edit_word_gt_callback_invokes_page_state_method():
     )
 
     assert result is True
-    assert calls == [(2, 4, 1, "edited-gt")]
+    assert calls == [(4, 1, "edited-gt")]
 
 
 def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
@@ -466,10 +464,9 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        update_word_attributes=lambda page_index, line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
+        update_word_attributes=lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
             calls.append(
                 (
-                    page_index,
                     line_index,
                     word_index,
                     italic,
@@ -495,7 +492,7 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
     )
 
     assert result is True
-    assert calls == [(3, 4, 1, True, False, True, False, False)]
+    assert calls == [(4, 1, True, False, True, False, False)]
 
 
 def test_text_tabs_word_style_event_routes_to_targeted_view_update():
@@ -509,7 +506,7 @@ def test_text_tabs_word_style_event_routes_to_targeted_view_update():
 
     page_state = None
 
-    def update_word_attributes(_page_index, _line_index, _word_index, *_flags):
+    def update_word_attributes(_line_index, _word_index, *_flags):
         event = WordStyleChangedEvent(
             page_index=0,
             line_index=4,
@@ -574,7 +571,7 @@ def test_text_tabs_word_gt_event_routes_to_targeted_view_update():
 
     page_state = None
 
-    def update_word_ground_truth(_page_index, _line_index, _word_index, _text):
+    def update_word_ground_truth(_line_index, _word_index, _text):
         event = WordGroundTruthChangedEvent(
             page_index=0,
             line_index=2,
@@ -656,7 +653,7 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
 
     page_state = None
 
-    def update_word_attributes(_page_index, _line_index, _word_index, *_flags):
+    def update_word_attributes(_line_index, _word_index, *_flags):
         event = WordStyleChangedEvent(
             page_index=0,
             line_index=0,
@@ -737,7 +734,7 @@ def test_text_tabs_word_gt_event_coalesces_only_same_page_refresh():
 
     page_state = None
 
-    def update_word_ground_truth(_page_index, _line_index, _word_index, _text):
+    def update_word_ground_truth(_line_index, _word_index, _text):
         event = WordGroundTruthChangedEvent(
             page_index=0,
             line_index=0,
@@ -795,8 +792,8 @@ def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        merge_paragraphs=lambda page_index, paragraph_indices: (
-            calls.append((page_index, paragraph_indices)) or True
+        merge_paragraphs=lambda paragraph_indices: (
+            calls.append((paragraph_indices,)) or True
         ),
         split_paragraph_after_line=lambda *_: False,
     )
@@ -805,7 +802,7 @@ def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.merge_paragraphs_callback([0, 2])
 
     assert result is True
-    assert calls == [(5, [0, 2])]
+    assert calls == [([0, 2],)]
 
 
 def test_text_tabs_split_paragraph_after_line_callback_invokes_page_state_method():
@@ -824,8 +821,8 @@ def test_text_tabs_split_paragraph_after_line_callback_invokes_page_state_method
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
         merge_paragraphs=lambda *_: False,
-        split_paragraph_after_line=lambda page_index, line_index: (
-            calls.append((page_index, line_index)) or True
+        split_paragraph_after_line=lambda line_index: (
+            calls.append((line_index,)) or True
         ),
     )
 
@@ -833,7 +830,7 @@ def test_text_tabs_split_paragraph_after_line_callback_invokes_page_state_method
     result = text_tabs.word_match_view.split_paragraph_after_line_callback(1)
 
     assert result is True
-    assert calls == [(6, 1)]
+    assert calls == [(1,)]
 
 
 def test_text_tabs_split_paragraph_with_selected_lines_callback_invokes_page_state_method():
@@ -853,8 +850,8 @@ def test_text_tabs_split_paragraph_with_selected_lines_callback_invokes_page_sta
         copy_ground_truth_to_ocr=lambda *_: False,
         merge_paragraphs=lambda *_: False,
         split_paragraph_after_line=lambda *_: False,
-        split_paragraph_with_selected_lines=lambda page_index, line_indices: (
-            calls.append((page_index, line_indices)) or True
+        split_paragraph_with_selected_lines=lambda line_indices: (
+            calls.append((line_indices,)) or True
         ),
     )
 
@@ -864,7 +861,7 @@ def test_text_tabs_split_paragraph_with_selected_lines_callback_invokes_page_sta
     )
 
     assert result is True
-    assert calls == [(7, [0, 2])]
+    assert calls == [([0, 2],)]
 
 
 def test_text_tabs_split_line_after_word_callback_invokes_page_state_method():
@@ -885,8 +882,8 @@ def test_text_tabs_split_line_after_word_callback_invokes_page_state_method():
         merge_paragraphs=lambda *_: False,
         split_paragraph_after_line=lambda *_: False,
         split_paragraph_with_selected_lines=lambda *_: False,
-        split_line_after_word=lambda page_index, line_index, word_index: (
-            calls.append((page_index, line_index, word_index)) or True
+        split_line_after_word=lambda line_index, word_index: (
+            calls.append((line_index, word_index)) or True
         ),
     )
 
@@ -894,7 +891,7 @@ def test_text_tabs_split_line_after_word_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.split_line_after_word_callback(2, 3)
 
     assert result is True
-    assert calls == [(8, 2, 3)]
+    assert calls == [(2, 3)]
 
 
 def test_text_tabs_group_selected_words_into_paragraph_callback_invokes_page_state_method():
@@ -916,8 +913,8 @@ def test_text_tabs_group_selected_words_into_paragraph_callback_invokes_page_sta
         split_paragraph_after_line=lambda *_: False,
         split_paragraph_with_selected_lines=lambda *_: False,
         split_line_after_word=lambda *_: False,
-        group_selected_words_into_new_paragraph=lambda page_index, word_keys: (
-            calls.append((page_index, word_keys)) or True
+        group_selected_words_into_new_paragraph=lambda word_keys: (
+            calls.append((word_keys,)) or True
         ),
     )
 
@@ -927,7 +924,7 @@ def test_text_tabs_group_selected_words_into_paragraph_callback_invokes_page_sta
     )
 
     assert result is True
-    assert calls == [(8, [(0, 1), (2, 3)])]
+    assert calls == [([(0, 1), (2, 3)],)]
 
 
 def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
@@ -948,8 +945,8 @@ def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
         merge_paragraphs=lambda *_: False,
         split_paragraph_after_line=lambda *_: False,
         split_paragraph_with_selected_lines=lambda *_: False,
-        delete_paragraphs=lambda page_index, paragraph_indices: (
-            calls.append((page_index, paragraph_indices)) or True
+        delete_paragraphs=lambda paragraph_indices: (
+            calls.append((paragraph_indices,)) or True
         ),
     )
 
@@ -957,7 +954,7 @@ def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.delete_paragraphs_callback([1, 2])
 
     assert result is True
-    assert calls == [(8, [1, 2])]
+    assert calls == [([1, 2],)]
 
 
 def test_text_tabs_delete_words_callback_invokes_page_state_method():
@@ -979,16 +976,14 @@ def test_text_tabs_delete_words_callback_invokes_page_state_method():
         split_paragraph_after_line=lambda *_: False,
         split_paragraph_with_selected_lines=lambda *_: False,
         delete_paragraphs=lambda *_: False,
-        delete_words=lambda page_index, word_keys: (
-            calls.append((page_index, word_keys)) or True
-        ),
+        delete_words=lambda word_keys: calls.append((word_keys,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=9)
     result = text_tabs.word_match_view.delete_words_callback([(0, 1), (2, 3)])
 
     assert result is True
-    assert calls == [(9, [(0, 1), (2, 3)])]
+    assert calls == [([(0, 1), (2, 3)],)]
 
 
 def test_text_tabs_merge_word_left_callback_invokes_page_state_method():
@@ -1011,8 +1006,8 @@ def test_text_tabs_merge_word_left_callback_invokes_page_state_method():
         split_paragraph_with_selected_lines=lambda *_: False,
         delete_paragraphs=lambda *_: False,
         delete_words=lambda *_: False,
-        merge_word_left=lambda page_index, line_index, word_index: (
-            calls.append((page_index, line_index, word_index)) or True
+        merge_word_left=lambda line_index, word_index: (
+            calls.append((line_index, word_index)) or True
         ),
         merge_word_right=lambda *_: False,
     )
@@ -1021,7 +1016,7 @@ def test_text_tabs_merge_word_left_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.merge_word_left_callback(2, 3)
 
     assert result is True
-    assert calls == [(10, 2, 3)]
+    assert calls == [(2, 3)]
 
 
 def test_text_tabs_merge_word_right_callback_invokes_page_state_method():
@@ -1045,8 +1040,8 @@ def test_text_tabs_merge_word_right_callback_invokes_page_state_method():
         delete_paragraphs=lambda *_: False,
         delete_words=lambda *_: False,
         merge_word_left=lambda *_: False,
-        merge_word_right=lambda page_index, line_index, word_index: (
-            calls.append((page_index, line_index, word_index)) or True
+        merge_word_right=lambda line_index, word_index: (
+            calls.append((line_index, word_index)) or True
         ),
     )
 
@@ -1054,7 +1049,7 @@ def test_text_tabs_merge_word_right_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.merge_word_right_callback(1, 0)
 
     assert result is True
-    assert calls == [(11, 1, 0)]
+    assert calls == [(1, 0)]
 
 
 def test_text_tabs_split_word_callback_invokes_page_state_method():
@@ -1079,8 +1074,8 @@ def test_text_tabs_split_word_callback_invokes_page_state_method():
         delete_words=lambda *_: False,
         merge_word_left=lambda *_: False,
         merge_word_right=lambda *_: False,
-        split_word=lambda page_index, line_index, word_index, split_fraction: (
-            calls.append((page_index, line_index, word_index, split_fraction)) or True
+        split_word=lambda line_index, word_index, split_fraction: (
+            calls.append((line_index, word_index, split_fraction)) or True
         ),
     )
 
@@ -1088,7 +1083,7 @@ def test_text_tabs_split_word_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.split_word_callback(1, 2, 0.4)
 
     assert result is True
-    assert calls == [(12, 1, 2, 0.4)]
+    assert calls == [(1, 2, 0.4)]
 
 
 def test_text_tabs_vertical_split_word_callback_invokes_page_state_method():
@@ -1115,9 +1110,8 @@ def test_text_tabs_vertical_split_word_callback_invokes_page_state_method():
         merge_word_right=lambda *_: False,
         split_word=lambda *_: False,
         split_word_vertically_and_assign_to_closest_line=(
-            lambda page_index, line_index, word_index, split_fraction: (
-                calls.append((page_index, line_index, word_index, split_fraction))
-                or True
+            lambda line_index, word_index, split_fraction: (
+                calls.append((line_index, word_index, split_fraction)) or True
             )
         ),
     )
@@ -1130,7 +1124,7 @@ def test_text_tabs_vertical_split_word_callback_invokes_page_state_method():
     )
 
     assert result is True
-    assert calls == [(17, 1, 2, 0.4)]
+    assert calls == [(1, 2, 0.4)]
 
 
 def test_text_tabs_rebox_word_callback_invokes_page_state_method():
@@ -1156,8 +1150,8 @@ def test_text_tabs_rebox_word_callback_invokes_page_state_method():
         merge_word_left=lambda *_: False,
         merge_word_right=lambda *_: False,
         split_word=lambda *_: False,
-        rebox_word=lambda page_index, line_index, word_index, x1, y1, x2, y2: (
-            calls.append((page_index, line_index, word_index, x1, y1, x2, y2)) or True
+        rebox_word=lambda line_index, word_index, x1, y1, x2, y2: (
+            calls.append((line_index, word_index, x1, y1, x2, y2)) or True
         ),
     )
 
@@ -1172,7 +1166,7 @@ def test_text_tabs_rebox_word_callback_invokes_page_state_method():
     )
 
     assert result is True
-    assert calls == [(13, 1, 2, 10.0, 11.0, 20.0, 21.0)]
+    assert calls == [(1, 2, 10.0, 11.0, 20.0, 21.0)]
 
 
 def test_text_tabs_refine_words_callback_invokes_page_state_method():
@@ -1190,16 +1184,14 @@ def test_text_tabs_refine_words_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        refine_words=lambda page_index, word_keys: (
-            calls.append((page_index, word_keys)) or True
-        ),
+        refine_words=lambda word_keys: calls.append((word_keys,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=14)
     result = text_tabs.word_match_view.refine_words_callback([(1, 2)])
 
     assert result is True
-    assert calls == [(14, [(1, 2)])]
+    assert calls == [([(1, 2)],)]
 
 
 def test_text_tabs_refine_lines_callback_invokes_page_state_method():
@@ -1217,16 +1209,14 @@ def test_text_tabs_refine_lines_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        refine_lines=lambda page_index, line_indices: (
-            calls.append((page_index, line_indices)) or True
-        ),
+        refine_lines=lambda line_indices: calls.append((line_indices,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=15)
     result = text_tabs.word_match_view.refine_lines_callback([1, 2])
 
     assert result is True
-    assert calls == [(15, [1, 2])]
+    assert calls == [([1, 2],)]
 
 
 def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
@@ -1244,8 +1234,8 @@ def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        refine_paragraphs=lambda page_index, paragraph_indices: (
-            calls.append((page_index, paragraph_indices)) or True
+        refine_paragraphs=lambda paragraph_indices: (
+            calls.append((paragraph_indices,)) or True
         ),
     )
 
@@ -1253,7 +1243,7 @@ def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
     result = text_tabs.word_match_view.refine_paragraphs_callback([0])
 
     assert result is True
-    assert calls == [(16, [0])]
+    assert calls == [([0],)]
 
 
 def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
@@ -1271,10 +1261,9 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        nudge_word_bbox=lambda page_index, line_index, word_index, left_delta, right_delta, top_delta, bottom_delta, refine_after=True: (
+        nudge_word_bbox=lambda line_index, word_index, left_delta, right_delta, top_delta, bottom_delta, refine_after=True: (
             calls.append(
                 (
-                    page_index,
                     line_index,
                     word_index,
                     left_delta,
@@ -1300,7 +1289,7 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
     )
 
     assert result is True
-    assert calls == [(17, 2, 3, 1.0, -1.0, 2.0, -2.0, True)]
+    assert calls == [(2, 3, 1.0, -1.0, 2.0, -2.0, True)]
 
 
 def test_text_tabs_expand_then_refine_words_callback_invokes_page_state_method():
@@ -1318,13 +1307,11 @@ def test_text_tabs_expand_then_refine_words_callback_invokes_page_state_method()
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        expand_then_refine_words=lambda page_index, word_keys: (
-            calls.append((page_index, word_keys)) or True
-        ),
+        expand_then_refine_words=lambda word_keys: calls.append((word_keys,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=18)
     result = text_tabs.word_match_view.expand_then_refine_words_callback([(1, 2)])
 
     assert result is True
-    assert calls == [(18, [(1, 2)])]
+    assert calls == [([(1, 2)],)]

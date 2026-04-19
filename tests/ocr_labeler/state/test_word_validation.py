@@ -77,12 +77,12 @@ def test_toggle_word_validated_sets_and_clears_flag():
     state.on_change = [lambda: notified.append(True)]
 
     # Toggle on
-    assert state.toggle_word_validated(0, 0, 0) is True
+    assert state.toggle_word_validated(0, 0) is True
     assert "validated" in w.word_labels
     assert len(notified) == 1
 
     # Toggle off
-    assert state.toggle_word_validated(0, 0, 0) is True
+    assert state.toggle_word_validated(0, 0) is True
     assert "validated" not in w.word_labels
     assert len(notified) == 2
 
@@ -100,7 +100,7 @@ def test_toggle_word_validated_emits_event():
     events: list[WordValidationChangedEvent] = []
     state.on_word_validation_change.subscribe(lambda e: events.append(e))
 
-    state.toggle_word_validated(0, 0, 0)
+    state.toggle_word_validated(0, 0)
 
     assert len(events) == 1
     assert events[0].is_validated is True
@@ -118,8 +118,8 @@ def test_toggle_word_validated_invalid_indices():
     state = PageState()
     state.current_page = page
 
-    assert state.toggle_word_validated(0, 5, 0) is False
-    assert state.toggle_word_validated(0, 0, 5) is False
+    assert state.toggle_word_validated(5, 0) is False
+    assert state.toggle_word_validated(0, 5) is False
 
 
 # ---------------------------------------------------------------------------

@@ -8,11 +8,15 @@ Phase 3.2/3.3 (presentation strings moved to viewmodel),
 Phase 3.4 (image cache extraction to operations),
 Phase 3.5 (match-status classification extracted to operations),
 Phase 6.0 (Page metadata), and crop_image delegation done.
-Phase 4.2 (page_state dispatch helper — 28 methods consolidated),
-Phase 4.3 (word_edit_dialog converted from closure function to class),
+Phase 4.2 (page_state dispatch helper — 28 methods consolidated;
+follow-up: unused `page_index` removed from 34 PageState methods
+and all callers in text_tabs.py, test files, and image_tabs.py),
+Phase 4.3 (word_edit_dialog converted from closure function to class;
+follow-up: `open_word_edit_dialog()` wrapper removed),
 Phase 4.5 (text_tabs callback factory — 24 closures replaced),
 Phase 4.6 (BaseView teardown lifecycle added).
-Remaining: 4.1 (split LineOperations), 4.4 (word_match delegation — deferred),
+Phase 4.1 (split LineOperations 4048→1823 lines via mixin pattern).
+Remaining: 4.4 (word_match delegation — deferred),
 6.2–6.4 (pd-book-tools structural migration).
 All 715 ocr-labeler tests and 491 pd-book-tools tests pass.
 
@@ -213,13 +217,18 @@ Larger refactoring to address god objects and file size issues.
 ### 4.1 Split `LineOperations` (4040 lines)
 
 - **Into**:
-  - `line_operations.py` — line-level merge/delete/split
-  - `paragraph_operations.py` — paragraph-level operations
-  - `word_bbox_operations.py` — bbox refinement/expansion
-  - `page_structure_operations.py` — page-wide helpers
+  - `line_operations.py` — line-level merge/delete/split (1823 lines)
+  - `paragraph_operations.py` — paragraph-level operations (mixin)
+  - `word_bbox_operations.py` — bbox refinement/expansion (mixin)
+  - `page_structure_operations.py` — page-wide helpers (base class)
     (recompute bboxes, prune empty, find parent)
 - **Risk**: High (many callers in page_state.py)
 - **Effort**: Large
+- **Status**: Done — Extracted ~2225 lines into 3 new modules using
+  mixin inheritance pattern. `LineOperations` inherits from
+  `PageStructureOperations`, `ParagraphOperationsMixin`, and
+  `WordBboxOperationsMixin`. All public API unchanged (MRO provides
+  all methods). No changes needed to `page_state.py` dispatch.
 
 ### 4.2 Reduce `page_state.py` boilerplate (2586 lines)
 
@@ -229,12 +238,10 @@ Larger refactoring to address god objects and file size issues.
 - **Risk**: Medium
 - **Effort**: Medium
 - **Status**: Done — `_dispatch_line_op()` consolidates 28 methods.
-- **Follow-up**: Remove unused `page_index` parameter from the 29
-  `PageState` methods that accept it only for "API consistency" but
-  never use it (they operate on `self.current_page`). Update all
-  callers in `text_tabs.py` (`_make_page_callback` factory) and
-  `word_match_actions.py` to stop passing it.
-  **Risk**: Low-Medium (many call sites). **Effort**: Medium.
+- **Follow-up**: Done — Removed unused `page_index` parameter from 34
+  `PageState` methods (28 dispatch + 6 word methods). Updated all
+  callers in `text_tabs.py` (`_make_page_callback` factory),
+  `word_edit_dialog.py`, `word_match_renderer.py`, and all test files.
 
 ### 4.3 Decompose `open_word_edit_dialog` (1190 lines)
 
@@ -245,11 +252,9 @@ Larger refactoring to address god objects and file size issues.
 - **Effort**: Large
 - **Status**: Done — `WordEditDialog` class created, thin
   `open_word_edit_dialog()` wrapper retained for compatibility.
-- **Follow-up**: Remove the `open_word_edit_dialog()` wrapper function.
-  Update callers (`word_match_renderer.py` import + `_open_word_edit_dialog`,
-  and the recursive `_rerender_dialog` inside `WordEditDialog` itself)
-  to instantiate `WordEditDialog(view, ...).open()` directly.
-  **Risk**: Low. **Effort**: Trivial.
+- **Follow-up**: Done — Removed `open_word_edit_dialog()` wrapper.
+  Callers (`word_match_renderer.py`, `_rerender_dialog`) now
+  instantiate `WordEditDialog(view, ...).open()` directly.
 
 ### 4.4 Reduce delegation boilerplate in `word_match.py`
 

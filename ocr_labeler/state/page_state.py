@@ -261,11 +261,10 @@ class PageState:
 
         return page_model
 
-    def copy_ground_truth_to_ocr(self, page_index: int, line_index: int) -> bool:
+    def copy_ground_truth_to_ocr(self, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line.
 
         Args:
-            page_index: Zero-based page index
             line_index: Zero-based line index to process
 
         Returns:
@@ -273,9 +272,7 @@ class PageState:
         """
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for GT→OCR copy.", page_index
-            )
+            logger.critical("No page available for GT→OCR copy.")
             return False
 
         # Import inside method to allow test monkeypatching
@@ -295,11 +292,10 @@ class PageState:
             logger.exception("Error in GT→OCR copy for line %s", line_index)
             return False
 
-    def copy_ocr_to_ground_truth(self, page_index: int, line_index: int) -> bool:
+    def copy_ocr_to_ground_truth(self, line_index: int) -> bool:
         """Copy OCR text to ground truth text for all words in the specified line.
 
         Args:
-            page_index: Zero-based page index
             line_index: Zero-based line index to process
 
         Returns:
@@ -307,9 +303,7 @@ class PageState:
         """
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for OCR→GT copy.", page_index
-            )
+            logger.critical("No page available for OCR→GT copy.")
             return False
 
         # Import inside method to allow test monkeypatching
@@ -331,7 +325,6 @@ class PageState:
 
     def update_word_ground_truth(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         ground_truth_text: str,
@@ -339,7 +332,6 @@ class PageState:
         """Update ground truth text for a single word on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
             ground_truth_text: New GT text value.
@@ -347,13 +339,9 @@ class PageState:
         Returns:
             bool: True if update succeeded, False otherwise.
         """
-        _ = page_index
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for word GT update.",
-                page_index,
-            )
+            logger.critical("No page available for word GT update.")
             return False
 
         try:
@@ -371,7 +359,7 @@ class PageState:
                 self._invalidate_text_cache()
                 self._emit_word_ground_truth_changed(
                     WordGroundTruthChangedEvent(
-                        page_index=page_index,
+                        page_index=self._current_page_index,
                         line_index=line_index,
                         word_index=word_index,
                         ground_truth_text=str(ground_truth_text or ""),
@@ -391,16 +379,12 @@ class PageState:
 
     def copy_selected_words_ocr_to_ground_truth(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Copy OCR text to GT for only selected words on the current page."""
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for selected-word OCR→GT copy.",
-                page_index,
-            )
+            logger.critical("No page available for selected-word OCR→GT copy.")
             return False
 
         try:
@@ -416,15 +400,13 @@ class PageState:
             return result
         except Exception as e:
             logger.exception(
-                "Error in selected-word OCR→GT copy on page %s: %s",
-                page_index,
+                "Error in selected-word OCR→GT copy: %s",
                 e,
             )
             return False
 
     def update_word_attributes(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         italic: bool,
@@ -436,7 +418,6 @@ class PageState:
         """Update style attributes for a single word on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
             italic: Whether word is italic.
@@ -448,13 +429,9 @@ class PageState:
         Returns:
             bool: True if update succeeded, False otherwise.
         """
-        _ = page_index
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for word attribute update.",
-                page_index,
-            )
+            logger.critical("No page available for word attribute update.")
             return False
 
         try:
@@ -476,7 +453,7 @@ class PageState:
                 self._invalidate_text_cache()
                 self._emit_word_style_changed(
                     WordStyleChangedEvent(
-                        page_index=page_index,
+                        page_index=self._current_page_index,
                         line_index=line_index,
                         word_index=word_index,
                         italic=bool(italic),
@@ -500,7 +477,6 @@ class PageState:
 
     def toggle_word_validated(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
     ) -> bool:
@@ -509,13 +485,9 @@ class PageState:
         Returns:
             True if toggle succeeded, False otherwise.
         """
-        _ = page_index
         page = self.current_page
         if not page:
-            logger.critical(
-                "No page available at index %s for word validation toggle.",
-                page_index,
-            )
+            logger.critical("No page available for word validation toggle.")
             return False
 
         try:
@@ -545,7 +517,7 @@ class PageState:
             self._invalidate_text_cache()
             self._emit_word_validation_changed(
                 WordValidationChangedEvent(
-                    page_index=page_index,
+                    page_index=self._current_page_index,
                     line_index=line_index,
                     word_index=word_index,
                     is_validated=is_validated,
@@ -1035,11 +1007,10 @@ class PageState:
                 raise
             return False
 
-    def merge_lines(self, page_index: int, line_indices: list[int]) -> bool:
+    def merge_lines(self, line_indices: list[int]) -> bool:
         """Merge selected lines on the current page into the first selected line.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Zero-based line indices to merge.
 
         Returns:
@@ -1047,11 +1018,10 @@ class PageState:
         """
         return self._dispatch_line_op("merge_lines", "line merge", line_indices)
 
-    def delete_lines(self, page_index: int, line_indices: list[int]) -> bool:
+    def delete_lines(self, line_indices: list[int]) -> bool:
         """Delete selected lines on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Zero-based line indices to delete.
 
         Returns:
@@ -1059,11 +1029,10 @@ class PageState:
         """
         return self._dispatch_line_op("delete_lines", "line deletion", line_indices)
 
-    def merge_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+    def merge_paragraphs(self, paragraph_indices: list[int]) -> bool:
         """Merge selected paragraphs on the current page into the first selected paragraph.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Zero-based paragraph indices to merge.
 
         Returns:
@@ -1073,11 +1042,10 @@ class PageState:
             "merge_paragraphs", "paragraph merge", paragraph_indices
         )
 
-    def delete_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+    def delete_paragraphs(self, paragraph_indices: list[int]) -> bool:
         """Delete selected paragraphs on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Zero-based paragraph indices to delete.
 
         Returns:
@@ -1087,11 +1055,10 @@ class PageState:
             "delete_paragraphs", "paragraph deletion", paragraph_indices
         )
 
-    def split_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
+    def split_paragraphs(self, paragraph_indices: list[int]) -> bool:
         """Split selected paragraphs on the current page into one paragraph per line.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Zero-based paragraph indices to split.
 
         Returns:
@@ -1101,11 +1068,10 @@ class PageState:
             "split_paragraphs", "paragraph split", paragraph_indices
         )
 
-    def split_paragraph_after_line(self, page_index: int, line_index: int) -> bool:
+    def split_paragraph_after_line(self, line_index: int) -> bool:
         """Split the current line's paragraph immediately after the selected line.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index used as split point.
 
         Returns:
@@ -1117,13 +1083,10 @@ class PageState:
             line_index,
         )
 
-    def split_paragraph_with_selected_lines(
-        self, page_index: int, line_indices: list[int]
-    ) -> bool:
+    def split_paragraph_with_selected_lines(self, line_indices: list[int]) -> bool:
         """Split one paragraph into selected lines and unselected lines.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Zero-based selected line indices.
 
         Returns:
@@ -1135,11 +1098,10 @@ class PageState:
             line_indices,
         )
 
-    def delete_words(self, page_index: int, word_keys: list[tuple[int, int]]) -> bool:
+    def delete_words(self, word_keys: list[tuple[int, int]]) -> bool:
         """Delete selected words on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: List of (line_index, word_index) pairs to delete.
 
         Returns:
@@ -1147,13 +1109,10 @@ class PageState:
         """
         return self._dispatch_line_op("delete_words", "word deletion", word_keys)
 
-    def merge_word_left(
-        self, page_index: int, line_index: int, word_index: int
-    ) -> bool:
+    def merge_word_left(self, line_index: int, word_index: int) -> bool:
         """Merge selected word into its immediate left neighbor.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
 
@@ -1164,13 +1123,10 @@ class PageState:
             "merge_word_left", "word merge-left", line_index, word_index
         )
 
-    def merge_word_right(
-        self, page_index: int, line_index: int, word_index: int
-    ) -> bool:
+    def merge_word_right(self, line_index: int, word_index: int) -> bool:
         """Merge selected word with its immediate right neighbor.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
 
@@ -1183,7 +1139,6 @@ class PageState:
 
     def split_word(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         split_fraction: float,
@@ -1191,7 +1146,6 @@ class PageState:
         """Split a selected word into two words on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
             split_fraction: Relative split position in range (0, 1).
@@ -1205,7 +1159,6 @@ class PageState:
 
     def split_word_vertically_and_assign_to_closest_line(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         split_fraction: float,
@@ -1213,7 +1166,6 @@ class PageState:
         """Split a word and assign each split piece to the closest line by y-midpoint.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based source line index.
             word_index: Zero-based word index.
             split_fraction: Relative split position in range (0, 1).
@@ -1231,14 +1183,12 @@ class PageState:
 
     def split_line_after_word(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
     ) -> bool:
         """Split a selected line into two lines after the selected word.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index used as the split point.
 
@@ -1251,7 +1201,6 @@ class PageState:
 
     def rebox_word(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         x1: float,
@@ -1262,7 +1211,6 @@ class PageState:
         """Replace an existing word bounding box on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
             x1: Left x-coordinate in page pixel space.
@@ -1287,7 +1235,6 @@ class PageState:
 
     def add_word(
         self,
-        page_index: int,
         x1: float,
         y1: float,
         x2: float,
@@ -1297,7 +1244,6 @@ class PageState:
         """Insert a new word into the nearest line on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             x1: Left x-coordinate in page pixel space.
             y1: Top y-coordinate in page pixel space.
             x2: Right x-coordinate in page pixel space.
@@ -1313,7 +1259,6 @@ class PageState:
 
     def nudge_word_bbox(
         self,
-        page_index: int,
         line_index: int,
         word_index: int,
         left_delta: float,
@@ -1325,7 +1270,6 @@ class PageState:
         """Resize a word bounding box by per-edge pixel deltas on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_index: Zero-based line index.
             word_index: Zero-based word index.
             left_delta: Left-edge size delta in pixels (+ expands left, - contracts).
@@ -1353,13 +1297,11 @@ class PageState:
 
     def refine_words(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Refine selected words on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
 
         Returns:
@@ -1371,13 +1313,11 @@ class PageState:
 
     def expand_then_refine_words(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Expand then refine selected words on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
 
         Returns:
@@ -1392,14 +1332,12 @@ class PageState:
 
     def expand_word_bboxes(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
         padding_px: float = 2.0,
     ) -> bool:
         """Expand selected word bboxes by uniform pixel padding on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
             padding_px: Pixels to add on each edge.
 
@@ -1414,11 +1352,10 @@ class PageState:
             _finalize="bbox",
         )
 
-    def refine_lines(self, page_index: int, line_indices: list[int]) -> bool:
+    def refine_lines(self, line_indices: list[int]) -> bool:
         """Refine selected lines on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Selected line indices.
 
         Returns:
@@ -1430,13 +1367,11 @@ class PageState:
 
     def refine_paragraphs(
         self,
-        page_index: int,
         paragraph_indices: list[int],
     ) -> bool:
         """Refine selected paragraphs on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Selected paragraph indices.
 
         Returns:
@@ -1451,13 +1386,11 @@ class PageState:
 
     def expand_then_refine_lines(
         self,
-        page_index: int,
         line_indices: list[int],
     ) -> bool:
         """Expand then refine selected lines on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Selected line indices.
 
         Returns:
@@ -1472,13 +1405,11 @@ class PageState:
 
     def expand_then_refine_paragraphs(
         self,
-        page_index: int,
         paragraph_indices: list[int],
     ) -> bool:
         """Expand then refine selected paragraphs on the current page.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Selected paragraph indices.
 
         Returns:
@@ -1493,14 +1424,12 @@ class PageState:
 
     def expand_line_bboxes(
         self,
-        page_index: int,
         line_indices: list[int],
         padding_px: float = 2.0,
     ) -> bool:
         """Expand all word bboxes in selected lines by uniform pixel padding.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             line_indices: Selected line indices.
             padding_px: Pixels to add on each edge.
 
@@ -1517,14 +1446,12 @@ class PageState:
 
     def expand_paragraph_bboxes(
         self,
-        page_index: int,
         paragraph_indices: list[int],
         padding_px: float = 2.0,
     ) -> bool:
         """Expand all word bboxes in selected paragraphs by uniform pixel padding.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             paragraph_indices: Selected paragraph indices.
             padding_px: Pixels to add on each edge.
 
@@ -1541,13 +1468,11 @@ class PageState:
 
     def split_line_with_selected_words(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Extract selected words into one new line.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
 
         Returns:
@@ -1561,7 +1486,6 @@ class PageState:
 
     def split_lines_into_selected_and_unselected_words(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Split each affected line into selected/unselected word lines."""
@@ -1573,13 +1497,11 @@ class PageState:
 
     def group_selected_words_into_new_paragraph(
         self,
-        page_index: int,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Move selected words into a newly created paragraph.
 
         Args:
-            page_index: Zero-based page index (kept for API consistency).
             word_keys: Selected (line_index, word_index) tuples.
 
         Returns:

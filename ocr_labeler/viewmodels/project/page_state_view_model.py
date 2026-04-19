@@ -6,7 +6,6 @@ import hashlib
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from nicegui import background_tasks, binding, run
@@ -52,7 +51,7 @@ class PageStateViewModel(BaseViewModel):
     current_export_status_text: str = ""
 
     # Page state reference
-    _page_state: Optional[PageState] = None
+    _page_state: PageState | None = None
 
     # Flag to prevent concurrent updates
     _update_in_progress: bool = False
@@ -60,8 +59,8 @@ class PageStateViewModel(BaseViewModel):
     _update_reschedule_requested: bool = False
 
     # Callback for direct image updates (bypasses binding to avoid websocket issues)
-    _image_update_callback: Optional[callable] = None
-    _word_view_image_ready_callback: Optional[callable] = None
+    _image_update_callback: callable | None = None
+    _word_view_image_ready_callback: callable | None = None
     _last_image_callback_signature: tuple | None = None
     _image_update_schedule_count: int = 0
     _image_update_schedule_skip_count: int = 0
@@ -86,8 +85,8 @@ class PageStateViewModel(BaseViewModel):
         self._update_in_progress: bool = False
         self._update_scheduled: bool = False
         self._update_reschedule_requested: bool = False
-        self._image_update_callback: Optional[callable] = None
-        self._word_view_image_ready_callback: Optional[callable] = None
+        self._image_update_callback: callable | None = None
+        self._word_view_image_ready_callback: callable | None = None
         self._last_image_callback_signature: tuple | None = None
         self._image_update_schedule_count: int = 0
         self._image_update_schedule_skip_count: int = 0

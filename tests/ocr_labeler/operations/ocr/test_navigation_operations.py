@@ -52,7 +52,7 @@ class TestNavigationOperations:
 
     def test_next_page_at_last_page(self, caplog):
         """Test next page navigation when already at last page."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result = NavigationOperations.next_page(5, 5)
 
         assert result.success is False
@@ -73,7 +73,7 @@ class TestNavigationOperations:
 
     def test_prev_page_at_first_page(self, caplog):
         """Test previous page navigation when already at first page."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result = NavigationOperations.prev_page(0)
 
         assert result.success is False
@@ -96,7 +96,7 @@ class TestNavigationOperations:
 
     def test_goto_page_number_too_low(self, caplog):
         """Test navigation to page number below minimum."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result, target_index = NavigationOperations.goto_page_number(0, 10)
 
         assert result.success is False
@@ -108,7 +108,7 @@ class TestNavigationOperations:
 
     def test_goto_page_number_too_high(self, caplog):
         """Test navigation to page number above maximum."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result, target_index = NavigationOperations.goto_page_number(15, 10)
 
         assert result.success is False
@@ -133,7 +133,7 @@ class TestNavigationOperations:
 
     def test_goto_page_index_clamp_low(self, caplog):
         """Test clamping of page index below minimum."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result, clamped_index = NavigationOperations.goto_page_index(-5, 10)
 
         assert result.success is True
@@ -142,7 +142,7 @@ class TestNavigationOperations:
 
     def test_goto_page_index_clamp_high(self, caplog):
         """Test clamping of page index above maximum."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result, clamped_index = NavigationOperations.goto_page_index(15, 10)
 
         assert result.success is True
@@ -151,7 +151,7 @@ class TestNavigationOperations:
 
     def test_goto_page_index_no_pages(self, caplog):
         """Test navigation when no pages are available."""
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result, clamped_index = NavigationOperations.goto_page_index(0, -1)
 
         assert result.success is False

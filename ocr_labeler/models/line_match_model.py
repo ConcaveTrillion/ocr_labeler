@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+
+from ocr_labeler.operations.ocr.image_utils import crop_image_to_bbox
 
 from .word_match_model import MatchStatus, WordMatch
 
@@ -18,10 +19,10 @@ class LineMatch:
     line_index: int
     ocr_line_text: str
     ground_truth_line_text: str
-    word_matches: List[WordMatch]
-    paragraph_index: Optional[int] = None
-    page_image: Optional[object] = None  # Reference to page image for cropping
-    line_object: Optional[object] = (
+    word_matches: list[WordMatch]
+    paragraph_index: int | None = None
+    page_image: object | None = None  # Reference to page image for cropping
+    line_object: object | None = (
         None  # Reference to the original line Block object for bbox access
     )
 
@@ -136,71 +137,8 @@ class LineMatch:
         if page_image is None:
             page_image = self.page_image
 
-        if not self.line_object or page_image is None:
-            logger.debug(
-                f"No line_object ({self.line_object is not None}) or page_image ({page_image is not None}) for line {self.line_index}"
-            )
-            return None
-
-        try:
-            # Get bounding box from line object
-            bbox = getattr(self.line_object, "bounding_box", None)
-            if not bbox:
-                logger.debug(f"No bounding_box found for line {self.line_index}")
-                return None
-
-            logger.debug(f"Processing bbox for line {self.line_index}: {bbox}")
-
-            # Use BoundingBox methods to get pixel coordinates
-            height, width = page_image.shape[:2]
-            logger.debug(f"Image dimensions: {height}x{width}")
-
-            # Scale to image dimensions if normalized
-            if bbox.is_normalized:
-                logger.debug("Scaling normalized bbox")
-                pixel_bbox = bbox.scale(width, height)
-            else:
-                logger.debug("Using non-normalized bbox directly")
-                pixel_bbox = bbox
-
-            logger.debug(f"Pixel bbox: {pixel_bbox}")
-
-            # Get integer coordinates using the BoundingBox properties
-            x1 = int(pixel_bbox.minX)
-            y1 = int(pixel_bbox.minY)
-            x2 = int(pixel_bbox.maxX)
-            y2 = int(pixel_bbox.maxY)
-
-            logger.debug(f"Extracted coordinates: ({x1}, {y1}, {x2}, {y2})")
-
-            # Validate coordinates
-            if x1 >= x2 or y1 >= y2:
-                logger.debug(f"Invalid bbox coordinates: ({x1}, {y1}, {x2}, {y2})")
-                return None
-
-            # Clamp coordinates to image bounds
-            x1 = max(0, min(x1, width - 1))
-            y1 = max(0, min(y1, height - 1))
-            x2 = max(x1 + 1, min(x2, width))
-            y2 = max(y1 + 1, min(y2, height))
-
-            logger.debug(f"Clamped coordinates: ({x1}, {y1}, {x2}, {y2})")
-
-            # Extract the cropped region
-            cropped = page_image[y1:y2, x1:x2]
-
-            if cropped.size == 0:
-                logger.debug(f"Empty crop for bbox ({x1}, {y1}, {x2}, {y2})")
-                return None
-
-            logger.debug(
-                f"Successfully cropped line {self.line_index} to shape {cropped.shape}"
-            )
-            return cropped
-
-        except Exception as e:
-            import traceback
-
-            logger.debug(f"Error cropping line image for line {self.line_index}: {e}")
-            logger.debug(f"Traceback: {traceback.format_exc()}")
-            return None
+        return crop_image_to_bbox(
+            self.line_object,
+            page_image,
+            label=f"line {self.line_index}",
+        )

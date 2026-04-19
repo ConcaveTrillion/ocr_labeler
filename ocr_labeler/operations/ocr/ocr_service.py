@@ -3,7 +3,6 @@
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
@@ -101,7 +100,7 @@ class OCRService:
         )
         return doc.pages[0]
 
-    async def process_page(self, image_path: Path) -> Optional[Page]:
+    async def process_page(self, image_path: Path) -> Page | None:
         """Process a page with OCR.
 
         Args:
@@ -151,9 +150,7 @@ class OCRService:
             logger.exception(f"Error processing page {image_path}: {e}")
             return None
 
-    async def process_pages_batch(
-        self, image_paths: list[Path]
-    ) -> list[Optional[Page]]:
+    async def process_pages_batch(self, image_paths: list[Path]) -> list[Page | None]:
         """Process multiple pages with OCR.
 
         Args:
@@ -194,7 +191,7 @@ class OCRService:
         suffix = image_path.suffix.lower().lstrip(".")
         return suffix in self.get_supported_formats()
 
-    def validate_image(self, image_path: Path) -> tuple[bool, Optional[str]]:
+    def validate_image(self, image_path: Path) -> tuple[bool, str | None]:
         """Validate an image file for OCR processing.
 
         Args:

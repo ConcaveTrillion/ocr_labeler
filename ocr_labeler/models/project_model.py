@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from pd_book_tools.ocr.page import Page
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

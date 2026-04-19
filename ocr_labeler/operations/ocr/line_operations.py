@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from .image_utils import is_geometry_normalization_error
 from .word_operations import WordOperations
 
 if TYPE_CHECKING:
@@ -453,7 +454,7 @@ class LineOperations:
 
     def validate_line_consistency(
         self, page: "Page", line_index: int
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Validate consistency of OCR vs ground truth for a line.
 
         Args:
@@ -3247,8 +3248,7 @@ class LineOperations:
 
     def _is_geometry_normalization_error(self, error: Exception) -> bool:
         """Return True for known malformed-bbox normalization failures."""
-        message = str(error)
-        return "NoneType" in message and "is_normalized" in message
+        return is_geometry_normalization_error(error)
 
     def _has_usable_bbox(self, bbox: object) -> bool:
         """Return True when bbox exposes finite corners required for overlay drawing."""

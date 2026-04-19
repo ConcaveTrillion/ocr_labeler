@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional, Protocol, TypeAlias, runtime_checkable
+from typing import Callable, Protocol, TypeAlias, runtime_checkable
 
 from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
@@ -48,12 +48,6 @@ EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
 SetWordAttributesAction: TypeAlias = Callable[
     [int, int, bool, bool, bool, bool, bool], bool
 ]
-
-WORD_LABEL_ITALIC = "italic"
-WORD_LABEL_SMALL_CAPS = "small_caps"
-WORD_LABEL_BLACKLETTER = "blackletter"
-WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
-WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
 
 
 class WordMatchView:
@@ -369,7 +363,7 @@ class WordMatchView:
         return self.renderer._group_lines_by_paragraph(line_matches)
 
     @staticmethod
-    def _format_paragraph_label(paragraph_index: Optional[int]) -> str:
+    def _format_paragraph_label(paragraph_index: int | None) -> str:
         """Return a user-facing label for a paragraph index."""
         if paragraph_index is None:
             return "Paragraph Unassigned"
@@ -446,7 +440,7 @@ class WordMatchView:
         paragraph_index = getattr(line_match, "paragraph_index", None)
         return paragraph_index if isinstance(paragraph_index, int) else None
 
-    def _toggle_paragraph_expanded(self, paragraph_index: Optional[int]) -> None:
+    def _toggle_paragraph_expanded(self, paragraph_index: int | None) -> None:
         self.renderer._toggle_paragraph_expanded(paragraph_index)
 
     def _paragraph_line_indices(self, paragraph_index: int) -> set[int]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable
 
 from nicegui import events
 
@@ -19,10 +19,10 @@ ProjectGotoCallback = Callable[
 class PageActionCallbacks:
     """Structured async callbacks for page-level action workflows."""
 
-    save_page: Optional[PageActionCallback] = None
-    save_project: Optional[PageActionCallback] = None
-    load_page: Optional[PageActionCallback] = None
-    refine_bboxes: Optional[PageActionCallback] = None
-    expand_refine_bboxes: Optional[PageActionCallback] = None
-    reload_ocr: Optional[PageActionCallback] = None
-    rematch_gt: Optional[PageActionCallback] = None
+    save_page: PageActionCallback | None = None
+    save_project: PageActionCallback | None = None
+    load_page: PageActionCallback | None = None
+    refine_bboxes: PageActionCallback | None = None
+    expand_refine_bboxes: PageActionCallback | None = None
+    reload_ocr: PageActionCallback | None = None
+    rematch_gt: PageActionCallback | None = None

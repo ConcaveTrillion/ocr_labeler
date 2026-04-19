@@ -15,10 +15,19 @@ from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, runtime_checkable
 
 from pd_book_tools.ocr.page import Page  # type: ignore
 
+from ocr_labeler.constants import (
+    IMAGE_EXTS,
+    WORD_LABEL_BLACKLETTER,
+    WORD_LABEL_ITALIC,
+    WORD_LABEL_LEFT_FOOTNOTE,
+    WORD_LABEL_RIGHT_FOOTNOTE,
+    WORD_LABEL_SMALL_CAPS,
+    WORD_LABEL_VALIDATED,
+)
 from ocr_labeler.models import (
     UNKNOWN_METADATA_VALUE,
     USER_PAGE_SCHEMA_VERSION,
@@ -35,6 +44,7 @@ from ocr_labeler.models import (
     UserPageSource,
     is_user_page_envelope,
 )
+from ocr_labeler.operations.ocr.image_utils import is_geometry_normalization_error
 from ocr_labeler.operations.persistence.persistence_paths_operations import (
     PersistencePathsOperations,
 )
@@ -49,17 +59,6 @@ logger = logging.getLogger(__name__)
 class _ReorganizablePage(Protocol):
     def reorganize_page(self) -> None: ...
 
-
-WORD_LABEL_ITALIC = "italic"
-WORD_LABEL_SMALL_CAPS = "small_caps"
-WORD_LABEL_BLACKLETTER = "blackletter"
-WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
-WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
-WORD_LABEL_VALIDATED = "validated"
-
-
-# Constants for ground truth operations
-IMAGE_EXTS = (".png", ".jpg", ".jpeg")
 
 PAGE_SAVED_PROVENANCE_ATTR = "_ocr_labeler_saved_provenance"
 
@@ -202,8 +201,7 @@ class PageOperations:
     @staticmethod
     def _is_geometry_normalization_error(error: Exception) -> bool:
         """Return True when bbox recompute fails due to malformed normalization metadata."""
-        message = str(error)
-        return "NoneType" in message and "is_normalized" in message
+        return is_geometry_normalization_error(error)
 
     def build_initial_page_parser(self):
         """Return an initial page parser that performs OCR via DocTR when invoked.
@@ -262,9 +260,9 @@ class PageOperations:
         page: PageModel | Page,
         project_root: Path,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         source_lib: str = "doctr-pgdp-labeled",
-        original_page: Optional[PageModel | Page] = None,
+        original_page: PageModel | Page | None = None,
     ) -> bool:
         """Save a single page object to a file with both image copy and JSON metadata.
 
@@ -373,7 +371,7 @@ class PageOperations:
         page_model: PageModel,
         project_root: Path,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Write cached_images filenames into the page's JSON file and bump schema to 2.1.
 
@@ -451,8 +449,8 @@ class PageOperations:
         page_number: int,
         project_root: Path,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
-    ) -> Optional[tuple[PageModel, Optional[dict[str, Any]]]]:
+        project_id: str | None = None,
+    ) -> tuple[PageModel, dict[str, Any] | None] | None:
         """Load a previously saved page from disk with metadata and image.
 
         Looks for saved files in the save directory:
@@ -766,7 +764,7 @@ class PageOperations:
         page_number: int,
         project_root: Path,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> PageLoadInfo:
         """Check if a page can be loaded and return validation information.
 
@@ -929,7 +927,7 @@ class PageOperations:
         image_path: Path,
         index: int = 0,
         ground_truth_text: str = "",
-    ) -> Optional[Page]:
+    ) -> Page | None:
         """Reset OCR processing for a page by re-running DocTR OCR.
 
         This method forces a fresh OCR run on the image, discarding any cached or
@@ -1030,7 +1028,7 @@ class PageOperations:
         page_number: int,
         relative_path: str,
         source_lib: str,
-        original_page: Optional[Page] = None,
+        original_page: Page | None = None,
     ) -> UserPageEnvelope:
         page_model = self._to_page_model(page)
         page_obj = page_model.page
@@ -1441,7 +1439,7 @@ class PageOperations:
     def _build_image_fingerprint(
         self,
         image_path: object,
-    ) -> Optional[SourceImageFingerprint]:
+    ) -> SourceImageFingerprint | None:
         if not image_path:
             return None
         try:
@@ -1503,7 +1501,7 @@ class PageOperations:
         self,
         default_name: str,
         component: object,
-    ) -> Optional[ProvenanceOCRModel]:
+    ) -> ProvenanceOCRModel | None:
         if component is None:
             return None
 
@@ -1529,7 +1527,7 @@ class PageOperations:
             weights_id=weights_id,
         )
 
-    def _extract_component_name(self, component: object) -> Optional[str]:
+    def _extract_component_name(self, component: object) -> str | None:
         direct_name = self._extract_component_attr(
             component,
             ["arch", "architecture", "name", "model_name"],
@@ -1558,7 +1556,7 @@ class PageOperations:
         self,
         component: object,
         attr_names: list[str],
-    ) -> Optional[str]:
+    ) -> str | None:
         for attr_name in attr_names:
             value = getattr(component, attr_name, None)
             if isinstance(value, str) and value:
@@ -1567,14 +1565,14 @@ class PageOperations:
                 return str(value)
         return None
 
-    def _build_ocr_config_fingerprint(self, source_lib: str) -> Optional[str]:
+    def _build_ocr_config_fingerprint(self, source_lib: str) -> str | None:
         model_names = [model.name for model in self._extract_ocr_models() if model.name]
         if not model_names and not source_lib:
             return None
         parts = [source_lib] + sorted(model_names)
         return "|".join(part for part in parts if part)
 
-    def _extract_page_dict(self, json_data: dict) -> Optional[dict]:
+    def _extract_page_dict(self, json_data: dict) -> dict | None:
         if is_user_page_envelope(json_data):
             envelope = UserPageEnvelope.from_dict(json_data)
             return envelope.payload.page
@@ -1588,7 +1586,7 @@ class PageOperations:
             return None
         return page_dict
 
-    def _extract_source_path(self, json_data: dict) -> Optional[str]:
+    def _extract_source_path(self, json_data: dict) -> str | None:
         if is_user_page_envelope(json_data):
             source_data = json_data.get("source", {})
             if isinstance(source_data, dict):

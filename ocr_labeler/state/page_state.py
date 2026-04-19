@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, Callable
 
 from nicegui import Event
 from pd_book_tools.ocr.page import Page  # type: ignore
@@ -72,7 +72,7 @@ class PageState:
     """
 
     page_ops: PageOperations = field(default_factory=PageOperations)
-    on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
+    on_change: list[Callable[[], None]] | None = field(default_factory=list)
     on_word_ground_truth_change: Event[WordGroundTruthChangedEvent] = field(
         default_factory=Event
     )
@@ -82,14 +82,14 @@ class PageState:
     )
 
     # Reference to project for accessing pages (set by ProjectState)
-    _project: Optional[Project] = field(default=None, init=False)
-    _project_root: Optional[Path] = field(default=None, init=False)
-    _project_state: Optional["ProjectState"] = field(
+    _project: Project | None = field(default=None, init=False)
+    _project_root: Path | None = field(default=None, init=False)
+    _project_state: "ProjectState" | None = field(
         default=None, init=False
     )  # Reference to parent ProjectState
-    current_page: Optional[Page] = field(default=None, init=False)
-    current_page_model: Optional[PageModel] = field(default=None, init=False)
-    original_page: Optional[Page] = field(default=None, init=False)
+    current_page: Page | None = field(default=None, init=False)
+    current_page_model: PageModel | None = field(default=None, init=False)
+    original_page: Page | None = field(default=None, init=False)
 
     # Cached text values for current page
     _cached_page_index: int = field(default=-1, init=False)
@@ -150,17 +150,9 @@ class PageState:
         self, save_directory: str | Path | None
     ) -> str:
         """Resolve save directory using user-local defaults and explicit overrides."""
-        if save_directory is None:
-            return str(PersistencePathsOperations.get_saved_projects_root())
-
-        directory_text = str(save_directory).strip()
-        if not directory_text:
-            return str(PersistencePathsOperations.get_saved_projects_root())
-
-        directory_path = Path(directory_text)
-        if directory_path.is_absolute():
-            return str(directory_path)
-        return str((Path.cwd() / directory_path).resolve())
+        return PersistencePathsOperations.resolve_workspace_save_directory(
+            save_directory
+        )
 
     def _on_project_state_change(self):
         """Handle project state changes to sync page index."""
@@ -223,9 +215,7 @@ class PageState:
         if self._project_state:
             self._project_state.on_change.append(self._on_project_state_change)
 
-    def get_page_model(
-        self, index: int, force_ocr: bool = False
-    ) -> Optional[PageModel]:
+    def get_page_model(self, index: int, force_ocr: bool = False) -> PageModel | None:
         """Get page model at the specified index, loading it if necessary."""
         if not self._project_state:
             logger.warning("PageState.get_page_model: no project state set")
@@ -575,7 +565,7 @@ class PageState:
         self,
         page_index: int,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         update_page_source: bool = True,
     ) -> bool:
         """Save a specific page using PageOperations.
@@ -594,7 +584,7 @@ class PageState:
             logger.error("PageState.save_page: no project root set")
             return False
 
-        page_model: Optional[PageModel] = None
+        page_model: PageModel | None = None
 
         # Prefer the actively edited in-memory page when saving the current page.
         # This avoids re-loading an older filesystem copy just before save.
@@ -659,7 +649,7 @@ class PageState:
         self,
         page_index: int,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Load a specific page from saved files.
 
@@ -738,7 +728,7 @@ class PageState:
 
     def find_ground_truth_text(
         self, page_name: str, ground_truth_map: dict
-    ) -> Optional[str]:
+    ) -> str | None:
         """Find ground truth text for a page from the ground truth mapping.
 
         Args:
@@ -957,7 +947,7 @@ class PageState:
         self,
         current_page_index: int,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Save the current page.
 
@@ -980,7 +970,7 @@ class PageState:
         self,
         current_page_index: int,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Load the current page from saved files.
 

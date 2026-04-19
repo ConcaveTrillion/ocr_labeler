@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from nicegui import binding
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class ProjectStateViewModel(BaseViewModel):
     """View model for project-specific state and navigation."""
 
-    _project_state: Optional[ProjectState] = None
+    _project_state: ProjectState | None = None
     _app_state_model: "AppStateViewModel | None" = None
 
     # UI-bound properties
@@ -255,7 +255,7 @@ class ProjectStateViewModel(BaseViewModel):
 
         return self.command_navigate_to_page(self.current_page_index - 1)
 
-    def command_get_page_display_info(self, page_index: Optional[int] = None) -> dict:
+    def command_get_page_display_info(self, page_index: int | None = None) -> dict:
         """Command to get display information for a page.
 
         Args:

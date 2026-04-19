@@ -96,6 +96,14 @@ def project_dir(tmp_path: Path) -> Path:
     return project
 
 
+@pytest.fixture()
+def save_dir(tmp_path: Path) -> Path:
+    """Return an isolated save directory so parallel tests don't collide."""
+    d = tmp_path / "saved"
+    d.mkdir()
+    return d
+
+
 # ------------------------------------------------------------------
 # Basic round-trip
 # ------------------------------------------------------------------
@@ -104,15 +112,17 @@ def project_dir(tmp_path: Path) -> Path:
 class TestBasicRoundTrip:
     """Save a page and load it back — verify core data survives."""
 
-    def test_word_text_preserved(self, project_dir: Path) -> None:
+    def test_word_text_preserved(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        assert ops.save_page(model, project_dir) is True
+        assert ops.save_page(model, project_dir, save_directory=save_dir) is True
 
-        result = ops.load_page_model(page_number=1, project_root=project_dir)
+        result = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         assert result is not None
         loaded_model, _ = result
         loaded_page = loaded_model.page
@@ -122,15 +132,17 @@ class TestBasicRoundTrip:
         assert words[0].text == "hello"
         assert words[1].text == "world"
 
-    def test_bounding_boxes_preserved(self, project_dir: Path) -> None:
+    def test_bounding_boxes_preserved(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_page = loaded_model.page
 
         w = list(loaded_page.lines[0].words)[0]
@@ -140,36 +152,44 @@ class TestBasicRoundTrip:
         assert float(bbox.maxX) == pytest.approx(40.0)
         assert float(bbox.maxY) == pytest.approx(20.0)
 
-    def test_ground_truth_text_preserved(self, project_dir: Path) -> None:
+    def test_ground_truth_text_preserved(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         page = _make_page(gt_words=True)
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_page = loaded_model.page
 
         words = list(loaded_page.lines[0].words)
         assert words[0].ground_truth_text == "Hello"
         assert words[1].ground_truth_text == "World"
 
-    def test_page_dimensions_preserved(self, project_dir: Path) -> None:
+    def test_page_dimensions_preserved(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_page = loaded_model.page
 
         assert loaded_page.width == 200
         assert loaded_page.height == 100
 
-    def test_paragraph_structure_preserved(self, project_dir: Path) -> None:
+    def test_paragraph_structure_preserved(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         """Paragraph→line→word hierarchy survives round-trip."""
         w1 = _word("a", 0)
         w2 = _word("b", 50)
@@ -182,9 +202,11 @@ class TestBasicRoundTrip:
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_page = loaded_model.page
 
         paragraphs = list(loaded_page.paragraphs)
@@ -203,7 +225,9 @@ class TestBasicRoundTrip:
 class TestWordAttributesRoundTrip:
     """Verify word-level attributes survive save/load."""
 
-    def test_validated_word_attribute_round_trip(self, project_dir: Path) -> None:
+    def test_validated_word_attribute_round_trip(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
@@ -213,16 +237,18 @@ class TestWordAttributesRoundTrip:
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_words = list(loaded_model.page.lines[0].words)
         # word_attributes sidecar persists validated via word_labels
         assert "validated" in list(loaded_words[0].word_labels)
         # Second word should not be validated
         assert "validated" not in list(loaded_words[1].word_labels)
 
-    def test_style_labels_round_trip(self, project_dir: Path) -> None:
+    def test_style_labels_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
@@ -233,9 +259,11 @@ class TestWordAttributesRoundTrip:
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         loaded_w = list(loaded_model.page.lines[0].words)[0]
         labels = getattr(loaded_w, "text_style_labels", None)
         if labels is not None:
@@ -250,7 +278,9 @@ class TestWordAttributesRoundTrip:
 class TestOriginalPageRoundTrip:
     """Verify original_page is saved and restored."""
 
-    def test_original_page_saved_and_loaded(self, project_dir: Path) -> None:
+    def test_original_page_saved_and_loaded(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         page = _make_page(gt_words=True)
         page.image_path = str(project_dir / "001.png")
 
@@ -259,10 +289,12 @@ class TestOriginalPageRoundTrip:
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir, original_page=original)
+        ops.save_page(
+            model, project_dir, save_directory=save_dir, original_page=original
+        )
 
         loaded_model, original_dict = ops.load_page_model(
-            page_number=1, project_root=project_dir
+            page_number=1, project_root=project_dir, save_directory=save_dir
         )
         assert original_dict is not None
 
@@ -280,26 +312,34 @@ class TestOriginalPageRoundTrip:
 class TestEdgeCases:
     """Edge-case save/load round-trip scenarios."""
 
-    def test_empty_page_round_trip(self, project_dir: Path) -> None:
+    def test_empty_page_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         page = Page(items=[], width=100, height=50, page_index=0)
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        result = ops.load_page_model(page_number=1, project_root=project_dir)
+        result = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         assert result is not None
         loaded_model, _ = result
         assert loaded_model.page.width == 100
         assert loaded_model.page.height == 50
 
-    def test_load_nonexistent_returns_none(self, project_dir: Path) -> None:
+    def test_load_nonexistent_returns_none(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         ops = PageOperations()
-        result = ops.load_page_model(page_number=99, project_root=project_dir)
+        result = ops.load_page_model(
+            page_number=99, project_root=project_dir, save_directory=save_dir
+        )
         assert result is None
 
-    def test_multiple_pages_independent(self, project_dir: Path) -> None:
+    def test_multiple_pages_independent(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
         """Save two pages with different indices, load them independently."""
         ops = PageOperations()
 
@@ -318,11 +358,15 @@ class TestEdgeCases:
         m1 = PageModel(page=page1, page_source="ocr", index=0)
         m2 = PageModel(page=page2, page_source="ocr", index=1)
 
-        ops.save_page(m1, project_dir)
-        ops.save_page(m2, project_dir)
+        ops.save_page(m1, project_dir, save_directory=save_dir)
+        ops.save_page(m2, project_dir, save_directory=save_dir)
 
-        r1 = ops.load_page_model(page_number=1, project_root=project_dir)
-        r2 = ops.load_page_model(page_number=2, project_root=project_dir)
+        r1 = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        r2 = ops.load_page_model(
+            page_number=2, project_root=project_dir, save_directory=save_dir
+        )
 
         assert r1 is not None
         assert r2 is not None
@@ -333,14 +377,16 @@ class TestEdgeCases:
         assert words1[0].text == "hello"
         assert words2[0].text == "only"
 
-    def test_ocr_confidence_preserved(self, project_dir: Path) -> None:
+    def test_ocr_confidence_preserved(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(model, project_dir)
+        ops.save_page(model, project_dir, save_directory=save_dir)
 
-        loaded_model, _ = ops.load_page_model(page_number=1, project_root=project_dir)
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
         w = list(loaded_model.page.lines[0].words)[0]
         assert w.ocr_confidence == pytest.approx(0.95)

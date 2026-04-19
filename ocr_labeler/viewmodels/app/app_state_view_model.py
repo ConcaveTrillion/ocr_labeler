@@ -1,6 +1,5 @@
 import logging
 from dataclasses import field
-from typing import Optional
 
 from nicegui import binding, run
 
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 class AppStateViewModel(BaseViewModel):
     """View model for application-level state and UI interactions."""
 
-    _app_state: Optional[AppState] = None
+    _app_state: AppState | None = None
 
     # UI-bound properties
     is_loading: bool = False
@@ -186,7 +185,7 @@ class AppStateViewModel(BaseViewModel):
             )
             return False
 
-    def command_get_project_display_name(self, key: Optional[str] = None) -> str:
+    def command_get_project_display_name(self, key: str | None = None) -> str:
         """Command to get display name for a project.
 
         Args:

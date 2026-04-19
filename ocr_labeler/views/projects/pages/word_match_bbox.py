@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable
 
 from nicegui import events, ui
 
@@ -983,7 +983,7 @@ class WordMatchBbox:
     # Line image helper
     # ------------------------------------------------------------------
 
-    def get_line_image(self, line_match: "LineMatch") -> Optional[str]:
+    def get_line_image(self, line_match: "LineMatch") -> str | None:
         """Get cropped line image as base64 data URL.
 
         Args:

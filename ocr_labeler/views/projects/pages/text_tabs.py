@@ -1315,9 +1315,14 @@ class TextTabs:
             "blackletter",
             aliases=("is_blackletter",),
         )
-        footnote_marker = word_ops.read_word_attribute(
+        left_footnote = word_ops.read_word_attribute(
             word,
             "left_footnote",
             aliases=("is_left_footnote",),
         )
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(footnote_marker)}:{int(footnote_marker)}"
+        right_footnote = word_ops.read_word_attribute(
+            word,
+            "right_footnote",
+            aliases=("is_right_footnote",),
+        )
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"

@@ -5,7 +5,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable
 
 from nicegui import run
 
@@ -35,12 +35,12 @@ class AppState:
     # If None, uses the configured default source projects root.
     base_projects_root: Path | None = None
     monospace_font_name: str = "monospace"
-    monospace_font_path: Optional[Path] = None
+    monospace_font_path: Path | None = None
 
     # Project state management
     projects: dict[str, ProjectState] = field(default_factory=dict)
     current_project_key: str | None = None
-    on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
+    on_change: list[Callable[[], None]] | None = field(default_factory=list)
 
     is_project_loading: bool = False  # True only during full project load
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable
 
 from nicegui import events, ui
 
@@ -40,7 +40,7 @@ class WordMatchRenderer:
         self._display_update_call_count: int = 0
         self._display_update_render_count: int = 0
         self._display_update_skip_count: int = 0
-        self._paragraph_expanded: dict[Optional[int], bool] = {}
+        self._paragraph_expanded: dict[int | None, bool] = {}
         self._word_dialog_refresh_key: WordKey | None = None
         self._word_dialog_refresh_callback: Callable[[], None] | None = None
 
@@ -371,7 +371,7 @@ class WordMatchRenderer:
 
     def _group_lines_by_paragraph(self, line_matches: list["LineMatch"]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
-        grouped: dict[Optional[int], list["LineMatch"]] = {}
+        grouped: dict[int | None, list["LineMatch"]] = {}
         for line_match in line_matches:
             paragraph_index = getattr(line_match, "paragraph_index", None)
             grouped.setdefault(paragraph_index, []).append(line_match)
@@ -385,7 +385,7 @@ class WordMatchRenderer:
 
         return ordered_groups
 
-    def _toggle_paragraph_expanded(self, paragraph_index: Optional[int]) -> None:
+    def _toggle_paragraph_expanded(self, paragraph_index: int | None) -> None:
         is_expanded = self._paragraph_expanded.get(paragraph_index, True)
         self._paragraph_expanded[paragraph_index] = not is_expanded
         self.update_lines_display()

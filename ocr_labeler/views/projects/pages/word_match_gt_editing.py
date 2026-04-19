@@ -7,6 +7,14 @@ from typing import TYPE_CHECKING
 
 from nicegui import events, ui
 
+from ....constants import (
+    WORD_LABEL_BLACKLETTER,
+    WORD_LABEL_FOOTNOTE,
+    WORD_LABEL_ITALIC,
+    WORD_LABEL_LEFT_FOOTNOTE,
+    WORD_LABEL_RIGHT_FOOTNOTE,
+    WORD_LABEL_SMALL_CAPS,
+)
 from ....operations.ocr.word_operations import WordOperations
 
 if TYPE_CHECKING:
@@ -16,13 +24,6 @@ logger = logging.getLogger(__name__)
 
 WordKey = tuple[int, int]
 ClickEvent = events.ClickEventArguments | None
-
-WORD_LABEL_ITALIC = "italic"
-WORD_LABEL_SMALL_CAPS = "small_caps"
-WORD_LABEL_BLACKLETTER = "blackletter"
-WORD_LABEL_FOOTNOTE = "footnote"
-WORD_LABEL_LEFT_FOOTNOTE = "left_footnote"
-WORD_LABEL_RIGHT_FOOTNOTE = "right_footnote"
 
 
 class WordMatchGtEditing:

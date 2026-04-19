@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
 
 from .config_operations import ConfigOperations
 
@@ -18,8 +17,8 @@ class ProjectDiscoveryOperations:
 
     @staticmethod
     def list_available_projects(
-        base_projects_root: Optional[Path] = None,
-    ) -> Dict[str, Path]:
+        base_projects_root: Path | None = None,
+    ) -> dict[str, Path]:
         """Return mapping of project name -> path under the canonical data root.
 
         Root priority order:
@@ -61,7 +60,7 @@ class ProjectDiscoveryOperations:
         if not base_root.exists():  # pragma: no cover - environment dependent
             logger.debug("No project root found at %s", base_root)
             return {}
-        projects: Dict[str, Path] = {}
+        projects: dict[str, Path] = {}
         try:
             for d in sorted(p for p in base_root.iterdir() if p.is_dir()):
                 try:
@@ -105,7 +104,7 @@ class ProjectDiscoveryOperations:
             return False
 
     @staticmethod
-    def get_project_keys(projects: Dict[str, Path]) -> list[str]:
+    def get_project_keys(projects: dict[str, Path]) -> list[str]:
         """Get sorted list of project keys from projects dictionary.
 
         Args:
@@ -117,7 +116,7 @@ class ProjectDiscoveryOperations:
         return sorted(projects.keys())
 
     @staticmethod
-    def get_default_project_key(project_keys: list[str]) -> Optional[str]:
+    def get_default_project_key(project_keys: list[str]) -> str | None:
         """Get the default project key from a list of keys.
 
         Args:

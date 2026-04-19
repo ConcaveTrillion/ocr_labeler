@@ -486,7 +486,7 @@ class ImageTabs:
             scale_x, scale_y = self._get_display_scale(page, tab_name="Paragraphs")
             paragraphs = list(getattr(page, "paragraphs", []) or [])
             for paragraph in paragraphs:
-                bbox = self._paragraph_bbox(paragraph, page)
+                bbox = self._element_bbox(paragraph, page)
                 if bbox is None:
                     continue
                 x1, y1, x2, y2 = bbox
@@ -500,7 +500,7 @@ class ImageTabs:
         if self.visible_layers.get("lines", False):
             scale_x, scale_y = self._get_display_scale(page, tab_name="Lines")
             for line in self._get_page_lines(page):
-                bbox = self._line_bbox(line, page)
+                bbox = self._element_bbox(line, page)
                 if bbox is None:
                     continue
                 x1, y1, x2, y2 = bbox
@@ -517,7 +517,7 @@ class ImageTabs:
             for line in self._get_page_lines(page):
                 words = getattr(line, "words", None) or []
                 for word in words:
-                    bbox = self._word_bbox(word, page)
+                    bbox = self._element_bbox(word, page)
                     if bbox is None:
                         continue
                     x1, y1, x2, y2 = bbox
@@ -682,7 +682,7 @@ class ImageTabs:
         scale_x, scale_y = self._get_display_scale(page, tab_name="Paragraphs")
         paragraphs = list(getattr(page, "paragraphs", []) or [])
         for paragraph_index, paragraph in enumerate(paragraphs):
-            bbox = self._paragraph_bbox(paragraph, page)
+            bbox = self._element_bbox(paragraph, page)
             if bbox is None:
                 continue
             px1, py1, px2, py2 = bbox
@@ -706,7 +706,7 @@ class ImageTabs:
         for line_index, line in enumerate(lines):
             words = getattr(line, "words", None) or []
             for word_index, word in enumerate(words):
-                bbox = self._word_bbox(word, page)
+                bbox = self._element_bbox(word, page)
                 if bbox is None:
                     continue
                 wx1, wy1, wx2, wy2 = bbox
@@ -728,7 +728,7 @@ class ImageTabs:
         scale_x, scale_y = self._get_display_scale(page, tab_name="Lines")
         lines = self._get_page_lines(page)
         for line_index, line in enumerate(lines):
-            bbox = self._line_bbox(line, page)
+            bbox = self._element_bbox(line, page)
             if bbox is None:
                 continue
             lx1, ly1, lx2, ly2 = bbox
@@ -742,63 +742,11 @@ class ImageTabs:
         logger.debug("Box selection resolved %d lines", len(selection))
         return selection
 
-    def _word_bbox(
-        self, word: object, page: object
+    def _element_bbox(
+        self, element: object, page: object
     ) -> tuple[float, float, float, float] | None:
-        """Extract pixel bbox for a word as (x1, y1, x2, y2)."""
-        bbox = getattr(word, "bounding_box", None)
-        if bbox is None:
-            return None
-        try:
-            if bool(getattr(bbox, "is_normalized", False)):
-                width = float(getattr(page, "width", 0) or 0)
-                height = float(getattr(page, "height", 0) or 0)
-                if width <= 0 or height <= 0:
-                    base_image = getattr(page, "cv2_numpy_page_image", None)
-                    if getattr(base_image, "shape", None) is not None:
-                        height, width = base_image.shape[:2]
-                if width > 0 and height > 0 and hasattr(bbox, "scale"):
-                    bbox = bbox.scale(width, height)
-            return (
-                float(getattr(bbox, "minX")),
-                float(getattr(bbox, "minY")),
-                float(getattr(bbox, "maxX")),
-                float(getattr(bbox, "maxY")),
-            )
-        except Exception:
-            return None
-
-    def _line_bbox(
-        self, line: object, page: object
-    ) -> tuple[float, float, float, float] | None:
-        """Extract pixel bbox for a line as (x1, y1, x2, y2)."""
-        bbox = getattr(line, "bounding_box", None)
-        if bbox is None:
-            return None
-        try:
-            if bool(getattr(bbox, "is_normalized", False)):
-                width = float(getattr(page, "width", 0) or 0)
-                height = float(getattr(page, "height", 0) or 0)
-                if width <= 0 or height <= 0:
-                    base_image = getattr(page, "cv2_numpy_page_image", None)
-                    if getattr(base_image, "shape", None) is not None:
-                        height, width = base_image.shape[:2]
-                if width > 0 and height > 0 and hasattr(bbox, "scale"):
-                    bbox = bbox.scale(width, height)
-            return (
-                float(getattr(bbox, "minX")),
-                float(getattr(bbox, "minY")),
-                float(getattr(bbox, "maxX")),
-                float(getattr(bbox, "maxY")),
-            )
-        except Exception:
-            return None
-
-    def _paragraph_bbox(
-        self, paragraph: object, page: object
-    ) -> tuple[float, float, float, float] | None:
-        """Extract pixel bbox for a paragraph as (x1, y1, x2, y2)."""
-        bbox = getattr(paragraph, "bounding_box", None)
+        """Extract pixel bbox for any page element (word, line, paragraph) as (x1, y1, x2, y2)."""
+        bbox = getattr(element, "bounding_box", None)
         if bbox is None:
             return None
         try:
@@ -847,7 +795,7 @@ class ImageTabs:
             for line_index in selected_line_indices:
                 if not (0 <= line_index < len(lines)):
                     continue
-                line_bbox = self._line_bbox(lines[line_index], page)
+                line_bbox = self._element_bbox(lines[line_index], page)
                 if line_bbox is not None:
                     lx1, ly1, lx2, ly2 = line_bbox
                     self._selected_line_boxes.append(
@@ -865,7 +813,7 @@ class ImageTabs:
                 words = getattr(lines[line_index], "words", None) or []
                 if not (0 <= word_index < len(words)):
                     continue
-                bbox = self._word_bbox(words[word_index], page)
+                bbox = self._element_bbox(words[word_index], page)
                 if bbox is not None:
                     x1, y1, x2, y2 = bbox
                     self._selected_word_boxes.append(
@@ -901,7 +849,7 @@ class ImageTabs:
             for paragraph_index in self._selected_paragraph_indices:
                 if not (0 <= paragraph_index < len(paragraphs)):
                     continue
-                bbox = self._paragraph_bbox(paragraphs[paragraph_index], page)
+                bbox = self._element_bbox(paragraphs[paragraph_index], page)
                 if bbox is not None:
                     x1, y1, x2, y2 = bbox
                     self._selected_paragraph_boxes.append(

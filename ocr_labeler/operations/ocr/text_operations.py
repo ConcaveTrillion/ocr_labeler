@@ -1,7 +1,6 @@
 """Text operations for managing OCR and ground truth text retrieval and caching."""
 
 import logging
-from typing import Optional, Tuple
 
 from pd_book_tools.ocr.page import Page
 
@@ -17,8 +16,8 @@ class TextOperations:
 
     @staticmethod
     def get_page_texts(
-        page: Optional[Page], ground_truth_map: Optional[dict] = None
-    ) -> Tuple[str, str]:
+        page: Page | None, ground_truth_map: dict | None = None
+    ) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 
         Args:
@@ -50,7 +49,7 @@ class TextOperations:
         return ocr_text, gt_text
 
     @staticmethod
-    def get_page_source_text(page: Optional[Page], is_loading: bool = False) -> str:
+    def get_page_source_text(page: Page | None, is_loading: bool = False) -> str:
         """Get the source text indicator for a page.
 
         Args:
@@ -108,7 +107,7 @@ class TextOperations:
         return page is not None
 
     @staticmethod
-    def get_loading_text() -> Tuple[str, str]:
+    def get_loading_text() -> tuple[str, str]:
         """Get loading placeholder text for OCR and ground truth.
 
         Returns:

@@ -116,3 +116,20 @@ class PersistencePathsOperations:
     def get_project_backups_root() -> Path:
         """Return default directory for project backups."""
         return PersistencePathsOperations.get_data_root() / "project-backups"
+
+    @staticmethod
+    def resolve_workspace_save_directory(
+        save_directory: str | Path | None,
+    ) -> str:
+        """Resolve save directory using user-local defaults and explicit overrides."""
+        if save_directory is None:
+            return str(PersistencePathsOperations.get_saved_projects_root())
+
+        directory_text = str(save_directory).strip()
+        if not directory_text:
+            return str(PersistencePathsOperations.get_saved_projects_root())
+
+        directory_path = Path(directory_text)
+        if directory_path.is_absolute():
+            return str(directory_path)
+        return str((Path.cwd() / directory_path).resolve())

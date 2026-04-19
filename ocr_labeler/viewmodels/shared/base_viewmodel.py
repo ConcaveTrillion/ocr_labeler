@@ -1,12 +1,13 @@
 """Base view model class providing common functionality for all view models."""
 
+import logging
 from abc import ABC
 from dataclasses import field
-from typing import Any, Callable, List
+from typing import Any, Callable
 
 from nicegui import binding
 
-logger = __import__("logging").getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 _BENIGN_CALLBACK_ERROR_FRAGMENTS = (
     "the client this element belongs to has been deleted",
@@ -24,7 +25,7 @@ class BaseViewModel(ABC):
     - Common initialization and cleanup patterns
     """
 
-    _property_changed_callbacks: List[Callable[[str, Any], None]] = field(
+    _property_changed_callbacks: list[Callable[[str, Any], None]] = field(
         default_factory=list
     )
 

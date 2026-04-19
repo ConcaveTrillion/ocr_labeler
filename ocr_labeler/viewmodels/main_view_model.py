@@ -1,7 +1,6 @@
 """Main view model for the application orchestrating app and project view models."""
 
 import logging
-from typing import Optional
 
 from nicegui import binding
 
@@ -18,8 +17,8 @@ class MainViewModel(BaseViewModel):
     """Main view model that orchestrates the entire application UI state."""
 
     # Child view models
-    app_state_view_model: Optional[AppStateViewModel] = None
-    project_state_view_model: Optional[ProjectStateViewModel] = None
+    app_state_view_model: AppStateViewModel | None = None
+    project_state_view_model: ProjectStateViewModel | None = None
 
     # UI-bound properties for main view
     has_project: bool = False
@@ -212,7 +211,7 @@ class MainViewModel(BaseViewModel):
             return self.project_state_view_model.command_navigate_prev()
         return False
 
-    def command_get_project_display_name(self, key: Optional[str] = None) -> str:
+    def command_get_project_display_name(self, key: str | None = None) -> str:
         """Delegate project display name to app state view model."""
         if self.app_state_view_model:
             return self.app_state_view_model.command_get_project_display_name(key)
@@ -224,7 +223,7 @@ class MainViewModel(BaseViewModel):
             return self.app_state_view_model.command_is_project_available(key)
         return False
 
-    def command_get_page_display_info(self, page_index: Optional[int] = None) -> dict:
+    def command_get_page_display_info(self, page_index: int | None = None) -> dict:
         """Delegate page display info to project state view model."""
         if self.project_state_view_model:
             return self.project_state_view_model.command_get_page_display_info(

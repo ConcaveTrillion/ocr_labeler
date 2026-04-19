@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
 from ...viewmodels.shared.base_viewmodel import BaseViewModel
 
-logger = __import__("logging").getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 TViewModel = TypeVar("TViewModel", bound=BaseViewModel)
 

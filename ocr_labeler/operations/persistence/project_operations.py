@@ -12,9 +12,11 @@ import logging
 import re
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from pd_book_tools.pgdp.pgdp_results import PGDPResults
+
+from ocr_labeler.constants import IMAGE_EXTS
 
 from .persistence_paths_operations import PersistencePathsOperations
 
@@ -38,7 +40,7 @@ class ProjectOperations:
     to avoid tight coupling with state management classes.
     """
 
-    def scan_project_directory(self, directory: Path) -> List[Path]:
+    def scan_project_directory(self, directory: Path) -> list[Path]:
         """Scan a directory for image files and return sorted paths.
 
         Args:
@@ -97,8 +99,8 @@ class ProjectOperations:
     def create_project(
         self,
         directory: Path,
-        images: List[Path],
-        ground_truth_map: Optional[dict[str, str]] = None,
+        images: list[Path],
+        ground_truth_map: dict[str, str] | None = None,
     ) -> "Project":
         """Create a Project object from directory and image paths.
 
@@ -143,7 +145,7 @@ class ProjectOperations:
         logger.info(f"Created project with {len(images)} images")
         return project
 
-    def load_project_metadata(self, project_directory: Path) -> Optional[Dict]:
+    def load_project_metadata(self, project_directory: Path) -> dict | None:
         """Load project metadata from a saved project directory.
 
         Args:
@@ -184,7 +186,7 @@ class ProjectOperations:
         self,
         source_directory: Path,
         backup_directory: str | Path | None = None,
-        backup_name: Optional[str] = None,
+        backup_name: str | None = None,
     ) -> bool:
         """Create a backup copy of a project directory.
 
@@ -232,7 +234,7 @@ class ProjectOperations:
 
     def list_saved_projects(
         self, save_directory: str | Path | None = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """List all saved projects with their metadata.
 
         Args:
@@ -273,7 +275,6 @@ class ProjectOperations:
         diacritic markup, footnote brackets, ASCII dashes, straight quotes,
         and proofer notes into OCR-comparable Unicode.
         """
-        image_exts = (".png", ".jpg", ".jpeg")
         normalized: dict[str, str] = {}
 
         for key, value in data.items():
@@ -294,7 +295,7 @@ class ProjectOperations:
             normalized.setdefault(lower_key, text_value)
 
             if "." not in key:
-                for ext in image_exts:
+                for ext in IMAGE_EXTS:
                     normalized.setdefault(f"{key}{ext}", text_value)
                     normalized.setdefault(f"{key}{ext}".lower(), text_value)
 

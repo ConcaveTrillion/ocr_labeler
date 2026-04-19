@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import field
-from typing import List, Optional
 
 from nicegui import binding
 from pd_book_tools.ocr.block import Block
@@ -22,7 +21,7 @@ class WordMatchViewModel(BaseViewModel):
     """View model for word-level OCR vs Ground Truth matching display."""
 
     # UI-bound properties
-    line_matches: List[LineMatch] = field(default_factory=list)
+    line_matches: list[LineMatch] = field(default_factory=list)
     fuzz_threshold: float = field(default=0.8)  # Threshold for fuzzy matches
 
     # Filtering and display options
@@ -108,8 +107,8 @@ class WordMatchViewModel(BaseViewModel):
         line_idx: int,
         line: Block,
         page: Page,
-        paragraph_index: Optional[int] = None,
-    ) -> Optional[LineMatch]:
+        paragraph_index: int | None = None,
+    ) -> LineMatch | None:
         """Create a LineMatch from a line object."""
         try:
             # Create enhanced word matches that include unmatched GT words
@@ -158,7 +157,7 @@ class WordMatchViewModel(BaseViewModel):
 
         return paragraph_lookup
 
-    def _create_enhanced_word_matches(self, line: Block) -> List[WordMatch]:
+    def _create_enhanced_word_matches(self, line: Block) -> list[WordMatch]:
         """Create word matches including unmatched ground truth words inserted before the next match."""
 
         enhanced_matches = []
@@ -172,7 +171,7 @@ class WordMatchViewModel(BaseViewModel):
         )
 
         # Create a list to track insertion points for unmatched GT words
-        # unmatched_gt_words is List[Tuple[int, str]] where int is insertion index
+        # unmatched_gt_words is list[tuple[int, str]] where int is insertion index
         insertion_map = {}
         if unmatched_gt_words:
             logger.debug(f"Unmatched GT words: {unmatched_gt_words}")
@@ -219,7 +218,7 @@ class WordMatchViewModel(BaseViewModel):
         )
         return enhanced_matches
 
-    def _create_word_match(self, word_idx: int, word) -> Optional[WordMatch]:
+    def _create_word_match(self, word_idx: int, word) -> WordMatch | None:
         """Create a WordMatch from a word object."""
         try:
             ocr_text = getattr(word, "text", "")

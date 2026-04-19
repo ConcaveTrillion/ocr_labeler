@@ -6,7 +6,6 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 from .persistence_paths_operations import PersistencePathsOperations
 
@@ -21,7 +20,7 @@ class SessionState:
     """Lightweight snapshot of the last user session."""
 
     schema_version: str = SESSION_STATE_SCHEMA_VERSION
-    last_project_path: Optional[str] = None
+    last_project_path: str | None = None
     last_page_index: int = 0
 
     def to_dict(self) -> dict:
@@ -93,7 +92,7 @@ class SessionStateOperations:
             return False
 
     @classmethod
-    def load_session_state(cls) -> Optional[SessionState]:
+    def load_session_state(cls) -> SessionState | None:
         """Load the last session snapshot from disk.
 
         Returns:

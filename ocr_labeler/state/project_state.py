@@ -6,7 +6,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from nicegui import background_tasks, run
 from pd_book_tools.ocr.page import Page
@@ -70,7 +70,7 @@ class ProjectState:
     is_project_loading: bool = False
     is_navigating: bool = False
     loading_status: str = ""  # Detailed status message for current loading operation
-    on_change: Optional[List[Callable[[], None]]] = field(default_factory=list)
+    on_change: list[Callable[[], None]] | None = field(default_factory=list)
     page_states: dict[int, PageState] = field(
         default_factory=dict
     )  # Per-page state management
@@ -175,17 +175,9 @@ class ProjectState:
         self, save_directory: str | Path | None
     ) -> str:
         """Resolve save directory using user-local defaults and explicit overrides."""
-        if save_directory is None:
-            return str(PersistencePathsOperations.get_saved_projects_root())
-
-        directory_text = str(save_directory).strip()
-        if not directory_text:
-            return str(PersistencePathsOperations.get_saved_projects_root())
-
-        directory_path = Path(directory_text)
-        if directory_path.is_absolute():
-            return str(directory_path)
-        return str((Path.cwd() / directory_path).resolve())
+        return PersistencePathsOperations.resolve_workspace_save_directory(
+            save_directory
+        )
 
     @staticmethod
     def _resolve_workspace_cache_directory() -> str:
@@ -408,7 +400,7 @@ class ProjectState:
 
     def get_or_load_page_model(
         self, index: int, force_ocr: bool = False
-    ) -> Optional[PageModel]:
+    ) -> PageModel | None:
         """Get PageModel at the specified index, loading it if necessary.
 
         This method delegates to ensure_page_model for lazy loading.
@@ -424,7 +416,7 @@ class ProjectState:
 
     def ensure_page_model(
         self, index: int, force_ocr: bool = False
-    ) -> Optional[PageModel]:
+    ) -> PageModel | None:
         """Ensure that the PageModel at index is loaded, loading it if necessary.
 
         This method handles the state concern of lazy page loading, including:
@@ -439,7 +431,7 @@ class ProjectState:
             force_ocr: If True, skip loading saved page and force OCR processing
 
         Returns:
-            Optional[PageModel]: The loaded page model or None if index is invalid
+            PageModel | None: The loaded page model or None if index is invalid
         """
         ensure_started = perf_counter()
 
@@ -491,7 +483,7 @@ class ProjectState:
 
         def _try_load_user_saved_page(
             page_index: int, img_path: Path
-        ) -> Optional[PageModel]:
+        ) -> PageModel | None:
             if self.project_root is None:
                 return None
 
@@ -1017,7 +1009,7 @@ class ProjectState:
     def save_current_page(
         self,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Save the current page using its PageState.
 
@@ -1070,7 +1062,7 @@ class ProjectState:
     def save_all_pages(
         self,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> SaveProjectResult:
         """Save all loaded pages that have an active PageState.
 
@@ -1440,7 +1432,7 @@ class ProjectState:
     def load_current_page(
         self,
         save_directory: str | Path | None = None,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> bool:
         """Load the current page from saved files.
 

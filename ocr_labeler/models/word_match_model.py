@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+
+from ocr_labeler.operations.ocr.image_utils import crop_image_to_bbox
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,9 @@ class WordMatch:
     ocr_text: str
     ground_truth_text: str
     match_status: MatchStatus
-    fuzz_score: Optional[float] = None
-    word_index: Optional[int] = None
-    word_object: Optional[object] = (
+    fuzz_score: float | None = None
+    word_index: int | None = None
+    word_object: object | None = (
         None  # Reference to the original word object for image access
     )
     is_validated: bool = False
@@ -74,75 +75,8 @@ class WordMatch:
 
     def get_cropped_image(self, page_image):
         """Extract cropped word image from page image using bounding box."""
-        if not self.word_object or page_image is None:
-            logger.debug(
-                f"No word_object ({self.word_object is not None}) or page_image ({page_image is not None}) for word: {self.ocr_text}"
-            )
-            return None
-
-        try:
-            # Get bounding box from word object
-            bbox = getattr(self.word_object, "bounding_box", None)
-            if not bbox:
-                logger.debug(f"No bounding_box found for word: {self.ocr_text}")
-                return None
-
-            logger.debug(f"Processing bbox for word '{self.ocr_text}': {bbox}")
-
-            # Use BoundingBox methods to get pixel coordinates
-            height, width = page_image.shape[:2]
-            logger.debug(f"Image dimensions: {height}x{width}")
-
-            # Scale to image dimensions if normalized
-            if bbox.is_normalized:
-                logger.debug("Scaling normalized bbox")
-                # Use the scale method to convert to pixel coordinates
-                pixel_bbox = bbox.scale(width, height)
-            else:
-                logger.debug("Using non-normalized bbox directly")
-                pixel_bbox = bbox
-
-            logger.debug(f"Pixel bbox: {pixel_bbox}")
-
-            # Get integer coordinates using the BoundingBox properties
-            logger.debug(
-                f"Getting coordinates from pixel_bbox.minX={pixel_bbox.minX}, type={type(pixel_bbox.minX)}"
-            )
-            x1 = int(pixel_bbox.minX)
-            y1 = int(pixel_bbox.minY)
-            x2 = int(pixel_bbox.maxX)
-            y2 = int(pixel_bbox.maxY)
-
-            logger.debug(f"Extracted coordinates: ({x1}, {y1}, {x2}, {y2})")
-
-            # Validate coordinates
-            if x1 >= x2 or y1 >= y2:
-                logger.debug(f"Invalid bbox coordinates: ({x1}, {y1}, {x2}, {y2})")
-                return None
-
-            # Clamp coordinates to image bounds
-            x1 = max(0, min(x1, width - 1))
-            y1 = max(0, min(y1, height - 1))
-            x2 = max(x1 + 1, min(x2, width))
-            y2 = max(y1 + 1, min(y2, height))
-
-            logger.debug(f"Clamped coordinates: ({x1}, {y1}, {x2}, {y2})")
-
-            # Extract the cropped region
-            cropped = page_image[y1:y2, x1:x2]
-
-            if cropped.size == 0:
-                logger.debug(f"Empty crop for bbox ({x1}, {y1}, {x2}, {y2})")
-                return None
-
-            logger.debug(
-                f"Successfully cropped word '{self.ocr_text}' to shape {cropped.shape}"
-            )
-            return cropped
-
-        except Exception as e:
-            import traceback
-
-            logger.debug(f"Error cropping word image for '{self.ocr_text}': {e}")
-            logger.debug(f"Traceback: {traceback.format_exc()}")
-            return None
+        return crop_image_to_bbox(
+            self.word_object,
+            page_image,
+            label=f"word '{self.ocr_text}'",
+        )

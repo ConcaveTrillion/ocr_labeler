@@ -10,6 +10,7 @@ from pd_book_tools.ocr.page import Page
 from pd_book_tools.ocr.word import Word
 
 from ocr_labeler.state.page_state import PageState
+from ocr_labeler.viewmodels.project import page_state_view_model as vm_module
 from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
 from ocr_labeler.views.projects.pages.image_tabs import ImageTabs
 
@@ -122,9 +123,9 @@ def test_image_tabs_source_updates_after_merge(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        vm,
-        "_cache_image_to_disk",
-        lambda img, image_type, page_index, project_id, ext: (
+        vm_module,
+        "cache_image_to_disk",
+        lambda img, image_type, page_index, project_id, ext, cache_dir: (
             "" if img is None else f"encoded:{img.value}"
         ),
     )

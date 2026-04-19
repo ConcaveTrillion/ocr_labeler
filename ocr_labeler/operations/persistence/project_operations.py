@@ -40,7 +40,8 @@ class ProjectOperations:
     to avoid tight coupling with state management classes.
     """
 
-    def scan_project_directory(self, directory: Path) -> list[Path]:
+    @staticmethod
+    def scan_project_directory(directory: Path) -> list[Path]:
         """Scan a directory for image files and return sorted paths.
 
         Args:
@@ -75,7 +76,8 @@ class ProjectOperations:
         # Return sorted by name for consistent ordering
         return sorted(images)
 
-    def validate_project_directory(self, directory: Path) -> bool:
+    @staticmethod
+    def validate_project_directory(directory: Path) -> bool:
         """Validate that a directory can be used as a project directory.
 
         Args:
@@ -90,14 +92,14 @@ class ProjectOperations:
                 return False
 
             # Check if directory has at least one image file
-            images = self.scan_project_directory(directory)
+            images = ProjectOperations.scan_project_directory(directory)
             return len(images) > 0
 
         except Exception:
             return False
 
+    @staticmethod
     def create_project(
-        self,
         directory: Path,
         images: list[Path],
         ground_truth_map: dict[str, str] | None = None,
@@ -146,7 +148,8 @@ class ProjectOperations:
         logger.info("Created project with %s images", len(images))
         return project
 
-    def load_project_metadata(self, project_directory: Path) -> dict | None:
+    @staticmethod
+    def load_project_metadata(project_directory: Path) -> dict | None:
         """Load project metadata from a saved project directory.
 
         Args:
@@ -183,8 +186,8 @@ class ProjectOperations:
             logger.exception("Failed to load project metadata")
             return None
 
+    @staticmethod
     def backup_project(
-        self,
         source_directory: Path,
         backup_directory: str | Path | None = None,
         backup_name: str | None = None,
@@ -233,9 +236,8 @@ class ProjectOperations:
             logger.exception("Failed to backup project")
             return False
 
-    def list_saved_projects(
-        self, save_directory: str | Path | None = None
-    ) -> list[dict]:
+    @staticmethod
+    def list_saved_projects(save_directory: str | Path | None = None) -> list[dict]:
         """List all saved projects with their metadata.
 
         Args:
@@ -259,7 +261,7 @@ class ProjectOperations:
                 if not project_dir.is_dir():
                     continue
 
-                metadata = self.load_project_metadata(project_dir)
+                metadata = ProjectOperations.load_project_metadata(project_dir)
                 if metadata:
                     metadata["directory_path"] = str(project_dir)
                     saved_projects.append(metadata)
@@ -269,7 +271,8 @@ class ProjectOperations:
 
         return saved_projects
 
-    def _normalize_ground_truth_entries(self, data: dict) -> dict[str, str]:
+    @staticmethod
+    def _normalize_ground_truth_entries(data: dict) -> dict[str, str]:
         """Normalize pages.json entries for flexible filename lookup.
 
         Raw PGDP text values are preprocessed via ``PGDPResults`` to convert
@@ -302,7 +305,8 @@ class ProjectOperations:
 
         return normalized
 
-    def reload_ground_truth_into_project(self, state):  # type: ignore[misc]
+    @classmethod
+    def reload_ground_truth_into_project(cls, state):  # type: ignore[misc]
         """Reload ground truth data into an existing project.
 
         Parameters
@@ -319,7 +323,7 @@ class ProjectOperations:
             )
             return
 
-        new_map = self.load_ground_truth_from_directory(Path(project_root))
+        new_map = cls.load_ground_truth_from_directory(Path(project_root))
         project.ground_truth_map = new_map
 
         invalidate_cache = getattr(state, "_invalidate_text_cache", None)
@@ -336,7 +340,8 @@ class ProjectOperations:
 
     PAGES_MANIFEST_FILENAME = "pages_manifest.json"
 
-    def load_ground_truth_from_directory(self, directory: Path) -> dict[str, str]:
+    @classmethod
+    def load_ground_truth_from_directory(cls, directory: Path) -> dict[str, str]:
         """Load and merge ground truth data from a project directory.
 
         Checks for a ``pages_manifest.json`` first.  If found, loads and
@@ -353,10 +358,10 @@ class ProjectOperations:
         dict[str, str]
             Normalized and merged ground truth mapping.
         """
-        manifest_path = directory / self.PAGES_MANIFEST_FILENAME
+        manifest_path = directory / cls.PAGES_MANIFEST_FILENAME
         if manifest_path.exists():
             try:
-                merged = self._load_ground_truth_from_manifest(manifest_path)
+                merged = cls._load_ground_truth_from_manifest(manifest_path)
                 logger.info(
                     "Loaded %d ground truth entries from manifest %s",
                     len(merged),
@@ -378,7 +383,7 @@ class ProjectOperations:
         try:
             raw_data = json.loads(pages_json.read_text(encoding="utf-8"))
             if isinstance(raw_data, dict):
-                norm = self._normalize_ground_truth_entries(raw_data)
+                norm = cls._normalize_ground_truth_entries(raw_data)
                 logger.info(
                     "Loaded %d ground truth entries from %s", len(norm), pages_json
                 )
@@ -388,7 +393,8 @@ class ProjectOperations:
             logger.warning("Failed to load pages.json (%s): %s", pages_json, exc)
         return {}
 
-    def _load_ground_truth_from_manifest(self, manifest_path: Path) -> dict[str, str]:
+    @classmethod
+    def _load_ground_truth_from_manifest(cls, manifest_path: Path) -> dict[str, str]:
         """Parse ``pages_manifest.json`` and merge source files with offsets.
 
         Manifest schema::
@@ -461,9 +467,9 @@ class ProjectOperations:
 
             # If offset > 0, remap numeric keys before normalizing
             if offset != 0:
-                source_data = self._apply_page_index_offset(source_data, offset)
+                source_data = cls._apply_page_index_offset(source_data, offset)
 
-            partial = self._normalize_ground_truth_entries(source_data)
+            partial = cls._normalize_ground_truth_entries(source_data)
             merged.update(partial)
             logger.debug(
                 "Merged %d entries from %s (offset=%d)",
@@ -476,7 +482,8 @@ class ProjectOperations:
 
     _NUMERIC_STEM_RE = re.compile(r"^(\d+)(\.\w+)?$")
 
-    def _apply_page_index_offset(self, data: dict, offset: int) -> dict:
+    @classmethod
+    def _apply_page_index_offset(cls, data: dict, offset: int) -> dict:
         """Return a copy of *data* with numeric stems in keys shifted by *offset*.
 
         Keys whose stems are not purely numeric are passed through unchanged.
@@ -499,7 +506,7 @@ class ProjectOperations:
             if not isinstance(key, str):
                 result[key] = value
                 continue
-            m = self._NUMERIC_STEM_RE.match(key)
+            m = cls._NUMERIC_STEM_RE.match(key)
             if m:
                 new_num = int(m.group(1)) + offset
                 ext = m.group(2) or ""

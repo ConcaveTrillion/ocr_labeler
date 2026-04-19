@@ -82,6 +82,30 @@ class TextTabsModel:
             logger.debug("TextTabs callback not set or not callable")
 
 
+def _make_page_callback(
+    page_state: PageState | None,
+    page_index: int,
+    method_name: str,
+    description: str | None = None,
+):
+    """Create a callback that delegates to ``page_state.<method>(page_index, *args)``.
+
+    Returns ``None`` when *page_state* is ``None`` or does not have *method_name*.
+    """
+    if page_state is None or not hasattr(page_state, method_name):
+        return None
+    method = getattr(page_state, method_name)
+    label = description or method_name
+
+    def callback(*args, **kwargs) -> bool:
+        logger.debug("%s on page %d", label, page_index)
+        result = method(page_index, *args, **kwargs)
+        logger.debug("%s result: %s", label, result)
+        return result
+
+    return callback
+
+
 class TextTabs:
     """Right side textual data tabs (Matches placeholder, Ground Truth, OCR)."""
 
@@ -118,122 +142,37 @@ class TextTabs:
         self._register_state_listeners()
 
         # Create callback for GT→OCR copy functionality
-        copy_callback = None
-        copy_ocr_to_gt_callback = None
-        copy_selected_words_ocr_to_gt_callback = None
-        if page_state:
-            # Create a wrapper that passes the current page index
-            def copy_gt_callback(line_index: int) -> bool:
-                logger.debug(
-                    "Copying GT to OCR for line %s on page %s", line_index, page_index
-                )
-                result = page_state.copy_ground_truth_to_ocr(page_index, line_index)
-                logger.debug("Copy operation result: %s", result)
-                return result
+        copy_callback = _make_page_callback(
+            page_state, page_index, "copy_ground_truth_to_ocr", "Copy GT to OCR"
+        )
+        copy_ocr_to_gt_callback = _make_page_callback(
+            page_state, page_index, "copy_ocr_to_ground_truth", "Copy OCR to GT"
+        )
+        copy_selected_words_ocr_to_gt_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "copy_selected_words_ocr_to_ground_truth",
+            "Copy selected words OCR to GT",
+        )
 
-            copy_callback = copy_gt_callback
-            logger.debug("Created GT to OCR copy callback")
-
-            if hasattr(page_state, "copy_ocr_to_ground_truth"):
-
-                def copy_ocr_callback(line_index: int) -> bool:
-                    logger.debug(
-                        "Copying OCR to GT for line %s on page %s",
-                        line_index,
-                        page_index,
-                    )
-                    result = page_state.copy_ocr_to_ground_truth(page_index, line_index)
-                    logger.debug("OCR to GT copy operation result: %s", result)
-                    return result
-
-                copy_ocr_to_gt_callback = copy_ocr_callback
-                logger.debug("Created OCR to GT copy callback")
-
-            if hasattr(page_state, "copy_selected_words_ocr_to_ground_truth"):
-
-                def copy_selected_words_ocr_callback(
-                    word_keys: list[tuple[int, int]],
-                ) -> bool:
-                    logger.debug(
-                        "Copying OCR to GT for selected words %s on page %d",
-                        word_keys,
-                        page_index,
-                    )
-                    result = page_state.copy_selected_words_ocr_to_ground_truth(
-                        page_index,
-                        word_keys,
-                    )
-                    logger.debug(
-                        "Selected-word OCR to GT copy operation result: %s",
-                        result,
-                    )
-                    return result
-
-                copy_selected_words_ocr_to_gt_callback = (
-                    copy_selected_words_ocr_callback
-                )
-                logger.debug("Created selected-words OCR to GT copy callback")
-
-        merge_lines_callback = None
-        if page_state:
-
-            def merge_lines_callback(line_indices: list[int]) -> bool:
-                logger.debug(
-                    "Merging selected lines %s on page %d", line_indices, page_index
-                )
-                result = page_state.merge_lines(page_index, line_indices)
-                logger.debug("Merge lines operation result: %s", result)
-                return result
-
-        delete_lines_callback = None
-        if page_state:
-
-            def delete_lines_callback(line_indices: list[int]) -> bool:
-                logger.debug(
-                    "Deleting selected lines %s on page %d", line_indices, page_index
-                )
-                result = page_state.delete_lines(page_index, line_indices)
-                logger.debug("Delete lines operation result: %s", result)
-                return result
-
-        merge_paragraphs_callback = None
-        if page_state:
-
-            def merge_paragraphs_callback(paragraph_indices: list[int]) -> bool:
-                logger.debug(
-                    "Merging selected paragraphs %s on page %d",
-                    paragraph_indices,
-                    page_index,
-                )
-                result = page_state.merge_paragraphs(page_index, paragraph_indices)
-                logger.debug("Merge paragraphs operation result: %s", result)
-                return result
-
-        delete_paragraphs_callback = None
-        if page_state:
-
-            def delete_paragraphs_callback(paragraph_indices: list[int]) -> bool:
-                logger.debug(
-                    "Deleting selected paragraphs %s on page %d",
-                    paragraph_indices,
-                    page_index,
-                )
-                result = page_state.delete_paragraphs(page_index, paragraph_indices)
-                logger.debug("Delete paragraphs operation result: %s", result)
-                return result
-
-        split_paragraph_after_line_callback = None
-        if page_state:
-
-            def split_paragraph_after_line_callback(line_index: int) -> bool:
-                logger.debug(
-                    "Splitting paragraph after line %s on page %d",
-                    line_index,
-                    page_index,
-                )
-                result = page_state.split_paragraph_after_line(page_index, line_index)
-                logger.debug("Split paragraph after line operation result: %s", result)
-                return result
+        merge_lines_callback = _make_page_callback(
+            page_state, page_index, "merge_lines", "Merge selected lines"
+        )
+        delete_lines_callback = _make_page_callback(
+            page_state, page_index, "delete_lines", "Delete selected lines"
+        )
+        merge_paragraphs_callback = _make_page_callback(
+            page_state, page_index, "merge_paragraphs", "Merge selected paragraphs"
+        )
+        delete_paragraphs_callback = _make_page_callback(
+            page_state, page_index, "delete_paragraphs", "Delete selected paragraphs"
+        )
+        split_paragraph_after_line_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "split_paragraph_after_line",
+            "Split paragraph after line",
+        )
 
         split_paragraph_with_selected_lines_callback = None
         if page_state:
@@ -268,481 +207,118 @@ class TextTabs:
                 )
                 return result
 
-        split_line_after_word_callback = None
-        if page_state and hasattr(page_state, "split_line_after_word"):
+        split_line_after_word_callback = _make_page_callback(
+            page_state, page_index, "split_line_after_word", "Split line after word"
+        )
 
-            def split_line_after_word_callback(
-                line_index: int, word_index: int
-            ) -> bool:
-                logger.debug(
-                    "Splitting line %s after word %s on page %d",
-                    line_index,
-                    word_index,
-                    page_index,
-                )
-                result = page_state.split_line_after_word(
-                    page_index,
-                    line_index,
-                    word_index,
-                )
-                logger.debug("Split line after word operation result: %s", result)
-                return result
-
-        delete_words_callback = None
-        if page_state:
-
-            def delete_words_callback(word_keys: list[tuple[int, int]]) -> bool:
-                logger.debug(
-                    "Deleting selected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.delete_words(page_index, word_keys)
-                logger.debug("Delete words operation result: %s", result)
-                return result
-
-        merge_word_left_callback = None
-        if page_state:
-
-            def merge_word_left_callback(line_index: int, word_index: int) -> bool:
-                logger.debug(
-                    "Merging word left at (%s, %s) on page %d",
-                    line_index,
-                    word_index,
-                    page_index,
-                )
-                result = page_state.merge_word_left(page_index, line_index, word_index)
-                logger.debug("Merge word left operation result: %s", result)
-                return result
-
-        merge_word_right_callback = None
-        if page_state:
-
-            def merge_word_right_callback(line_index: int, word_index: int) -> bool:
-                logger.debug(
-                    "Merging word right at (%s, %s) on page %d",
-                    line_index,
-                    word_index,
-                    page_index,
-                )
-                result = page_state.merge_word_right(
-                    page_index,
-                    line_index,
-                    word_index,
-                )
-                logger.debug("Merge word right operation result: %s", result)
-                return result
-
-        split_word_callback = None
-        if page_state:
-
-            def split_word_callback(
-                line_index: int,
-                word_index: int,
-                split_fraction: float,
-            ) -> bool:
-                logger.debug(
-                    "Splitting word at (%s, %s) with split_fraction=%s on page %d",
-                    line_index,
-                    word_index,
-                    split_fraction,
-                    page_index,
-                )
-                result = page_state.split_word(
-                    page_index,
-                    line_index,
-                    word_index,
-                    split_fraction,
-                )
-                logger.debug("Split word operation result: %s", result)
-                return result
-
-        split_word_vertical_closest_line_callback = None
-        if page_state and hasattr(
+        delete_words_callback = _make_page_callback(
+            page_state, page_index, "delete_words", "Delete selected words"
+        )
+        merge_word_left_callback = _make_page_callback(
+            page_state, page_index, "merge_word_left", "Merge word left"
+        )
+        merge_word_right_callback = _make_page_callback(
+            page_state, page_index, "merge_word_right", "Merge word right"
+        )
+        split_word_callback = _make_page_callback(
+            page_state, page_index, "split_word", "Split word"
+        )
+        split_word_vertical_closest_line_callback = _make_page_callback(
             page_state,
+            page_index,
             "split_word_vertically_and_assign_to_closest_line",
-        ):
-
-            def split_word_vertical_closest_line_callback(
-                line_index: int,
-                word_index: int,
-                split_fraction: float,
-            ) -> bool:
-                logger.debug(
-                    "Splitting word vertically at (%s, %s) with split_fraction=%s on page %d",
-                    line_index,
-                    word_index,
-                    split_fraction,
-                    page_index,
-                )
-                result = page_state.split_word_vertically_and_assign_to_closest_line(
-                    page_index,
-                    line_index,
-                    word_index,
-                    split_fraction,
-                )
-                logger.debug(
-                    "Split word vertical closest-line operation result: %s", result
-                )
-                return result
-
-        rebox_word_callback = None
-        if page_state and hasattr(page_state, "rebox_word"):
-
-            def rebox_word_callback(
-                line_index: int,
-                word_index: int,
-                x1: float,
-                y1: float,
-                x2: float,
-                y2: float,
-            ) -> bool:
-                logger.debug(
-                    "Reboxing word at (%s, %s) with bbox=(%s, %s, %s, %s) on page %d",
-                    line_index,
-                    word_index,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    page_index,
-                )
-                result = page_state.rebox_word(
-                    page_index,
-                    line_index,
-                    word_index,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                )
-                logger.debug("Rebox word operation result: %s", result)
-                return result
-
-        add_word_callback = None
-        if page_state and hasattr(page_state, "add_word"):
-
-            def add_word_callback(
-                x1: float,
-                y1: float,
-                x2: float,
-                y2: float,
-            ) -> bool:
-                logger.debug(
-                    "Adding word with bbox=(%s, %s, %s, %s) on page %d",
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    page_index,
-                )
-                result = page_state.add_word(page_index, x1, y1, x2, y2)
-                logger.debug("Add word operation result: %s", result)
-                return result
-
-        nudge_word_bbox_callback = None
-        if page_state and hasattr(page_state, "nudge_word_bbox"):
-
-            def nudge_word_bbox_callback(
-                line_index: int,
-                word_index: int,
-                left_delta: float,
-                right_delta: float,
-                top_delta: float,
-                bottom_delta: float,
-                refine_after: bool,
-            ) -> bool:
-                logger.debug(
-                    "Resizing word bbox at (%s, %s) with deltas l=%s r=%s t=%s b=%s refine_after=%s on page %d",
-                    line_index,
-                    word_index,
-                    left_delta,
-                    right_delta,
-                    top_delta,
-                    bottom_delta,
-                    refine_after,
-                    page_index,
-                )
-                result = page_state.nudge_word_bbox(
-                    page_index,
-                    line_index,
-                    word_index,
-                    left_delta,
-                    right_delta,
-                    top_delta,
-                    bottom_delta,
-                    refine_after=refine_after,
-                )
-                logger.debug("Nudge word bbox operation result: %s", result)
-                return result
-
-        refine_words_callback = None
-        if page_state and hasattr(page_state, "refine_words"):
-
-            def refine_words_callback(word_keys: list[tuple[int, int]]) -> bool:
-                logger.debug(
-                    "Refining selected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.refine_words(page_index, word_keys)
-                logger.debug("Refine words operation result: %s", result)
-                return result
-
-        expand_then_refine_words_callback = None
-        if page_state and hasattr(page_state, "expand_then_refine_words"):
-
-            def expand_then_refine_words_callback(
-                word_keys: list[tuple[int, int]],
-            ) -> bool:
-                logger.debug(
-                    "Expand-then-refining selected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.expand_then_refine_words(page_index, word_keys)
-                logger.debug("Expand-then-refine words operation result: %s", result)
-                return result
-
-        expand_word_bboxes_callback = None
-        if page_state and hasattr(page_state, "expand_word_bboxes"):
-
-            def expand_word_bboxes_callback(
-                word_keys: list[tuple[int, int]],
-            ) -> bool:
-                logger.debug(
-                    "Expanding bboxes for selected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.expand_word_bboxes(page_index, word_keys)
-                logger.debug("Expand word bboxes operation result: %s", result)
-                return result
-
-        refine_lines_callback = None
-        if page_state and hasattr(page_state, "refine_lines"):
-
-            def refine_lines_callback(line_indices: list[int]) -> bool:
-                logger.debug(
-                    "Refining selected lines %s on page %d",
-                    line_indices,
-                    page_index,
-                )
-                result = page_state.refine_lines(page_index, line_indices)
-                logger.debug("Refine lines operation result: %s", result)
-                return result
-
-        expand_then_refine_lines_callback = None
-        if page_state and hasattr(page_state, "expand_then_refine_lines"):
-
-            def expand_then_refine_lines_callback(line_indices: list[int]) -> bool:
-                logger.debug(
-                    "Expand-then-refining selected lines %s on page %d",
-                    line_indices,
-                    page_index,
-                )
-                result = page_state.expand_then_refine_lines(page_index, line_indices)
-                logger.debug("Expand-then-refine lines operation result: %s", result)
-                return result
-
-        expand_line_bboxes_callback = None
-        if page_state and hasattr(page_state, "expand_line_bboxes"):
-
-            def expand_line_bboxes_callback(line_indices: list[int]) -> bool:
-                logger.debug(
-                    "Expanding bboxes for selected lines %s on page %d",
-                    line_indices,
-                    page_index,
-                )
-                result = page_state.expand_line_bboxes(page_index, line_indices)
-                logger.debug("Expand line bboxes operation result: %s", result)
-                return result
-
-        refine_paragraphs_callback = None
-        if page_state and hasattr(page_state, "refine_paragraphs"):
-
-            def refine_paragraphs_callback(paragraph_indices: list[int]) -> bool:
-                logger.debug(
-                    "Refining selected paragraphs %s on page %d",
-                    paragraph_indices,
-                    page_index,
-                )
-                result = page_state.refine_paragraphs(page_index, paragraph_indices)
-                logger.debug("Refine paragraphs operation result: %s", result)
-                return result
-
-        expand_then_refine_paragraphs_callback = None
-        if page_state and hasattr(page_state, "expand_then_refine_paragraphs"):
-
-            def expand_then_refine_paragraphs_callback(
-                paragraph_indices: list[int],
-            ) -> bool:
-                logger.debug(
-                    "Expand-then-refining selected paragraphs %s on page %d",
-                    paragraph_indices,
-                    page_index,
-                )
-                result = page_state.expand_then_refine_paragraphs(
-                    page_index, paragraph_indices
-                )
-                logger.debug(
-                    "Expand-then-refine paragraphs operation result: %s", result
-                )
-                return result
-
-        expand_paragraph_bboxes_callback = None
-        if page_state and hasattr(page_state, "expand_paragraph_bboxes"):
-
-            def expand_paragraph_bboxes_callback(
-                paragraph_indices: list[int],
-            ) -> bool:
-                logger.debug(
-                    "Expanding bboxes for selected paragraphs %s on page %d",
-                    paragraph_indices,
-                    page_index,
-                )
-                result = page_state.expand_paragraph_bboxes(
-                    page_index, paragraph_indices
-                )
-                logger.debug("Expand paragraph bboxes operation result: %s", result)
-                return result
-
-        split_line_with_selected_words_callback = None
-        if page_state and hasattr(page_state, "split_line_with_selected_words"):
-
-            def split_line_with_selected_words_callback(
-                word_keys: list[tuple[int, int]],
-            ) -> bool:
-                logger.debug(
-                    "Forming one new line from selected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.split_line_with_selected_words(
-                    page_index, word_keys
-                )
-                logger.debug(
-                    "Create line from selected words operation result: %s",
-                    result,
-                )
-                return result
-
-        split_lines_into_selected_unselected_callback = None
-        if page_state and hasattr(
+            "Split word vertical closest-line",
+        )
+        rebox_word_callback = _make_page_callback(
+            page_state, page_index, "rebox_word", "Rebox word"
+        )
+        add_word_callback = _make_page_callback(
+            page_state, page_index, "add_word", "Add word"
+        )
+        nudge_word_bbox_callback = _make_page_callback(
+            page_state, page_index, "nudge_word_bbox", "Nudge word bbox"
+        )
+        refine_words_callback = _make_page_callback(
+            page_state, page_index, "refine_words", "Refine selected words"
+        )
+        expand_then_refine_words_callback = _make_page_callback(
             page_state,
+            page_index,
+            "expand_then_refine_words",
+            "Expand-then-refine selected words",
+        )
+        expand_word_bboxes_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "expand_word_bboxes",
+            "Expand word bboxes",
+        )
+        refine_lines_callback = _make_page_callback(
+            page_state, page_index, "refine_lines", "Refine selected lines"
+        )
+        expand_then_refine_lines_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "expand_then_refine_lines",
+            "Expand-then-refine selected lines",
+        )
+        expand_line_bboxes_callback = _make_page_callback(
+            page_state, page_index, "expand_line_bboxes", "Expand line bboxes"
+        )
+        refine_paragraphs_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "refine_paragraphs",
+            "Refine selected paragraphs",
+        )
+        expand_then_refine_paragraphs_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "expand_then_refine_paragraphs",
+            "Expand-then-refine selected paragraphs",
+        )
+        expand_paragraph_bboxes_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "expand_paragraph_bboxes",
+            "Expand paragraph bboxes",
+        )
+        split_line_with_selected_words_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "split_line_with_selected_words",
+            "Create line from selected words",
+        )
+        split_lines_into_selected_unselected_callback = _make_page_callback(
+            page_state,
+            page_index,
             "split_lines_into_selected_and_unselected_words",
-        ):
-
-            def split_lines_into_selected_unselected_callback(
-                word_keys: list[tuple[int, int]],
-            ) -> bool:
-                logger.debug(
-                    "Splitting lines into selected/unselected words %s on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.split_lines_into_selected_and_unselected_words(
-                    page_index,
-                    word_keys,
-                )
-                logger.debug(
-                    "Split lines into selected/unselected words operation result: %s",
-                    result,
-                )
-                return result
-
-        group_selected_words_into_paragraph_callback = None
-        if page_state and hasattr(
+            "Split lines into selected/unselected words",
+        )
+        group_selected_words_into_paragraph_callback = _make_page_callback(
             page_state,
+            page_index,
             "group_selected_words_into_new_paragraph",
-        ):
-
-            def group_selected_words_into_paragraph_callback(
-                word_keys: list[tuple[int, int]],
-            ) -> bool:
-                logger.debug(
-                    "Grouping selected words %s into new paragraph on page %d",
-                    word_keys,
-                    page_index,
-                )
-                result = page_state.group_selected_words_into_new_paragraph(
-                    page_index,
-                    word_keys,
-                )
-                logger.debug(
-                    "Group selected words into paragraph operation result: %s",
-                    result,
-                )
-                return result
-
-        edit_word_ground_truth_callback = None
-        if page_state and hasattr(page_state, "update_word_ground_truth"):
-
-            def edit_word_ground_truth_callback(
-                line_index: int,
-                word_index: int,
-                ground_truth_text: str,
-            ) -> bool:
-                logger.debug(
-                    "Updating word GT at (%s, %s) on page %d",
-                    line_index,
-                    word_index,
-                    page_index,
-                )
-                result = page_state.update_word_ground_truth(
-                    page_index,
-                    line_index,
-                    word_index,
-                    ground_truth_text,
-                )
-                logger.debug("Update word GT operation result: %s", result)
-                return result
-
-        set_word_attributes_callback = None
-        if page_state and hasattr(page_state, "update_word_attributes"):
-
-            def set_word_attributes_callback(
-                line_index: int,
-                word_index: int,
-                italic: bool,
-                small_caps: bool,
-                blackletter: bool,
-                left_footnote: bool,
-                right_footnote: bool,
-            ) -> bool:
-                logger.debug(
-                    "Updating word attributes at (%s, %s) on page %d: italic=%s small_caps=%s blackletter=%s left_footnote=%s right_footnote=%s",
-                    line_index,
-                    word_index,
-                    page_index,
-                    italic,
-                    small_caps,
-                    blackletter,
-                    left_footnote,
-                    right_footnote,
-                )
-                result = page_state.update_word_attributes(
-                    page_index,
-                    line_index,
-                    word_index,
-                    italic,
-                    small_caps,
-                    blackletter,
-                    left_footnote,
-                    right_footnote,
-                )
-                logger.debug("Update word attributes operation result: %s", result)
-                return result
-
-        toggle_word_validated_callback = None
-        if page_state and hasattr(page_state, "toggle_word_validated"):
-
-            def toggle_word_validated_callback(
-                line_index: int, word_index: int
-            ) -> bool:
-                return page_state.toggle_word_validated(
-                    page_index, line_index, word_index
-                )
+            "Group selected words into paragraph",
+        )
+        edit_word_ground_truth_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "update_word_ground_truth",
+            "Update word GT",
+        )
+        set_word_attributes_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "update_word_attributes",
+            "Update word attributes",
+        )
+        toggle_word_validated_callback = _make_page_callback(
+            page_state,
+            page_index,
+            "toggle_word_validated",
+            "Toggle word validated",
+        )
 
         apply_word_style_callback = None
         if set_word_attributes_callback is not None:

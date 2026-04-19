@@ -3,13 +3,18 @@
 Prioritized implementation plan for code review findings. Grouped into
 phases, ordered by impact and risk.
 
-**Status**: Phases 1–3.7, 5.1–5.6, 2.1–2.8, and 6.1 completed.
+**Status**: Phases 1–3.7, 5.1–5.7, 2.1–2.8, and 6.1 completed.
 Phase 3.2/3.3 (presentation strings moved to viewmodel),
+Phase 3.4 (image cache extraction to operations),
 Phase 3.5 (match-status classification extracted to operations),
 Phase 6.0 (Page metadata), and crop_image delegation done.
-Remaining: 3.4 (image cache extraction), 4.x (structural), 5.7,
+Phase 4.2 (page_state dispatch helper — 28 methods consolidated),
+Phase 4.3 (word_edit_dialog converted from closure function to class),
+Phase 4.5 (text_tabs callback factory — 24 closures replaced),
+Phase 4.6 (BaseView teardown lifecycle added).
+Remaining: 4.1 (split LineOperations), 4.4 (word_match delegation — deferred),
 6.2–6.4 (pd-book-tools structural migration).
-All 710 ocr-labeler tests and 491 pd-book-tools tests pass.
+All 715 ocr-labeler tests and 491 pd-book-tools tests pass.
 
 ## Phase 1: Bug Fixes and Quick Wins
 
@@ -223,6 +228,13 @@ Larger refactoring to address god objects and file size issues.
 - **Each method**: Becomes a 3-line call to the dispatcher
 - **Risk**: Medium
 - **Effort**: Medium
+- **Status**: Done — `_dispatch_line_op()` consolidates 28 methods.
+- **Follow-up**: Remove unused `page_index` parameter from the 29
+  `PageState` methods that accept it only for "API consistency" but
+  never use it (they operate on `self.current_page`). Update all
+  callers in `text_tabs.py` (`_make_page_callback` factory) and
+  `word_match_actions.py` to stop passing it.
+  **Risk**: Low-Medium (many call sites). **Effort**: Medium.
 
 ### 4.3 Decompose `open_word_edit_dialog` (1190 lines)
 
@@ -231,6 +243,13 @@ Larger refactoring to address god objects and file size issues.
   methods
 - **Risk**: Medium-High (complex closure state)
 - **Effort**: Large
+- **Status**: Done — `WordEditDialog` class created, thin
+  `open_word_edit_dialog()` wrapper retained for compatibility.
+- **Follow-up**: Remove the `open_word_edit_dialog()` wrapper function.
+  Update callers (`word_match_renderer.py` import + `_open_word_edit_dialog`,
+  and the recursive `_rerender_dialog` inside `WordEditDialog` itself)
+  to instantiate `WordEditDialog(view, ...).open()` directly.
+  **Risk**: Low. **Effort**: Trivial.
 
 ### 4.4 Reduce delegation boilerplate in `word_match.py`
 

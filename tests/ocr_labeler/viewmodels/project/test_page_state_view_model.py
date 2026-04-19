@@ -127,7 +127,7 @@ def test_image_sources_change_after_rebind_with_mocked_encoder(tmp_path, monkeyp
     vm = PageStateViewModel(ps)
 
     # Monkeypatch _cache_image_to_disk to return distinct markers per image object
-    def fake_cache(self, img, image_type, page_index, project_id, ext):
+    def fake_cache(img, image_type, page_index, project_id, ext, cache_dir):
         if getattr(img, "shape", None) == (10, 10, 3):
             return "ENCODED-FIRST"
         if getattr(img, "shape", None) == (20, 20, 3):
@@ -135,8 +135,8 @@ def test_image_sources_change_after_rebind_with_mocked_encoder(tmp_path, monkeyp
         return ""
 
     monkeypatch.setattr(
-        PageStateViewModel,
-        "_cache_image_to_disk",
+        vm_module,
+        "cache_image_to_disk",
         fake_cache,
     )
 
@@ -234,46 +234,38 @@ def test_update_request_during_in_progress_is_coalesced(tmp_path, monkeypatch):
 
 
 def test_cache_image_to_disk_creates_file_and_deduplicates(tmp_path):
-    """_cache_image_to_disk writes the file once; a second call reuses it."""
+    """cache_image_to_disk writes the file once; a second call reuses it."""
     import numpy as np
 
-    project_state = ProjectState()
-    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
-    page_state = PageState()
-    page_state.set_project_context(project_state.project, tmp_path, project_state)
+    from ocr_labeler.operations.ocr.image_cache_operations import cache_image_to_disk
 
-    vm = PageStateViewModel(page_state)
-    vm._word_image_cache_dir = tmp_path / "cache"
-    vm._word_image_cache_dir.mkdir()
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
 
     img = np.zeros((5, 5, 3), dtype=np.uint8)
 
-    url1 = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
-    url2 = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
+    url1 = cache_image_to_disk(img, "original", 0, "proj", ".png", cache_dir)
+    url2 = cache_image_to_disk(img, "original", 0, "proj", ".png", cache_dir)
 
     assert url1.startswith("/_word_image_cache/")
     assert "original" in url1
     assert url1 == url2
-    assert len(list((tmp_path / "cache").glob("*.png"))) == 1
+    assert len(list(cache_dir.glob("*.png"))) == 1
 
 
 def test_cache_image_to_disk_separates_image_types(tmp_path):
     """Different image_type labels produce distinct cache files and URLs."""
     import numpy as np
 
-    project_state = ProjectState()
-    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
-    page_state = PageState()
-    page_state.set_project_context(project_state.project, tmp_path, project_state)
+    from ocr_labeler.operations.ocr.image_cache_operations import cache_image_to_disk
 
-    vm = PageStateViewModel(page_state)
-    vm._word_image_cache_dir = tmp_path / "cache"
-    vm._word_image_cache_dir.mkdir()
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
 
     img = np.zeros((5, 5, 3), dtype=np.uint8)
 
-    url_original = vm._cache_image_to_disk(img, "original", 0, "proj", ".png")
-    url_lines = vm._cache_image_to_disk(img, "lines", 0, "proj", ".png")
+    url_original = cache_image_to_disk(img, "original", 0, "proj", ".png", cache_dir)
+    url_lines = cache_image_to_disk(img, "lines", 0, "proj", ".png", cache_dir)
 
     assert url_original != url_lines
     assert "original" in url_original
@@ -284,24 +276,20 @@ def test_cache_image_to_disk_changes_url_for_small_pixel_differences(tmp_path):
     """Small overlay edits must produce a fresh cached file and URL."""
     import numpy as np
 
-    project_state = ProjectState()
-    project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
-    page_state = PageState()
-    page_state.set_project_context(project_state.project, tmp_path, project_state)
+    from ocr_labeler.operations.ocr.image_cache_operations import cache_image_to_disk
 
-    vm = PageStateViewModel(page_state)
-    vm._word_image_cache_dir = tmp_path / "cache"
-    vm._word_image_cache_dir.mkdir()
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
 
     before = np.zeros((101, 101, 3), dtype=np.uint8)
     after = before.copy()
     after[1, 1] = [255, 255, 255]
 
-    before_url = vm._cache_image_to_disk(before, "words", 0, "proj", ".png")
-    after_url = vm._cache_image_to_disk(after, "words", 0, "proj", ".png")
+    before_url = cache_image_to_disk(before, "words", 0, "proj", ".png", cache_dir)
+    after_url = cache_image_to_disk(after, "words", 0, "proj", ".png", cache_dir)
 
     assert before_url != after_url
-    assert len(list((tmp_path / "cache").glob("*.png"))) == 2
+    assert len(list(cache_dir.glob("*.png"))) == 2
 
 
 def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
@@ -340,13 +328,13 @@ def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
     for path in [stale_original, stale_lines, other_page]:
         path.write_bytes(b"old")
 
-    def fake_cache(np_img, image_type, page_index, project_id, ext):
+    def fake_cache(np_img, image_type, page_index, project_id, ext, cache_dir):
         page_number = max(1, page_index + 1)
         filename = f"{project_id}_{page_number:03d}_{image_type}_newhash{ext}"
         (vm._word_image_cache_dir / filename).write_bytes(b"new")
         return f"/_word_image_cache/{filename}?v=newhash"
 
-    monkeypatch.setattr(vm, "_cache_image_to_disk", fake_cache)
+    monkeypatch.setattr(vm_module, "cache_image_to_disk", fake_cache)
     monkeypatch.setattr(vm, "_resolve_project_id_for_cache", lambda: "proj")
 
     vm._update_image_sources_blocking()

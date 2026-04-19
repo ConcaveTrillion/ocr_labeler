@@ -32,6 +32,7 @@ class BaseView(ABC, Generic[TViewModel]):
         self.viewmodel: TViewModel = viewmodel
         self._root: Any = None
         self._is_built = False
+        self._is_torn_down = False
 
         # Set up property change listening
         self.viewmodel.add_property_changed_listener(
@@ -88,3 +89,16 @@ class BaseView(ABC, Generic[TViewModel]):
         This should be called at the end of the build() method.
         """
         self._is_built = True
+
+    def teardown(self):
+        """Clean up listeners registered during __init__.
+
+        Idempotent — safe to call more than once.  Subclasses that register
+        additional listeners should override this method and call ``super().teardown()``.
+        """
+        if self._is_torn_down:
+            return
+        self._is_torn_down = True
+        self.viewmodel.remove_property_changed_listener(
+            self._on_viewmodel_property_changed
+        )

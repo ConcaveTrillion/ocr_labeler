@@ -13,7 +13,7 @@ from nicegui.testing import User
 from nicegui.testing.user_interaction import UserInteraction
 
 from ocr_labeler.app import NiceGuiLabeler
-from ocr_labeler.viewmodels.project.page_state_view_model import PageStateViewModel
+from ocr_labeler.viewmodels.project import page_state_view_model as vm_module
 
 
 @pytest.fixture
@@ -90,14 +90,14 @@ def mock_ocr_processing(monkeypatch):
         mock_ocr.return_value = mock_document
 
         # Monkeypatch _cache_image_to_disk to avoid actual image processing
-        def fake_cache_image(self, img, image_type, page_index, project_id, ext):
+        def fake_cache_image(img, image_type, page_index, project_id, ext, cache_dir):
             if hasattr(img, "shape"):
                 return f"/_word_image_cache/fake_{image_type}_{img.shape}{ext}"
             return ""
 
         monkeypatch.setattr(
-            PageStateViewModel,
-            "_cache_image_to_disk",
+            vm_module,
+            "cache_image_to_disk",
             fake_cache_image,
         )
 

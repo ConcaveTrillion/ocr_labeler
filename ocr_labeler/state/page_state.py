@@ -989,6 +989,52 @@ class PageState:
             project_id=project_id,
         )
 
+    def _dispatch_line_op(
+        self,
+        line_op_name: str,
+        operation_label: str,
+        *args,
+        _finalize: str = "structural",
+        _reraise: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Dispatch a ``LineOperations`` method on the current page.
+
+        Consolidates the repeated guard / call / finalize / error-handling
+        boilerplate shared by all structural and bbox editing methods.
+
+        Args:
+            line_op_name: Method name on ``LineOperations``.
+            operation_label: Human-readable label for log messages.
+            *args: Positional arguments forwarded after ``page``.
+            _finalize: ``"structural"`` or ``"bbox"`` — selects the
+                post-success finalizer.
+            _reraise: When *True*, re-raise exceptions instead of
+                returning *False*.
+            **kwargs: Keyword arguments forwarded to the operation.
+        """
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for %s", operation_label)
+            return False
+
+        try:
+            from ..operations.ocr.line_operations import LineOperations
+
+            line_ops = LineOperations()
+            result = getattr(line_ops, line_op_name)(page, *args, **kwargs)
+            if result:
+                if _finalize == "structural":
+                    self._finalize_structural_edit(page, operation_label)
+                else:
+                    self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error in %s: %s", operation_label, e)
+            if _reraise:
+                raise
+            return False
+
     def merge_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Merge selected lines on the current page into the first selected line.
 
@@ -999,38 +1045,7 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for line merge")
-            return False
-
-        logger.debug(
-            "PageState.merge_lines: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_indices,
-            type(page).__name__,
-        )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.merge_lines(page, line_indices)
-            logger.debug(
-                "PageState.merge_lines result: selected=%s success=%s",
-                line_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "line merge")
-
-            return result
-        except Exception as e:
-            logger.exception("Error merging lines %s: %s", line_indices, e)
-            return False
+        return self._dispatch_line_op("merge_lines", "line merge", line_indices)
 
     def delete_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Delete selected lines on the current page.
@@ -1042,38 +1057,7 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for line deletion")
-            return False
-
-        logger.debug(
-            "PageState.delete_lines: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_indices,
-            type(page).__name__,
-        )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.delete_lines(page, line_indices)
-            logger.debug(
-                "PageState.delete_lines result: selected=%s success=%s",
-                line_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "line deletion")
-
-            return result
-        except Exception as e:
-            logger.exception("Error deleting lines %s: %s", line_indices, e)
-            return False
+        return self._dispatch_line_op("delete_lines", "line deletion", line_indices)
 
     def merge_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
         """Merge selected paragraphs on the current page into the first selected paragraph.
@@ -1085,38 +1069,9 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for paragraph merge")
-            return False
-
-        logger.debug(
-            "PageState.merge_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            paragraph_indices,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "merge_paragraphs", "paragraph merge", paragraph_indices
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.merge_paragraphs(page, paragraph_indices)
-            logger.debug(
-                "PageState.merge_paragraphs result: selected=%s success=%s",
-                paragraph_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "paragraph merge")
-
-            return result
-        except Exception as e:
-            logger.exception("Error merging paragraphs %s: %s", paragraph_indices, e)
-            return False
 
     def delete_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
         """Delete selected paragraphs on the current page.
@@ -1128,38 +1083,9 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for paragraph deletion")
-            return False
-
-        logger.debug(
-            "PageState.delete_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            paragraph_indices,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "delete_paragraphs", "paragraph deletion", paragraph_indices
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.delete_paragraphs(page, paragraph_indices)
-            logger.debug(
-                "PageState.delete_paragraphs result: selected=%s success=%s",
-                paragraph_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "paragraph deletion")
-
-            return result
-        except Exception as e:
-            logger.exception("Error deleting paragraphs %s: %s", paragraph_indices, e)
-            return False
 
     def split_paragraphs(self, page_index: int, paragraph_indices: list[int]) -> bool:
         """Split selected paragraphs on the current page into one paragraph per line.
@@ -1171,38 +1097,9 @@ class PageState:
         Returns:
             bool: True if any selected paragraph was split, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for paragraph split")
-            return False
-
-        logger.debug(
-            "PageState.split_paragraphs: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            paragraph_indices,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "split_paragraphs", "paragraph split", paragraph_indices
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_paragraphs(page, paragraph_indices)
-            logger.debug(
-                "PageState.split_paragraphs result: selected=%s success=%s",
-                paragraph_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "paragraph split")
-
-            return result
-        except Exception as e:
-            logger.exception("Error splitting paragraphs %s: %s", paragraph_indices, e)
-            return False
 
     def split_paragraph_after_line(self, page_index: int, line_index: int) -> bool:
         """Split the current line's paragraph immediately after the selected line.
@@ -1214,40 +1111,11 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for paragraph split-after-line")
-            return False
-
-        logger.debug(
-            "PageState.split_paragraph_after_line: page_index=%s current_index=%s line_index=%s page_type=%s",
-            page_index,
-            self._current_page_index,
+        return self._dispatch_line_op(
+            "split_paragraph_after_line",
+            "paragraph split-after-line",
             line_index,
-            type(page).__name__,
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_paragraph_after_line(page, line_index)
-            logger.debug(
-                "PageState.split_paragraph_after_line result: line_index=%s success=%s",
-                line_index,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "paragraph split-after-line")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting paragraph after line index %s: %s", line_index, e
-            )
-            return False
 
     def split_paragraph_with_selected_lines(
         self, page_index: int, line_indices: list[int]
@@ -1261,45 +1129,11 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for split-by-selected-lines")
-            return False
-
-        logger.debug(
-            "PageState.split_paragraph_with_selected_lines: page_index=%s current_index=%s line_indices=%s page_type=%s",
-            page_index,
-            self._current_page_index,
+        return self._dispatch_line_op(
+            "split_paragraph_with_selected_lines",
+            "paragraph split-by-selected-lines",
             line_indices,
-            type(page).__name__,
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_paragraph_with_selected_lines(page, line_indices)
-            logger.debug(
-                "PageState.split_paragraph_with_selected_lines result: line_indices=%s success=%s",
-                line_indices,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(
-                    page,
-                    "paragraph split-by-selected-lines",
-                )
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting paragraph with selected lines %s: %s",
-                line_indices,
-                e,
-            )
-            return False
 
     def delete_words(self, page_index: int, word_keys: list[tuple[int, int]]) -> bool:
         """Delete selected words on the current page.
@@ -1311,38 +1145,7 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word deletion")
-            return False
-
-        logger.debug(
-            "PageState.delete_words: page_index=%s current_index=%s selected=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            word_keys,
-            type(page).__name__,
-        )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.delete_words(page, word_keys)
-            logger.debug(
-                "PageState.delete_words result: selected=%s success=%s",
-                word_keys,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "word deletion")
-
-            return result
-        except Exception as e:
-            logger.exception("Error deleting words %s: %s", word_keys, e)
-            return False
+        return self._dispatch_line_op("delete_words", "word deletion", word_keys)
 
     def merge_word_left(
         self, page_index: int, line_index: int, word_index: int
@@ -1357,45 +1160,9 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word merge-left")
-            return False
-
-        logger.debug(
-            "PageState.merge_word_left: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_index,
-            word_index,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "merge_word_left", "word merge-left", line_index, word_index
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.merge_word_left(page, line_index, word_index)
-            logger.debug(
-                "PageState.merge_word_left result: line_index=%s word_index=%s success=%s",
-                line_index,
-                word_index,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "word merge-left")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error merging word left line=%s word=%s: %s",
-                line_index,
-                word_index,
-                e,
-            )
-            return False
 
     def merge_word_right(
         self, page_index: int, line_index: int, word_index: int
@@ -1410,45 +1177,9 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word merge-right")
-            return False
-
-        logger.debug(
-            "PageState.merge_word_right: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_index,
-            word_index,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "merge_word_right", "word merge-right", line_index, word_index
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.merge_word_right(page, line_index, word_index)
-            logger.debug(
-                "PageState.merge_word_right result: line_index=%s word_index=%s success=%s",
-                line_index,
-                word_index,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "word merge-right")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error merging word right line=%s word=%s: %s",
-                line_index,
-                word_index,
-                e,
-            )
-            return False
 
     def split_word(
         self,
@@ -1468,53 +1199,9 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word split")
-            return False
-
-        logger.debug(
-            "PageState.split_word: page_index=%s current_index=%s line_index=%s word_index=%s split_fraction=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_index,
-            word_index,
-            split_fraction,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "split_word", "word split", line_index, word_index, split_fraction
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_word(
-                page,
-                line_index,
-                word_index,
-                split_fraction,
-            )
-            logger.debug(
-                "PageState.split_word result: line_index=%s word_index=%s split_fraction=%s success=%s",
-                line_index,
-                word_index,
-                split_fraction,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "word split")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting word line=%s word=%s split_fraction=%s: %s",
-                line_index,
-                word_index,
-                split_fraction,
-                e,
-            )
-            return False
 
     def split_word_vertically_and_assign_to_closest_line(
         self,
@@ -1534,55 +1221,13 @@ class PageState:
         Returns:
             bool: True if split/reassignment succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical(
-                "No page available for vertical word split with line reassignment"
-            )
-            return False
-
-        logger.debug(
-            "PageState.split_word_vertically_and_assign_to_closest_line: page_index=%s current_index=%s line_index=%s word_index=%s split_fraction=%s page_type=%s",
-            page_index,
-            self._current_page_index,
+        return self._dispatch_line_op(
+            "split_word_vertically_and_assign_to_closest_line",
+            "word split vertical closest-line",
             line_index,
             word_index,
             split_fraction,
-            type(page).__name__,
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_word_vertically_and_assign_to_closest_line(
-                page,
-                line_index,
-                word_index,
-                split_fraction,
-            )
-            logger.debug(
-                "PageState.split_word_vertically_and_assign_to_closest_line result: line_index=%s word_index=%s split_fraction=%s success=%s",
-                line_index,
-                word_index,
-                split_fraction,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "word split vertical closest-line")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting word vertically line=%s word=%s split_fraction=%s: %s",
-                line_index,
-                word_index,
-                split_fraction,
-                e,
-            )
-            return False
 
     def split_line_after_word(
         self,
@@ -1600,45 +1245,9 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for line split-after-word")
-            return False
-
-        logger.debug(
-            "PageState.split_line_after_word: page_index=%s current_index=%s line_index=%s word_index=%s page_type=%s",
-            page_index,
-            self._current_page_index,
-            line_index,
-            word_index,
-            type(page).__name__,
+        return self._dispatch_line_op(
+            "split_line_after_word", "line split-after-word", line_index, word_index
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_line_after_word(page, line_index, word_index)
-            logger.debug(
-                "PageState.split_line_after_word result: line_index=%s word_index=%s success=%s",
-                line_index,
-                word_index,
-                result,
-            )
-
-            if result:
-                self._finalize_structural_edit(page, "line split-after-word")
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting line after word line=%s word=%s: %s",
-                line_index,
-                word_index,
-                e,
-            )
-            return False
 
     def rebox_word(
         self,
@@ -1664,57 +1273,17 @@ class PageState:
         Returns:
             bool: True if rebox succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word rebox")
-            return False
-
-        logger.debug(
-            "PageState.rebox_word: page_index=%s current_index=%s line_index=%s word_index=%s bbox=(%s,%s,%s,%s) page_type=%s",
-            page_index,
-            self._current_page_index,
+        return self._dispatch_line_op(
+            "rebox_word",
+            "word rebox",
             line_index,
             word_index,
             x1,
             y1,
             x2,
             y2,
-            type(page).__name__,
+            _finalize="bbox",
         )
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.rebox_word(
-                page,
-                line_index,
-                word_index,
-                x1,
-                y1,
-                x2,
-                y2,
-            )
-            logger.debug(
-                "PageState.rebox_word result: line_index=%s word_index=%s success=%s",
-                line_index,
-                word_index,
-                result,
-            )
-
-            if result:
-                self._finalize_bbox_edit(page)
-
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error reboxing word line=%s word=%s: %s",
-                line_index,
-                word_index,
-                e,
-            )
-            return False
 
     def add_word(
         self,
@@ -1738,23 +1307,9 @@ class PageState:
         Returns:
             bool: True if the word was added successfully, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for add_word")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.add_word_to_page(page, x1, y1, x2, y2, text=text)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error adding word to page: %s", e)
-            return False
+        return self._dispatch_line_op(
+            "add_word_to_page", "add word", x1, y1, x2, y2, text=text, _finalize="bbox"
+        )
 
     def nudge_word_bbox(
         self,
@@ -1782,41 +1337,19 @@ class PageState:
         Returns:
             bool: True if nudge succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word bbox nudge")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.nudge_word_bbox(
-                page,
-                line_index,
-                word_index,
-                left_delta,
-                right_delta,
-                top_delta,
-                bottom_delta,
-                refine_after=refine_after,
-            )
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error resizing word bbox line=%s word=%s deltas=(l=%s r=%s t=%s b=%s): %s",
-                line_index,
-                word_index,
-                left_delta,
-                right_delta,
-                top_delta,
-                bottom_delta,
-                e,
-            )
-            raise
+        return self._dispatch_line_op(
+            "nudge_word_bbox",
+            "word bbox nudge",
+            line_index,
+            word_index,
+            left_delta,
+            right_delta,
+            top_delta,
+            bottom_delta,
+            refine_after=refine_after,
+            _finalize="bbox",
+            _reraise=True,
+        )
 
     def refine_words(
         self,
@@ -1832,23 +1365,9 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for word refine")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.refine_words(page, word_keys)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error refining words %s: %s", word_keys, e)
-            return False
+        return self._dispatch_line_op(
+            "refine_words", "word refine", word_keys, _finalize="bbox"
+        )
 
     def expand_then_refine_words(
         self,
@@ -1864,23 +1383,12 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-then-refine")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_then_refine_words(page, word_keys)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error expand-then-refining words %s: %s", word_keys, e)
-            return False
+        return self._dispatch_line_op(
+            "expand_then_refine_words",
+            "expand-then-refine words",
+            word_keys,
+            _finalize="bbox",
+        )
 
     def expand_word_bboxes(
         self,
@@ -1898,23 +1406,13 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-bbox")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_word_bboxes(page, word_keys, padding_px=padding_px)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error expanding word bboxes %s: %s", word_keys, e)
-            return False
+        return self._dispatch_line_op(
+            "expand_word_bboxes",
+            "expand word bboxes",
+            word_keys,
+            padding_px=padding_px,
+            _finalize="bbox",
+        )
 
     def refine_lines(self, page_index: int, line_indices: list[int]) -> bool:
         """Refine selected lines on the current page.
@@ -1926,23 +1424,9 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for line refine")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.refine_lines(page, line_indices)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error refining lines %s: %s", line_indices, e)
-            return False
+        return self._dispatch_line_op(
+            "refine_lines", "line refine", line_indices, _finalize="bbox"
+        )
 
     def refine_paragraphs(
         self,
@@ -1958,27 +1442,12 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for paragraph refine")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.refine_paragraphs(page, paragraph_indices)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error refining paragraphs %s: %s",
-                paragraph_indices,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "refine_paragraphs",
+            "paragraph refine",
+            paragraph_indices,
+            _finalize="bbox",
+        )
 
     def expand_then_refine_lines(
         self,
@@ -1994,23 +1463,12 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-then-refine lines")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_then_refine_lines(page, line_indices)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error expand-then-refining lines %s: %s", line_indices, e)
-            return False
+        return self._dispatch_line_op(
+            "expand_then_refine_lines",
+            "expand-then-refine lines",
+            line_indices,
+            _finalize="bbox",
+        )
 
     def expand_then_refine_paragraphs(
         self,
@@ -2026,27 +1484,12 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-then-refine paragraphs")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_then_refine_paragraphs(page, paragraph_indices)
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error expand-then-refining paragraphs %s: %s",
-                paragraph_indices,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "expand_then_refine_paragraphs",
+            "expand-then-refine paragraphs",
+            paragraph_indices,
+            _finalize="bbox",
+        )
 
     def expand_line_bboxes(
         self,
@@ -2064,25 +1507,13 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-line-bboxes")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_line_bboxes(
-                page, line_indices, padding_px=padding_px
-            )
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception("Error expanding line bboxes %s: %s", line_indices, e)
-            return False
+        return self._dispatch_line_op(
+            "expand_line_bboxes",
+            "expand line bboxes",
+            line_indices,
+            padding_px=padding_px,
+            _finalize="bbox",
+        )
 
     def expand_paragraph_bboxes(
         self,
@@ -2100,29 +1531,13 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for expand-paragraph-bboxes")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.expand_paragraph_bboxes(
-                page, paragraph_indices, padding_px=padding_px
-            )
-            if result:
-                self._finalize_bbox_edit(page)
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error expanding paragraph bboxes %s: %s",
-                paragraph_indices,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "expand_paragraph_bboxes",
+            "expand paragraph bboxes",
+            paragraph_indices,
+            padding_px=padding_px,
+            _finalize="bbox",
+        )
 
     def split_line_with_selected_words(
         self,
@@ -2138,30 +1553,11 @@ class PageState:
         Returns:
             bool: True if extraction succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for split-line-by-selected-words")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_line_with_selected_words(page, word_keys)
-            if result:
-                self._finalize_structural_edit(
-                    page,
-                    "selected-word single-line extraction",
-                )
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error extracting selected words into one line %s: %s",
-                word_keys,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "split_line_with_selected_words",
+            "selected-word single-line extraction",
+            word_keys,
+        )
 
     def split_lines_into_selected_and_unselected_words(
         self,
@@ -2169,33 +1565,11 @@ class PageState:
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Split each affected line into selected/unselected word lines."""
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for selected/unselected per-line split")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.split_lines_into_selected_and_unselected_words(
-                page,
-                word_keys,
-            )
-            if result:
-                self._finalize_structural_edit(
-                    page,
-                    "selected/unselected per-line split",
-                )
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error splitting lines into selected/unselected words %s: %s",
-                word_keys,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "split_lines_into_selected_and_unselected_words",
+            "selected/unselected per-line split",
+            word_keys,
+        )
 
     def group_selected_words_into_new_paragraph(
         self,
@@ -2211,30 +1585,11 @@ class PageState:
         Returns:
             bool: True if grouping succeeded, False otherwise.
         """
-        _ = page_index
-        page = self.current_page
-        if not page:
-            logger.critical("No page available for selected-word paragraph grouping")
-            return False
-
-        try:
-            from ..operations.ocr.line_operations import LineOperations
-
-            line_ops = LineOperations()
-            result = line_ops.group_selected_words_into_new_paragraph(page, word_keys)
-            if result:
-                self._finalize_structural_edit(
-                    page,
-                    "selected-word paragraph grouping",
-                )
-            return result
-        except Exception as e:
-            logger.exception(
-                "Error grouping selected words into new paragraph %s: %s",
-                word_keys,
-                e,
-            )
-            return False
+        return self._dispatch_line_op(
+            "group_selected_words_into_new_paragraph",
+            "selected-word paragraph grouping",
+            word_keys,
+        )
 
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.

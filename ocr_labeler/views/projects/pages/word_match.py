@@ -9,7 +9,6 @@ from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
 
 from ....models.line_match_model import LineMatch
-from ....operations.ocr.word_operations import WordOperations
 from ....viewmodels.project.word_match_view_model import WordMatchViewModel
 from .word_match_actions import WordMatchActions
 from .word_match_bbox import WordMatchBbox
@@ -277,7 +276,7 @@ class WordMatchView:
             self.view_model.update_from_page(page)
             # Update the UI
             self._update_summary()
-            self._update_lines_display()
+            self.renderer.update_lines_display()
             logger.debug("WordMatchView update complete")
 
         except RuntimeError as e:
@@ -426,22 +425,16 @@ class WordMatchView:
         if word_object is None:
             return False, False, False, False, False
 
-        word_ops = WordOperations()
-        italic = word_ops.read_word_attribute(
-            word_object, "italic", aliases=("is_italic",)
-        )
-        small_caps = word_ops.read_word_attribute(
-            word_object,
+        italic = word_object.read_style_attribute("italic", aliases=("is_italic",))
+        small_caps = word_object.read_style_attribute(
             "small_caps",
             aliases=("is_small_caps",),
         )
-        blackletter = word_ops.read_word_attribute(
-            word_object,
+        blackletter = word_object.read_style_attribute(
             "blackletter",
             aliases=("is_blackletter",),
         )
-        footnote_marker = word_ops.read_word_attribute(
-            word_object,
+        footnote_marker = word_object.read_style_attribute(
             "left_footnote",
             aliases=("is_left_footnote",),
         )
@@ -737,7 +730,7 @@ class WordMatchView:
         logger.debug("Filter selector value: %s", self.filter_selector.value)
         self.filter_mode = self.filter_selector.value
         logger.debug("Filter mode set to: %s", self.filter_mode)
-        self._update_lines_display()
+        self.renderer.update_lines_display()
         logger.debug("Filter change handling complete")
 
     def _get_effective_selected_lines(self) -> list[int]:

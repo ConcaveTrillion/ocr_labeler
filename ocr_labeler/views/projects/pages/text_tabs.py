@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import contextlib
 import hashlib
 import logging
+from typing import TYPE_CHECKING
 
 from nicegui import binding, ui
 from pd_book_tools.ocr.page import Page
 
-from ....operations.ocr.word_operations import WordOperations
+if TYPE_CHECKING:
+    from pd_book_tools.ocr.word import Word
+
 from ....state import PageState
 from ....state.page_state import (
     WordGroundTruthChangedEvent,
@@ -846,40 +851,29 @@ class TextTabs:
             paragraph_fingerprint,
         )
 
-    def _word_bbox_signature(self, word: object) -> str:
+    def _word_bbox_signature(self, word: "Word") -> str:
         """Return a stable bbox signature for dedupe checks."""
-        bbox = getattr(word, "bounding_box", None)
-        if bbox is None:
+        sig = word.bbox_signature
+        if sig is None:
             return ""
+        return f"{sig[0]:.6f}:{sig[1]:.6f}:{sig[2]:.6f}:{sig[3]:.6f}:{int(sig[4])}"
 
-        min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
-        min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
-        max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
-        max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
-        is_normalized = bool(getattr(bbox, "is_normalized", False))
-        return f"{min_x:.6f}:{min_y:.6f}:{max_x:.6f}:{max_y:.6f}:{int(is_normalized)}"
-
-    def _word_style_signature(self, word: object) -> str:
+    def _word_style_signature(self, word: "Word") -> str:
         """Return stable style signature for dedupe checks."""
-        word_ops = WordOperations()
-        italic = word_ops.read_word_attribute(word, "italic", aliases=("is_italic",))
-        small_caps = word_ops.read_word_attribute(
-            word,
+        italic = word.read_style_attribute("italic", aliases=("is_italic",))
+        small_caps = word.read_style_attribute(
             "small_caps",
             aliases=("is_small_caps",),
         )
-        blackletter = word_ops.read_word_attribute(
-            word,
+        blackletter = word.read_style_attribute(
             "blackletter",
             aliases=("is_blackletter",),
         )
-        left_footnote = word_ops.read_word_attribute(
-            word,
+        left_footnote = word.read_style_attribute(
             "left_footnote",
             aliases=("is_left_footnote",),
         )
-        right_footnote = word_ops.read_word_attribute(
-            word,
+        right_footnote = word.read_style_attribute(
             "right_footnote",
             aliases=("is_right_footnote",),
         )

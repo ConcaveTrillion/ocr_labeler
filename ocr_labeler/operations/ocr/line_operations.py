@@ -1,46 +1,38 @@
 """Line-level and word-level structural/GT operations for OCR labeling.
 
-This module contains the ``LineOperations`` façade that composes three
-extracted base/mixin classes via multiple inheritance:
+This module contains the ``LineOperations`` class that provides all
+line/word structural and ground-truth editing methods, paragraph-level
+operations, and word/line/paragraph bbox refinement operations.
 
-* :class:`PageStructureOperations` – private helpers & page-structure utilities
-* :class:`ParagraphOperationsMixin` – paragraph-level operations
-* :class:`WordBboxOperationsMixin` – word/line/paragraph bbox refinement ops
-
-``LineOperations`` itself retains only the line/word structural and
-ground-truth editing methods.
+All delegation is done directly to ``Page``, ``Block``, ``Word``, and
+``BoundingBox`` methods rather than through intermediate mixin classes.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
-from .page_structure_operations import PageStructureOperations
-from .paragraph_operations import ParagraphOperationsMixin
-from .word_bbox_operations import WordBboxOperationsMixin
-from .word_operations import WordOperations
-
-if TYPE_CHECKING:
-    from pd_book_tools.ocr.page import Page
+from pd_book_tools.geometry.bounding_box import BoundingBox
+from pd_book_tools.geometry.point import Point
+from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
+from pd_book_tools.ocr.page import Page
+from pd_book_tools.ocr.word import Word
 
 logger = logging.getLogger(__name__)
 
 
-class LineOperations(
-    PageStructureOperations, ParagraphOperationsMixin, WordBboxOperationsMixin
-):
+class LineOperations:
     """Handle line-level and word-level structural/GT operations.
 
-    This class inherits page-structure helpers, paragraph operations, and
-    word-bbox refinement operations from its base classes, and directly
-    provides:
+    Provides:
 
     - Copying ground truth ↔ OCR text for lines and selected words
     - Clearing ground truth text
     - Word-level GT and attribute editing
     - Line merging, deletion, and splitting
     - Word merging, splitting, deletion, reboxing, and nudging
+    - Paragraph-level operations (merge, delete, split, group)
+    - Word/line/paragraph bbox refinement and expansion
     """
 
     def copy_ground_truth_to_ocr(self, page: "Page", line_index: int) -> bool:
@@ -178,7 +170,7 @@ class LineOperations(
         updated_count = 0
         for line_index, word_index in sorted(set(word_keys)):
             try:
-                line_words = self._validated_line_words(page, line_index)
+                line_words = page.validated_line_words(line_index)
                 if (
                     line_words is None
                     or word_index < 0
@@ -187,7 +179,7 @@ class LineOperations(
                     continue
 
                 target_word = line_words[word_index]
-                ocr_text = str(getattr(target_word, "text", "") or "")
+                ocr_text = str(target_word.text or "")
                 if not ocr_text.strip():
                     continue
 
@@ -288,7 +280,7 @@ class LineOperations(
             return False
 
         try:
-            line_words = self._validated_line_words(page, line_index)
+            line_words = page.validated_line_words(line_index)
             if line_words is None:
                 return False
 
@@ -303,10 +295,7 @@ class LineOperations(
 
             normalized_value = str(ground_truth_text or "")
             target_word = line_words[word_index]
-            if (
-                str(getattr(target_word, "ground_truth_text", "") or "")
-                == normalized_value
-            ):
+            if str(target_word.ground_truth_text or "") == normalized_value:
                 logger.debug(
                     "Word GT unchanged for line=%s word=%s",
                     line_index,
@@ -318,19 +307,17 @@ class LineOperations(
 
             lines = list(page.lines)
             target_line = lines[line_index]
-            if hasattr(target_line, "words"):
-                line_gt = " ".join(
-                    str(getattr(word, "ground_truth_text", "") or "")
-                    for word in list(getattr(target_line, "words", []) or [])
-                ).strip()
-                with_gt = bool(line_gt)
-                try:
-                    target_line.ground_truth_text = line_gt if with_gt else ""
-                except Exception:
-                    logger.debug(
-                        "Unable to update line ground_truth_text after word edit",
-                        exc_info=True,
-                    )
+            line_gt = " ".join(
+                str(word.ground_truth_text or "") for word in list(target_line.words)
+            ).strip()
+            with_gt = bool(line_gt)
+            try:
+                target_line.ground_truth_text = line_gt if with_gt else ""
+            except Exception:
+                logger.debug(
+                    "Unable to update line ground_truth_text after word edit",
+                    exc_info=True,
+                )
 
             logger.info(
                 "Updated GT for line=%d word=%d",
@@ -379,7 +366,7 @@ class LineOperations(
             return False
 
         try:
-            line_words = self._validated_line_words(page, line_index)
+            line_words = page.validated_line_words(line_index)
             if line_words is None:
                 return False
 
@@ -393,7 +380,6 @@ class LineOperations(
                 return False
 
             target_word = line_words[word_index]
-            word_ops = WordOperations()
 
             desired_italic = bool(italic)
             desired_small_caps = bool(small_caps)
@@ -402,24 +388,22 @@ class LineOperations(
             desired_right_footnote = bool(right_footnote)
 
             if (
-                word_ops.read_word_attribute(
-                    target_word, "italic", aliases=("is_italic",)
-                )
+                target_word.read_style_attribute("italic", aliases=("is_italic",))
                 == desired_italic
-                and word_ops.read_word_attribute(
-                    target_word, "small_caps", aliases=("is_small_caps",)
+                and target_word.read_style_attribute(
+                    "small_caps", aliases=("is_small_caps",)
                 )
                 == desired_small_caps
-                and word_ops.read_word_attribute(
-                    target_word, "blackletter", aliases=("is_blackletter",)
+                and target_word.read_style_attribute(
+                    "blackletter", aliases=("is_blackletter",)
                 )
                 == desired_blackletter
-                and word_ops.read_word_attribute(
-                    target_word, "left_footnote", aliases=("is_left_footnote",)
+                and target_word.read_style_attribute(
+                    "left_footnote", aliases=("is_left_footnote",)
                 )
                 == desired_left_footnote
-                and word_ops.read_word_attribute(
-                    target_word, "right_footnote", aliases=("is_right_footnote",)
+                and target_word.read_style_attribute(
+                    "right_footnote", aliases=("is_right_footnote",)
                 )
                 == desired_right_footnote
             ):
@@ -430,8 +414,7 @@ class LineOperations(
                 )
                 return True
 
-            word_ops.update_word_attributes(
-                target_word,
+            target_word.update_style_attributes(
                 italic=desired_italic,
                 small_caps=desired_small_caps,
                 blackletter=desired_blackletter,
@@ -475,8 +458,6 @@ class LineOperations(
             return False
 
         try:
-            from pd_book_tools.ocr.block import Block
-
             lines = list(page.lines)
             line_count_before = len(lines)
 
@@ -519,7 +500,7 @@ class LineOperations(
                 try:
                     primary_line.merge(secondary_line)
                 except Exception as merge_error:
-                    if not self._is_geometry_normalization_error(merge_error):
+                    if not BoundingBox.is_geometry_normalization_error(merge_error):
                         raise
                     logger.warning(
                         "Line merge hit malformed bbox metadata (primary=%s secondary=%s): %s; applying merge fallback",
@@ -527,10 +508,7 @@ class LineOperations(
                         index,
                         merge_error,
                     )
-                    if not self._merge_line_blocks_fallback(
-                        primary_line,
-                        secondary_line,
-                    ):
+                    if not primary_line.merge_fallback(secondary_line):
                         return False
 
             remove_line_if_exists = page.remove_line_if_exists
@@ -545,16 +523,16 @@ class LineOperations(
                 remove_line_if_exists(lines[index])
 
             try:
-                self._finalize_page_structure(page)
+                page.finalize_page_structure()
             except Exception as finalize_error:
-                if not self._is_geometry_normalization_error(finalize_error):
+                if not BoundingBox.is_geometry_normalization_error(finalize_error):
                     raise
                 logger.warning(
                     "Merged lines but skipped final bbox recompute due to malformed geometry: %s",
                     finalize_error,
                 )
-                self._remove_empty_items_safely(page)
-                self._recompute_paragraph_bboxes_with_block_api(page)
+                page._remove_empty_items_safely()
+                page._recompute_paragraph_bboxes()
 
             lines_after = len(list(page.lines))
             logger.info(
@@ -658,7 +636,7 @@ class LineOperations(
             for line_index, word_index in unique_keys:
                 line_words = validated_by_line.get(line_index)
                 if line_words is None:
-                    line_words = self._validated_line_words(page, line_index)
+                    line_words = page.validated_line_words(line_index)
                     if line_words is None:
                         return False
                     validated_by_line[line_index] = line_words
@@ -676,19 +654,20 @@ class LineOperations(
                 keys_by_line.setdefault(line_index, []).append(word_index)
 
             for line_index, word_indices in keys_by_line.items():
-                line_words = self._validated_line_words(page, line_index)
+                line_words = page.validated_line_words(line_index)
                 if line_words is None:
                     return False
+                lines = list(page.lines)
                 for word_index in sorted(word_indices, reverse=True):
-                    if not self._remove_word_from_line(
-                        page=page,
-                        line_index=line_index,
-                        word_index=word_index,
-                        line_words=line_words,
-                    ):
+                    if line_index < 0 or line_index >= len(lines):
                         return False
+                    line = lines[line_index]
+                    words = list(line_words)
+                    if word_index < 0 or word_index >= len(words):
+                        return False
+                    line.remove_item(words[word_index])
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
 
             logger.info("Deleted %d selected words", len(unique_keys))
             return True
@@ -708,12 +687,15 @@ class LineOperations(
         Returns:
             bool: True when merge succeeds, False otherwise.
         """
-        return self._merge_adjacent_words(
-            page=page,
-            line_index=line_index,
-            word_index=word_index,
-            direction="left",
-        )
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            logger.warning(
+                "Line index %s out of range (0-%s)",
+                line_index,
+                len(lines) - 1,
+            )
+            return False
+        return lines[line_index].merge_adjacent_words(word_index, "left")
 
     def merge_word_right(self, page: "Page", line_index: int, word_index: int) -> bool:
         """Merge the selected word with its immediate right neighbor.
@@ -726,12 +708,15 @@ class LineOperations(
         Returns:
             bool: True when merge succeeds, False otherwise.
         """
-        return self._merge_adjacent_words(
-            page=page,
-            line_index=line_index,
-            word_index=word_index,
-            direction="right",
-        )
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            logger.warning(
+                "Line index %s out of range (0-%s)",
+                line_index,
+                len(lines) - 1,
+            )
+            return False
+        return lines[line_index].merge_adjacent_words(word_index, "right")
 
     def split_word(
         self,
@@ -773,7 +758,7 @@ class LineOperations(
                 return False
 
             line = lines[line_index]
-            words = list(getattr(line, "words", []) or [])
+            words = list(line.words)
             if word_index < 0 or word_index >= len(words):
                 logger.warning(
                     "Word split index %s out of range for line %s (0-%s)",
@@ -784,7 +769,7 @@ class LineOperations(
                 return False
 
             word = words[word_index]
-            word_text = str(getattr(word, "text", "") or "")
+            word_text = str(word.text or "")
             if len(word_text) < 2:
                 logger.warning(
                     "Word split requires at least two characters (line=%s, word=%s)",
@@ -793,8 +778,8 @@ class LineOperations(
                 )
                 return False
 
-            bbox = getattr(word, "bounding_box", None)
-            bbox_width = float(getattr(bbox, "width", 0.0) or 0.0)
+            bbox = word.bounding_box
+            bbox_width = float(bbox.width if bbox else 0.0)
             if bbox is None or bbox_width <= 0.0:
                 logger.warning(
                     "Word split requires valid non-zero bounding box (line=%s, word=%s)",
@@ -814,38 +799,19 @@ class LineOperations(
                 epsilon, min(bbox_width - epsilon, bbox_split_offset)
             )
 
-            split_word = getattr(line, "split_word", None)
-            if callable(split_word):
-                split_word(
-                    split_word_index=word_index,
-                    bbox_split_offset=bbox_split_offset,
-                    character_split_index=character_split_index,
-                )
-            else:
-                word_left, word_right = word.split(
-                    bbox_split_offset=bbox_split_offset,
-                    character_split_index=character_split_index,
-                )
-                remove_item = getattr(line, "remove_item", None)
-                add_item = getattr(line, "add_item", None)
-                if callable(remove_item) and callable(add_item):
-                    remove_item(word)
-                    add_item(word_left)
-                    add_item(word_right)
-                else:
-                    logger.warning(
-                        "Line type %s does not support split replacement APIs",
-                        type(line).__name__,
-                    )
-                    return False
+            line.split_word(
+                split_word_index=word_index,
+                bbox_split_offset=bbox_split_offset,
+                character_split_index=character_split_index,
+            )
 
-            updated_words = self._validated_line_words(page, line_index)
+            updated_words = page.validated_line_words(line_index)
             if updated_words is None:
                 return False
             for updated_word in updated_words:
                 updated_word.ground_truth_text = ""
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
 
             logger.info(
                 "Split word line=%d index=%d fraction=%.3f char_index=%d",
@@ -884,7 +850,7 @@ class LineOperations(
         Returns:
             bool: True when split/reassignment succeeds, False otherwise.
         """
-        lines_before_split = list(getattr(page, "lines", []) or [])
+        lines_before_split = list(page.lines)
         if line_index < 0 or line_index >= len(lines_before_split):
             logger.warning(
                 "Line index %s out of range (0-%s)",
@@ -898,8 +864,8 @@ class LineOperations(
             return False
 
         try:
-            lines = list(getattr(page, "lines", []) or [])
-            source_words = list(getattr(source_line, "words", []) or [])
+            lines = list(page.lines)
+            source_words = list(source_line.words)
             if word_index < 0 or word_index + 1 >= len(source_words):
                 logger.warning(
                     "Post-split word indices %s/%s unavailable on line %s",
@@ -910,16 +876,15 @@ class LineOperations(
                 return False
 
             split_words = [source_words[word_index], source_words[word_index + 1]]
-            line_midpoints = {
-                id(line): self._line_vertical_midpoint(line) for line in lines
-            }
 
             touched_lines: dict[int, object] = {id(source_line): source_line}
             for split_piece in split_words:
-                midpoint_y = self._word_vertical_midpoint(split_piece)
-                target_line = self._closest_line_by_midpoint(
+                piece_bbox = split_piece.bounding_box
+                midpoint_y = (
+                    piece_bbox.vertical_midpoint if piece_bbox is not None else None
+                )
+                target_line = Page.closest_line_by_midpoint(
                     lines,
-                    line_midpoints,
                     midpoint_y,
                     fallback_line=source_line,
                 )
@@ -928,7 +893,7 @@ class LineOperations(
                 if target_line is source_line:
                     continue
 
-                if not self._move_word_between_lines(
+                if not Page.move_word_between_lines(
                     source_line, target_line, split_piece
                 ):
                     logger.warning(
@@ -939,14 +904,12 @@ class LineOperations(
                     return False
 
             for touched_line in touched_lines.values():
-                touched_words = list(getattr(touched_line, "words", []) or [])
+                touched_words = list(touched_line.words)
                 for touched_word in touched_words:
                     touched_word.ground_truth_text = ""
-                recompute_line = getattr(touched_line, "recompute_bounding_box", None)
-                if callable(recompute_line):
-                    recompute_line()
+                touched_line.recompute_bounding_box()
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
 
             logger.info(
                 "Split word vertically with closest-line assignment line=%d index=%d fraction=%.3f",
@@ -986,9 +949,7 @@ class LineOperations(
             return False
 
         try:
-            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
-
-            lines = list(getattr(page, "lines", []) or [])
+            lines = list(page.lines)
             if line_index < 0 or line_index >= len(lines):
                 logger.warning(
                     "Line index %s out of range for line split (0-%s)",
@@ -998,7 +959,7 @@ class LineOperations(
                 return False
 
             target_line = lines[line_index]
-            line_words = list(getattr(target_line, "words", []) or [])
+            line_words = list(target_line.words)
             if len(line_words) < 2:
                 logger.warning(
                     "Line split requires at least two words (line index %s)",
@@ -1025,10 +986,10 @@ class LineOperations(
                 )
                 return False
 
-            paragraphs = list(getattr(page, "paragraphs", []) or [])
+            paragraphs = list(page.paragraphs)
             target_paragraph = None
             for paragraph in paragraphs:
-                paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                paragraph_lines = list(paragraph.lines)
                 if target_line in paragraph_lines:
                     target_paragraph = paragraph
                     break
@@ -1040,7 +1001,7 @@ class LineOperations(
                 )
                 return False
 
-            parent = self._find_parent_block(page, target_paragraph)
+            parent = Page._find_parent_block_recursive(page, target_paragraph)
             if parent is None:
                 logger.warning(
                     "Unable to locate parent block for line split after word (%s, %s)",
@@ -1049,7 +1010,7 @@ class LineOperations(
                 )
                 return False
 
-            paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+            paragraph_items = list(target_paragraph.items)
             if target_line not in paragraph_items:
                 logger.warning(
                     "Target line missing in paragraph items for line split (%s, %s)",
@@ -1077,7 +1038,7 @@ class LineOperations(
             target_paragraph.recompute_bounding_box()
             parent.recompute_bounding_box()
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
 
             logger.info(
                 "Split line %s after word %s",
@@ -1126,7 +1087,7 @@ class LineOperations(
             return False
 
         try:
-            line_words = self._validated_line_words(page, line_index)
+            line_words = page.validated_line_words(line_index)
             if line_words is None:
                 return False
             if word_index < 0 or word_index >= len(line_words):
@@ -1152,15 +1113,14 @@ class LineOperations(
                 )
                 return False
 
-            from pd_book_tools.geometry.bounding_box import BoundingBox
-            from pd_book_tools.geometry.point import Point
-
             word = line_words[word_index]
-            existing_bbox = getattr(word, "bounding_box", None)
-            is_normalized = bool(getattr(existing_bbox, "is_normalized", False))
+            existing_bbox = word.bounding_box
+            is_normalized = bool(
+                existing_bbox.is_normalized if existing_bbox else False
+            )
 
             if is_normalized:
-                page_width, page_height = self._resolve_page_dimensions(page)
+                page_width, page_height = page.resolved_dimensions
                 if page_width <= 0.0 or page_height <= 0.0:
                     logger.warning(
                         "Unable to resolve page dimensions for normalized rebox"
@@ -1180,8 +1140,8 @@ class LineOperations(
 
             word.bounding_box = new_bbox
             if refine_after:
-                self._refine_word_bbox(page, word)
-            self._finalize_page_structure(page)
+                word.refine_bbox(page.cv2_numpy_page_image)
+            page.finalize_page_structure()
 
             logger.info(
                 "Reboxed word line=%d index=%d bbox=(%.2f, %.2f, %.2f, %.2f)",
@@ -1252,15 +1212,11 @@ class LineOperations(
                 return False
 
             # Determine bbox normalization from the first word found.
-            is_normalized = self._detect_page_normalization(page)
+            is_normalized = page.is_content_normalized
             page_width, page_height = 0.0, 0.0
 
-            from pd_book_tools.geometry.bounding_box import BoundingBox
-            from pd_book_tools.geometry.point import Point
-            from pd_book_tools.ocr.word import Word
-
             if is_normalized:
-                page_width, page_height = self._resolve_page_dimensions(page)
+                page_width, page_height = page.resolved_dimensions
                 if page_width <= 0.0 or page_height <= 0.0:
                     logger.warning("Unable to resolve page dimensions for add_word")
                     return False
@@ -1292,18 +1248,16 @@ class LineOperations(
                 cx = cx / page_width
                 cy = cy / page_height
 
-            target_line = self._closest_line_by_y_range_then_x(
+            target_line = Page.closest_line_by_y_range_then_x(
                 lines,
                 cx,
                 cy,
                 lines[0],
             )
 
-            if not self._add_word_to_line(target_line, new_word):
-                logger.warning("Failed to add new word to target line")
-                return False
+            target_line.add_item(new_word)
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
 
             logger.info(
                 "Added new word to page bbox=(%.2f, %.2f, %.2f, %.2f)",
@@ -1348,9 +1302,7 @@ class LineOperations(
             return False
 
         try:
-            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
-
-            lines = list(getattr(page, "lines", []) or [])
+            lines = list(page.lines)
 
             # Group selected word indices by line
             line_to_selected_word_indices: dict[int, set[int]] = {}
@@ -1368,16 +1320,16 @@ class LineOperations(
                 )
 
             # Process lines in visual order to preserve selected-word ordering.
-            selected_words_for_new_line: list[object] = []
+            selected_words_for_new_line: list[Word] = []
             source_line_bboxes: list[object] = []
-            containing_paragraphs: list[object] = []
-            line_insertion_points: list[tuple[object, int]] = []
+            containing_paragraphs: list[Block] = []
+            line_insertion_points: list[tuple[Block, int]] = []
             emptied_line_ids: set[int] = set()
             for line_index in sorted(line_to_selected_word_indices):
                 selected_word_indices = line_to_selected_word_indices[line_index]
                 target_line = lines[line_index]
-                line_words = list(getattr(target_line, "words", []) or [])
-                source_line_original_bbox = getattr(target_line, "bounding_box", None)
+                line_words = list(target_line.words)
+                source_line_original_bbox = target_line.bounding_box
 
                 if len(line_words) < 1:
                     logger.warning("Line %s has no words", line_index)
@@ -1410,14 +1362,17 @@ class LineOperations(
                     return False
 
                 selected_words_for_new_line.extend(selected_words)
-                if self._has_usable_bbox(source_line_original_bbox):
+                if (
+                    source_line_original_bbox is not None
+                    and source_line_original_bbox.has_usable_coordinates
+                ):
                     source_line_bboxes.append(source_line_original_bbox)
 
                 # Find parent paragraph
-                paragraphs = list(getattr(page, "paragraphs", []) or [])
+                paragraphs = list(page.paragraphs)
                 target_paragraph = None
                 for paragraph in paragraphs:
-                    paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                    paragraph_lines = list(paragraph.lines)
                     if target_line in paragraph_lines:
                         target_paragraph = paragraph
                         break
@@ -1429,7 +1384,7 @@ class LineOperations(
                     return False
                 containing_paragraphs.append(target_paragraph)
 
-                paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+                paragraph_items = list(target_paragraph.items)
                 if target_line not in paragraph_items:
                     logger.warning(
                         "Target line missing in paragraph items for line %s",
@@ -1446,14 +1401,13 @@ class LineOperations(
                 if not unselected_words:
                     emptied_line_ids.add(id(target_line))
 
-                recompute_target_line = getattr(
-                    target_line, "recompute_bounding_box", None
-                )
-                if unselected_words and callable(recompute_target_line):
+                if unselected_words:
                     try:
-                        recompute_target_line()
+                        target_line.recompute_bounding_box()
                     except Exception as recompute_error:
-                        if not self._is_geometry_normalization_error(recompute_error):
+                        if not BoundingBox.is_geometry_normalization_error(
+                            recompute_error
+                        ):
                             raise
                         logger.warning(
                             "Skipped source line bbox recompute due to malformed geometry on line %s: %s",
@@ -1463,10 +1417,14 @@ class LineOperations(
 
                 if (
                     unselected_words
-                    and not self._has_usable_bbox(
-                        getattr(target_line, "bounding_box", None)
+                    and not (
+                        target_line.bounding_box is not None
+                        and target_line.bounding_box.has_usable_coordinates
                     )
-                    and self._has_usable_bbox(source_line_original_bbox)
+                    and (
+                        source_line_original_bbox is not None
+                        and source_line_original_bbox.has_usable_coordinates
+                    )
                 ):
                     target_line.bounding_box = source_line_original_bbox
 
@@ -1476,27 +1434,28 @@ class LineOperations(
 
             new_line = Block(
                 items=selected_words_for_new_line,
-                bounding_box=self._first_usable_bbox(source_line_bboxes),
+                bounding_box=Page.first_usable_bbox(source_line_bboxes),
                 child_type=BlockChildType.WORDS,
                 block_category=BlockCategory.LINE,
             )
-            recompute_new_line = getattr(new_line, "recompute_bounding_box", None)
-            if callable(recompute_new_line):
-                try:
-                    recompute_new_line()
-                except Exception as recompute_error:
-                    if not self._is_geometry_normalization_error(recompute_error):
-                        raise
-                    logger.warning(
-                        "Skipped extracted line bbox recompute due to malformed geometry: %s",
-                        recompute_error,
-                    )
+            try:
+                new_line.recompute_bounding_box()
+            except Exception as recompute_error:
+                if not BoundingBox.is_geometry_normalization_error(recompute_error):
+                    raise
+                logger.warning(
+                    "Skipped extracted line bbox recompute due to malformed geometry: %s",
+                    recompute_error,
+                )
 
             if (
-                not self._has_usable_bbox(getattr(new_line, "bounding_box", None))
+                not (
+                    new_line.bounding_box is not None
+                    and new_line.bounding_box.has_usable_coordinates
+                )
                 and source_line_bboxes
             ):
-                new_line.bounding_box = self._first_usable_bbox(source_line_bboxes)
+                new_line.bounding_box = Page.first_usable_bbox(source_line_bboxes)
 
             unique_paragraphs = []
             for paragraph in containing_paragraphs:
@@ -1505,9 +1464,7 @@ class LineOperations(
 
             if len(unique_paragraphs) == 1 and line_insertion_points:
                 target_paragraph = unique_paragraphs[0]
-                original_paragraph_items = list(
-                    getattr(target_paragraph, "items", []) or []
-                )
+                original_paragraph_items = list(target_paragraph.items)
                 paragraph_items = [
                     item
                     for item in original_paragraph_items
@@ -1531,19 +1488,16 @@ class LineOperations(
             else:
                 new_paragraph = Block(
                     items=[new_line],
-                    bounding_box=self._first_usable_bbox(
+                    bounding_box=Page.first_usable_bbox(
                         source_line_bboxes
-                        + [
-                            getattr(paragraph, "bounding_box", None)
-                            for paragraph in unique_paragraphs
-                        ]
+                        + [paragraph.bounding_box for paragraph in unique_paragraphs]
                     ),
                     child_type=BlockChildType.BLOCKS,
                     block_category=BlockCategory.PARAGRAPH,
                 )
-                page.items = list(getattr(page, "items", []) or []) + [new_paragraph]
+                page.items = list(page.items) + [new_paragraph]
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
             logger.info(
                 "Moved selected words into one new line from %d source line(s)",
                 len(line_to_selected_word_indices),
@@ -1580,9 +1534,7 @@ class LineOperations(
             return False
 
         try:
-            from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
-
-            lines = list(getattr(page, "lines", []) or [])
+            lines = list(page.lines)
 
             line_to_selected_word_indices: dict[int, set[int]] = {}
             for line_index, word_index in unique_keys:
@@ -1602,7 +1554,7 @@ class LineOperations(
             for line_index in sorted(line_to_selected_word_indices, reverse=True):
                 selected_word_indices = line_to_selected_word_indices[line_index]
                 target_line = lines[line_index]
-                line_words = list(getattr(target_line, "words", []) or [])
+                line_words = list(target_line.words)
 
                 if len(line_words) < 2:
                     logger.warning(
@@ -1639,10 +1591,10 @@ class LineOperations(
                     )
                     continue
 
-                paragraphs = list(getattr(page, "paragraphs", []) or [])
+                paragraphs = list(page.paragraphs)
                 target_paragraph = None
                 for paragraph in paragraphs:
-                    paragraph_lines = list(getattr(paragraph, "lines", []) or [])
+                    paragraph_lines = list(paragraph.lines)
                     if target_line in paragraph_lines:
                         target_paragraph = paragraph
                         break
@@ -1654,7 +1606,7 @@ class LineOperations(
                     )
                     return False
 
-                paragraph_items = list(getattr(target_paragraph, "items", []) or [])
+                paragraph_items = list(target_paragraph.items)
                 if target_line not in paragraph_items:
                     logger.warning(
                         "Target line missing in paragraph items for line %s",
@@ -1681,7 +1633,7 @@ class LineOperations(
                 )
                 target_paragraph.recompute_bounding_box()
 
-                parent = self._find_parent_block(page, target_paragraph)
+                parent = Page._find_parent_block_recursive(page, target_paragraph)
                 if parent is not None:
                     parent.recompute_bounding_box()
 
@@ -1691,7 +1643,7 @@ class LineOperations(
                 logger.warning("No lines were split into selected/unselected groups")
                 return False
 
-            self._finalize_page_structure(page)
+            page.finalize_page_structure()
             logger.info(
                 "Split %d line(s) into selected/unselected words",
                 len(line_to_selected_word_indices),
@@ -1736,7 +1688,7 @@ class LineOperations(
             return False
 
         try:
-            line_words = self._validated_line_words(page, line_index)
+            line_words = page.validated_line_words(line_index)
             if line_words is None:
                 return False
             if word_index < 0 or word_index >= len(line_words):
@@ -1749,7 +1701,7 @@ class LineOperations(
                 return False
 
             word = line_words[word_index]
-            bbox = getattr(word, "bounding_box", None)
+            bbox = word.bounding_box
             if bbox is None:
                 logger.warning(
                     "Word bbox nudge requires an existing bbox for line=%s word=%s",
@@ -1758,30 +1710,30 @@ class LineOperations(
                 )
                 return False
 
-            is_normalized = bool(getattr(bbox, "is_normalized", False))
+            is_normalized = bool(bbox.is_normalized)
             if is_normalized:
-                page_width, page_height = self._resolve_page_dimensions(page)
+                page_width, page_height = page.resolved_dimensions
                 if page_width <= 0.0 or page_height <= 0.0:
                     logger.warning(
                         "Unable to resolve page dimensions for normalized bbox nudge"
                     )
                     return False
-                x1 = float(getattr(bbox, "minX", 0.0) or 0.0) * page_width
-                y1 = float(getattr(bbox, "minY", 0.0) or 0.0) * page_height
-                x2 = float(getattr(bbox, "maxX", 0.0) or 0.0) * page_width
-                y2 = float(getattr(bbox, "maxY", 0.0) or 0.0) * page_height
+                x1 = float(bbox.minX or 0.0) * page_width
+                y1 = float(bbox.minY or 0.0) * page_height
+                x2 = float(bbox.maxX or 0.0) * page_width
+                y2 = float(bbox.maxY or 0.0) * page_height
             else:
-                x1 = float(getattr(bbox, "minX", 0.0) or 0.0)
-                y1 = float(getattr(bbox, "minY", 0.0) or 0.0)
-                x2 = float(getattr(bbox, "maxX", 0.0) or 0.0)
-                y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
+                x1 = float(bbox.minX or 0.0)
+                y1 = float(bbox.minY or 0.0)
+                x2 = float(bbox.maxX or 0.0)
+                y2 = float(bbox.maxY or 0.0)
 
             nx1 = x1 - float(left_delta)
             ny1 = y1 - float(top_delta)
             nx2 = x2 + float(right_delta)
             ny2 = y2 + float(bottom_delta)
 
-            page_width, page_height = self._resolve_page_dimensions(page)
+            page_width, page_height = page.resolved_dimensions
             nx1 = max(0.0, nx1)
             ny1 = max(0.0, ny1)
             if page_width > 0.0:
@@ -1823,3 +1775,91 @@ class LineOperations(
                 e,
             )
             raise
+
+    # ------------------------------------------------------------------
+    # Paragraph operations (delegate directly to Page)
+    # ------------------------------------------------------------------
+
+    def merge_paragraphs(self, page: Page, paragraph_indices: list[int]) -> bool:
+        return page.merge_paragraphs(paragraph_indices)
+
+    def delete_paragraphs(self, page: Page, paragraph_indices: list[int]) -> bool:
+        return page.delete_paragraphs(paragraph_indices)
+
+    def split_paragraphs(self, page: Page, paragraph_indices: list[int]) -> bool:
+        return page.split_paragraphs(paragraph_indices)
+
+    def split_paragraph_after_line(self, page: Page, line_index: int) -> bool:
+        return page.split_paragraph_after_line(line_index)
+
+    def split_paragraph_with_selected_lines(
+        self,
+        page: Page,
+        line_indices: list[int],
+    ) -> bool:
+        return page.split_paragraph_with_selected_lines(line_indices)
+
+    def group_selected_words_into_new_paragraph(
+        self,
+        page: Page,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        return page.group_selected_words_into_new_paragraph(word_keys)
+
+    # ------------------------------------------------------------------
+    # Word/line/paragraph bbox refinement operations (delegate to Page)
+    # ------------------------------------------------------------------
+
+    def refine_words(self, page: Page, word_keys: list[tuple[int, int]]) -> bool:
+        return page.refine_words(word_keys)
+
+    def expand_then_refine_words(
+        self,
+        page: Page,
+        word_keys: list[tuple[int, int]],
+    ) -> bool:
+        return page.expand_then_refine_words(word_keys)
+
+    def expand_word_bboxes(
+        self,
+        page: Page,
+        word_keys: list[tuple[int, int]],
+        padding_px: float = 2.0,
+    ) -> bool:
+        return page.expand_word_bboxes(word_keys, padding_px)
+
+    def refine_lines(self, page: Page, line_indices: list[int]) -> bool:
+        return page.refine_lines(line_indices)
+
+    def refine_paragraphs(self, page: Page, paragraph_indices: list[int]) -> bool:
+        return page.refine_paragraphs(paragraph_indices)
+
+    def expand_then_refine_lines(
+        self,
+        page: Page,
+        line_indices: list[int],
+    ) -> bool:
+        return page.expand_then_refine_lines(line_indices)
+
+    def expand_then_refine_paragraphs(
+        self,
+        page: Page,
+        paragraph_indices: list[int],
+    ) -> bool:
+        return page.expand_then_refine_paragraphs(paragraph_indices)
+
+    def expand_line_bboxes(
+        self,
+        page: Page,
+        line_indices: list[int],
+        padding_px: float = 2.0,
+    ) -> bool:
+        return page.expand_line_bboxes(line_indices, padding_px)
+
+    def expand_paragraph_bboxes(
+        self,
+        page: Page,
+        paragraph_indices: list[int],
+        padding_px: float = 2.0,
+    ) -> bool:
+        return page.expand_paragraph_bboxes(paragraph_indices, padding_px)

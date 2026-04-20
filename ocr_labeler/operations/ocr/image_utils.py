@@ -51,5 +51,6 @@ def crop_image_to_bbox(
 
 def is_geometry_normalization_error(error: Exception) -> bool:
     """Return True for known malformed-bbox normalization failures."""
-    message = str(error)
-    return "NoneType" in message and "is_normalized" in message
+    from pd_book_tools.geometry.bounding_box import BoundingBox
+
+    return BoundingBox.is_geometry_normalization_error(error)

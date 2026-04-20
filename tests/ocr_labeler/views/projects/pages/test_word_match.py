@@ -3,6 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from pd_book_tools.geometry.bounding_box import BoundingBox
+from pd_book_tools.geometry.point import Point
+from pd_book_tools.ocr.word import Word
 
 from ocr_labeler.models.line_match_model import LineMatch
 from ocr_labeler.models.word_match_model import MatchStatus, WordMatch
@@ -11,6 +14,25 @@ from ocr_labeler.views.projects.pages.word_edit_dialog import (
     render_word_split_marker,
 )
 from ocr_labeler.views.projects.pages.word_match import WordMatchView
+
+_DUMMY_BBOX = BoundingBox(Point(0, 0), Point(1, 1), is_normalized=False)
+
+
+def _make_word(
+    *,
+    text: str = "",
+    text_style_labels: list[str] | None = None,
+    text_style_label_scopes: dict[str, str] | None = None,
+    word_components: list[str] | None = None,
+    bounding_box: BoundingBox | None = None,
+) -> Word:
+    return Word(
+        text=text,
+        bounding_box=bounding_box or _DUMMY_BBOX,
+        text_style_labels=text_style_labels,
+        text_style_label_scopes=text_style_label_scopes,
+        word_components=word_components,
+    )
 
 
 def test_merge_clears_selection_before_callback(monkeypatch):
@@ -1787,10 +1809,8 @@ def test_bbox_nudge_step_defaults_to_five_px():
 
 def test_display_signature_changes_when_word_bbox_changes():
     view = WordMatchView()
-    bbox = SimpleNamespace(
-        minX=10.0, minY=20.0, maxX=30.0, maxY=40.0, is_normalized=False
-    )
-    word_object = SimpleNamespace(bounding_box=bbox)
+    bbox = BoundingBox(Point(10.0, 20.0), Point(30.0, 40.0), is_normalized=False)
+    word_object = _make_word(bounding_box=bbox)
     word_match = SimpleNamespace(
         match_status=SimpleNamespace(value="exact"),
         ocr_text="token",
@@ -1813,7 +1833,9 @@ def test_display_signature_changes_when_word_bbox_changes():
     view.view_model.line_matches = [line_match]
 
     before = view.renderer._compute_display_signature()
-    bbox.maxX = 35.0
+    word_object.bounding_box = BoundingBox(
+        Point(10.0, 20.0), Point(35.0, 40.0), is_normalized=False
+    )
     after = view.renderer._compute_display_signature()
 
     assert before != after
@@ -1963,10 +1985,9 @@ def test_toggle_word_attribute_uses_current_flags(monkeypatch):
     seen = {}
     view = WordMatchView()
     word_match = SimpleNamespace(
-        word_object=SimpleNamespace(
+        word_object=_make_word(
             text_style_labels=["small caps"],
             text_style_label_scopes={"small caps": "whole"},
-            word_components=[],
         )
     )
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
@@ -2004,13 +2025,12 @@ def test_word_attribute_tooltip_includes_active_flags():
         fuzz_score=0.5,
         ocr_text="ocr",
         ground_truth_text="gt",
-        word_object=SimpleNamespace(
+        word_object=_make_word(
             text_style_labels=["italics", "blackletter"],
             text_style_label_scopes={
                 "italics": "whole",
                 "blackletter": "whole",
             },
-            word_components=[],
         ),
     )
 
@@ -2169,10 +2189,9 @@ def test_apply_style_processor_updates_explicit_word(monkeypatch):
 
 def test_apply_scope_processor_updates_existing_styles(monkeypatch):
     view = WordMatchView()
-    word_object = SimpleNamespace(
+    word_object = _make_word(
         text_style_labels=["italics"],
         text_style_label_scopes={"italics": "whole"},
-        word_components=[],
     )
     view.selection.selected_word_indices = {(0, 0)}
     monkeypatch.setattr(
@@ -2202,10 +2221,9 @@ def test_apply_scope_processor_updates_existing_styles(monkeypatch):
 
 def test_apply_scope_processor_updates_explicit_word(monkeypatch):
     view = WordMatchView()
-    word_object = SimpleNamespace(
+    word_object = _make_word(
         text_style_labels=["italics"],
         text_style_label_scopes={"italics": "whole"},
-        word_components=[],
     )
     monkeypatch.setattr(
         view,
@@ -2233,10 +2251,9 @@ def test_apply_scope_processor_updates_explicit_word(monkeypatch):
 
 def test_apply_scope_processor_updates_explicit_word_style(monkeypatch):
     view = WordMatchView()
-    word_object = SimpleNamespace(
+    word_object = _make_word(
         text_style_labels=["italics", "small caps"],
         text_style_label_scopes={"italics": "whole", "small caps": "whole"},
-        word_components=[],
     )
     monkeypatch.setattr(
         view,
@@ -2267,10 +2284,9 @@ def test_apply_scope_processor_updates_explicit_word_style(monkeypatch):
 
 def test_clear_scope_on_word_removes_scope_entries(monkeypatch):
     view = WordMatchView()
-    word_object = SimpleNamespace(
+    word_object = _make_word(
         text_style_labels=["italics", "small caps"],
         text_style_label_scopes={"italics": "part", "small caps": "whole"},
-        word_components=[],
     )
     monkeypatch.setattr(
         view,
@@ -2298,10 +2314,9 @@ def test_clear_scope_on_word_removes_scope_entries(monkeypatch):
 
 def test_clear_scope_on_word_style_removes_only_target_style(monkeypatch):
     view = WordMatchView()
-    word_object = SimpleNamespace(
+    word_object = _make_word(
         text_style_labels=["italics", "small caps"],
         text_style_label_scopes={"italics": "part", "small caps": "whole"},
-        word_components=[],
     )
     monkeypatch.setattr(
         view,
@@ -2358,10 +2373,9 @@ def test_apply_component_processor_updates_selected_words(monkeypatch):
         view,
         "_line_word_match_by_ocr_index",
         lambda line_index, word_index: SimpleNamespace(
-            word_object=SimpleNamespace(
+            word_object=_make_word(
                 text_style_labels=["regular"],
                 text_style_label_scopes={"regular": "whole"},
-                word_components=[],
             ),
             line_index=line_index,
             word_index=word_index,
@@ -2409,7 +2423,7 @@ def test_apply_component_processor_clears_existing_component(monkeypatch):
         view,
         "_line_word_match_by_ocr_index",
         lambda *_args: SimpleNamespace(
-            word_object=SimpleNamespace(
+            word_object=_make_word(
                 text_style_labels=["regular"],
                 text_style_label_scopes={"regular": "whole"},
                 word_components=["footnote marker"],
@@ -2455,10 +2469,9 @@ def test_apply_component_processor_updates_explicit_word(monkeypatch):
         view,
         "_line_word_match_by_ocr_index",
         lambda *_args: SimpleNamespace(
-            word_object=SimpleNamespace(
+            word_object=_make_word(
                 text_style_labels=["regular"],
                 text_style_label_scopes={"regular": "whole"},
-                word_components=[],
             )
         ),
     )

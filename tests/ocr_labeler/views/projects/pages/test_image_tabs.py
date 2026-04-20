@@ -262,6 +262,44 @@ def test_image_tabs_ctrl_drag_adds_words_in_box():
     assert image_tabs._selected_word_indices == {(0, 0), (0, 1)}
 
 
+def test_image_tabs_ctrl_drag_toggles_already_selected_words():
+    """Ctrl+drag over already-selected words should deselect them."""
+    page = Page(
+        width=100,
+        height=100,
+        page_index=0,
+        items=[
+            _line([_word("alpha", 10), _word("beta", 40)], 10),
+        ],
+    )
+
+    captured: dict = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_words_selected=lambda selection: captured.update({"selection": selection}),
+    )
+    # Both words already selected
+    image_tabs.set_selected_words({(0, 0), (0, 1)})
+    # Ctrl+drag over only "alpha"
+    image_tabs._drag_start = (0.0, 0.0)
+    image_tabs._drag_current = (35.0, 20.0)
+    image_tabs._drag_add_mode = True
+
+    image_tabs._apply_box_selection()
+
+    # "alpha" toggled off, "beta" remains
+    assert captured["selection"] == {(0, 1)}
+    assert image_tabs._selected_word_indices == {(0, 1)}
+
+
 def test_image_tabs_select_words_from_blocks_when_lines_missing():
     block_a = _line([_word("alpha", 10)], 10)
     block_b = _line([_word("beta", 50)], 50)
@@ -423,6 +461,44 @@ def test_image_tabs_ctrl_drag_on_lines_adds_line_words():
     image_tabs._apply_box_selection("Lines")
 
     assert captured["selection"] == {(0, 0), (0, 1), (1, 0)}
+
+
+def test_image_tabs_ctrl_drag_on_lines_toggles_already_selected():
+    """Ctrl+drag over an already-selected line should deselect its words."""
+    page = Page(
+        width=200,
+        height=100,
+        page_index=0,
+        items=[
+            _line([_word("alpha", 10), _word("beta", 40)], 10),
+            _line([_word("gamma", 120)], 120),
+        ],
+    )
+
+    captured: dict = {}
+
+    class _VmStub:
+        def __init__(self):
+            self._page_state = SimpleNamespace(current_page=page)
+
+        def set_image_update_callback(self, _cb):
+            pass
+
+    image_tabs = ImageTabs(
+        _VmStub(),
+        on_words_selected=lambda selection: captured.update({"selection": selection}),
+    )
+    # Both lines selected
+    image_tabs.set_selected_words({(0, 0), (0, 1), (1, 0)})
+    # Ctrl+drag over only line 0 (bbox 10-30, drag covers 0-85)
+    image_tabs._drag_start = (0.0, 0.0)
+    image_tabs._drag_current = (85.0, 20.0)
+    image_tabs._drag_add_mode = True
+
+    image_tabs._apply_box_selection("Lines")
+
+    # Line 0 toggled off, line 1 remains
+    assert captured["selection"] == {(1, 0)}
 
 
 def test_image_tabs_clear_drag_state_removes_dashed_overlay():

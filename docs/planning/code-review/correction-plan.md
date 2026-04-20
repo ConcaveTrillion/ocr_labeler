@@ -348,9 +348,23 @@ details. These require changes to the external library.
 
 ### 6.2 Move structural operations to pd-book-tools
 
+**DONE** — Created `pd_book_tools.ocr.page_structure_operations` (PageStructureOperations),
+`pd_book_tools.ocr.paragraph_operations` (ParagraphOperationsMixin), and
+`pd_book_tools.ocr.word_bbox_operations` (WordBboxOperationsMixin).
+ocr-labeler files replaced with thin re-export wrappers.
+
 ### 6.3 Move geometry helpers to pd-book-tools
 
+**DONE** — Added `vertical_midpoint`, `horizontal_midpoint`, and `y_range`
+properties to `BoundingBox`. Geometry helpers in `PageStructureOperations`
+use these directly.
+
 ### 6.4 Standardize Word style API in pd-book-tools
+
+**DONE** — Created `pd_book_tools.ocr.word_style_operations` (WordStyleOperations)
+with style read/write/apply/remove methods. ocr-labeler's `WordOperations` now
+extends `WordStyleOperations` and adds only `classify_match_status` (which
+depends on the ocr-labeler `MatchStatus` enum).
 
 ## Summary
 

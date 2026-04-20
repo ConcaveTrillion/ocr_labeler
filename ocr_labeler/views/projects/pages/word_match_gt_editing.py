@@ -15,7 +15,6 @@ from ....constants import (
     WORD_LABEL_RIGHT_FOOTNOTE,
     WORD_LABEL_SMALL_CAPS,
 )
-from ....operations.ocr.word_operations import WordOperations
 
 if TYPE_CHECKING:
     from .word_match import WordMatchView
@@ -301,6 +300,7 @@ class WordMatchGtEditing:
                 left_footnote=bool(left_footnote),
                 right_footnote=bool(right_footnote),
             )
+            self._view.renderer.rerender_line_card(line_index)
         except Exception as e:
             logger.exception(
                 "Error updating word attributes (%s, %s): %s",
@@ -410,6 +410,7 @@ class WordMatchGtEditing:
             left_footnote=bool(left_footnote),
             right_footnote=bool(right_footnote),
         )
+        self._view.renderer.rerender_line_card(line_index)
 
     def _set_word_style_button_states(
         self,
@@ -481,8 +482,7 @@ class WordMatchGtEditing:
         if word_object is None:
             return
         footnote_marker = bool(left_footnote or right_footnote)
-        WordOperations().update_word_attributes(
-            word_object,
+        word_object.update_style_attributes(
             italic=italic,
             small_caps=small_caps,
             blackletter=blackletter,

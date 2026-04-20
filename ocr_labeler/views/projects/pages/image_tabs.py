@@ -193,10 +193,7 @@ class ImageTabs(NotificationMixin):
                         or ""
                     )
                     if existing_source:
-                        if hasattr(img, "set_source"):
-                            img.set_source(existing_source)
-                        else:
-                            img.source = existing_source
+                        img.source = existing_source
         self.container = col
         logger.debug("ImageTabs UI build complete with single viewport")
         return col
@@ -625,7 +622,7 @@ class ImageTabs(NotificationMixin):
                 selected_paragraphs.difference_update(selected_in_box)
             elif self._drag_add_mode:
                 selected_paragraphs = set(self._selected_paragraph_indices)
-                selected_paragraphs.update(selected_in_box)
+                selected_paragraphs.symmetric_difference_update(selected_in_box)
             else:
                 selected_paragraphs = selected_in_box
 
@@ -642,7 +639,7 @@ class ImageTabs(NotificationMixin):
                 line_selection.difference_update(selected_line_indices)
             elif self._drag_add_mode:
                 line_selection = set(current_line_indices)
-                line_selection.update(selected_line_indices)
+                line_selection.symmetric_difference_update(selected_line_indices)
             else:
                 line_selection = selected_line_indices
 
@@ -655,7 +652,7 @@ class ImageTabs(NotificationMixin):
                 selected.difference_update(selected_in_box)
             elif self._drag_add_mode:
                 selected = set(self._selected_word_indices)
-                selected.update(selected_in_box)
+                selected.symmetric_difference_update(selected_in_box)
             else:
                 selected = selected_in_box
 
@@ -1002,10 +999,7 @@ class ImageTabs(NotificationMixin):
         if img_element is None:
             return
 
-        if hasattr(img_element, "set_source"):
-            img_element.set_source(source)
-        else:
-            img_element.source = source
+        img_element.source = source
 
         self._viewport_layer_overlay_cache_key = None
         self._update_interactive_image_geometry(self._selection_mode_tab())

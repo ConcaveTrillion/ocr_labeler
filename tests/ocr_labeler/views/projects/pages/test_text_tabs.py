@@ -194,16 +194,18 @@ def test_text_tabs_updates_when_ground_truth_changes_even_if_ocr_text_unchanged(
     text_tabs = TextTabs(page_state=page_state)
     text_tabs.word_match_view = MagicMock()
 
+    word_obj = _word("alpha", 0)
+    word_obj.ground_truth_text = ""
     line = SimpleNamespace(
         text="alpha beta",
         ground_truth_text="",
-        words=[SimpleNamespace(text="alpha", ground_truth_text="")],
+        words=[word_obj],
         unmatched_ground_truth_words=[],
     )
     page = SimpleNamespace(name="p001.png", index=0, lines=[line])
 
     text_tabs.update_word_matches(page)
-    line.words[0].ground_truth_text = "alpha"
+    word_obj.ground_truth_text = "alpha"
     line.ground_truth_text = "alpha"
     text_tabs.update_word_matches(page)
 
@@ -230,13 +232,10 @@ def test_text_tabs_updates_when_word_style_changes_even_if_text_unchanged():
     text_tabs = TextTabs(page_state=page_state)
     text_tabs.word_match_view = MagicMock()
 
-    word = SimpleNamespace(
-        text="alpha",
-        ground_truth_text="alpha",
-        text_style_labels=["regular"],
-        text_style_label_scopes={"regular": "whole"},
-        word_components=[],
-    )
+    word = _word("alpha", 0)
+    word.ground_truth_text = "alpha"
+    word.text_style_labels = ["regular"]
+    word.text_style_label_scopes = {"regular": "whole"}
     line = SimpleNamespace(
         text="alpha",
         ground_truth_text="alpha",
@@ -619,11 +618,8 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
         current_page_index=0,
     )
 
-    word = SimpleNamespace(
-        text="alpha",
-        ground_truth_text="alpha",
-        word_labels=[],
-    )
+    word = _word("alpha", 0)
+    word.ground_truth_text = "alpha"
     line = SimpleNamespace(
         text="alpha",
         ground_truth_text="alpha",
@@ -631,6 +627,9 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
         unmatched_ground_truth_words=[],
     )
     page_one = SimpleNamespace(name="p001.png", index=0, lines=[line], blocks=[])
+
+    word_two = _word("beta", 0)
+    word_two.ground_truth_text = "beta"
     page_two = SimpleNamespace(
         name="p001.png",
         index=0,
@@ -638,13 +637,7 @@ def test_text_tabs_word_style_event_coalesces_only_same_page_refresh():
             SimpleNamespace(
                 text="beta",
                 ground_truth_text="beta",
-                words=[
-                    SimpleNamespace(
-                        text="beta",
-                        ground_truth_text="beta",
-                        word_labels=[],
-                    )
-                ],
+                words=[word_two],
                 unmatched_ground_truth_words=[],
             )
         ],
@@ -715,18 +708,20 @@ def test_text_tabs_word_gt_event_coalesces_only_same_page_refresh():
         current_page_index=0,
     )
 
+    word_one = _word("alpha", 0)
+    word_one.ground_truth_text = "alpha"
     line_one = SimpleNamespace(
         text="alpha",
         ground_truth_text="alpha",
-        words=[
-            SimpleNamespace(text="alpha", ground_truth_text="alpha", word_labels=[])
-        ],
+        words=[word_one],
         unmatched_ground_truth_words=[],
     )
+    word_two = _word("beta", 0)
+    word_two.ground_truth_text = "beta"
     line_two = SimpleNamespace(
         text="beta",
         ground_truth_text="beta",
-        words=[SimpleNamespace(text="beta", ground_truth_text="beta", word_labels=[])],
+        words=[word_two],
         unmatched_ground_truth_words=[],
     )
     page_one = SimpleNamespace(name="p001.png", index=0, lines=[line_one], blocks=[])

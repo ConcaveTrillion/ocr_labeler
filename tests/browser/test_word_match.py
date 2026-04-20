@@ -296,6 +296,38 @@ def test_word_tag_clear_in_renderer(browser_app_url: str, browser_page) -> None:
     expect(page.locator('[data-testid="word-tag-chip"]')).to_have_count(0)
 
 
+@pytest.mark.browser
+def test_apply_style_shows_tag_chip_immediately(
+    browser_app_url: str, browser_page
+) -> None:
+    """Select word, apply style via toolbar, verify tag chip appears without view switch."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Ensure no tag chips exist initially
+    expect(page.locator('[data-testid="word-tag-chip"]')).to_have_count(0)
+
+    # Select the first word
+    _select_first_word(page)
+
+    # Pick "Italics" from the style dropdown (a legacy style that exercises
+    # the set_word_attributes_callback path).
+    page.get_by_label("Style").click()
+    page.get_by_role("option", name="Italics").first.click()
+    page.wait_for_timeout(300)
+
+    # Click Apply Style
+    apply_button = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_button).to_be_enabled()
+    apply_button.click()
+    page.wait_for_timeout(1000)
+
+    # Tag chip should appear immediately — no view switch needed
+    chip = page.locator('[data-testid="word-tag-chip"]').first
+    expect(chip).to_be_visible(timeout=5_000)
+    expect(chip).to_contain_text("Italics")
+
+
 # ---------------------------------------------------------------------------
 # Line checkbox selection (Commit 3)
 # ---------------------------------------------------------------------------
@@ -336,6 +368,95 @@ def test_line_checkbox_selection(browser_app_url: str, browser_page) -> None:
 
     # Verify unchecked
     expect(line_checkbox).not_to_be_checked()
+
+
+# ---------------------------------------------------------------------------
+# Word checkbox selection with mouse
+# ---------------------------------------------------------------------------
+
+WORD_CHECKBOX = '[data-testid="word-checkbox"]'
+
+
+@pytest.mark.browser
+def test_word_checkbox_select_and_deselect(browser_app_url: str, browser_page) -> None:
+    """Click word checkbox to select, click again to deselect."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    cb = page.locator(WORD_CHECKBOX).first
+    expect(cb).to_be_visible()
+    expect(cb).not_to_be_checked()
+
+    # Select
+    cb.click()
+    page.wait_for_timeout(500)
+    expect(cb).to_be_checked()
+
+    # Deselect
+    cb.click()
+    page.wait_for_timeout(500)
+    expect(cb).not_to_be_checked()
+
+
+@pytest.mark.browser
+def test_word_ctrl_click_multi_select(browser_app_url: str, browser_page) -> None:
+    """Ctrl+click selects multiple words independently."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Switch to All Lines to ensure multiple words are visible
+    page.get_by_text("All Lines").first.click()
+    page.wait_for_timeout(500)
+
+    checkboxes = page.locator(WORD_CHECKBOX)
+    checkboxes.first.wait_for(state="visible", timeout=10_000)
+    assert checkboxes.count() >= 2, "Need at least 2 word checkboxes"
+
+    first = checkboxes.nth(0)
+    second = checkboxes.nth(1)
+
+    # Select first word
+    first.click()
+    page.wait_for_timeout(500)
+    expect(first).to_be_checked()
+
+    # Ctrl+click second word — both should be selected
+    second.click(modifiers=["ControlOrMeta"])
+    page.wait_for_timeout(500)
+    expect(first).to_be_checked()
+    expect(second).to_be_checked()
+
+
+@pytest.mark.browser
+def test_word_ctrl_click_deselect(browser_app_url: str, browser_page) -> None:
+    """Ctrl+click an already-selected word should deselect it."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Switch to All Lines to ensure multiple words are visible
+    page.get_by_text("All Lines").first.click()
+    page.wait_for_timeout(500)
+
+    checkboxes = page.locator(WORD_CHECKBOX)
+    checkboxes.first.wait_for(state="visible", timeout=10_000)
+    assert checkboxes.count() >= 2, "Need at least 2 word checkboxes"
+
+    first = checkboxes.nth(0)
+    second = checkboxes.nth(1)
+
+    # Select both words
+    first.click()
+    page.wait_for_timeout(500)
+    second.click()
+    page.wait_for_timeout(500)
+    expect(first).to_be_checked()
+    expect(second).to_be_checked()
+
+    # Ctrl+click first word to deselect it — second should remain
+    first.click(modifiers=["ControlOrMeta"])
+    page.wait_for_timeout(500)
+    expect(first).not_to_be_checked()
+    expect(second).to_be_checked()
 
 
 # ---------------------------------------------------------------------------

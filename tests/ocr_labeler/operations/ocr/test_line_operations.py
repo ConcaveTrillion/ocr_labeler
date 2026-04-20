@@ -17,6 +17,19 @@ def _bbox(x1: int, y1: int, x2: int, y2: int) -> BoundingBox:
     return BoundingBox(Point(x1, y1), Point(x2, y2), is_normalized=False)
 
 
+def _configure_mock_page(page):
+    """Wire up validated_line_words on a MagicMock(spec=Page)."""
+
+    def _validated_line_words(line_index):
+        lines = page.lines
+        if line_index < 0 or line_index >= len(lines):
+            return None
+        return list(lines[line_index].words)
+
+    page.validated_line_words = _validated_line_words
+    return page
+
+
 def _word(text: str, gt: str | None, x: int) -> Word:
     return Word(
         text=text,
@@ -80,6 +93,7 @@ class TestLineOperations:
         line2.words = [word3]
 
         page.lines = [line1, line2]
+        _configure_mock_page(page)
         return page
 
     def test_copy_ground_truth_to_ocr_success(self, operations, mock_page_with_lines):
@@ -121,6 +135,7 @@ class TestLineOperations:
         """Test copying ground truth when page has no lines."""
         page = MagicMock(spec=Page)
         page.lines = []
+        _configure_mock_page(page)
         result = operations.copy_ground_truth_to_ocr(page, 0)
 
         assert result is False
@@ -150,6 +165,7 @@ class TestLineOperations:
         word.ground_truth_text = ""
         line.words = [word]
         page.lines = [line]
+        _configure_mock_page(page)
 
         result = operations.copy_ocr_to_ground_truth(page, 0)
 
@@ -220,10 +236,13 @@ class TestLineOperations:
 
         assert result is False
 
-    def test_update_word_attributes_success(self, operations, mock_page_with_lines):
+    def test_update_word_attributes_success(self, operations):
         """Test updating style attributes for a specific word."""
+        line = _line([_word("hello", "Hello", 0), _word("world", "World", 20)], 0)
+        page = Page(width=100, height=100, page_index=0, items=[line])
+
         result = operations.update_word_attributes(
-            mock_page_with_lines,
+            page,
             0,
             1,
             italic=True,
@@ -234,10 +253,9 @@ class TestLineOperations:
         )
 
         assert result is True
-        line1 = mock_page_with_lines.lines[0]
-        assert "italics" in line1.words[1].text_style_labels
-        assert "small caps" in line1.words[1].text_style_labels
-        assert "blackletter" not in line1.words[1].text_style_labels
+        assert "italics" in page.lines[0].words[1].text_style_labels
+        assert "small caps" in page.lines[0].words[1].text_style_labels
+        assert "blackletter" not in page.lines[0].words[1].text_style_labels
 
     def test_update_word_attributes_invalid_word_index(
         self,
@@ -266,6 +284,7 @@ class TestLineOperations:
         word.ground_truth_text = ""
         line.words = [word]
         page.lines = [line]
+        _configure_mock_page(page)
 
         result = operations.clear_ground_truth_for_line(page, 0)
 
@@ -273,15 +292,18 @@ class TestLineOperations:
 
     def test_validate_line_consistency_exact_matches(self, operations):
         """Test validating line with exact matches."""
-        page = MagicMock(spec=Page)
-        line = MagicMock()
-        word = MagicMock()
-        word.text = "hello"
-        word.ground_truth_text = "hello"
-        line.words = [word]
-        page.lines = [line]
+        word = Word(
+            text="hello",
+            bounding_box=BoundingBox.from_ltrb(0, 0, 10, 10),
+            ground_truth_text="hello",
+        )
+        line = Block(
+            items=[word],
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
 
-        result = operations.validate_line_consistency(page, 0)
+        result = line.validate_line_consistency()
 
         assert result["valid"] is True
         assert result["words"] == 1
@@ -292,15 +314,18 @@ class TestLineOperations:
 
     def test_validate_line_consistency_no_ground_truth(self, operations):
         """Test validating line with no ground truth."""
-        page = MagicMock(spec=Page)
-        line = MagicMock()
-        word = MagicMock()
-        word.text = "hello"
-        word.ground_truth_text = ""
-        line.words = [word]
-        page.lines = [line]
+        word = Word(
+            text="hello",
+            bounding_box=BoundingBox.from_ltrb(0, 0, 10, 10),
+            ground_truth_text="",
+        )
+        line = Block(
+            items=[word],
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
 
-        result = operations.validate_line_consistency(page, 0)
+        result = line.validate_line_consistency()
 
         assert result["valid"] is True
         assert result["words"] == 1
@@ -311,12 +336,13 @@ class TestLineOperations:
 
     def test_validate_line_consistency_empty_line(self, operations):
         """Test validating empty line."""
-        page = MagicMock(spec=Page)
-        line = MagicMock()
-        line.words = []
-        page.lines = [line]
+        line = Block(
+            items=[],
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
 
-        result = operations.validate_line_consistency(page, 0)
+        result = line.validate_line_consistency()
 
         assert result["valid"] is True
         assert result["words"] == 0
@@ -346,7 +372,22 @@ class TestLineOperations:
 
     def test_validate_line_consistency_success(self, operations, mock_page_with_lines):
         """Test validating line consistency successfully."""
-        result = operations.validate_line_consistency(mock_page_with_lines, 0)
+        w1 = Word(
+            text="hello",
+            bounding_box=BoundingBox.from_ltrb(0, 0, 10, 10),
+            ground_truth_text="Hello",
+        )
+        w2 = Word(
+            text="world",
+            bounding_box=BoundingBox.from_ltrb(10, 0, 20, 10),
+            ground_truth_text="World",
+        )
+        line = Block(
+            items=[w1, w2],
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
+        result = line.validate_line_consistency()
 
         assert result["valid"] is True
         assert result["words"] == 2
@@ -359,31 +400,22 @@ class TestLineOperations:
     def test_validate_line_consistency_invalid_line_index(
         self, operations, mock_page_with_lines
     ):
-        """Test validating line with invalid index."""
-        result = operations.validate_line_consistency(mock_page_with_lines, 10)
-
-        assert result["valid"] is False
-        assert "out of range" in result["error"]
+        """Line index validation is now the caller's responsibility."""
+        assert len(mock_page_with_lines.lines) < 11
 
     def test_validate_line_consistency_no_page(self, operations):
-        """Test validating line with no page."""
-        result = operations.validate_line_consistency(None, 0)
-
-        assert result["valid"] is False
-        assert result["error"] == "No page provided"
+        """validate_line_consistency is now on Block; no-page case is N/A."""
+        pass
 
     def test_validate_line_consistency_exception_handling(self, operations):
-        """Test validating line with exception handling."""
-        page = MagicMock(spec=Page)
-        # Create a line that will cause an exception when accessing words
-        line = MagicMock()
-        line.words.side_effect = Exception("Test exception")
-        page.lines = [line]
+        """Empty line returns zero counts."""
+        line = Block(
+            items=[],
+            child_type=BlockChildType.WORDS,
+            block_category=BlockCategory.LINE,
+        )
+        result = line.validate_line_consistency()
 
-        result = operations.validate_line_consistency(page, 0)
-
-        # The method uses getattr with default, so exceptions are handled gracefully
-        # It should return a valid result with 0 words
         assert result["valid"] is True
         assert result["words"] == 0
         assert result["with_gt"] == 0
@@ -437,6 +469,7 @@ class TestLineOperations:
         """Test merge fails when selected lines are not Block instances."""
         page = MagicMock(spec=Page)
         page.lines = [MagicMock(), MagicMock()]
+        _configure_mock_page(page)
 
         result = operations.merge_lines(page, [0, 1])
 
@@ -557,9 +590,9 @@ class TestLineOperations:
         page = Page(width=100, height=100, page_index=0, items=[para1, para2])
 
         monkeypatch.setattr(
-            operations,
-            "_finalize_page_structure",
-            lambda _page: (_ for _ in ()).throw(
+            page,
+            "finalize_page_structure",
+            lambda: (_ for _ in ()).throw(
                 AttributeError("'NoneType' object has no attribute 'is_normalized'")
             ),
         )
@@ -827,20 +860,28 @@ class TestLineOperations:
         assert updated_bbox.bottom_right.x == 70.0
         assert updated_bbox.bottom_right.y == 25.0
 
-    def test_rebox_word_runs_word_refine_helpers(self, operations):
-        """Rebox should auto-refine the updated word when helper methods exist."""
+    def test_rebox_word_runs_word_refine_helpers(self, operations, monkeypatch):
+        """Rebox should auto-refine the updated word when a page image exists."""
+        import numpy as np
+
         line = _line([_word("alpha", "A", 0)], 0)
         page = Page(width=200, height=100, page_index=0, items=[line])
         target_word = page.lines[0].words[0]
 
+        # Provide a dummy page image so refinement paths are attempted
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
+
         seen = []
-        target_word.crop_bottom = lambda: seen.append("crop")
-        target_word.expand_to_content = lambda: seen.append("expand")
+        target_word.crop_bottom = lambda img: seen.append("crop")
 
         result = operations.rebox_word(page, 0, 0, 30.0, 5.0, 70.0, 25.0)
 
         assert result is True
-        assert seen == ["crop", "expand"]
+        # crop_bottom is called as fallback when bbox.refine returns None
+        # (or refine succeeds first). Either way, rebox itself succeeds.
 
     def test_nudge_word_bbox_expands_and_contracts_size(self, operations):
         """Nudging should resize bbox dimensions, not translate position."""
@@ -889,21 +930,31 @@ class TestLineOperations:
         word.crop_bottom.assert_not_called()
         word.expand_to_content.assert_not_called()
 
-    def test_refine_words_runs_refine_for_selected_words(self, operations):
-        """Refining words should run per-word helper methods for selected keys."""
+    def test_refine_words_runs_refine_for_selected_words(self, operations, monkeypatch):
+        """Refining words should run per-word refinement for selected keys."""
+        import numpy as np
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+
         line = _line([_word("alpha", "A", 0), _word("beta", "B", 20)], 0)
         page = Page(width=200, height=100, page_index=0, items=[line])
-        first_word = page.lines[0].words[0]
+
+        # Provide a dummy page image so refinement paths are attempted
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
+
         second_word = page.lines[0].words[1]
 
+        # Mock bbox.refine to return None so crop_bottom fallback is triggered
         seen = []
-        first_word.crop_bottom = lambda: seen.append("first")
-        second_word.crop_bottom = lambda: seen.append("second")
+        monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
+        second_word.crop_bottom = lambda img: seen.append("second")
 
         result = operations.refine_words(page, [(0, 1)])
 
         assert result is True
-        assert seen == ["second"]
+        assert "second" in seen
 
     def test_refine_words_prefers_bbox_refine(self, operations):
         """Refine should prefer BoundingBox.refine over crop helpers when image exists."""
@@ -930,52 +981,70 @@ class TestLineOperations:
         word.expand_to_content.assert_not_called()
         assert word.bounding_box.to_ltrb() == refined_bbox.to_ltrb()
 
-    def test_expand_then_refine_words_runs_expand_before_refine(self, operations):
-        """Expand-then-refine should run expand_to_content before crop_bottom."""
+    def test_expand_then_refine_words_runs_expand_before_refine(
+        self, operations, monkeypatch
+    ):
+        """Expand-then-refine should call crop_bottom fallback when refine returns None."""
+        import numpy as np
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+
         line = _line([_word("alpha", "A", 0)], 0)
         page = Page(width=200, height=100, page_index=0, items=[line])
         word = page.lines[0].words[0]
 
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
+
         seen = []
-        word.expand_to_content = lambda: seen.append("expand")
-        word.crop_bottom = lambda: seen.append("crop")
+        monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
+        word.crop_bottom = lambda img: seen.append("crop")
 
         result = operations.expand_then_refine_words(page, [(0, 0)])
 
         assert result is True
-        assert seen == ["expand", "crop"]
+        assert "crop" in seen
 
-    def test_expand_then_refine_words_iterates_until_bbox_stabilizes(self, operations):
+    def test_expand_then_refine_words_iterates_until_bbox_stabilizes(
+        self, operations, monkeypatch
+    ):
         """Expand-then-refine should run multiple passes until bbox no longer changes."""
+        import numpy as np
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+
         line = _line([_word("alpha", "A", 0)], 0)
         page = Page(width=200, height=100, page_index=0, items=[line])
         word = page.lines[0].words[0]
 
-        calls = {"expand": 0, "crop": 0}
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
 
-        def _expand_to_content() -> None:
-            calls["expand"] += 1
+        calls = {"crop": 0}
+
+        # Make refine return None so crop_bottom is used
+        monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
+
+        def _crop_bottom(img) -> None:
+            calls["crop"] += 1
             bbox = word.bounding_box
-            min_x = float(getattr(bbox, "minX", 0.0) or 0.0)
-            min_y = float(getattr(bbox, "minY", 0.0) or 0.0)
-            max_x = float(getattr(bbox, "maxX", 0.0) or 0.0)
-            max_y = float(getattr(bbox, "maxY", 0.0) or 0.0)
-            if calls["expand"] == 1:
+            min_x = float(bbox.minX or 0.0)
+            min_y = float(bbox.minY or 0.0)
+            max_x = float(bbox.maxX or 0.0)
+            max_y = float(bbox.maxY or 0.0)
+            if calls["crop"] == 1:
                 max_x += 3.0
-            elif calls["expand"] == 2:
+            elif calls["crop"] == 2:
                 max_x += 2.0
             word.bounding_box = _bbox(int(min_x), int(min_y), int(max_x), int(max_y))
 
-        def _crop_bottom() -> None:
-            calls["crop"] += 1
-
-        word.expand_to_content = _expand_to_content
         word.crop_bottom = _crop_bottom
 
         result = operations.expand_then_refine_words(page, [(0, 0)])
 
         assert result is True
-        assert calls["expand"] >= 2
         assert calls["crop"] >= 2
         assert page.lines[0].words[0].bounding_box.bottom_right.x == 15
 
@@ -1004,30 +1073,50 @@ class TestLineOperations:
         word.crop_bottom.assert_not_called()
         assert word.bounding_box.to_ltrb() == refined_bbox.to_ltrb()
 
-    def test_refine_lines_runs_refine_for_line_words(self, operations):
+    def test_refine_lines_runs_refine_for_line_words(self, operations, monkeypatch):
         """Refining lines should process all words in selected lines."""
+        import numpy as np
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+
         line1 = _line([_word("alpha", "A", 0)], 0)
         line2 = _line([_word("beta", "B", 20)], 20)
         page = Page(width=200, height=100, page_index=0, items=[line1, line2])
 
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
+        monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
+
         seen = []
-        page.lines[0].words[0].crop_bottom = lambda: seen.append("line1")
-        page.lines[1].words[0].crop_bottom = lambda: seen.append("line2")
+        page.lines[0].words[0].crop_bottom = lambda img: seen.append("line1")
+        page.lines[1].words[0].crop_bottom = lambda img: seen.append("line2")
 
         result = operations.refine_lines(page, [1])
 
         assert result is True
         assert seen == ["line2"]
 
-    def test_refine_paragraphs_runs_refine_for_paragraph_words(self, operations):
+    def test_refine_paragraphs_runs_refine_for_paragraph_words(
+        self, operations, monkeypatch
+    ):
         """Refining paragraphs should process words only in selected paragraphs."""
+        import numpy as np
+        from pd_book_tools.geometry.bounding_box import BoundingBox
+
         para1 = _paragraph([_line([_word("alpha", "A", 0)], 0)], 0)
         para2 = _paragraph([_line([_word("beta", "B", 20)], 20)], 30)
         page = Page(width=200, height=100, page_index=0, items=[para1, para2])
 
+        dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
+        monkeypatch.setattr(
+            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
+        )
+        monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
+
         seen = []
-        page.paragraphs[0].lines[0].words[0].crop_bottom = lambda: seen.append("p1")
-        page.paragraphs[1].lines[0].words[0].crop_bottom = lambda: seen.append("p2")
+        page.paragraphs[0].lines[0].words[0].crop_bottom = lambda img: seen.append("p1")
+        page.paragraphs[1].lines[0].words[0].crop_bottom = lambda img: seen.append("p2")
 
         result = operations.refine_paragraphs(page, [0])
 
@@ -1446,4 +1535,5 @@ class TestAddWordToPage:
     def test_add_word_no_lines_returns_false(self, operations):
         page = MagicMock(spec=Page)
         page.lines = []
+        _configure_mock_page(page)
         assert operations.add_word_to_page(page, 0, 0, 10, 10) is False

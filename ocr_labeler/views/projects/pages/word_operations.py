@@ -14,8 +14,6 @@ from pd_book_tools.ocr.label_normalization import (
     normalize_word_component,
 )
 
-from ....operations.ocr.word_operations import WordOperations
-
 if TYPE_CHECKING:
     from .word_match import WordMatchView
 
@@ -56,7 +54,6 @@ class SelectedWordOperationsProcessor:
         self._view = view
         self._set_word_attributes_callback = set_word_attributes_callback
         self._refresh_word_callback = refresh_word_callback
-        self._word_ops = WordOperations()
 
     @property
     def supported_styles(self) -> tuple[str, ...]:
@@ -134,8 +131,7 @@ class SelectedWordOperationsProcessor:
                 continue
 
             try:
-                changed = self._word_ops.apply_style_scope(
-                    word_object,
+                changed = word_object.apply_style_scope(
                     normalized_style,
                     "whole",
                 )
@@ -210,9 +206,7 @@ class SelectedWordOperationsProcessor:
             changed = False
             for style_label in candidate_styles:
                 try:
-                    self._word_ops.apply_style_scope(
-                        word_object, style_label, normalized_scope
-                    )
+                    word_object.apply_style_scope(style_label, normalized_scope)
                     changed = True
                 except Exception:
                     logger.exception(
@@ -248,7 +242,7 @@ class SelectedWordOperationsProcessor:
         if word_object is None:
             return WordOperationResult(0, "Select a valid word", "warning")
 
-        if not self._word_ops.clear_all_scopes(word_object):
+        if not word_object.clear_all_scopes():
             return WordOperationResult(
                 0,
                 "Failed to clear scope; select a word with an existing style",
@@ -295,8 +289,7 @@ class SelectedWordOperationsProcessor:
             )
 
         try:
-            changed = self._word_ops.apply_style_scope(
-                word_object,
+            changed = word_object.apply_style_scope(
                 normalized_style,
                 normalized_scope,
             )
@@ -459,8 +452,7 @@ class SelectedWordOperationsProcessor:
             )
 
         try:
-            changed = self._word_ops.remove_text_style_label(
-                word_object,
+            changed = word_object.remove_style_label(
                 normalized_style,
             )
         except Exception:
@@ -564,8 +556,7 @@ class SelectedWordOperationsProcessor:
                 continue
 
             try:
-                changed = self._word_ops.apply_word_component(
-                    word_object,
+                changed = word_object.apply_component(
                     normalized_component,
                     enabled=enabled,
                 )

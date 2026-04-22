@@ -41,8 +41,8 @@ class TestSessionState:
 class TestSessionStateOperations:
     def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: tmp_path / SESSION_STATE_FILENAME),
         )
         SessionStateOperations.save_session_state(
@@ -56,8 +56,8 @@ class TestSessionStateOperations:
 
     def test_load_returns_none_when_no_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: tmp_path / "nonexistent.json"),
         )
         assert SessionStateOperations.load_session_state() is None
@@ -66,8 +66,8 @@ class TestSessionStateOperations:
         dest = tmp_path / SESSION_STATE_FILENAME
         dest.write_text("not valid json", encoding="utf-8")
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         assert SessionStateOperations.load_session_state() is None
@@ -76,8 +76,8 @@ class TestSessionStateOperations:
         dest = tmp_path / SESSION_STATE_FILENAME
         dest.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         assert SessionStateOperations.load_session_state() is None
@@ -85,8 +85,8 @@ class TestSessionStateOperations:
     def test_save_creates_parent_directories(self, tmp_path, monkeypatch):
         nested = tmp_path / "a" / "b" / SESSION_STATE_FILENAME
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: nested),
         )
         result = SessionStateOperations.save_session_state("/proj", 0)
@@ -97,8 +97,8 @@ class TestSessionStateOperations:
         dest = tmp_path / SESSION_STATE_FILENAME
         dest.write_text("{}", encoding="utf-8")
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         result = SessionStateOperations.clear_session_state()
@@ -108,8 +108,8 @@ class TestSessionStateOperations:
     def test_clear_is_idempotent(self, tmp_path, monkeypatch):
         dest = tmp_path / SESSION_STATE_FILENAME
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         # File doesn't exist — should return True without error
@@ -119,8 +119,8 @@ class TestSessionStateOperations:
     def test_save_clamps_negative_page_index(self, tmp_path, monkeypatch):
         dest = tmp_path / SESSION_STATE_FILENAME
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         SessionStateOperations.save_session_state("/proj", -5)
@@ -131,8 +131,8 @@ class TestSessionStateOperations:
     def test_save_with_none_project_path(self, tmp_path, monkeypatch):
         dest = tmp_path / SESSION_STATE_FILENAME
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         result = SessionStateOperations.save_session_state(None, 0)
@@ -144,8 +144,8 @@ class TestSessionStateOperations:
     def test_save_with_path_object(self, tmp_path, monkeypatch):
         dest = tmp_path / SESSION_STATE_FILENAME
         monkeypatch.setattr(
-            "ocr_labeler.operations.persistence.session_state_operations."
-            "SessionStateOperations._session_state_path",
+            SessionStateOperations,
+            "_session_state_path",
             staticmethod(lambda: dest),
         )
         result = SessionStateOperations.save_session_state(Path("/my/project"), 2)

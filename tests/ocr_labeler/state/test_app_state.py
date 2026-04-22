@@ -259,15 +259,17 @@ def test_reload_ground_truth_invokes_helper(monkeypatch, tmp_path):
 
 
 def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
+    from ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
     monkeypatch.setenv("HOME", str(tmp_path))
-    base = (
-        tmp_path
-        / ".local"
-        / "share"
-        / "pgdp-ocr-labeler"
-        / "source-pgdp-data"
-        / "output"
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setattr(
+        ConfigOperations,
+        "CONFIG_PATH",
+        tmp_path / "config" / "config.yaml",
     )
+
+    base = ConfigOperations.get_default_source_projects_root()
     base.mkdir(parents=True)
 
     projA = base / "projA"

@@ -12,13 +12,10 @@ Status: planning snapshots; updated 2026-04-16 to reflect current implementation
 ## Product Roadmap
 
 - [Overview](roadmap/overview.md)
-- [Editing Core (Mostly Complete)](roadmap/editing-core.md)
 - [Persistence Track (Named Milestones, mapped into roadmap)](roadmap/persistence-milestones.md)
-- [Enhanced UI and Matching (Complete)](roadmap/enhanced-ui-matching.md)
-- [Navigation and Multi-page](roadmap/navigation-multi-page.md)
 - [Performance and Polish](roadmap/performance-polish.md)
 - [Testing and Documentation](roadmap/testing-documentation.md)
-- [Training and Validation Export (Mostly Complete)](roadmap/training-validation-export.md)
+- [Training and Validation Export](roadmap/training-validation-export.md)
 - [Distribution Strategy](roadmap/distribution-strategy.md)
 
 ## Persistence Planning
@@ -45,11 +42,3 @@ Status: planning snapshots; updated 2026-04-16 to reflect current implementation
 ## Immediate Next Step
 
 - [Next Step](next-step.md)
-
-## Recently Completed
-
-- [Save Project — Bulk Page Persist](next-step.md) (Done)
-- [DocTR Export Dialog with Scope and Style Filtering](roadmap/training-validation-export.md) (Done)
-- [Per-Word Validation State with Line/Paragraph Rollup](next-step.md) (Done)
-- [Preserve Per-Word GT Edits Across Save/Load](next-step.md) (Done)
-- [Ground Truth PGDP Preprocessing (Done)](next-step.md)

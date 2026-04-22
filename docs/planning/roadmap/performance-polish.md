@@ -1,14 +1,7 @@
 # Roadmap Phase 6: Performance and Polish
 
 **Priority:** Low
-**Status:** Planned
-
-## Already In Place
-
-- Page load timing instrumentation (`page_timing_logger`)
-- ThreadPoolExecutor-based image encoding with LRU eviction
-- Text caching with page index validation
-- Local state cleanup utilities (log/cache removal)
+**Status:** Active
 
 ## Scope (Remaining)
 

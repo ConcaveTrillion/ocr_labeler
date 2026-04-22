@@ -68,9 +68,8 @@ Current Capabilities
   Windows).
 
 Planned / Not Yet Implemented (see `docs/planning/README.md` for full roadmap)
---------------------------------------------------------------
+------------------------------------------------------------------------------
 
-- Bounding box refinement: add-word workflow, expand-bbox action
 - Merge multiple JSON project files with page index offsets
 - Full persistence metadata schema with session restore
 - Derived word/line cache optimization
@@ -161,7 +160,13 @@ Run the UI (CLI)
 
 A console entrypoint `ocr-labeler-ui` is installed.
 
-Basic launch (replace `sample_project` with your images directory):
+Preferred launch from repo root (uses current directory as project):
+
+```bash
+make run
+```
+
+Basic launch with an explicit project directory:
 
 ```bash
 uv run ocr-labeler-ui sample_project
@@ -182,7 +187,13 @@ uv run ocr-labeler-ui
 Auto-load happens only when the resolved `project_dir` is a valid project
 directory (contains supported page images).
 
-Increase logging verbosity:
+Increase logging verbosity (repo root + current directory as project):
+
+```bash
+make run-verbose
+```
+
+For an explicit project directory:
 
 ```bash
 uv run ocr-labeler-ui sample_project -v        # DEBUG app logs
@@ -190,7 +201,13 @@ uv run ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
 uv run ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
 ```
 
-Enable isolated page timing logs in the CLI:
+Enable isolated page timing logs in the CLI (repo root + current directory as project):
+
+```bash
+make run-page-timing
+```
+
+For an explicit project directory:
 
 ```bash
 uv run ocr-labeler-ui sample_project --page-timing
@@ -282,9 +299,9 @@ Running Tests
 
 ```bash
 make test
-# or directly:
-uv run pytest -n auto -v -ra
 ```
+
+For targeted runs, use `uv run pytest -n auto ...` (for example `make test-k K='pattern'` or `uv run pytest -n auto tests/path/to/test_file.py`).
 
 Browser-Based Regression Tests
 ------------------------------
@@ -298,7 +315,7 @@ make test-browser
 Browser tests are marked with `@pytest.mark.browser` and run via:
 
 ```bash
-uv run pytest -m browser -n auto -v -ra
+make test-browser
 ```
 
 One-time local setup for Playwright Chromium binaries
@@ -367,7 +384,6 @@ Development Notes
 Future Enhancements (Short List)
 --------------------------------
 
-- Add-word and expand-bbox workflows
 - Multi-JSON project file merge with page index offsets
 - Full persistence metadata schema and session restore
 - Derived word/line cache optimization
@@ -376,4 +392,4 @@ Future Enhancements (Short List)
 License
 -------
 
-TBD (add license details here).
+No project license has been published yet.

@@ -80,11 +80,12 @@ def _open_dialog_with_enabled_merge_action(
             state="visible", timeout=10_000
         )
 
-        action_button = page.locator(action_selector)
+        dialog = page.locator(".q-dialog").last
+        action_button = dialog.locator(action_selector)
         if action_button.is_enabled():
             return
 
-        page.locator(DIALOG_CLOSE).click()
+        dialog.locator(DIALOG_CLOSE).click()
         page.wait_for_timeout(200)
 
     raise AssertionError(
@@ -377,11 +378,12 @@ def test_dialog_merge_prev(browser_app_url: str, browser_page) -> None:
 
     _open_dialog_with_enabled_merge_action(page, DIALOG_MERGE_PREV)
 
-    page.locator(DIALOG_MERGE_PREV).click()
+    dialog = page.locator(".q-dialog").last
+    dialog.locator(DIALOG_MERGE_PREV).click()
     page.wait_for_timeout(500)
-    expect(page.locator(DIALOG_CLOSE)).to_be_visible()
+    expect(dialog.locator(DIALOG_CLOSE)).to_be_visible()
 
-    page.locator(DIALOG_CLOSE).click()
+    dialog.locator(DIALOG_CLOSE).click()
     page.wait_for_timeout(500)
 
 
@@ -404,11 +406,12 @@ def test_dialog_merge_next(browser_app_url: str, browser_page) -> None:
 
     _open_dialog_with_enabled_merge_action(page, DIALOG_MERGE_NEXT)
 
-    page.locator(DIALOG_MERGE_NEXT).click()
+    dialog = page.locator(".q-dialog").last
+    dialog.locator(DIALOG_MERGE_NEXT).click()
     page.wait_for_timeout(500)
-    expect(page.locator(DIALOG_CLOSE)).to_be_visible()
+    expect(dialog.locator(DIALOG_CLOSE)).to_be_visible()
 
-    page.locator(DIALOG_CLOSE).click()
+    dialog.locator(DIALOG_CLOSE).click()
     page.wait_for_timeout(500)
 
 

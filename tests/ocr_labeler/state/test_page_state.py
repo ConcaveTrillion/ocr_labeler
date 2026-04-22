@@ -126,13 +126,8 @@ def test_merge_lines_reapplies_ground_truth_after_merge(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "merge_lines",
-        lambda _self, _page, _line_indices: True,
-    )
+        def merge_lines(self, _line_indices):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -213,13 +208,8 @@ def test_merge_lines_reapplies_gt_via_project_image_path_when_page_name_missing(
         def add_ground_truth(self, text: str):
             self.added_gt = text
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "merge_lines",
-        lambda _self, _page, _line_indices: True,
-    )
+        def merge_lines(self, _line_indices):
+            return True
 
     page_state.current_page = PageStub()
     page_state.current_page_model = type(
@@ -296,13 +286,8 @@ def test_delete_lines_reapplies_ground_truth_after_delete(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "delete_lines",
-        lambda _self, _page, _line_indices: True,
-    )
+        def delete_lines(self, _line_indices):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -375,13 +360,8 @@ def test_delete_paragraphs_reapplies_ground_truth_after_delete(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "delete_paragraphs",
-        lambda _self, _page, _paragraph_indices: True,
-    )
+        def delete_paragraphs(self, _paragraph_indices):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -424,13 +404,8 @@ def test_delete_words_reapplies_ground_truth_after_delete(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "delete_words",
-        lambda _self, _page, _word_keys: True,
-    )
+        def delete_words(self, _word_keys):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -457,12 +432,17 @@ def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
         def __init__(self):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
+    class BlockStub:
+        def merge_word_left(self, _word_index):
+            return True
+
     class PageStub:
         def __init__(self):
             self.name = "page_001.png"
             self.removed_gt = False
             self.added_gt = None
             self.overlay_refresh_called = False
+            self.lines = [BlockStub()]
 
         def remove_ground_truth(self):
             self.removed_gt = True
@@ -472,14 +452,6 @@ def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
 
         def refresh_page_images(self):
             self.overlay_refresh_called = True
-
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "merge_word_left",
-        lambda _self, _page, _line_index, _word_index: True,
-    )
 
     page = PageStub()
     page_state.current_page = page
@@ -506,12 +478,17 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
         def __init__(self):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
+    class BlockStub:
+        def merge_word_right(self, _word_index):
+            return True
+
     class PageStub:
         def __init__(self):
             self.name = "page_001.png"
             self.removed_gt = False
             self.added_gt = None
             self.overlay_refresh_called = False
+            self.lines = [BlockStub()]
 
         def remove_ground_truth(self):
             self.removed_gt = True
@@ -521,14 +498,6 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
 
         def refresh_page_images(self):
             self.overlay_refresh_called = True
-
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "merge_word_right",
-        lambda _self, _page, _line_index, _word_index: True,
-    )
 
     page = PageStub()
     page_state.current_page = page
@@ -555,12 +524,17 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
         def __init__(self):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
+    class BlockStub:
+        def split_word_at_fraction(self, _word_index, _split_fraction):
+            return True
+
     class PageStub:
         def __init__(self):
             self.name = "page_001.png"
             self.removed_gt = False
             self.added_gt = None
             self.overlay_refresh_called = False
+            self.lines = [BlockStub()]
 
         def remove_ground_truth(self):
             self.removed_gt = True
@@ -570,14 +544,6 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
 
         def refresh_page_images(self):
             self.overlay_refresh_called = True
-
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "split_word",
-        lambda _self, _page, _line_index, _word_index, _split_fraction: True,
-    )
 
     page = PageStub()
     page_state.current_page = page
@@ -620,13 +586,10 @@ def test_split_word_vertical_closest_line_reapplies_ground_truth(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "split_word_vertically_and_assign_to_closest_line",
-        lambda _self, _page, _line_index, _word_index, _split_fraction: True,
-    )
+        def split_word_vertically_and_assign_to_closest_line(
+            self, _line_index, _word_index, _split_fraction
+        ):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -656,13 +619,8 @@ def test_rebox_word_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "rebox_word",
-        lambda _self, _page, _line_index, _word_index, _x1, _y1, _x2, _y2: True,
-    )
+        def rebox_word(self, _line_index, _word_index, _x1, _y1, _x2, _y2):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -698,13 +656,8 @@ def test_rebox_word_invalidates_overlay_cache_before_refresh(monkeypatch):
             ):
                 self.cv2_numpy_page_image_word_with_bboxes = "fresh-word-overlay"
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "rebox_word",
-        lambda _self, _page, _line_index, _word_index, _x1, _y1, _x2, _y2: True,
-    )
+        def rebox_word(self, _line_index, _word_index, _x1, _y1, _x2, _y2):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -727,15 +680,17 @@ def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "nudge_word_bbox",
-        lambda _self, _page, _line_index, _word_index, _left, _right, _top, _bottom, refine_after=True: (
-            True
-        ),
-    )
+        def nudge_word_bbox(
+            self,
+            _line_index,
+            _word_index,
+            _left,
+            _right,
+            _top,
+            _bottom,
+            refine_after=True,
+        ):
+            return True
 
     page = PageStub()
     page_state.current_page = page
@@ -751,6 +706,8 @@ def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
 
 def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     """Successful word refine should refresh overlays and notify listeners."""
+    import ocr_labeler.state.page_state as ps_module
+
     page_state = PageState()
 
     class PageStub:
@@ -760,18 +717,14 @@ def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "refine_words",
-        lambda _self, _page, _word_keys: True,
-    )
-
     page = PageStub()
     page_state.current_page = page
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
+
+    monkeypatch.setattr(
+        ps_module.BboxOperations, "refine_words", lambda self, p, keys: True
+    )
 
     result = page_state.refine_words([(0, 1)])
 
@@ -782,6 +735,8 @@ def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
 
 def test_expand_then_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     """Successful expand-then-refine should refresh overlays and notify listeners."""
+    import ocr_labeler.state.page_state as ps_module
+
     page_state = PageState()
 
     class PageStub:
@@ -791,18 +746,14 @@ def test_expand_then_refine_words_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "expand_then_refine_words",
-        lambda _self, _page, _word_keys: True,
-    )
-
     page = PageStub()
     page_state.current_page = page
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
+
+    monkeypatch.setattr(
+        ps_module.BboxOperations, "expand_then_refine_words", lambda self, p, keys: True
+    )
 
     result = page_state.expand_then_refine_words([(0, 1)])
 
@@ -813,6 +764,8 @@ def test_expand_then_refine_words_refreshes_overlay_and_notifies(monkeypatch):
 
 def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
     """Successful line refine should refresh overlays and notify listeners."""
+    import ocr_labeler.state.page_state as ps_module
+
     page_state = PageState()
 
     class PageStub:
@@ -822,18 +775,14 @@ def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "refine_lines",
-        lambda _self, _page, _line_indices: True,
-    )
-
     page = PageStub()
     page_state.current_page = page
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
+
+    monkeypatch.setattr(
+        ps_module.BboxOperations, "refine_lines", lambda self, p, indices: True
+    )
 
     result = page_state.refine_lines([0])
 
@@ -844,6 +793,8 @@ def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
 
 def test_refine_paragraphs_refreshes_overlay_and_notifies(monkeypatch):
     """Successful paragraph refine should refresh overlays and notify listeners."""
+    import ocr_labeler.state.page_state as ps_module
+
     page_state = PageState()
 
     class PageStub:
@@ -853,18 +804,14 @@ def test_refine_paragraphs_refreshes_overlay_and_notifies(monkeypatch):
         def refresh_page_images(self):
             self.overlay_refresh_called = True
 
-    from ocr_labeler.operations.ocr import line_operations as line_ops_module
-
-    monkeypatch.setattr(
-        line_ops_module.LineOperations,
-        "refine_paragraphs",
-        lambda _self, _page, _paragraph_indices: True,
-    )
-
     page = PageStub()
     page_state.current_page = page
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
+
+    monkeypatch.setattr(
+        ps_module.BboxOperations, "refine_paragraphs", lambda self, p, indices: True
+    )
 
     result = page_state.refine_paragraphs([0])
 

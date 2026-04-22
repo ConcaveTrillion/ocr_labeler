@@ -47,7 +47,7 @@ include = [
 ]
 
 [tool.uv.sources]
-pd-book-tools = { path = "../pd-book-tools", editable = false }
+pd-book-tools = { path = "../pd-book-tools", editable = true }
 
 [tool.coverage.run]
 source = ["ocr_labeler"]

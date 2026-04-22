@@ -11,6 +11,7 @@ from nicegui import Event
 from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ..models.page_model import PageModel
+from ..operations.ocr.bbox_operations import BboxOperations
 from ..operations.ocr.page_operations import PageOperations
 from ..operations.persistence.persistence_paths_operations import (
     PersistencePathsOperations,
@@ -970,15 +971,15 @@ class PageState:
         _reraise: bool = False,
         **kwargs,
     ) -> bool:
-        """Dispatch a ``LineOperations`` method on the current page.
+        """Dispatch a structural page operation on the current page.
 
         Consolidates the repeated guard / call / finalize / error-handling
         boilerplate shared by all structural and bbox editing methods.
 
         Args:
-            line_op_name: Method name on ``LineOperations``.
+            line_op_name: Method name on ``Page``.
             operation_label: Human-readable label for log messages.
-            *args: Positional arguments forwarded after ``page``.
+            *args: Positional arguments forwarded to the page method.
             _finalize: ``"structural"`` or ``"bbox"`` — selects the
                 post-success finalizer.
             _reraise: When *True*, re-raise exceptions instead of
@@ -991,10 +992,173 @@ class PageState:
             return False
 
         try:
-            from ..operations.ocr.line_operations import LineOperations
+            result = getattr(page, line_op_name)(*args, **kwargs)
+            if result:
+                if _finalize == "structural":
+                    self._finalize_structural_edit(page, operation_label)
+                else:
+                    self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error in %s: %s", operation_label, e)
+            if _reraise:
+                raise
+            return False
 
-            line_ops = LineOperations()
-            result = getattr(line_ops, line_op_name)(page, *args, **kwargs)
+    def _dispatch_bbox_op(
+        self,
+        bbox_op_name: str,
+        operation_label: str,
+        *args,
+        _reraise: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Dispatch a selection-scoped bbox operation via ``BboxOperations``.
+
+        Consolidates the guard / call / finalize / error-handling boilerplate
+        shared by all word/line/paragraph bbox refinement and expansion methods.
+
+        Args:
+            bbox_op_name: Method name on ``BboxOperations``.
+            operation_label: Human-readable label for log messages.
+            *args: Positional arguments forwarded after ``page``.
+            _reraise: When *True*, re-raise exceptions instead of returning *False*.
+            **kwargs: Keyword arguments forwarded to the operation.
+        """
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for %s", operation_label)
+            return False
+        try:
+            result = getattr(BboxOperations(), bbox_op_name)(page, *args, **kwargs)
+            if result:
+                self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error in %s: %s", operation_label, e)
+            if _reraise:
+                raise
+            return False
+
+    def _dispatch_block_op(
+        self,
+        block_op_name: str,
+        operation_label: str,
+        line_index: int,
+        *args,
+        _finalize: str = "structural",
+        _reraise: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Dispatch an operation directly on a line block (Block) within the current page.
+
+        Resolves *line_index* to the corresponding line block and calls
+        ``block_op_name`` on it, bypassing the Page-level method.
+
+        Args:
+            block_op_name: Method name on the ``Block`` (line) object.
+            operation_label: Human-readable label for log messages.
+            line_index: Zero-based index of the line to operate on.
+            *args: Positional arguments forwarded to the block method.
+            _finalize: ``"structural"`` or ``"bbox"`` — selects the
+                post-success finalizer.
+            _reraise: When *True*, re-raise exceptions instead of
+                returning *False*.
+            **kwargs: Keyword arguments forwarded to the operation.
+        """
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for %s", operation_label)
+            return False
+
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            logger.warning(
+                "%s: line_index %s out of range (0-%s)",
+                operation_label,
+                line_index,
+                len(lines) - 1,
+            )
+            return False
+
+        try:
+            result = getattr(lines[line_index], block_op_name)(*args, **kwargs)
+            if result:
+                if _finalize == "structural":
+                    self._finalize_structural_edit(page, operation_label)
+                else:
+                    self._finalize_bbox_edit(page)
+            return result
+        except Exception as e:
+            logger.exception("Error in %s: %s", operation_label, e)
+            if _reraise:
+                raise
+            return False
+
+    def _dispatch_word_op(
+        self,
+        word_op_name: str,
+        operation_label: str,
+        line_index: int,
+        word_index: int,
+        *args,
+        _finalize: str = "structural",
+        _reraise: bool = False,
+        _pass_page_image: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Dispatch an operation directly on a Word within the current page.
+
+        Resolves *(line_index, word_index)* to the target ``Word`` and calls
+        *word_op_name* on it.  When *_pass_page_image* is ``True`` the current
+        page's CV2 numpy image is prepended to *args*, enabling image-aware
+        ``Word`` methods (e.g. ``refine_bbox``, ``expand_then_refine_bbox``) to
+        be called without additional plumbing.
+
+        Args:
+            word_op_name: Method name on the ``Word`` object.
+            operation_label: Human-readable label for log messages.
+            line_index: Zero-based index of the line containing the word.
+            word_index: Zero-based index of the word within the line.
+            *args: Positional arguments forwarded to the word method.
+            _finalize: ``"structural"`` or ``"bbox"`` — selects the
+                post-success finalizer.
+            _reraise: When *True*, re-raise exceptions instead of
+                returning *False*.
+            _pass_page_image: When *True*, prepend the current page's CV2
+                numpy image to *args* before calling the word method.
+            **kwargs: Keyword arguments forwarded to the operation.
+        """
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for %s", operation_label)
+            return False
+
+        lines = list(page.lines)
+        if line_index < 0 or line_index >= len(lines):
+            logger.warning(
+                "%s: line_index %s out of range (0-%s)",
+                operation_label,
+                line_index,
+                len(lines) - 1,
+            )
+            return False
+
+        words = list(lines[line_index].words)
+        if word_index < 0 or word_index >= len(words):
+            logger.warning(
+                "%s: word_index %s out of range (0-%s)",
+                operation_label,
+                word_index,
+                len(words) - 1,
+            )
+            return False
+
+        if _pass_page_image:
+            args = (page.cv2_numpy_page_image, *args)
+
+        try:
+            result = getattr(words[word_index], word_op_name)(*args, **kwargs)
             if result:
                 if _finalize == "structural":
                     self._finalize_structural_edit(page, operation_label)
@@ -1119,7 +1283,7 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
+        return self._dispatch_block_op(
             "merge_word_left", "word merge-left", line_index, word_index
         )
 
@@ -1133,7 +1297,7 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
+        return self._dispatch_block_op(
             "merge_word_right", "word merge-right", line_index, word_index
         )
 
@@ -1153,8 +1317,12 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "split_word", "word split", line_index, word_index, split_fraction
+        return self._dispatch_block_op(
+            "split_word_at_fraction",
+            "word split",
+            line_index,
+            word_index,
+            split_fraction,
         )
 
     def split_word_vertically_and_assign_to_closest_line(
@@ -1307,9 +1475,7 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "refine_words", "word refine", word_keys, _finalize="bbox"
-        )
+        return self._dispatch_bbox_op("refine_words", "word refine", word_keys)
 
     def expand_then_refine_words(
         self,
@@ -1323,11 +1489,8 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "expand_then_refine_words",
-            "expand-then-refine words",
-            word_keys,
-            _finalize="bbox",
+        return self._dispatch_bbox_op(
+            "expand_then_refine_words", "expand-then-refine words", word_keys
         )
 
     def expand_word_bboxes(
@@ -1344,12 +1507,8 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "expand_word_bboxes",
-            "expand word bboxes",
-            word_keys,
-            padding_px=padding_px,
-            _finalize="bbox",
+        return self._dispatch_bbox_op(
+            "expand_word_bboxes", "expand word bboxes", word_keys, padding_px=padding_px
         )
 
     def refine_lines(self, line_indices: list[int]) -> bool:
@@ -1361,9 +1520,7 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "refine_lines", "line refine", line_indices, _finalize="bbox"
-        )
+        return self._dispatch_bbox_op("refine_lines", "line refine", line_indices)
 
     def refine_paragraphs(
         self,
@@ -1377,11 +1534,8 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "refine_paragraphs",
-            "paragraph refine",
-            paragraph_indices,
-            _finalize="bbox",
+        return self._dispatch_bbox_op(
+            "refine_paragraphs", "paragraph refine", paragraph_indices
         )
 
     def expand_then_refine_lines(
@@ -1396,11 +1550,8 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
-            "expand_then_refine_lines",
-            "expand-then-refine lines",
-            line_indices,
-            _finalize="bbox",
+        return self._dispatch_bbox_op(
+            "expand_then_refine_lines", "expand-then-refine lines", line_indices
         )
 
     def expand_then_refine_paragraphs(
@@ -1415,11 +1566,10 @@ class PageState:
         Returns:
             bool: True if expand/refine succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
+        return self._dispatch_bbox_op(
             "expand_then_refine_paragraphs",
             "expand-then-refine paragraphs",
             paragraph_indices,
-            _finalize="bbox",
         )
 
     def expand_line_bboxes(
@@ -1436,12 +1586,11 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
+        return self._dispatch_bbox_op(
             "expand_line_bboxes",
             "expand line bboxes",
             line_indices,
             padding_px=padding_px,
-            _finalize="bbox",
         )
 
     def expand_paragraph_bboxes(
@@ -1458,12 +1607,11 @@ class PageState:
         Returns:
             bool: True if expand succeeded, False otherwise.
         """
-        return self._dispatch_line_op(
+        return self._dispatch_bbox_op(
             "expand_paragraph_bboxes",
             "expand paragraph bboxes",
             paragraph_indices,
             padding_px=padding_px,
-            _finalize="bbox",
         )
 
     def split_line_with_selected_words(

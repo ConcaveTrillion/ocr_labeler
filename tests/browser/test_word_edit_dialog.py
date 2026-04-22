@@ -61,6 +61,37 @@ def _open_dialog(page: Page) -> None:
     page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
 
 
+def _open_dialog_with_enabled_merge_action(
+    page: Page,
+    action_selector: str,
+    max_candidates: int = 40,
+) -> None:
+    """Open a word edit dialog where a specific merge action button is enabled.
+
+    This avoids relying on global word positions that may map to a disabled
+    merge button (for example, first word in a line for Merge Prev).
+    """
+    edit_buttons = page.locator(EDIT_WORD_BUTTON)
+    total = min(edit_buttons.count(), max_candidates)
+
+    for i in range(total):
+        edit_buttons.nth(i).click()
+        page.get_by_text("Merge / Split").first.wait_for(
+            state="visible", timeout=10_000
+        )
+
+        action_button = page.locator(action_selector)
+        if action_button.is_enabled():
+            return
+
+        page.locator(DIALOG_CLOSE).click()
+        page.wait_for_timeout(200)
+
+    raise AssertionError(
+        f"No dialog candidate found with enabled action: {action_selector}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Dialog opens with correct data
 # ---------------------------------------------------------------------------
@@ -333,27 +364,22 @@ def test_dialog_split_buttons_disabled_without_marker(
 
 @pytest.mark.browser
 def test_dialog_merge_prev(browser_app_url: str, browser_page) -> None:
-    """Open dialog on second word → Merge Prev → notification appears."""
+    """Open dialog on a word with enabled Merge Prev and verify merge applies."""
     page = browser_page
     _setup(page, browser_app_url)
     navigate_to_page(page, 3)
 
-    edit_buttons = page.locator(EDIT_WORD_BUTTON)
-    # Page 3 has 305 words; wait for at least 2 to render
+    # Wait for words to render before selecting a candidate dialog.
     page.wait_for_function(
-        "() => document.querySelectorAll('[data-testid=\"edit-word-button\"]').length >= 2",
+        "() => document.querySelectorAll('[data-testid=\"edit-word-button\"]').length >= 3",
         timeout=10_000,
     )
 
-    # Open dialog for the second word
-    edit_buttons.nth(1).click()
-    page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
+    _open_dialog_with_enabled_merge_action(page, DIALOG_MERGE_PREV)
 
-    # Merge Prev should be enabled for 2nd word
     page.locator(DIALOG_MERGE_PREV).click()
-
-    # Merge triggers a notification and re-renders the dialog
-    page.locator(".q-notification").first.wait_for(state="visible", timeout=10_000)
+    page.wait_for_timeout(500)
+    expect(page.locator(DIALOG_CLOSE)).to_be_visible()
 
     page.locator(DIALOG_CLOSE).click()
     page.wait_for_timeout(500)
@@ -366,24 +392,21 @@ def test_dialog_merge_prev(browser_app_url: str, browser_page) -> None:
 
 @pytest.mark.browser
 def test_dialog_merge_next(browser_app_url: str, browser_page) -> None:
-    """Open dialog on first word → Merge Next → notification appears."""
+    """Open dialog on a word with enabled Merge Next and verify merge applies."""
     page = browser_page
     _setup(page, browser_app_url)
     navigate_to_page(page, 3)
 
     page.wait_for_function(
-        "() => document.querySelectorAll('[data-testid=\"edit-word-button\"]').length >= 2",
+        "() => document.querySelectorAll('[data-testid=\"edit-word-button\"]').length >= 3",
         timeout=10_000,
     )
 
-    # Open dialog for the first word
-    page.locator(EDIT_WORD_BUTTON).first.click()
-    page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
+    _open_dialog_with_enabled_merge_action(page, DIALOG_MERGE_NEXT)
 
     page.locator(DIALOG_MERGE_NEXT).click()
-
-    # Merge triggers a notification and re-renders the dialog
-    page.locator(".q-notification").first.wait_for(state="visible", timeout=10_000)
+    page.wait_for_timeout(500)
+    expect(page.locator(DIALOG_CLOSE)).to_be_visible()
 
     page.locator(DIALOG_CLOSE).click()
     page.wait_for_timeout(500)

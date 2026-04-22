@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
-from ocr_labeler.operations.ocr.image_utils import crop_image_to_bbox
+from pd_book_tools.ocr.image_utilities import crop_image_to_bbox
 
 logger = logging.getLogger(__name__)
 

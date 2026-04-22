@@ -17,6 +17,7 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, runtime_checkable
 
+from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ocr_labeler.constants import (
@@ -44,7 +45,6 @@ from ocr_labeler.models import (
     UserPageSource,
     is_user_page_envelope,
 )
-from ocr_labeler.operations.ocr.image_utils import is_geometry_normalization_error
 from ocr_labeler.operations.persistence.persistence_paths_operations import (
     PersistencePathsOperations,
 )
@@ -201,7 +201,7 @@ class PageOperations:
     @staticmethod
     def _is_geometry_normalization_error(error: Exception) -> bool:
         """Return True when bbox recompute fails due to malformed normalization metadata."""
-        return is_geometry_normalization_error(error)
+        return BoundingBox.is_geometry_normalization_error(error)
 
     def build_initial_page_parser(self):
         """Return an initial page parser that performs OCR via DocTR when invoked.

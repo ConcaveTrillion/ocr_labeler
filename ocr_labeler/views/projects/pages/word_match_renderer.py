@@ -70,15 +70,16 @@ class WordMatchRenderer:
                 available_line_indices
             )
         if self._view.selection.selected_word_indices:
-            word_count_by_line = {
-                line_match.line_index: len(line_match.word_matches)
+            valid_word_keys = {
+                (line_match.line_index, word_match.word_index)
                 for line_match in self._view.view_model.line_matches
+                for word_match in line_match.word_matches
+                if word_match.word_index is not None and word_match.word_index >= 0
             }
             self._view.selection.selected_word_indices = {
                 (line_index, word_index)
                 for line_index, word_index in self._view.selection.selected_word_indices
-                if line_index in available_line_indices
-                and 0 <= word_index < word_count_by_line.get(line_index, 0)
+                if (line_index, word_index) in valid_word_keys
             }
         for line_index in available_line_indices:
             self._view.selection.sync_line_selection_from_words(line_index)
@@ -773,7 +774,7 @@ class WordMatchRenderer:
         word_match,
     ) -> None:
         """Create compact per-word controls for fast initial rendering."""
-        selection_key = (line_index, word_index)
+        selection_key = (line_index, split_word_index)
         with ui.row().classes("items-center"):
             word_checkbox = (
                 ui.checkbox(
@@ -787,12 +788,14 @@ class WordMatchRenderer:
                 .on_value_change(
                     lambda event, key=selection_key: (
                         self._view.selection.on_word_selection_change(
-                            key,
-                            bool(event.value),
+                            key, bool(event.value)
                         )
+                        if key[1] >= 0
+                        else None
                     )
                 )
             )
+            word_checkbox.disabled = split_word_index < 0
             self._view.selection._word_checkbox_refs[selection_key] = word_checkbox
 
             edit_button = ui.button(

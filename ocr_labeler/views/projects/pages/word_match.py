@@ -378,8 +378,9 @@ class WordMatchView:
         if line_match is None:
             return set()
         return {
-            (line_index, word_index)
-            for word_index, _ in enumerate(line_match.word_matches)
+            (line_index, word_match.word_index)
+            for word_match in line_match.word_matches
+            if word_match.word_index is not None and word_match.word_index >= 0
         }
 
     def _line_paragraph_index(self, line_index: int) -> int | None:

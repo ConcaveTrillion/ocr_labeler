@@ -167,9 +167,21 @@ def test_top_grid_copy_page_gt_to_ocr_uses_all_lines(monkeypatch):
 
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=2, paragraph_index=0, word_matches=[object()]),
-        SimpleNamespace(line_index=0, paragraph_index=0, word_matches=[object()]),
-        SimpleNamespace(line_index=1, paragraph_index=1, word_matches=[object()]),
+        SimpleNamespace(
+            line_index=2,
+            paragraph_index=0,
+            word_matches=[WordMatch("a", "a", MatchStatus.EXACT, word_index=0)],
+        ),
+        SimpleNamespace(
+            line_index=0,
+            paragraph_index=0,
+            word_matches=[WordMatch("b", "b", MatchStatus.EXACT, word_index=0)],
+        ),
+        SimpleNamespace(
+            line_index=1,
+            paragraph_index=1,
+            word_matches=[WordMatch("c", "c", MatchStatus.EXACT, word_index=0)],
+        ),
     ]
     view.selection.selected_line_indices = {99}
     view.selection.selected_word_indices = {(99, 0)}
@@ -203,9 +215,21 @@ def test_top_grid_copy_paragraph_ocr_to_gt_uses_selected_paragraph_lines(monkeyp
 
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=0, paragraph_index=0, word_matches=[object()]),
-        SimpleNamespace(line_index=1, paragraph_index=1, word_matches=[object()]),
-        SimpleNamespace(line_index=3, paragraph_index=1, word_matches=[object()]),
+        SimpleNamespace(
+            line_index=0,
+            paragraph_index=0,
+            word_matches=[WordMatch("a", "a", MatchStatus.EXACT, word_index=0)],
+        ),
+        SimpleNamespace(
+            line_index=1,
+            paragraph_index=1,
+            word_matches=[WordMatch("b", "b", MatchStatus.EXACT, word_index=0)],
+        ),
+        SimpleNamespace(
+            line_index=3,
+            paragraph_index=1,
+            word_matches=[WordMatch("c", "c", MatchStatus.EXACT, word_index=0)],
+        ),
     ]
     view.selection.selected_paragraph_indices = {1}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
@@ -337,7 +361,14 @@ def test_delete_restores_word_selection_on_failure(monkeypatch):
 def test_line_selection_selects_all_words_for_line():
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=2, word_matches=[object(), object(), object()])
+        SimpleNamespace(
+            line_index=2,
+            word_matches=[
+                WordMatch("a", "a", MatchStatus.EXACT, word_index=0),
+                WordMatch("b", "b", MatchStatus.EXACT, word_index=1),
+                WordMatch("c", "c", MatchStatus.EXACT, word_index=2),
+            ],
+        )
     ]
 
     view.selection.on_line_selection_change(2, True)
@@ -349,7 +380,13 @@ def test_line_selection_selects_all_words_for_line():
 def test_all_words_selected_auto_selects_line():
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=1, word_matches=[object(), object()])
+        SimpleNamespace(
+            line_index=1,
+            word_matches=[
+                WordMatch("a", "a", MatchStatus.EXACT, word_index=0),
+                WordMatch("b", "b", MatchStatus.EXACT, word_index=1),
+            ],
+        )
     ]
 
     view.selection.on_word_selection_change((1, 0), True)
@@ -362,7 +399,10 @@ def test_all_words_selected_auto_selects_line():
 def test_set_selected_words_emits_selection_callback():
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=0, word_matches=[object()])
+        SimpleNamespace(
+            line_index=0,
+            word_matches=[WordMatch("a", "a", MatchStatus.EXACT, word_index=0)],
+        )
     ]
     seen = {}
     view.selection.set_selection_change_callback(
@@ -394,8 +434,16 @@ def test_group_lines_by_paragraph_orders_unassigned_last():
 def test_set_selected_paragraphs_emits_selection_callback():
     view = WordMatchView()
     view.view_model.line_matches = [
-        SimpleNamespace(line_index=0, paragraph_index=0, word_matches=[object()]),
-        SimpleNamespace(line_index=1, paragraph_index=1, word_matches=[object()]),
+        SimpleNamespace(
+            line_index=0,
+            paragraph_index=0,
+            word_matches=[WordMatch("a", "a", MatchStatus.EXACT, word_index=0)],
+        ),
+        SimpleNamespace(
+            line_index=1,
+            paragraph_index=1,
+            word_matches=[WordMatch("b", "b", MatchStatus.EXACT, word_index=0)],
+        ),
     ]
     seen = {}
     view.selection.set_paragraph_selection_change_callback(
@@ -414,17 +462,20 @@ def test_set_selected_paragraphs_selects_all_lines_and_words():
         SimpleNamespace(
             line_index=0,
             paragraph_index=0,
-            word_matches=[object(), object()],
+            word_matches=[
+                WordMatch("a", "a", MatchStatus.EXACT, word_index=0),
+                WordMatch("b", "b", MatchStatus.EXACT, word_index=1),
+            ],
         ),
         SimpleNamespace(
             line_index=1,
             paragraph_index=0,
-            word_matches=[object()],
+            word_matches=[WordMatch("c", "c", MatchStatus.EXACT, word_index=0)],
         ),
         SimpleNamespace(
             line_index=2,
             paragraph_index=1,
-            word_matches=[object()],
+            word_matches=[WordMatch("d", "d", MatchStatus.EXACT, word_index=0)],
         ),
     ]
 
@@ -483,17 +534,20 @@ def test_on_paragraph_selection_change_clears_paragraph_lines_and_words_when_unc
         SimpleNamespace(
             line_index=0,
             paragraph_index=0,
-            word_matches=[object(), object()],
+            word_matches=[
+                WordMatch("a", "a", MatchStatus.EXACT, word_index=0),
+                WordMatch("b", "b", MatchStatus.EXACT, word_index=1),
+            ],
         ),
         SimpleNamespace(
             line_index=1,
             paragraph_index=0,
-            word_matches=[object()],
+            word_matches=[WordMatch("c", "c", MatchStatus.EXACT, word_index=0)],
         ),
         SimpleNamespace(
             line_index=2,
             paragraph_index=1,
-            word_matches=[object()],
+            word_matches=[WordMatch("d", "d", MatchStatus.EXACT, word_index=0)],
         ),
     ]
     view.selection.selected_paragraph_indices = {0}
@@ -2787,6 +2841,80 @@ def test_collect_word_keys_for_lines():
     keys = view.toolbar._collect_word_keys_for_lines([1])
 
     assert keys == [(1, 1)]
+
+
+def test_line_word_keys_skip_unmatched_gt_words() -> None:
+    view = WordMatchView()
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a b",
+        ground_truth_line_text="a x b",
+        word_matches=[
+            WordMatch(
+                ocr_text="a",
+                ground_truth_text="a",
+                match_status=MatchStatus.EXACT,
+                word_index=0,
+            ),
+            WordMatch(
+                ocr_text="",
+                ground_truth_text="x",
+                match_status=MatchStatus.UNMATCHED_GT,
+                word_index=None,
+            ),
+            WordMatch(
+                ocr_text="b",
+                ground_truth_text="b",
+                match_status=MatchStatus.EXACT,
+                word_index=3,
+            ),
+        ],
+    )
+    view.view_model.line_matches = [lm]
+
+    assert view._line_word_keys(0) == {(0, 0), (0, 3)}
+
+
+def test_validate_selected_words_after_line_select_uses_ocr_indices(monkeypatch):
+    view = WordMatchView()
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a b",
+        ground_truth_line_text="a x b",
+        word_matches=[
+            WordMatch(
+                ocr_text="a",
+                ground_truth_text="a",
+                match_status=MatchStatus.EXACT,
+                word_index=0,
+                is_validated=False,
+            ),
+            WordMatch(
+                ocr_text="",
+                ground_truth_text="x",
+                match_status=MatchStatus.UNMATCHED_GT,
+                word_index=None,
+                is_validated=False,
+            ),
+            WordMatch(
+                ocr_text="b",
+                ground_truth_text="b",
+                match_status=MatchStatus.EXACT,
+                word_index=3,
+                is_validated=False,
+            ),
+        ],
+    )
+    view.view_model.line_matches = [lm]
+
+    toggled: list[tuple[int, int]] = []
+    view.toggle_word_validated_callback = lambda li, wi: toggled.append((li, wi))
+    monkeypatch.setattr(view.renderer, "_rerender_or_hide_line", lambda _line: None)
+
+    view.selection.on_line_selection_change(0, True)
+    view.toolbar._handle_validate_selected_words()
+
+    assert sorted(toggled) == [(0, 0), (0, 3)]
 
 
 # ---------------------------------------------------------------------------

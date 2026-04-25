@@ -31,7 +31,7 @@ Keep expensive OCR and filesystem operations off the main NiceGUI event loop.
 - A blocking fallback path exists for no-event-loop/test contexts in some
   components; production paths are async
   (`background_tasks.create` + `run.io_bound`).
-- No current `run.cpu_bound(...)` call sites were found in `ocr_labeler/**/*.py` during this validation pass.
+- No current `run.cpu_bound(...)` call sites were found in `pd_ocr_labeler/**/*.py` during this validation pass.
 
 ## Design Goals
 

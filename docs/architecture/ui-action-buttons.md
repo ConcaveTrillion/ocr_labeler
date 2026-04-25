@@ -8,7 +8,7 @@ coverage and plan new tests.
 
 ## 1. Header — Project Load Controls
 
-**Source:** `ocr_labeler/views/header/project_load_controls.py`
+**Source:** `pd_ocr_labeler/views/header/project_load_controls.py`
 
 ### Main Controls
 
@@ -38,7 +38,7 @@ coverage and plan new tests.
 
 ## 2. Project Navigation Controls
 
-**Source:** `ocr_labeler/views/projects/project_navigation_controls.py`
+**Source:** `pd_ocr_labeler/views/projects/project_navigation_controls.py`
 
 | # | Label | Handler | Description | Browser-Tested |
 | --- | --- | --- | --- | --- |
@@ -56,7 +56,7 @@ coverage and plan new tests.
 
 ## 3. Page Actions
 
-**Source:** `ocr_labeler/views/projects/pages/page_actions.py`
+**Source:** `pd_ocr_labeler/views/projects/pages/page_actions.py`
 
 | # | Label | Handler | Tooltip | Browser-Tested |
 | --- | --- | --- | --- | --- |
@@ -69,7 +69,7 @@ coverage and plan new tests.
 
 ## 4. Word Match Toolbar — Scope Action Grid
 
-**Source:** `ocr_labeler/views/projects/pages/word_match_toolbar.py`
+**Source:** `pd_ocr_labeler/views/projects/pages/word_match_toolbar.py`
 
 Each row shares the same column layout. Columns with "—" indicate the
 operation is not applicable at that scope.
@@ -142,7 +142,7 @@ operation is not applicable at that scope.
 
 ## 5. Word Match Renderer — Per-Line and Per-Word Buttons
 
-**Source:** `ocr_labeler/views/projects/pages/word_match_renderer.py`
+**Source:** `pd_ocr_labeler/views/projects/pages/word_match_renderer.py`
 
 ### Paragraph Expander
 
@@ -176,7 +176,7 @@ operation is not applicable at that scope.
 
 ## 6. Word Edit Dialog
 
-**Source:** `ocr_labeler/views/projects/pages/word_edit_dialog.py`
+**Source:** `pd_ocr_labeler/views/projects/pages/word_edit_dialog.py`
 
 ### Dialog Header
 

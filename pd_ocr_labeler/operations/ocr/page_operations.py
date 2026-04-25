@@ -1,0 +1,1602 @@
+"""Page operations for OCR labeling tasks.
+
+This module contains operations that can be performed on pages, such as saving,
+loading, exporting, and other persistence-related functionality. These operations
+are separated from state management to maintain clear architectural boundaries.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import shutil
+import sys
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, runtime_checkable
+
+from pd_book_tools.geometry.bounding_box import BoundingBox
+from pd_book_tools.ocr.page import Page  # type: ignore
+
+from pd_ocr_labeler.constants import (
+    IMAGE_EXTS,
+    WORD_LABEL_BLACKLETTER,
+    WORD_LABEL_ITALIC,
+    WORD_LABEL_LEFT_FOOTNOTE,
+    WORD_LABEL_RIGHT_FOOTNOTE,
+    WORD_LABEL_SMALL_CAPS,
+    WORD_LABEL_VALIDATED,
+)
+from pd_ocr_labeler.models import (
+    UNKNOWN_METADATA_VALUE,
+    USER_PAGE_SCHEMA_VERSION,
+    PageModel,
+    ProvenanceApp,
+    ProvenanceOCR,
+    ProvenanceOCRModel,
+    ProvenanceToolchain,
+    SourceImageFingerprint,
+    UserPageEnvelope,
+    UserPagePayload,
+    UserPageProvenance,
+    UserPageSchema,
+    UserPageSource,
+    is_user_page_envelope,
+)
+from pd_ocr_labeler.operations.persistence.persistence_paths_operations import (
+    PersistencePathsOperations,
+)
+
+if TYPE_CHECKING:
+    pass
+
+logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _ReorganizablePage(Protocol):
+    def reorganize_page(self) -> None: ...
+
+
+PAGE_SAVED_PROVENANCE_ATTR = "_pd_ocr_labeler_saved_provenance"
+
+
+class PageLoadInfo(NamedTuple):
+    """Information about a page's load availability and file paths."""
+
+    can_load: bool
+    json_filename: str
+    json_path: Path
+    file_prefix: str
+
+
+class PageOperations:
+    """Handle page-level operations like save, load, export, and reset.
+
+    This class provides functionality for:
+    - Saving pages to disk with metadata
+    - Loading pages from saved files
+    - Exporting pages in various formats
+    - Resetting OCR data for pages
+
+    Operations are designed to be stateless and work with dependency injection
+    to avoid tight coupling with state management classes.
+    """
+
+    def __init__(self, docTR_predictor: object | None = None):
+        """Initialize PageOperations with its own page parser.
+
+        Args:
+            docTR_predictor: Optional predictor for OCR processing
+        """
+        # Store the predictor at instance level to avoid recreating it per-page
+        self._docTR_predictor = docTR_predictor
+        self._predictor_initialized = False
+        self._saved_provenance_by_page_id: dict[int, dict[str, Any]] = {}
+        self._page_image_cache_dir: Path | None = None
+        self.page_parser = self.build_initial_page_parser()
+
+    def _resolve_page_image_cache_dir(self) -> Path:
+        """Return the shared page-image cache directory."""
+        if self._page_image_cache_dir is not None:
+            return self._page_image_cache_dir
+        return PersistencePathsOperations.get_page_image_cache_root()
+
+    @staticmethod
+    def _resolve_save_directory(
+        project_root: Path, save_directory: str | Path | None
+    ) -> Path:
+        """Resolve save directory with user-local default and compatibility fallbacks."""
+        if save_directory is None:
+            return PersistencePathsOperations.get_saved_projects_root()
+
+        directory_text = str(save_directory).strip()
+        if not directory_text:
+            return PersistencePathsOperations.get_saved_projects_root()
+
+        save_dir = Path(directory_text)
+        if save_dir.is_absolute():
+            return save_dir
+        return project_root / save_dir
+
+    @staticmethod
+    def _page_cache_file_prefix(project_id: str, page_number: int) -> str:
+        """Return the filename prefix used by page image cache entries."""
+        safe_project_id = (project_id or "project").strip() or "project"
+        safe_page_number = max(1, int(page_number))
+        return f"{safe_project_id}_{safe_page_number:03d}_"
+
+    def _remove_page_cached_image_files(
+        self,
+        *,
+        project_id: str,
+        page_number: int,
+    ) -> None:
+        """Remove cached image files for a page when JSON no longer references them."""
+        self._remove_unused_page_cached_image_files(
+            project_id=project_id,
+            page_number=page_number,
+            keep_filenames={},
+        )
+
+    def _remove_unused_page_cached_image_files(
+        self,
+        *,
+        project_id: str,
+        page_number: int,
+        keep_filenames: dict[str, str],
+    ) -> None:
+        """Remove stale cached image files for a page while keeping current ones."""
+        cache_dir = self._resolve_page_image_cache_dir()
+        if not cache_dir.exists():
+            return
+
+        keep = {filename for filename in keep_filenames.values() if filename}
+        prefix = self._page_cache_file_prefix(project_id, page_number)
+        try:
+            for candidate in cache_dir.iterdir():
+                if not candidate.is_file() or not candidate.name.startswith(prefix):
+                    continue
+                if candidate.name in keep:
+                    continue
+                try:
+                    candidate.unlink()
+                except FileNotFoundError:
+                    continue
+                except Exception:
+                    logger.debug(
+                        "Failed removing stale cached page image: %s",
+                        candidate,
+                        exc_info=True,
+                    )
+        except FileNotFoundError:
+            return
+
+    def _get_or_create_predictor(self):
+        """Get or create the DocTR predictor instance.
+
+        Lazy initialization to avoid loading models until actually needed.
+        Ensures each PageOperations instance has its own predictor for thread safety.
+        """
+        if not self._predictor_initialized:
+            if self._docTR_predictor is None:
+                from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
+
+                self._docTR_predictor = get_default_doctr_predictor()
+            self._predictor_initialized = True
+        return self._docTR_predictor
+
+    def _reorganize_page_if_available(self, page_obj: Page) -> None:
+        """Run page reorganization when the page object supports it."""
+        try:
+            if isinstance(page_obj, _ReorganizablePage):
+                page_obj.reorganize_page()
+        except Exception as e:
+            logger.debug(
+                "Page reorganization failed, continuing with raw OCR layout: %s", e
+            )
+
+    @staticmethod
+    def _is_geometry_normalization_error(error: Exception) -> bool:
+        """Return True when bbox recompute fails due to malformed normalization metadata."""
+        return BoundingBox.is_geometry_normalization_error(error)
+
+    def build_initial_page_parser(self):
+        """Return an initial page parser that performs OCR via DocTR when invoked.
+
+        This creates a parser for the initial OCR processing of pages from images.
+        This is distinct from loading/saving work done on already processed pages.
+
+        The returned parser supports force refresh semantics - when called, it
+        always runs OCR on the image regardless of any cached state. Higher-level
+        code controls whether to use saved results or force fresh OCR processing.
+
+        Separated for easier testing & potential alternative implementations (e.g.,
+        different OCR engines or caching strategies).
+
+        Returns:
+            Callable that takes (path, index, ground_truth_string) and returns
+            a Page object with OCR results.
+        """
+
+        def _parse_page(
+            path: Path,
+            index: int,
+            ground_truth_string: str,
+        ) -> Page:
+            from pd_book_tools.ocr.document import Document
+
+            predictor = self._get_or_create_predictor()
+            doc = Document.from_image_ocr_via_doctr(
+                path,
+                source_identifier=path.name,
+                predictor=predictor,
+            )
+            page_obj: Page = doc.pages[0]
+
+            from cv2 import imread as cv2_imread
+
+            img = cv2_imread(str(path))
+            if img is not None:
+                page_obj.cv2_numpy_page_image = img
+                logger.debug("attached cv2 image for index %s", index)
+
+            self._reorganize_page_if_available(page_obj)
+
+            if ground_truth_string:
+                page_obj.add_ground_truth(ground_truth_string)
+
+            page_obj.ocr_provenance = self._build_live_ocr_provenance(
+                source_lib="doctr-pd-labeled"
+            )
+            return page_obj
+
+        return _parse_page
+
+    def save_page(
+        self,
+        page: PageModel | Page,
+        project_root: Path,
+        save_directory: str | Path | None = None,
+        project_id: str | None = None,
+        source_lib: str = "doctr-pd-labeled",
+        original_page: PageModel | Page | None = None,
+    ) -> bool:
+        """Save a single page object to a file with both image copy and JSON metadata.
+
+        Creates two files in the save directory:
+        - <project_id>_<page_number>.png (or .jpg): Copy of original image
+        - <project_id>_<page_number>.json: Metadata with serialized Page object
+
+        Args:
+            page: Page object to save (required).
+            project_root: Root directory of the project for relative path calculation.
+            save_directory: Directory to save files. When omitted, uses the
+                default user-local labeled-projects directory.
+            project_id: Project identifier. If None, derives from project_root name.
+            source_lib: Source library identifier (default: "doctr-pd-labeled").
+            original_page: Original Page object before modifications (optional).
+
+        Returns:
+            bool: True if save was successful, False otherwise.
+
+        Example:
+            # Save page with default settings
+            operations = PageOperations()
+            success = operations.save_page(
+                page=my_page,
+                project_root=Path("/path/to/project")
+            )
+
+            # Save with custom directory and project ID
+            success = operations.save_page(
+                page=my_page,
+                project_root=Path("/path/to/project"),
+                save_directory="my-output/labeled-data",
+                project_id="book_chapter_1"
+            )
+        """
+        try:
+            page_model = self._to_page_model(page)
+            page_obj = page_model.page
+            original_page_obj = self._to_page(original_page)
+
+            # Generate project ID if not provided
+            if project_id is None:
+                project_id = project_root.name
+
+            # Create save directory
+            save_dir = self._resolve_save_directory(project_root, save_directory)
+            save_dir.mkdir(parents=True, exist_ok=True)
+
+            # Get page number (1-based for filenames)
+            page_number = getattr(page_obj, "index", 0) + 1
+
+            # Get original image path
+            image_path = getattr(page_obj, "image_path", None)
+            if image_path is None:
+                logger.error("Page has no associated image_path")
+                return False
+
+            # Determine file extensions
+            image_suffix = Path(image_path).suffix.lower()
+            if image_suffix not in {".png", ".jpg", ".jpeg"}:
+                image_suffix = ".png"  # Default fallback
+
+            # Create file names
+            file_prefix = f"{project_id}_{page_number:03d}"
+            image_filename = f"{file_prefix}{image_suffix}"
+            json_filename = f"{file_prefix}.json"
+
+            # Copy image file
+            image_dest = save_dir / image_filename
+            shutil.copy2(image_path, image_dest)
+            logger.info("Copied image to: %s", image_dest)
+
+            # Create JSON metadata with relative path (fallback to filename if not relative)
+            try:
+                relative_path = str(Path(image_path).relative_to(project_root))
+            except ValueError:
+                # If image_path is not relative to project_root, use just the filename
+                relative_path = Path(image_path).name
+
+            envelope = self._build_user_page_envelope(
+                page=page_model,
+                project_id=project_id,
+                page_number=page_number,
+                relative_path=relative_path,
+                source_lib=source_lib,
+                original_page=original_page_obj,
+            )
+            json_data = envelope.to_dict()
+
+            # Save JSON file
+            json_dest = save_dir / json_filename
+            with open(json_dest, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            logger.info("Saved JSON metadata to: %s", json_dest)
+
+            self._store_saved_provenance(page_model, envelope.provenance.to_dict())
+
+            return True
+
+        except Exception:
+            logger.exception("Failed to save page")
+            return False
+
+    def update_cached_images_in_json(
+        self,
+        page_model: PageModel,
+        project_root: Path,
+        save_directory: str | Path | None = None,
+        project_id: str | None = None,
+    ) -> bool:
+        """Write cached_images filenames into the page's JSON file and bump schema to 2.1.
+
+        Called automatically after images are rendered to disk so that subsequent
+        sessions (and same-session page revisits that lose the in-memory PageModel)
+        can skip refresh_page_images() entirely.
+
+        If the page JSON does not yet exist (page never explicitly saved) this is
+        a no-op — the cached filenames are already in memory and will be written
+        on the next explicit save.
+
+        Uses an atomic temp-then-rename write to avoid partial-write corruption.
+        """
+        try:
+            if project_id is None:
+                project_id = project_root.name
+
+            page_index = getattr(page_model, "index", None)
+            if page_index is None:
+                logger.debug(
+                    "update_cached_images_in_json: no page index on model, skipping"
+                )
+                return False
+            page_number = int(page_index) + 1
+
+            save_dir = self._resolve_save_directory(project_root, save_directory)
+            json_path = save_dir / f"{project_id}_{page_number:03d}.json"
+
+            cached_filenames = page_model.cached_image_filenames or {}
+            if not cached_filenames:
+                return False
+
+            self._remove_unused_page_cached_image_files(
+                project_id=project_id,
+                page_number=page_number,
+                keep_filenames=dict(cached_filenames),
+            )
+
+            if not json_path.exists():
+                logger.debug(
+                    "update_cached_images_in_json: %s not found (page not yet saved), "
+                    "skipping",
+                    json_path,
+                )
+                return False
+
+            with open(json_path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+
+            json_data["cached_images"] = dict(cached_filenames)
+
+            # Bring forward old schema pages to 2.1.
+            schema = json_data.get("schema")
+            if isinstance(schema, dict):
+                schema["version"] = USER_PAGE_SCHEMA_VERSION
+
+            tmp_path = json_path.with_name(json_path.name + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            tmp_path.replace(json_path)
+
+            logger.debug(
+                "update_cached_images_in_json: persisted %d cached image filenames to %s",
+                len(cached_filenames),
+                json_path,
+            )
+            return True
+
+        except Exception as e:
+            logger.warning("Failed to update cached_images in JSON: %s", e)
+            return False
+
+    def load_page_model(
+        self,
+        page_number: int,
+        project_root: Path,
+        save_directory: str | Path | None = None,
+        project_id: str | None = None,
+    ) -> tuple[PageModel, dict[str, Any] | None] | None:
+        """Load a previously saved page from disk with metadata and image.
+
+        Looks for saved files in the save directory:
+        - <project_id>_<page_number>.json: Metadata with serialized Page object
+        - <project_id>_<page_number>.png (or .jpg): Image file (not directly loaded into Page)
+
+        Args:
+            page_number: Page number to load (1-based indexing to match save_page).
+            project_root: Root directory of the project.
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
+            project_id: Project identifier. If None, derives from project_root name.
+
+        Returns:
+            tuple: (PageModel, original_page_dict) if found and valid, None otherwise.
+                   original_page_dict is the dict of the original OCR page if saved, else None.
+
+        Example:
+            # Load page with default settings
+            operations = PageOperations()
+            page_model, original_page_dict = operations.load_page_model(
+                page_number=1,
+                project_root=Path("/path/to/project")
+            )
+
+            # Load with custom directory and project ID
+            page_model, original_page_dict = operations.load_page_model(
+                page_number=5,
+                project_root=Path("/path/to/project"),
+                save_directory="my-output/labeled-data",
+                project_id="book_chapter_1"
+            )
+        """
+        try:
+            if project_id is None:
+                project_id = project_root.name
+
+            save_dir = self._resolve_save_directory(project_root, save_directory)
+            if not save_dir.exists():
+                logger.info("Save directory does not exist: %s", save_dir)
+                return None
+
+            file_prefix = f"{project_id}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            json_path = save_dir / json_filename
+
+            if not json_path.exists():
+                logger.info("Saved page not found: %s", json_path)
+                return None
+
+            # Load JSON metadata
+            with open(json_path, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+
+            # Validate JSON structure
+            if not isinstance(json_data, dict):
+                logger.error("Invalid JSON structure in %s", json_path)
+                return None
+
+            page_dict = self._extract_page_dict(json_data)
+            if not isinstance(page_dict, dict):
+                logger.error("Invalid page data structure in %s", json_path)
+                return None
+
+            # Reconstruct Page object from dictionary
+            page = Page.from_dict(page_dict)
+            logger.info("Successfully loaded page from: %s", json_path)
+
+            if is_user_page_envelope(json_data):
+                envelope = UserPageEnvelope.from_dict(json_data)
+                self._apply_word_attributes_to_page(
+                    page,
+                    envelope.payload.word_attributes,
+                )
+
+            # Restore the original image path from source_path
+            source_path = self._extract_source_path(json_data)
+            if source_path:
+                page.image_path = project_root / source_path  # type: ignore[attr-defined]
+                logger.debug("Restored image_path: %s", page.image_path)
+            else:
+                logger.warning(
+                    "No source_path found in %s, checking for saved image", json_path
+                )
+
+            # Load the corresponding image file and attach it to the page
+            # Try to find the image file (could be .png, .jpg, or .jpeg)
+            image_path = None
+            for ext in IMAGE_EXTS:
+                candidate_path = save_dir / f"{file_prefix}{ext}"
+                if candidate_path.exists():
+                    image_path = candidate_path
+                    break
+
+            # If we don't have image_path from source_path, use the saved image as fallback
+            if not hasattr(page, "image_path") or page.image_path is None:
+                if image_path:
+                    page.image_path = image_path  # type: ignore[attr-defined]
+                    logger.debug("Using saved image as image_path: %s", image_path)
+                else:
+                    logger.warning(
+                        "No image_path available for loaded page from %s", json_path
+                    )
+
+            if image_path:
+                try:
+                    from cv2 import imread as cv2_imread
+
+                    img = cv2_imread(str(image_path))
+                    if img is not None:
+                        page.cv2_numpy_page_image = img
+                        logger.debug(
+                            "Attached cv2 image for loaded page: %s", image_path
+                        )
+                    else:
+                        logger.warning("Failed to load image from: %s", image_path)
+                except Exception as e:
+                    logger.warning("Error loading image %s: %s", image_path, e)
+            else:
+                logger.warning("No image file found for prefix: %s", file_prefix)
+
+            page_model = PageModel(page=page)
+            self._attach_loaded_provenance(page_model=page_model, json_data=json_data)
+
+            source_data = json_data.get("source", {})
+            if isinstance(source_data, dict):
+                source_index = source_data.get("page_index")
+                if isinstance(source_index, int):
+                    page_model.index = source_index
+                image_path = source_data.get("image_path")
+                if isinstance(image_path, str) and image_path:
+                    candidate = (project_root / image_path).resolve()
+                    try:
+                        candidate.relative_to(project_root.resolve())
+                        page_model.image_path = str(candidate)
+                    except ValueError:
+                        logger.warning(
+                            "Ignoring image_path from saved JSON that escapes project root: %r",
+                            image_path,
+                        )
+
+            page_model.name = str(getattr(page, "name", page_model.name) or "") or None
+            page_model.page_source = "filesystem"
+
+            # Extract original page and cached image filenames if saved
+            original_page_dict = None
+            has_cached_images = False
+            if is_user_page_envelope(json_data):
+                envelope = UserPageEnvelope.from_dict(json_data)
+                original_page_dict = envelope.payload.original_page
+                if envelope.cached_images:
+                    page_model.cached_image_filenames = envelope.cached_images
+                    has_cached_images = True
+
+            if not has_cached_images:
+                self._remove_page_cached_image_files(
+                    project_id=project_id,
+                    page_number=page_number,
+                )
+
+            return page_model, original_page_dict
+
+        except Exception:
+            logger.exception("Failed to load page %s", page_number)
+            return None
+
+    def refine_all_bboxes(self, page: PageModel | Page, padding_px: int = 2) -> bool:
+        """Refine all bounding boxes in a page with specified padding.
+
+        Calls page.refine_bounding_boxes(padding_px) and refreshes page images.
+
+        Args:
+            page: Page object to refine bboxes for.
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if refinement was successful, False otherwise.
+        """
+        try:
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to refine_all_bboxes")
+                return False
+            logger.debug("Refining bboxes for page with padding_px=%s", padding_px)
+            page_obj.refine_bounding_boxes(padding_px=padding_px)
+
+            # Refresh page images after bbox changes
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
+                logger.debug("Refreshed page images after bbox refinement")
+
+            logger.info("Successfully refined bboxes for page")
+            return True
+        except Exception as e:
+            if self._is_geometry_normalization_error(e):
+                logger.warning(
+                    "refine_all_bboxes hit malformed geometry (%s); "
+                    "falling back to expand_and_refine_all_bboxes",
+                    e,
+                )
+                return self.expand_and_refine_all_bboxes(page, padding_px=padding_px)
+            logger.exception("Failed to refine bboxes for page")
+            return False
+
+    def expand_and_refine_all_bboxes(
+        self, page: PageModel | Page, padding_px: int = 2
+    ) -> bool:
+        """Expand and refine all bounding boxes in a page.
+
+        Iterates through all words in the page, calling crop_bottom() and expand_to_content()
+        on each word, then calls page.refine_bounding_boxes(padding_px) and refreshes page images.
+
+        Args:
+            page: Page object to expand and refine bboxes for.
+            padding_px: Padding in pixels to use for refinement (default: 2).
+
+        Returns:
+            bool: True if operation was successful, False otherwise.
+        """
+        try:
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to expand_and_refine_all_bboxes")
+                return False
+            logger.debug(
+                "Expanding and refining bboxes for page with padding_px=%s", padding_px
+            )
+
+            # Iterate through all words and prefer BoundingBox.refine(expand_beyond_original=True)
+            word_blocks = None
+            if hasattr(page_obj, "blocks"):
+                word_blocks = page_obj.blocks
+            elif hasattr(page_obj, "lines"):
+                word_blocks = page_obj.lines
+
+            if word_blocks is None:
+                logger.warning(
+                    "Page has no blocks/lines; skipping expand/refine word pass"
+                )
+                return False
+
+            page_image = None
+            if hasattr(page_obj, "cv2_numpy_page_image"):
+                page_image = page_obj.cv2_numpy_page_image
+
+            used_bbox_refine_any = False
+            for block in word_blocks:
+                words = getattr(block, "words", None)
+                if not words:
+                    continue
+                for word in words:
+                    used_bbox_refine = False
+                    bbox = getattr(word, "bounding_box", None)
+                    bbox_refine = (
+                        getattr(bbox, "refine", None) if bbox is not None else None
+                    )
+                    if callable(bbox_refine) and page_image is not None:
+                        refined_bbox = bbox_refine(
+                            page_image,
+                            padding_px=padding_px,
+                            expand_beyond_original=True,
+                        )
+                        if refined_bbox is not None:
+                            word.bounding_box = refined_bbox
+                            used_bbox_refine = True
+                            used_bbox_refine_any = True
+
+                    if not used_bbox_refine:
+                        crop_bottom = getattr(word, "crop_bottom", None)
+                        if callable(crop_bottom):
+                            try:
+                                crop_bottom()
+                            except TypeError:
+                                if page_image is not None:
+                                    crop_bottom(page_image)
+                                else:
+                                    raise
+                        expand_to_content = getattr(word, "expand_to_content", None)
+                        if callable(expand_to_content):
+                            try:
+                                expand_to_content()
+                            except TypeError:
+                                if page_image is not None:
+                                    expand_to_content(page_image)
+                                else:
+                                    raise
+
+                recompute_block = getattr(block, "recompute_bounding_box", None)
+                if callable(recompute_block):
+                    recompute_block()
+
+            recompute_page = getattr(page_obj, "recompute_bounding_box", None)
+            if callable(recompute_page):
+                recompute_page()
+            elif not used_bbox_refine_any:
+                page_obj.refine_bounding_boxes(padding_px=padding_px)
+
+            # Refresh page images after bbox changes
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
+                logger.debug("Refreshed page images after expand and refine")
+
+            logger.info("Successfully expanded and refined bboxes for page")
+            return True
+        except Exception:
+            logger.exception("Failed to expand and refine bboxes for page")
+            return False
+
+    def can_load_page(
+        self,
+        page_number: int,
+        project_root: Path,
+        save_directory: str | Path | None = None,
+        project_id: str | None = None,
+    ) -> PageLoadInfo:
+        """Check if a page can be loaded and return validation information.
+
+        Validates that the required JSON file exists for the specified page and
+        returns detailed information about the file paths and availability.
+
+        Args:
+            page_number: Page number to check (1-based indexing to match save_page).
+            project_root: Root directory of the project.
+            save_directory: Directory where files were saved. When omitted,
+                uses the default user-local labeled-projects directory.
+            project_id: Project identifier. If None, derives from project_root name.
+
+        Returns:
+            PageLoadInfo: Named tuple containing:
+                - can_load (bool): Whether the page can be loaded
+                - json_filename (str): Name of the JSON file
+                - json_path (Path): Full path to the JSON file
+                - file_prefix (str): File prefix used for naming
+
+        Example:
+            # Check if page can be loaded with default settings
+            operations = PageOperations()
+            load_info = operations.can_load_page(
+                page_number=1,
+                project_root=Path("/path/to/project")
+            )
+
+            if load_info.can_load:
+                print(f"Page can be loaded from: {load_info.json_path}")
+            else:
+                print(f"Page not available at: {load_info.json_path}")
+        """
+        try:
+            # Generate project ID if not provided
+            if project_id is None:
+                project_id = project_root.name
+
+            # Create save directory path
+            save_dir = self._resolve_save_directory(project_root, save_directory)
+
+            # Create file names (matching save_page format)
+            file_prefix = f"{project_id}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            json_path = save_dir / json_filename
+
+            # Check if save directory and JSON file exist
+            can_load = save_dir.exists() and json_path.exists()
+
+            if can_load:
+                # Additional validation: check if file is readable and has basic structure
+                try:
+                    raw_text = json_path.read_text(encoding="utf-8")
+                    json_data = json.loads(raw_text)
+
+                    # Basic structure validation
+                    if not isinstance(json_data, dict) or not self._has_loadable_page(
+                        json_data
+                    ):
+                        can_load = False
+                        logger.warning("Invalid JSON structure in %s", json_path)
+                except Exception as e:
+                    can_load = False
+                    logger.warning(
+                        "Cannot read or parse JSON file %s: %s", json_path, e
+                    )
+
+            return PageLoadInfo(
+                can_load=can_load,
+                json_filename=json_filename,
+                json_path=json_path,
+                file_prefix=file_prefix,
+            )
+
+        except Exception:
+            logger.exception("Failed to check page %s availability", page_number)
+            # Return a safe default with the computed paths
+            file_prefix = f"{project_id or project_root.name}_{page_number:03d}"
+            json_filename = f"{file_prefix}.json"
+            save_dir = Path(save_directory)
+            if not save_dir.is_absolute():
+                save_dir = project_root / save_dir
+            json_path = save_dir / json_filename
+
+            return PageLoadInfo(
+                can_load=False,
+                json_filename=json_filename,
+                json_path=json_path,
+                file_prefix=file_prefix,
+            )
+
+    def create_fallback_page(
+        self,
+        index: int,
+        img_path: Path,
+        ground_truth_map: dict[str, str],
+    ) -> Page:
+        """Create a fallback page when OCR fails, attaching image and ground truth if available.
+
+        Args:
+            index: Zero-based page index.
+            img_path: Path to the image file.
+            ground_truth_map: Mapping of image names to ground truth text.
+
+        Returns:
+            Page: A basic fallback page object.
+        """
+        page = Page(width=0, height=0, page_index=index, items=[])
+        page.image_path = img_path  # type: ignore[attr-defined]
+        page.name = img_path.name  # type: ignore[attr-defined]
+        page.index = index  # type: ignore[attr-defined]
+        page.ocr_failed = True  # type: ignore[attr-defined]
+
+        # Add ground truth if available
+        gt_text = self.find_ground_truth_text(img_path.name, ground_truth_map)
+        if gt_text:
+            page.add_ground_truth(gt_text)  # type: ignore[attr-defined]
+            logger.debug("Injected ground truth for fallback page: %s", img_path.name)
+
+        # Best-effort load image
+        try:
+            from cv2 import imread as cv2_imread
+
+            img = cv2_imread(str(img_path))
+            if img is not None:
+                page.cv2_numpy_page_image = img  # type: ignore[attr-defined]
+                logger.debug("Attached cv2 image for fallback page: %s", img_path.name)
+        except Exception:
+            logger.debug("cv2 load failed for fallback page: %s", img_path.name)
+
+        return page
+
+    def refresh_page_images(self, page: PageModel | Page) -> bool:
+        """Refresh all generated images (overlays) for a page.
+
+        Calls page.refresh_page_images() if available.
+
+        Args:
+            page: Page object to refresh images for.
+
+        Returns:
+            bool: True if refresh was successful, False otherwise.
+        """
+        try:
+            page_obj = self._to_page(page)
+            if page_obj is None:
+                logger.warning("No page provided to refresh_page_images")
+                return False
+            if hasattr(page_obj, "refresh_page_images"):
+                page_obj.refresh_page_images()
+                logger.info("Successfully refreshed page images using native method")
+                return True
+            else:
+                logger.warning("Page object has no native refresh_page_images method")
+                return False
+        except Exception:
+            logger.exception("Failed to refresh page images")
+            return False
+
+    def reset_ocr(
+        self,
+        image_path: Path,
+        index: int = 0,
+        ground_truth_text: str = "",
+    ) -> Page | None:
+        """Reset OCR processing for a page by re-running DocTR OCR.
+
+        This method forces a fresh OCR run on the image, discarding any cached or
+        saved results. It's useful when you want to reprocess an image with the
+        current OCR engine settings.
+
+        Args:
+            image_path: Path to the image file to process.
+            index: Page index (default: 0).
+            ground_truth_text: Optional ground truth text to add (default: "").
+
+        Returns:
+            Page object with fresh OCR results, or None if processing failed.
+
+        Example:
+            operations = PageOperations()
+            page = operations.reset_ocr(
+                image_path=Path("page_001.png"),
+                index=0,
+                ground_truth_text="Sample GT text"
+            )
+        """
+        try:
+            logger.info("Resetting OCR for page: %s", image_path)
+
+            # Use the page parser to perform fresh OCR
+            page = self.page_parser(
+                path=image_path,
+                index=index,
+                ground_truth_string=ground_truth_text,
+            )
+
+            if page is None:
+                logger.error("Failed to reset OCR for %s", image_path)
+                return None
+
+            logger.info("Successfully reset OCR for %s", image_path)
+            return page
+
+        except Exception:
+            logger.exception("Error resetting OCR for %s", image_path)
+            return None
+
+    def find_ground_truth_text(
+        self, name: str, ground_truth_map: dict[str, str]
+    ) -> str | None:
+        """Find ground truth text for a given page name using variant lookup.
+
+        The normalization process adds multiple keys (with/without extension, lowercase).
+        This helper attempts a list of variants in priority order to find a match.
+
+        Parameters
+        ----------
+        name : str
+            The image filename (e.g. "001.png") or bare page identifier
+        ground_truth_map : dict[str, str]
+            Normalized mapping produced by ``load_ground_truth_map``
+
+        Returns
+        -------
+        str | None
+            Ground truth text if found, None otherwise
+        """
+        if not name:
+            return None
+        normalized_name = str(name).strip()
+        if not normalized_name:
+            return None
+
+        basename = Path(normalized_name).name
+        candidates: list[str] = []
+        candidates.extend(
+            [
+                normalized_name,
+                normalized_name.lower(),
+                basename,
+                basename.lower(),
+            ]
+        )
+        # If name has extension, add base name variants; else add ext variants (handled by normalization)
+        if "." in basename:
+            base = basename.rsplit(".", 1)[0]
+            candidates.extend([base, base.lower()])
+        # Deduplicate while preserving order
+        seen = set()
+        for c in candidates:
+            if c in seen:
+                continue
+            seen.add(c)
+            if c in ground_truth_map:
+                return ground_truth_map[c]
+        return None
+
+    def _build_user_page_envelope(
+        self,
+        page: PageModel | Page,
+        project_id: str,
+        page_number: int,
+        relative_path: str,
+        source_lib: str,
+        original_page: Page | None = None,
+    ) -> UserPageEnvelope:
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
+        source_fingerprint = self._build_image_fingerprint(
+            getattr(page_obj, "image_path", None)
+        )
+
+        cached_images = dict(getattr(page_model, "cached_image_filenames", None) or {})
+        return UserPageEnvelope(
+            schema=UserPageSchema(version=USER_PAGE_SCHEMA_VERSION),
+            provenance=UserPageProvenance(
+                saved_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                app=ProvenanceApp(version=self._safe_package_version("pd-ocr-labeler")),
+                toolchain=ProvenanceToolchain(
+                    python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                    pd_book_tools=self._safe_package_version("pd-book-tools"),
+                ),
+                ocr=self._resolve_ocr_provenance_for_save(
+                    page=page_model, source_lib=source_lib
+                ),
+            ),
+            source=UserPageSource(
+                project_id=project_id,
+                page_index=getattr(page_obj, "index", 0),
+                page_number=page_number,
+                image_path=relative_path,
+                image_fingerprint=source_fingerprint,
+            ),
+            payload=UserPagePayload(
+                page=page_obj.to_dict(),
+                original_page=original_page.to_dict() if original_page else None,
+                word_attributes=self._collect_word_attributes(page_obj),
+            ),
+            cached_images=cached_images,
+        )
+
+    def _collect_word_attributes(
+        self,
+        page: Page,
+    ) -> dict[str, dict[str, bool]] | None:
+        """Collect word style attributes keyed by line/word indices."""
+        try:
+            lines = list(getattr(page, "lines", []) or [])
+        except TypeError:
+            return None
+        word_attributes: dict[str, dict[str, bool]] = {}
+
+        for line_index, line in enumerate(lines):
+            try:
+                words = list(getattr(line, "words", []) or [])
+            except TypeError:
+                continue
+            for word_index, word in enumerate(words):
+                italic = self._word_style_attr(word, "italic", "is_italic")
+                small_caps = self._word_style_attr(
+                    word,
+                    "small_caps",
+                    "is_small_caps",
+                )
+                blackletter = self._word_style_attr(
+                    word,
+                    "blackletter",
+                    "is_blackletter",
+                )
+                left_footnote = self._word_style_attr(
+                    word,
+                    "left_footnote",
+                    "is_left_footnote",
+                )
+                right_footnote = self._word_style_attr(
+                    word,
+                    "right_footnote",
+                    "is_right_footnote",
+                )
+                validated = self._word_style_attr(
+                    word,
+                    "validated",
+                )
+                if not (
+                    italic
+                    or small_caps
+                    or blackletter
+                    or left_footnote
+                    or right_footnote
+                    or validated
+                ):
+                    continue
+
+                word_attributes[f"{line_index}:{word_index}"] = {
+                    "italic": italic,
+                    "small_caps": small_caps,
+                    "blackletter": blackletter,
+                    "left_footnote": left_footnote,
+                    "right_footnote": right_footnote,
+                    "validated": validated,
+                }
+
+        return word_attributes or None
+
+    def _word_style_attr(self, word: object, *attribute_names: str) -> bool:
+        """Return True if any style label mapped from attribute names is present."""
+        try:
+            labels = {str(label) for label in word.word_labels}
+        except AttributeError:
+            return False
+        except TypeError:
+            return False
+        for attribute_name in attribute_names:
+            normalized = str(attribute_name).removeprefix("is_")
+            if normalized in labels:
+                return True
+        return False
+
+    def _apply_word_attributes_to_page(
+        self,
+        page: Page,
+        word_attributes: dict[str, dict[str, bool]] | None,
+    ) -> None:
+        """Apply persisted style attributes to words in a loaded page."""
+        if not word_attributes:
+            return
+
+        lines = list(getattr(page, "lines", []) or [])
+        for key, attributes in word_attributes.items():
+            try:
+                line_part, word_part = str(key).split(":", 1)
+                line_index = int(line_part)
+                word_index = int(word_part)
+            except (TypeError, ValueError):
+                continue
+
+            if line_index < 0 or line_index >= len(lines):
+                continue
+
+            words = list(getattr(lines[line_index], "words", []) or [])
+            if word_index < 0 or word_index >= len(words):
+                continue
+
+            target_word = words[word_index]
+            try:
+                labels = [str(label) for label in target_word.word_labels]
+            except AttributeError:
+                continue
+            except TypeError:
+                continue
+
+            italic = bool(attributes.get("italic", False))
+            small_caps = bool(attributes.get("small_caps", False))
+            blackletter = bool(attributes.get("blackletter", False))
+            left_footnote = bool(attributes.get("left_footnote", False))
+            right_footnote = bool(attributes.get("right_footnote", False))
+            # Migration: old "footnote" key maps to right_footnote.
+            if not right_footnote and bool(attributes.get("footnote", False)):
+                right_footnote = True
+            labels_set = set(labels)
+
+            if italic:
+                labels_set.add(WORD_LABEL_ITALIC)
+            else:
+                labels_set.discard(WORD_LABEL_ITALIC)
+
+            if small_caps:
+                labels_set.add(WORD_LABEL_SMALL_CAPS)
+            else:
+                labels_set.discard(WORD_LABEL_SMALL_CAPS)
+
+            if blackletter:
+                labels_set.add(WORD_LABEL_BLACKLETTER)
+            else:
+                labels_set.discard(WORD_LABEL_BLACKLETTER)
+
+            if left_footnote:
+                labels_set.add(WORD_LABEL_LEFT_FOOTNOTE)
+            else:
+                labels_set.discard(WORD_LABEL_LEFT_FOOTNOTE)
+
+            if right_footnote:
+                labels_set.add(WORD_LABEL_RIGHT_FOOTNOTE)
+            else:
+                labels_set.discard(WORD_LABEL_RIGHT_FOOTNOTE)
+
+            validated = bool(attributes.get("validated", False))
+            if validated:
+                labels_set.add(WORD_LABEL_VALIDATED)
+            else:
+                labels_set.discard(WORD_LABEL_VALIDATED)
+
+            ordered = [label for label in labels if label in labels_set]
+            ordered.extend(
+                sorted(label for label in labels_set if label not in set(ordered))
+            )
+            target_word.word_labels = ordered
+
+    def _resolve_ocr_provenance_for_save(
+        self,
+        page: PageModel | Page,
+        source_lib: str,
+    ) -> ProvenanceOCR:
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
+
+        if isinstance(page_model.ocr_provenance, ProvenanceOCR):
+            return page_model.ocr_provenance
+        if isinstance(page_model.ocr_provenance, dict):
+            try:
+                return ProvenanceOCR.from_dict(page_model.ocr_provenance)
+            except Exception:
+                logger.debug(
+                    "Ignoring invalid page model OCR provenance dict", exc_info=True
+                )
+
+        direct_provenance = self._coerce_page_ocr_provenance(page_obj)
+        if direct_provenance is not None:
+            return direct_provenance
+
+        live_provenance = getattr(page_obj, "_pd_ocr_labeler_live_ocr_provenance", None)
+        if isinstance(live_provenance, ProvenanceOCR):
+            return live_provenance
+        if isinstance(live_provenance, dict):
+            try:
+                return ProvenanceOCR.from_dict(live_provenance)
+            except Exception:
+                logger.debug("Ignoring invalid live OCR provenance dict", exc_info=True)
+        elif hasattr(live_provenance, "to_dict"):
+            try:
+                live_dict = live_provenance.to_dict()
+                if isinstance(live_dict, dict):
+                    return ProvenanceOCR.from_dict(live_dict)
+            except Exception:
+                logger.debug(
+                    "Ignoring invalid live OCR provenance object", exc_info=True
+                )
+
+        provenance = self._resolve_saved_provenance(page_model)
+        if isinstance(provenance, dict):
+            ocr_data = provenance.get("ocr")
+            if isinstance(ocr_data, dict):
+                try:
+                    return ProvenanceOCR.from_dict(ocr_data)
+                except Exception:
+                    logger.debug(
+                        "Ignoring invalid saved OCR provenance payload", exc_info=True
+                    )
+
+        return self._build_live_ocr_provenance(source_lib)
+
+    def get_page_provenance_summary(self, page: PageModel | Page | None) -> str:
+        """Return a compact provenance summary suitable for UI tooltip display."""
+        if page is None:
+            return ""
+
+        provenance = self._resolve_saved_provenance(page)
+        if not isinstance(provenance, dict):
+            return ""
+
+        saved_at = provenance.get("saved_at")
+        app_data = (
+            provenance.get("app") if isinstance(provenance.get("app"), dict) else {}
+        )
+        app_version = app_data.get("version")
+        toolchain_data = (
+            provenance.get("toolchain")
+            if isinstance(provenance.get("toolchain"), dict)
+            else {}
+        )
+        pd_book_tools_version = toolchain_data.get("pd_book_tools")
+        ocr = provenance.get("ocr") if isinstance(provenance.get("ocr"), dict) else {}
+
+        engine = ocr.get("engine", UNKNOWN_METADATA_VALUE)
+        engine_version = ocr.get("engine_version")
+        if engine_version and engine_version != UNKNOWN_METADATA_VALUE:
+            engine_text = f"{engine} ({engine_version})"
+        else:
+            engine_text = str(engine)
+
+        models = ocr.get("models")
+        model_text = ""
+        if isinstance(models, list) and models:
+            names: list[str] = []
+            for model in models:
+                if not isinstance(model, dict):
+                    continue
+                model_name = model.get("name")
+                model_version = model.get("version")
+                if not model_name:
+                    continue
+                if model_version and model_version != UNKNOWN_METADATA_VALUE:
+                    names.append(f"{model_name} ({model_version})")
+                else:
+                    names.append(str(model_name))
+            if names:
+                model_text = ", ".join(names)
+
+        config_fingerprint = ocr.get("config_fingerprint")
+
+        lines = [
+            f"Saved: {saved_at or UNKNOWN_METADATA_VALUE}",
+            f"App: {app_version or UNKNOWN_METADATA_VALUE}",
+            f"pd-book-tools: {pd_book_tools_version or UNKNOWN_METADATA_VALUE}",
+            f"OCR: {engine_text}",
+        ]
+        if model_text:
+            lines.append(f"Models: {model_text}")
+        if config_fingerprint and config_fingerprint != UNKNOWN_METADATA_VALUE:
+            lines.append(f"Config: {config_fingerprint}")
+
+        return "\n".join(lines)
+
+    def _resolve_saved_provenance(
+        self, page: PageModel | Page
+    ) -> dict[str, Any] | None:
+        page_model = self._to_page_model(page)
+        if isinstance(page_model.saved_provenance, dict):
+            return page_model.saved_provenance
+
+        page_obj = page_model.page
+        stored = getattr(page, PAGE_SAVED_PROVENANCE_ATTR, None)
+        if isinstance(stored, dict):
+            return stored
+
+        stored = self._saved_provenance_by_page_id.get(id(page_obj))
+        if isinstance(stored, dict):
+            return stored
+
+        stored = self._saved_provenance_by_page_id.get(id(page_model))
+        if isinstance(stored, dict):
+            return stored
+
+        ocr_provenance = self._coerce_page_ocr_provenance(page_obj)
+        if ocr_provenance is not None:
+            return {"ocr": ocr_provenance.to_dict()}
+
+        return None
+
+    def _coerce_page_ocr_provenance(self, page: Page) -> ProvenanceOCR | None:
+        raw = getattr(page, "ocr_provenance", None)
+        if raw is None:
+            return None
+        if isinstance(raw, ProvenanceOCR):
+            return raw
+        if isinstance(raw, dict):
+            try:
+                return ProvenanceOCR.from_dict(raw)
+            except Exception:
+                logger.debug("Ignoring invalid OCR provenance dict", exc_info=True)
+                return None
+        if hasattr(raw, "to_dict"):
+            try:
+                raw_dict = raw.to_dict()
+            except Exception:
+                logger.debug("Ignoring invalid OCR provenance object", exc_info=True)
+                return None
+            if isinstance(raw_dict, dict):
+                try:
+                    return ProvenanceOCR.from_dict(raw_dict)
+                except Exception:
+                    logger.debug(
+                        "Ignoring invalid OCR provenance to_dict payload",
+                        exc_info=True,
+                    )
+        return None
+
+    def _attach_loaded_provenance(self, page_model: PageModel, json_data: dict) -> None:
+        if not is_user_page_envelope(json_data):
+            return
+        provenance_data = json_data.get("provenance", {})
+        if not isinstance(provenance_data, dict):
+            return
+        self._store_saved_provenance(page_model, provenance_data)
+        ocr_data = provenance_data.get("ocr", {})
+        if isinstance(ocr_data, dict):
+            page_model.ocr_provenance = ProvenanceOCR.from_dict(ocr_data)
+            page_model.page.ocr_provenance = page_model.ocr_provenance
+
+    def _store_saved_provenance(
+        self, page: PageModel | Page, provenance_data: dict[str, Any]
+    ) -> None:
+        page_model = self._to_page_model(page)
+        page_obj = page_model.page
+        page_model.saved_provenance = provenance_data
+        self._saved_provenance_by_page_id[id(page_model)] = provenance_data
+        self._saved_provenance_by_page_id[id(page_obj)] = provenance_data
+        try:
+            setattr(page_obj, PAGE_SAVED_PROVENANCE_ATTR, provenance_data)
+        except Exception:
+            pass
+
+    def _to_page(self, page: PageModel | Page | None) -> Page | None:
+        if page is None:
+            return None
+        if isinstance(page, PageModel):
+            return page.page
+        return page
+
+    def _to_page_model(self, page: PageModel | Page) -> PageModel:
+        if isinstance(page, PageModel):
+            return page
+        return PageModel(page=page)
+
+    def _build_live_ocr_provenance(self, source_lib: str) -> ProvenanceOCR:
+        return ProvenanceOCR(
+            engine=self._infer_ocr_engine(source_lib),
+            engine_version=self._safe_package_version("python-doctr"),
+            models=self._extract_ocr_models(),
+            config_fingerprint=self._build_ocr_config_fingerprint(source_lib),
+        )
+
+    def _build_image_fingerprint(
+        self,
+        image_path: object,
+    ) -> SourceImageFingerprint | None:
+        if not image_path:
+            return None
+        try:
+            path = Path(str(image_path))
+            stat = path.stat()
+            return SourceImageFingerprint(size=stat.st_size, mtime_ns=stat.st_mtime_ns)
+        except Exception:
+            return None
+
+    def _safe_package_version(self, package_name: str) -> str:
+        try:
+            return package_version(package_name)
+        except PackageNotFoundError:
+            return UNKNOWN_METADATA_VALUE
+        except Exception:
+            return UNKNOWN_METADATA_VALUE
+
+    def _infer_ocr_engine(self, source_lib: str) -> str:
+        lowered = source_lib.lower()
+        if "doctr" in lowered:
+            return "doctr"
+        if "tesseract" in lowered:
+            return "tesseract"
+        return UNKNOWN_METADATA_VALUE
+
+    def _has_loadable_page(self, json_data: dict) -> bool:
+        if is_user_page_envelope(json_data):
+            payload = json_data.get("payload", {})
+            return isinstance(payload, dict) and isinstance(payload.get("page"), dict)
+        pages = json_data.get("pages")
+        return isinstance(pages, list) and len(pages) > 0 and isinstance(pages[0], dict)
+
+    def _extract_ocr_models(self) -> list[ProvenanceOCRModel]:
+        predictor = self._docTR_predictor
+        if predictor is None:
+            return []
+
+        models: list[ProvenanceOCRModel] = []
+        candidate_specs = [
+            ("det_model", getattr(predictor, "det_predictor", None)),
+            ("rec_model", getattr(predictor, "reco_predictor", None)),
+            ("det_model", getattr(predictor, "detector", None)),
+            ("rec_model", getattr(predictor, "recognizer", None)),
+            ("det_model", getattr(predictor, "det_arch", None)),
+            ("rec_model", getattr(predictor, "reco_arch", None)),
+        ]
+
+        for default_name, component in candidate_specs:
+            model = self._build_provenance_model(default_name, component)
+            if model is None:
+                continue
+            if any(existing.name == model.name for existing in models):
+                continue
+            models.append(model)
+
+        return models
+
+    def _build_provenance_model(
+        self,
+        default_name: str,
+        component: object,
+    ) -> ProvenanceOCRModel | None:
+        if component is None:
+            return None
+
+        if isinstance(component, str):
+            return ProvenanceOCRModel(name=component)
+
+        model_name = self._extract_component_name(component) or default_name
+        model_version = self._extract_component_attr(component, ["version"])
+        weights_id = self._extract_component_attr(
+            component,
+            [
+                "weights_id",
+                "weights",
+                "weights_path",
+                "checkpoint",
+                "checkpoint_path",
+                "model_name",
+            ],
+        )
+        return ProvenanceOCRModel(
+            name=model_name,
+            version=model_version,
+            weights_id=weights_id,
+        )
+
+    def _extract_component_name(self, component: object) -> str | None:
+        direct_name = self._extract_component_attr(
+            component,
+            ["arch", "architecture", "name", "model_name"],
+        )
+        if direct_name:
+            return direct_name
+
+        nested = getattr(component, "model", None)
+        if nested is not None:
+            nested_name = self._extract_component_attr(
+                nested,
+                ["arch", "architecture", "name", "model_name"],
+            )
+            if nested_name:
+                return nested_name
+            nested_class_name = nested.__class__.__name__
+            if nested_class_name and nested_class_name != "object":
+                return nested_class_name
+
+        class_name = component.__class__.__name__
+        if class_name and class_name != "object":
+            return class_name
+        return None
+
+    def _extract_component_attr(
+        self,
+        component: object,
+        attr_names: list[str],
+    ) -> str | None:
+        for attr_name in attr_names:
+            value = getattr(component, attr_name, None)
+            if isinstance(value, str) and value:
+                return value
+            if isinstance(value, (int, float)):
+                return str(value)
+        return None
+
+    def _build_ocr_config_fingerprint(self, source_lib: str) -> str | None:
+        model_names = [model.name for model in self._extract_ocr_models() if model.name]
+        if not model_names and not source_lib:
+            return None
+        parts = [source_lib] + sorted(model_names)
+        return "|".join(part for part in parts if part)
+
+    def _extract_page_dict(self, json_data: dict) -> dict | None:
+        if is_user_page_envelope(json_data):
+            envelope = UserPageEnvelope.from_dict(json_data)
+            return envelope.payload.page
+        pages_data = json_data.get("pages", [])
+        if not pages_data or not isinstance(pages_data, list):
+            logger.error("No pages data found in loaded JSON")
+            return None
+        page_dict = pages_data[0]
+        if not isinstance(page_dict, dict):
+            logger.error("Invalid legacy page data structure")
+            return None
+        return page_dict
+
+    def _extract_source_path(self, json_data: dict) -> str | None:
+        if is_user_page_envelope(json_data):
+            source_data = json_data.get("source", {})
+            if isinstance(source_data, dict):
+                image_path = source_data.get("image_path")
+                if isinstance(image_path, str) and image_path:
+                    return image_path
+            return None
+        source_path = json_data.get("source_path")
+        if isinstance(source_path, str) and source_path:
+            return source_path
+        return None

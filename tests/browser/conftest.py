@@ -68,7 +68,7 @@ def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
     cmd = [
         sys.executable,
         "-m",
-        "ocr_labeler.cli",
+        "pd_ocr_labeler.cli",
         str(REPO_ROOT),
         "--projects-root",
         str(browser_projects_root),

@@ -20,10 +20,10 @@ during labeling and refinement.
 
 ## Current Implementation Notes
 
-- Left-side image UI is currently in `ocr_labeler/views/projects/pages/image_tabs.py`.
+- Left-side image UI is currently in `pd_ocr_labeler/views/projects/pages/image_tabs.py`.
 - Image rendering uses tab-specific images and interactive overlays (`Words`, `Lines`, `Paragraphs`) with drag handlers.
-- Right-panel selection synchronization is already wired in `ocr_labeler/views/projects/pages/content.py` and `ocr_labeler/views/projects/pages/word_match.py`.
-- Page layout and splitter composition is in `ocr_labeler/views/projects/pages/content.py`.
+- Right-panel selection synchronization is already wired in `pd_ocr_labeler/views/projects/pages/content.py` and `pd_ocr_labeler/views/projects/pages/word_match.py`.
+- Page layout and splitter composition is in `pd_ocr_labeler/views/projects/pages/content.py`.
 
 This means most of the selection/event plumbing already exists and can be reused.
 
@@ -129,7 +129,7 @@ For this redesign, prefer reducing cache surface area:
 ### 1) Introduce unified overlay component
 
 - Replace/refactor `ImageTabs` in
-  `ocr_labeler/views/projects/pages/image_tabs.py` into a single-overlay view
+  `pd_ocr_labeler/views/projects/pages/image_tabs.py` into a single-overlay view
   (can keep class name initially for low-risk migration, then rename later).
 - Remove tab definitions and per-tab interactive images.
 - Add controls row (checkboxes + radio) above viewport.
@@ -149,7 +149,7 @@ For this redesign, prefer reducing cache surface area:
 
 ### 3) Update layout usage
 
-- In `ocr_labeler/views/projects/pages/content.py`, keep left-panel
+- In `pd_ocr_labeler/views/projects/pages/content.py`, keep left-panel
   composition the same but expect a single viewport rather than tabs.
 - Ensure image updates from `set_image_update_callback` still update base image source and trigger overlay redraw.
 
@@ -220,8 +220,8 @@ For this redesign, prefer reducing cache surface area:
   - Add layer visibility checkboxes (paragraph, line, word).
   - Add selection-mode radio control (paragraph, line, word).
 - Files:
-  - `ocr_labeler/views/projects/pages/image_tabs.py`
-  - `ocr_labeler/views/projects/pages/content.py`
+  - `pd_ocr_labeler/views/projects/pages/image_tabs.py`
+  - `pd_ocr_labeler/views/projects/pages/content.py`
 - Done when:
   - One viewport renders and controls appear.
   - Selection mode changes internal state.
@@ -233,7 +233,7 @@ For this redesign, prefer reducing cache surface area:
   - Render selected entities with stronger highlight style.
   - Honor layer checkboxes in render output.
 - Files:
-  - `ocr_labeler/views/projects/pages/image_tabs.py`
+  - `pd_ocr_labeler/views/projects/pages/image_tabs.py`
 - Done when:
   - Any combination of layers can be shown simultaneously.
   - Visual state remains stable during mouse drag.
@@ -245,8 +245,8 @@ For this redesign, prefer reducing cache surface area:
   - Apply selection to paragraph/line/word based on active mode.
   - Keep rebox override behavior for word rebox interactions.
 - Files:
-  - `ocr_labeler/views/projects/pages/image_tabs.py`
-  - `ocr_labeler/views/projects/pages/word_match.py`
+  - `pd_ocr_labeler/views/projects/pages/image_tabs.py`
+  - `pd_ocr_labeler/views/projects/pages/word_match.py`
 - Done when:
   - Drag selection updates the intended entity type only.
   - Ctrl/Shift add/remove behavior works in all modes.
@@ -258,9 +258,9 @@ For this redesign, prefer reducing cache surface area:
   - Ensure left-panel selection updates right-panel checkboxes.
   - Ensure right-panel selection updates left overlay highlights.
 - Files:
-  - `ocr_labeler/views/projects/pages/content.py`
-  - `ocr_labeler/views/projects/pages/image_tabs.py`
-  - `ocr_labeler/views/projects/pages/word_match.py`
+  - `pd_ocr_labeler/views/projects/pages/content.py`
+  - `pd_ocr_labeler/views/projects/pages/image_tabs.py`
+  - `pd_ocr_labeler/views/projects/pages/word_match.py`
 - Done when:
   - Existing line/word/paragraph actions remain enabled/disabled correctly.
 
@@ -271,9 +271,9 @@ For this redesign, prefer reducing cache surface area:
   - Continue using base page image cache and invalidation behavior.
   - Ignore legacy layer rasters for rendering in the new UI.
 - Files:
-  - `ocr_labeler/views/projects/pages/image_tabs.py`
-  - `ocr_labeler/state/page_state.py`
-  - `ocr_labeler/operations/ocr/page_operations.py`
+  - `pd_ocr_labeler/views/projects/pages/image_tabs.py`
+  - `pd_ocr_labeler/state/page_state.py`
+  - `pd_ocr_labeler/operations/ocr/page_operations.py`
 - Done when:
   - Unified overlay flow does not create new paragraph/line/word raster cache files.
   - Forced OCR reload still clears page cache entries.

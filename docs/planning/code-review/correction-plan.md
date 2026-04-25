@@ -18,7 +18,7 @@ Phase 4.6 (BaseView teardown lifecycle added).
 Phase 4.1 (split LineOperations 4048→1823 lines via mixin pattern),
 Phase 4.4 (word_match delegation — 80 wrappers removed, 1448→834 lines).
 Remaining: 6.2–6.4 (pd-book-tools structural migration).
-All 715 ocr-labeler tests and 491 pd-book-tools tests pass.
+All 715 pd-ocr-labeler tests and 491 pd-book-tools tests pass.
 
 ## Phase 1: Bug Fixes and Quick Wins
 
@@ -41,7 +41,7 @@ duplicated code.
 
 ### 1.3 Centralize `WORD_LABEL_*` constants
 
-- **Create**: `ocr_labeler/models/constants.py`
+- **Create**: `pd_ocr_labeler/models/constants.py`
 - **Move**: All `WORD_LABEL_*` constants from `word_match.py`,
   `word_match_gt_editing.py`, `page_operations.py`
 - **Also move**: `WordKey` and `ClickEvent` type aliases
@@ -90,7 +90,7 @@ Consolidate duplicated implementations without changing architecture.
 
 ### 2.1 Extract shared `get_cropped_image` utility
 
-- **Create**: `ocr_labeler/operations/ocr/image_utils.py`
+- **Create**: `pd_ocr_labeler/operations/ocr/image_utils.py`
 - **Extract**: Common crop pipeline from `word_match_model.py` and
   `line_match_model.py`
 - **Both models**: Call the shared utility
@@ -351,7 +351,7 @@ details. These require changes to the external library.
 **DONE** — Created `pd_book_tools.ocr.page_structure_operations` (PageStructureOperations),
 `pd_book_tools.ocr.paragraph_operations` (ParagraphOperationsMixin), and
 `pd_book_tools.ocr.word_bbox_operations` (WordBboxOperationsMixin).
-ocr-labeler files replaced with thin re-export wrappers.
+pd-ocr-labeler files replaced with thin re-export wrappers.
 
 ### 6.3 Move geometry helpers to pd-book-tools
 
@@ -362,9 +362,9 @@ use these directly.
 ### 6.4 Standardize Word style API in pd-book-tools
 
 **DONE** — Created `pd_book_tools.ocr.word_style_operations` (WordStyleOperations)
-with style read/write/apply/remove methods. ocr-labeler's `WordOperations` now
+with style read/write/apply/remove methods. pd-ocr-labeler's `WordOperations` now
 extends `WordStyleOperations` and adds only `classify_match_status` (which
-depends on the ocr-labeler `MatchStatus` enum).
+depends on the pd-ocr-labeler `MatchStatus` enum).
 
 ## Summary
 

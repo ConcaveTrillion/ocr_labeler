@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        path: ocr_labeler
+        path: pd_ocr_labeler
 
     - name: Checkout pd-book-tools dependency
       uses: actions/checkout@v4
@@ -27,15 +27,15 @@ jobs:
 
     - name: Install dependencies and setup
       run: make install
-      working-directory: ocr_labeler
+      working-directory: pd_ocr_labeler
 
     - name: Run CI pipeline
       run: make ci
-      working-directory: ocr_labeler
+      working-directory: pd_ocr_labeler
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: distribution-packages
-        path: ocr_labeler/dist/
+        path: pd_ocr_labeler/dist/
         retention-days: 30

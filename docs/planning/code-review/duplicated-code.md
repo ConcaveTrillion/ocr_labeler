@@ -16,8 +16,8 @@ codebase and should be consolidated.
 `WORD_LABEL_LEFT_FOOTNOTE` / `WORD_LABEL_RIGHT_FOOTNOTE` also duplicated
 between `word_match.py` and `word_match_gt_editing.py`.
 
-**Fix**: Centralize in a constants module (`ocr_labeler/constants.py` or
-`ocr_labeler/models/constants.py`).
+**Fix**: Centralize in a constants module (`pd_ocr_labeler/constants.py` or
+`pd_ocr_labeler/models/constants.py`).
 
 ### `WordKey` type alias — 5 definitions
 

@@ -1,7 +1,7 @@
 # pd-book-tools Model Alignment
 
 Purpose: identify dynamic/custom attributes currently attached in
-`ocr_labeler` to `pd_book_tools` OCR objects, and define the upstream changes
+`pd_ocr_labeler` to `pd_book_tools` OCR objects, and define the upstream changes
 needed so these attributes exist natively in `pd-book-tools`.
 
 Status: planned migration guide for upstream model changes.
@@ -16,25 +16,25 @@ in `pd-book-tools`.
 
 ## Recent progress
 
-The word-level label model has been migrated in `ocr_labeler`:
+The word-level label model has been migrated in `pd_ocr_labeler`:
 
-- `WordOperations` (`ocr_labeler/operations/ocr/word_operations.py`) now uses
+- `WordOperations` (`pd_ocr_labeler/operations/ocr/word_operations.py`) now uses
   upstream `text_style_labels`, `text_style_label_scopes`, and `word_components`
   fields instead of the legacy `word_labels` list.
 - Label normalization uses `pd_book_tools.ocr.label_normalization` utilities.
 - The old `_read_word_attribute`/`_write_word_attribute` helpers in
   `LineOperations` have been removed in favor of `WordOperations`.
 
-## Confirmed dynamic attributes in `ocr_labeler`
+## Confirmed dynamic attributes in `pd_ocr_labeler`
 
 ### `Page` attributes being added dynamically
 
 Observed assignment sites include:
 
-- `ocr_labeler/state/project_state.py`
-- `ocr_labeler/state/page_state.py`
-- `ocr_labeler/operations/ocr/page_operations.py`
-- `ocr_labeler/operations/ocr/ocr_service.py`
+- `pd_ocr_labeler/state/project_state.py`
+- `pd_ocr_labeler/state/page_state.py`
+- `pd_ocr_labeler/operations/ocr/page_operations.py`
+- `pd_ocr_labeler/operations/ocr/ocr_service.py`
 
 Attributes:
 
@@ -59,15 +59,15 @@ Attributes:
    - Current usage: mark fallback pages created when OCR fails.
    - Runtime value: `bool`.
 
-6. `_ocr_labeler_live_ocr_provenance`
-7. `_ocr_labeler_saved_ocr_provenance`
-8. `_ocr_labeler_saved_provenance`
+6. `_pd_ocr_labeler_live_ocr_provenance`
+7. `_pd_ocr_labeler_saved_ocr_provenance`
+8. `_pd_ocr_labeler_saved_provenance`
    - Current usage: attach provenance metadata dictionaries directly on `Page` as an optimization/cache and for save summary.
    - Runtime value: `dict[str, Any]`.
 
 ### Not part of this migration
 
-The following are used in `ocr_labeler` but already exist
+The following are used in `pd_ocr_labeler` but already exist
 (or are handled) in `pd-book-tools` and are not new model fields to add:
 
 - `Page.add_ground_truth(...)` (already exists)
@@ -102,7 +102,7 @@ Rationale:
 
 - Removes repeated `# type: ignore[attr-defined]` in app code.
 - Makes model intent explicit and discoverable.
-- Preserves compatibility with existing `ocr_labeler` call sites during migration.
+- Preserves compatibility with existing `pd_ocr_labeler` call sites during migration.
 
 ### 2) Include new metadata in serialization
 
@@ -146,7 +146,7 @@ This keeps normalization logic inside `Page` and reduces app-side conditional ch
    - `page_source` <-> `source` alias behavior.
    - Serialization round-trip with/without metadata keys.
 
-3. After upstream release, simplify `ocr_labeler`:
+3. After upstream release, simplify `pd_ocr_labeler`:
    - Remove `type: ignore[attr-defined]` for these fields.
    - Replace dynamic attribute checks (`hasattr(page, "page_source")`, etc.) with direct usage.
    - Rename private ad-hoc provenance attribute constants to direct typed fields.
@@ -173,7 +173,7 @@ def page_source(self, value: str) -> None:
     self.source = value
 ```
 
-## Migration notes for `ocr_labeler`
+## Migration notes for `pd_ocr_labeler`
 
 Once upstream fields are available, replace dynamic assignment blocks such as:
 
@@ -181,7 +181,7 @@ Once upstream fields are available, replace dynamic assignment blocks such as:
 - `page.name = ...`
 - `page.index = ...`
 - `page.page_source = ...`
-- `setattr(page, "_ocr_labeler_saved_provenance", ...)`
+- `setattr(page, "_pd_ocr_labeler_saved_provenance", ...)`
 
 with direct typed assignments and remove local fallback caches that only exist to compensate for missing upstream
 model fields.

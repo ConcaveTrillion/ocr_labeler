@@ -1,5 +1,5 @@
 [project]
-name = "ocr-labeler"
+name = "pd-ocr-labeler"
 version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
@@ -31,8 +31,8 @@ all-dev = [
 ]
 
 [project.scripts]
-ocr-labeler-ui = "ocr_labeler.cli:main"
-ocr-labeler-export = "ocr_labeler.operations.export.cli:main"
+pd-ocr-labeler-ui = "pd_ocr_labeler.cli:main"
+pd-ocr-labeler-export = "pd_ocr_labeler.operations.export.cli:main"
 
 [build-system]
 requires = [
@@ -41,16 +41,16 @@ requires = [
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ocr_labeler"]
+packages = ["pd_ocr_labeler"]
 include = [
-    "ocr_labeler/fonts/DPSansMono.ttf",
+    "pd_ocr_labeler/fonts/DPSansMono.ttf",
 ]
 
 [tool.uv.sources]
 pd-book-tools = { path = "../pd-book-tools", editable = true }
 
 [tool.coverage.run]
-source = ["ocr_labeler"]
+source = ["pd_ocr_labeler"]
 branch = true
 omit = [
     "*/tests/*",
@@ -78,7 +78,7 @@ output = "coverage.xml"
 
 # Optional: default pytest addopts to always collect coverage (can be overridden)
 [tool.pytest.ini_options]
-addopts = "--cov=ocr_labeler --cov-report=term-missing:skip-covered --cov-report=html"
+addopts = "--cov=pd_ocr_labeler --cov-report=term-missing:skip-covered --cov-report=html"
 asyncio_mode = "auto"
 markers = [
     "browser: browser-based UI regression tests",

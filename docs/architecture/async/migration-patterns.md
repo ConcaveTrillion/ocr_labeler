@@ -2,7 +2,7 @@
 
 Status: pattern reference for ongoing cleanup and modernization.
 
-Validated against `ocr_labeler/**/*.py` on 2026-02-15.
+Validated against `pd_ocr_labeler/**/*.py` on 2026-02-15.
 
 ## Background Task Scheduling
 
@@ -62,7 +62,7 @@ await run.io_bound(path.read_text, encoding="utf-8")
 
 - No usages found for `asyncio.create_task`, `loop.run_in_executor`,
   `asyncio.to_thread`, or `asyncio.get_running_loop()` in
-  `ocr_labeler/**/*.py`.
+  `pd_ocr_labeler/**/*.py`.
 - Current runtime scheduling/offload patterns in app code use `background_tasks.create(...)` and `run.io_bound(...)`.
 - Current intentional `asyncio` usages are:
-  - `asyncio.sleep(...)` in `ocr_labeler/views/projects/project_view.py` for cooperative UI yielding.
+  - `asyncio.sleep(...)` in `pd_ocr_labeler/views/projects/project_view.py` for cooperative UI yielding.

@@ -6,30 +6,30 @@ Last validated: 2026-02-15.
 
 ## State and ViewModels
 
-- `ocr_labeler/state/page_state.py`
-- `ocr_labeler/state/project_state.py`
-- `ocr_labeler/viewmodels/project/page_state_view_model.py`
-- `ocr_labeler/viewmodels/project/project_state_view_model.py`
+- `pd_ocr_labeler/state/page_state.py`
+- `pd_ocr_labeler/state/project_state.py`
+- `pd_ocr_labeler/viewmodels/project/page_state_view_model.py`
+- `pd_ocr_labeler/viewmodels/project/project_state_view_model.py`
 
 ## Operations
 
-- `ocr_labeler/operations/ocr/navigation_operations.py`
-- `ocr_labeler/operations/ocr/page_operations.py`
-- `ocr_labeler/operations/ocr/text_operations.py`
-- `ocr_labeler/operations/ocr/ocr_service.py`
-- `ocr_labeler/operations/persistence/project_operations.py`
+- `pd_ocr_labeler/operations/ocr/navigation_operations.py`
+- `pd_ocr_labeler/operations/ocr/page_operations.py`
+- `pd_ocr_labeler/operations/ocr/text_operations.py`
+- `pd_ocr_labeler/operations/ocr/ocr_service.py`
+- `pd_ocr_labeler/operations/persistence/project_operations.py`
 
 ## Views
 
-- `ocr_labeler/views/main_view.py`
-- `ocr_labeler/views/projects/project_view.py`
-- `ocr_labeler/views/projects/project_navigation_controls.py`
-- `ocr_labeler/views/projects/pages/page_view.py`
-- `ocr_labeler/views/projects/pages/page_actions.py`
-- `ocr_labeler/views/projects/pages/content.py`
-- `ocr_labeler/views/projects/pages/image_tabs.py`
-- `ocr_labeler/views/projects/pages/text_tabs.py`
-- `ocr_labeler/views/projects/pages/word_match.py`
+- `pd_ocr_labeler/views/main_view.py`
+- `pd_ocr_labeler/views/projects/project_view.py`
+- `pd_ocr_labeler/views/projects/project_navigation_controls.py`
+- `pd_ocr_labeler/views/projects/pages/page_view.py`
+- `pd_ocr_labeler/views/projects/pages/page_actions.py`
+- `pd_ocr_labeler/views/projects/pages/content.py`
+- `pd_ocr_labeler/views/projects/pages/image_tabs.py`
+- `pd_ocr_labeler/views/projects/pages/text_tabs.py`
+- `pd_ocr_labeler/views/projects/pages/word_match.py`
 
 ## Tests
 

@@ -12,8 +12,8 @@ from nicegui.elements.button import Button
 from nicegui.testing import User
 from nicegui.testing.user_interaction import UserInteraction
 
-from ocr_labeler.app import NiceGuiLabeler
-from ocr_labeler.viewmodels.project import page_state_view_model as vm_module
+from pd_ocr_labeler.app import NiceGuiLabeler
+from pd_ocr_labeler.viewmodels.project import page_state_view_model as vm_module
 
 
 @pytest.fixture
@@ -144,7 +144,7 @@ class TestProjectStructure:
         """Test that ground truth data can be loaded from test projects."""
         import json
 
-        from ocr_labeler.state.project_state import ProjectState
+        from pd_ocr_labeler.state.project_state import ProjectState
 
         project_state = ProjectState()
 
@@ -388,10 +388,10 @@ class TestNiceGuiIntegration:
         with (
             caplog.at_level(
                 logging.ERROR,
-                logger="ocr_labeler.state.project_state",
+                logger="pd_ocr_labeler.state.project_state",
             ),
             patch(
-                "ocr_labeler.viewmodels.project.project_state_view_model.ProjectStateViewModel.command_expand_refine_bboxes",
+                "pd_ocr_labeler.viewmodels.project.project_state_view_model.ProjectStateViewModel.command_expand_refine_bboxes",
                 return_value=True,
             ) as mock_expand_refine,
         ):
@@ -432,7 +432,7 @@ class TestNiceGuiIntegration:
             project_state_error_logs = [
                 record
                 for record in caplog.records
-                if record.name == "ocr_labeler.state.project_state"
+                if record.name == "pd_ocr_labeler.state.project_state"
                 and record.levelno >= logging.ERROR
             ]
             assert not project_state_error_logs

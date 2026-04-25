@@ -1,6 +1,6 @@
 # pd-book-tools Migration Candidates
 
-Code in ocr-labeler that operates generically on `Page`, `Block`, `Word`,
+Code in pd-ocr-labeler that operates generically on `Page`, `Block`, `Word`,
 and `BoundingBox` objects without app-specific dependencies. These are
 candidates for migration to the pd-book-tools library.
 

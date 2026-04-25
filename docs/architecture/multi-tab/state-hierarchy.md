@@ -1,6 +1,6 @@
 # Multi-Tab State Hierarchy
 
-Status: validated against `ocr_labeler/state/app_state.py` on 2026-02-15.
+Status: validated against `pd_ocr_labeler/state/app_state.py` on 2026-02-15.
 
 ## Structure
 
@@ -43,4 +43,4 @@ under concurrent tab usage.
 
 ### Fix (Historical)
 
-Refactor to lazy instance-level predictor reuse (`_get_or_create_predictor()`) in `ocr_labeler/operations/ocr/page_operations.py`.
+Refactor to lazy instance-level predictor reuse (`_get_or_create_predictor()`) in `pd_ocr_labeler/operations/ocr/page_operations.py`.

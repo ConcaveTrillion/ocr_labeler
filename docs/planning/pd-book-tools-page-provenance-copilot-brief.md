@@ -2,7 +2,7 @@
 
 ## Context
 
-`ocr_labeler` currently attaches OCR provenance metadata to `Page` instances using dynamic attributes (for example, `_ocr_labeler_live_ocr_provenance`).
+`pd_ocr_labeler` currently attaches OCR provenance metadata to `Page` instances using dynamic attributes (for example, `_pd_ocr_labeler_live_ocr_provenance`).
 
 The goal is to move OCR provenance ownership into `pd-book-tools` at the
 `Page` object level so provenance travels with `Page` through normal
@@ -62,7 +62,7 @@ Primary targets:
 5. **Preserve behavior of existing APIs**
    - Do not break current `Page` constructor call sites.
    - Keep existing output fields untouched except for additive `ocr_provenance`.
-   - Avoid introducing app-specific naming (`ocr_labeler` should not appear in `pd-book-tools` core models).
+   - Avoid introducing app-specific naming (`pd_ocr_labeler` should not appear in `pd-book-tools` core models).
 
 ## Test Requirements
 
@@ -83,7 +83,7 @@ And only add to `tests/ocr/test_document.py` for OCR-construction assertions.
 ## Non-Goals
 
 - Do not redesign full persistence envelope/schema in `pd-book-tools`.
-- Do not add app/toolchain provenance fields specific to `ocr_labeler`.
+- Do not add app/toolchain provenance fields specific to `pd_ocr_labeler`.
 - Do not require provenance for successful load.
 
 ## Suggested Copilot Prompt (copy/paste)
@@ -105,7 +105,7 @@ Requirements:
 Constraints:
 
 - Keep changes additive and minimal.
-- Avoid `ocr_labeler`-specific fields or naming.
+- Avoid `pd_ocr_labeler`-specific fields or naming.
 - Do not break existing constructor call sites.
 
 Validation:

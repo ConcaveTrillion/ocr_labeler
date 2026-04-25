@@ -47,7 +47,7 @@ def app_url(projects_root: Path):
     cmd = [
         sys.executable,
         "-m",
-        "ocr_labeler.cli",
+        "pd_ocr_labeler.cli",
         str(repo_root),
         "--projects-root",
         str(projects_root),

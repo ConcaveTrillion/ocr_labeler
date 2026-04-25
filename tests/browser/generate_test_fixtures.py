@@ -9,7 +9,7 @@ It can use EITHER:
   2. Synthetic page data as a fallback (no external deps)
 
 Usage:
-    cd ocr-labeler
+    cd pd-ocr-labeler
     uv run python tests/browser/generate_test_fixtures.py              # uses labeled-ocr
     uv run python tests/browser/generate_test_fixtures.py --synthetic  # synthetic data
 
@@ -28,7 +28,7 @@ import shutil
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]  # ocr-labeler/
+REPO_ROOT = Path(__file__).resolve().parents[2]  # pd-ocr-labeler/
 DATA_ROOT = REPO_ROOT.parent / "data"  # ../data/
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"

@@ -2,7 +2,7 @@
 
 This document describes the per-session isolation model used for multi-tab behavior.
 
-Status: validated against `ocr_labeler/app.py` on 2026-02-15.
+Status: validated against `pd_ocr_labeler/app.py` on 2026-02-15.
 
 ## Core Principle
 

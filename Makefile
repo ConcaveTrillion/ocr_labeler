@@ -77,7 +77,7 @@ test-browser: ## Run browser-based regression tests (Playwright)
 
 coverage: ## Run tests with coverage report (parallelized)
 	@echo "🧪 Running tests with coverage (parallelized)..."
-	uv run pytest --cov=ocr_labeler --cov-report=html -n auto -v -ra
+	uv run pytest --cov=pd_ocr_labeler --cov-report=html -n auto -v -ra
 	@echo "📊 Coverage report generated in htmlcov/index.html"
 
 lint: ## Run linting checks
@@ -131,15 +131,15 @@ build: ## Build distribution packages (wheel and sdist)
 
 run: ## Run the OCR labeler UI with current directory as project
 	@echo "🚀 Starting OCR Labeler UI..."
-	uv run ocr-labeler-ui .
+	uv run pd-ocr-labeler-ui .
 
 run-verbose: ## Run the OCR labeler UI with verbose logging
 	@echo "🚀 Starting OCR Labeler UI (verbose mode)..."
-	uv run ocr-labeler-ui . -vv
+	uv run pd-ocr-labeler-ui . -vv
 
 run-page-timing: ## Run the OCR labeler UI with isolated page timing logs
 	@echo "🚀 Starting OCR Labeler UI (page timing mode)..."
-	uv run ocr-labeler-ui . --page-timing
+	uv run pd-ocr-labeler-ui . --page-timing
 
 clean: ## Clean up cache, temporary files, and logs (keeps venv and UV cache)
 	@echo "🧹 Cleaning Python cache files..."
@@ -158,12 +158,12 @@ clean: ## Clean up cache, temporary files, and logs (keeps venv and UV cache)
 
 clean-logs: ## Remove session logs from OS-aware and legacy local paths
 	@echo "🧹 Cleaning session logs..."
-	uv run python -m ocr_labeler.local_state_cleanup --logs
+	uv run python -m pd_ocr_labeler.local_state_cleanup --logs
 	@echo "✅ Log cleanup complete!"
 
 clean-cache: ## Remove pre-rendered image cache from OS-aware and legacy local paths
 	@echo "🧹 Clearing pre-rendered image cache..."
-	uv run python -m ocr_labeler.local_state_cleanup --cache
+	uv run python -m pd_ocr_labeler.local_state_cleanup --cache
 	@echo "✅ Image cache cleared! Pages will re-render on next load."
 
 clean-image-cache: clean-cache ## Backward-compatible alias for clean-cache

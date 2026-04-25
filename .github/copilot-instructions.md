@@ -1,4 +1,4 @@
-# Copilot Project Instructions: ocr-labeler
+# Copilot Project Instructions: pd-ocr-labeler
 
 Copilot-specific adapter for this repository.
 

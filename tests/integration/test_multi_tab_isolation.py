@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from ocr_labeler.app import NiceGuiLabeler
-from ocr_labeler.state.app_state import AppState
+from pd_ocr_labeler.app import NiceGuiLabeler
+from pd_ocr_labeler.state.app_state import AppState
 
 
 class TestMultiTabIsolation:

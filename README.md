@@ -95,15 +95,15 @@ This project depends on `pd-book-tools` via a relative path (configured in `pypr
 ```text
 parent_dir/
  pd-book-tools/
- ocr_labeler/   (this repo)
+ pd_ocr_labeler/   (this repo)
 ```
 
 Example:
 
 ```bash
 git clone https://github.com/your-org/pd-book-tools.git
-git clone https://github.com/your-org/ocr_labeler.git
-cd ocr_labeler
+git clone https://github.com/your-org/pd_ocr_labeler.git
+cd pd_ocr_labeler
 ```
 
 Install Dependencies
@@ -158,7 +158,7 @@ Keys are matched case‑insensitively; variants without extension (e.g. "001") a
 Run the UI (CLI)
 ----------------
 
-A console entrypoint `ocr-labeler-ui` is installed.
+A console entrypoint `pd-ocr-labeler-ui` is installed.
 
 Preferred launch from repo root (uses current directory as project):
 
@@ -169,19 +169,19 @@ make run
 Basic launch with an explicit project directory:
 
 ```bash
-uv run ocr-labeler-ui sample_project
+uv run pd-ocr-labeler-ui sample_project
 ```
 
 Change host/port (e.g. access from another device on LAN):
 
 ```bash
-uv run ocr-labeler-ui sample_project --host 0.0.0.0 --port 9000
+uv run pd-ocr-labeler-ui sample_project --host 0.0.0.0 --port 9000
 ```
 
 Start with project chooser behavior:
 
 ```bash
-uv run ocr-labeler-ui
+uv run pd-ocr-labeler-ui
 ```
 
 Auto-load happens only when the resolved `project_dir` is a valid project
@@ -196,9 +196,9 @@ make run-verbose
 For an explicit project directory:
 
 ```bash
-uv run ocr-labeler-ui sample_project -v        # DEBUG app logs
-uv run ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
-uv run ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
+uv run pd-ocr-labeler-ui sample_project -v        # DEBUG app logs
+uv run pd-ocr-labeler-ui sample_project -vv       # DEBUG app + pd-book-tools
+uv run pd-ocr-labeler-ui sample_project -vvv      # DEBUG app + dependencies
 ```
 
 Enable isolated page timing logs in the CLI (repo root + current directory as project):
@@ -210,10 +210,10 @@ make run-page-timing
 For an explicit project directory:
 
 ```bash
-uv run ocr-labeler-ui sample_project --page-timing
+uv run pd-ocr-labeler-ui sample_project --page-timing
 ```
 
-This prints only page timing events (`ocr_labeler.page_timing`) such as
+This prints only page timing events (`pd_ocr_labeler.page_timing`) such as
 `page_load_timing`, `page_load_timing_step`, and `page_navigation_timing`.
 
 Then open: <http://127.0.0.1:8080/> (or your chosen host/port)
@@ -368,18 +368,18 @@ Development Notes
 -----------------
 
 - See `docs/planning/README.md` for roadmap & phased feature list.
-- `AppState` in `ocr_labeler/state/app_state.py` handles app-level project
+- `AppState` in `pd_ocr_labeler/state/app_state.py` handles app-level project
   discovery/selection and session notifications.
-- `ProjectState` in `ocr_labeler/state/project_state.py` handles page
+- `ProjectState` in `pd_ocr_labeler/state/project_state.py` handles page
   navigation, lazy OCR loading, page persistence, and bulk save.
-- `PageState` in `ocr_labeler/state/page_state.py` handles per-page image
+- `PageState` in `pd_ocr_labeler/state/page_state.py` handles per-page image
   caching and word style tracking.
-- ViewModel layer (`ocr_labeler/viewmodels/`) provides MVVM binding between
+- ViewModel layer (`pd_ocr_labeler/viewmodels/`) provides MVVM binding between
   state and NiceGUI views.
-- Operations layer (`ocr_labeler/operations/`) contains business logic for
+- Operations layer (`pd_ocr_labeler/operations/`) contains business logic for
   persistence, OCR processing, export, and word/line operations.
-- UI composition lives in modular components under `ocr_labeler/views/`.
-- Minimal wrapper `NiceGuiLabeler` is in `ocr_labeler/app.py`.
+- UI composition lives in modular components under `pd_ocr_labeler/views/`.
+- Minimal wrapper `NiceGuiLabeler` is in `pd_ocr_labeler/app.py`.
 
 Future Enhancements (Short List)
 --------------------------------

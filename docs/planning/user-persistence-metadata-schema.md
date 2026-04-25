@@ -5,7 +5,7 @@
 Define an explicit storage format for **user-authoritative saved page data**
 (`Save Page`) that captures provenance and compatibility metadata, including:
 
-- this app (`ocr_labeler`) version/build information
+- this app (`pd_ocr_labeler`) version/build information
 - supporting library/toolchain versions (including `pd-book-tools`)
 - OCR engine + model configuration used to generate baseline OCR
 
@@ -41,7 +41,7 @@ Saved user page JSON should include:
 ```json
 {
   "schema": {
-    "name": "ocr_labeler.user_page",
+    "name": "pd_ocr_labeler.user_page",
     "version": "2.0"
   },
   "provenance": {
@@ -49,7 +49,7 @@ Saved user page JSON should include:
     "saved_by": "Save Page",
     "source_lane": "labeled",
     "app": {
-      "name": "ocr_labeler",
+      "name": "pd_ocr_labeler",
       "version": "x.y.z",
       "git_commit": "optional"
     },

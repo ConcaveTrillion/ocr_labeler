@@ -10,7 +10,7 @@ from pathlib import Path
 class PersistencePathsOperations:
     """Resolve OS-aware persistence locations for the application."""
 
-    APP_NAME = "pgdp-ocr-labeler"
+    APP_NAME = "pd-ocr-labeler"
 
     @staticmethod
     def get_config_root() -> Path:

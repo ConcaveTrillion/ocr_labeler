@@ -14,7 +14,7 @@ def test_get_saved_projects_root_linux_uses_xdg_data_home(monkeypatch, tmp_path)
 
     root = PersistencePathsOperations.get_saved_projects_root()
 
-    assert root == xdg_data_home / "pgdp-ocr-labeler" / "labeled-projects"
+    assert root == xdg_data_home / "pd-ocr-labeler" / "labeled-projects"
 
 
 def test_get_project_backups_root_linux_uses_xdg_data_home(monkeypatch, tmp_path):
@@ -33,4 +33,4 @@ def test_get_project_backups_root_linux_uses_xdg_data_home(monkeypatch, tmp_path
 
     root = PersistencePathsOperations.get_project_backups_root()
 
-    assert root == xdg_data_home / "pgdp-ocr-labeler" / "project-backups"
+    assert root == xdg_data_home / "pd-ocr-labeler" / "project-backups"

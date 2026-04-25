@@ -39,7 +39,7 @@ Common commands:
 
 ## Runtime logs (Linux)
 
-- Linux session/runtime logs are stored under `/home/user/.local/share/pgdp-ocr-labeler/logs`.
+- Linux session/runtime logs are stored under `/home/user/.local/share/pd-ocr-labeler/logs`.
 
 ## Validation rules
 

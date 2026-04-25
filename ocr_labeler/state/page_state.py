@@ -610,7 +610,7 @@ class PageState:
             project_id=project_id,
             source_lib=self._project.source_lib
             if self._project
-            else "doctr-pgdp-labeled",
+            else "doctr-pd-labeled",
             original_page=self.original_page,
         )
 

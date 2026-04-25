@@ -149,7 +149,7 @@ class TestPageOperations:
             "items": [],
         }
         page._ocr_labeler_live_ocr_provenance = operations._build_live_ocr_provenance(
-            source_lib="doctr-pgdp-labeled"
+            source_lib="doctr-pd-labeled"
         )
         (temp_dir / "source.png").touch()
 
@@ -304,7 +304,7 @@ class TestPageOperations:
         output_dir.mkdir()
 
         legacy_json = {
-            "source_lib": "doctr-pgdp-labeled",
+            "source_lib": "doctr-pd-labeled",
             "source_path": "source.png",
             "pages": [
                 {
@@ -544,7 +544,7 @@ class TestPageOperations:
         # Create valid JSON file
         json_file = output_dir / "project_001.json"
         json_data = {
-            "source_lib": "doctr-pgdp-labeled",
+            "source_lib": "doctr-pd-labeled",
             "source_path": "source.png",
             "pages": [{"name": "test_page", "text": "Sample text"}],
         }
@@ -584,7 +584,7 @@ class TestPageOperations:
         with open(output_dir / "project_001.json", "w", encoding="utf-8") as f:
             json.dump(
                 {
-                    "source_lib": "doctr-pgdp-labeled",
+                    "source_lib": "doctr-pd-labeled",
                     "source_path": "source.png",
                     "pages": [{"name": "test_page", "text": "Sample text"}],
                 },

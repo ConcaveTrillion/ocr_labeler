@@ -107,7 +107,7 @@ def test_backup_project_defaults_to_user_backup_root(monkeypatch, tmp_path):
 
     assert ok is True
     assert (
-        xdg_data_home / "pgdp-ocr-labeler" / "project-backups" / "backup_1" / "page.png"
+        xdg_data_home / "pd-ocr-labeler" / "project-backups" / "backup_1" / "page.png"
     ).exists()
 
 
@@ -122,7 +122,7 @@ def test_list_saved_projects_defaults_to_user_data_root(monkeypatch, tmp_path):
         lambda: "Linux",
     )
 
-    save_dir = xdg_data_home / "pgdp-ocr-labeler" / "labeled-projects" / "proj1"
+    save_dir = xdg_data_home / "pd-ocr-labeler" / "labeled-projects" / "proj1"
     save_dir.mkdir(parents=True)
     (save_dir / "project.json").write_text('{"project_id":"proj1"}', encoding="utf-8")
 

@@ -56,7 +56,7 @@ def test_load_current_page_success(tmp_path):
 
     json_file = save_dir / "test_project_001.json"
     json_data = {
-        "source_lib": "doctr-pgdp-labeled",
+        "source_lib": "doctr-pd-labeled",
         "source_path": "test_image.png",
         "pages": [{"type": "Page", "items": [], "width": 800, "height": 600}],
     }
@@ -154,7 +154,7 @@ def test_load_current_page_generates_project_id_from_root(tmp_path):
     # Create valid JSON file with expected filename
     json_file = save_dir / "my_book_project_001.json"
     json_data = {
-        "source_lib": "doctr-pgdp-labeled",
+        "source_lib": "doctr-pd-labeled",
         "source_path": "test_image.png",
         "pages": [{"type": "Page", "items": []}],
     }

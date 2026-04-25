@@ -100,7 +100,7 @@ def _write_labeled_legacy(
     from cv2 import imwrite as cv2_imwrite
 
     data = {
-        "source_lib": "doctr-pgdp-labeled",
+        "source_lib": "doctr-pd-labeled",
         "source_path": f"matched-ocr/{stem}.png",
         "pages": [page.to_dict()],
     }
@@ -570,7 +570,7 @@ class TestDocTRExportEdgeCases:
         page = _make_page(words)
         # Write JSON but NO image
         data = {
-            "source_lib": "doctr-pgdp-labeled",
+            "source_lib": "doctr-pd-labeled",
             "source_path": "test.png",
             "pages": [page.to_dict()],
         }

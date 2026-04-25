@@ -764,7 +764,7 @@ class ProjectState:
                                     self._resolve_workspace_cache_directory()
                                 ),
                                 project_id=None,  # Will be derived from project_root.name
-                                source_lib="doctr-pgdp-cached",
+                                source_lib="doctr-pd-cached",
                             )
                             cache_save_duration_ms = (
                                 perf_counter() - cache_save_started

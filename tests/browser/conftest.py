@@ -54,7 +54,7 @@ def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
     xdg_cache_home = xdg_base / "cache"
 
     # Copy pre-saved page JSONs into the expected location
-    labeled_dir = xdg_data_home / "pgdp-ocr-labeler" / "labeled-projects"
+    labeled_dir = xdg_data_home / "pd-ocr-labeler" / "labeled-projects"
     labeled_dir.mkdir(parents=True)
     saved_pages_src = FIXTURES_DIR / "saved-pages"
     for f in saved_pages_src.iterdir():

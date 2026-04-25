@@ -1,6 +1,6 @@
 {
     "github.copilot.chat.additionalReadAccessPaths": [
-        "/home/user/.local/share/pgdp-ocr-labeler/logs"
+        "/home/user/.local/share/pd-ocr-labeler/logs"
     ],
     "python.terminal.activateEnvironment": true,
     "python.defaultInterpreterPath": "./.venv/bin/python",

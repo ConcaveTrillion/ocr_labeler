@@ -339,7 +339,7 @@ def test_get_default_source_projects_root_linux_uses_xdg_data_home(
 
     root = ConfigOperations.get_default_source_projects_root()
 
-    assert root == xdg_data_home / "pgdp-ocr-labeler" / "source-pgdp-data" / "output"
+    assert root == xdg_data_home / "pd-ocr-labeler" / "source-pgdp-data" / "output"
 
 
 def test_get_default_config_path_linux_uses_xdg_config_home(monkeypatch, tmp_path):
@@ -356,7 +356,7 @@ def test_get_default_config_path_linux_uses_xdg_config_home(monkeypatch, tmp_pat
 
     config_path = ConfigOperations.get_default_config_path()
 
-    assert config_path == xdg_config_home / "pgdp-ocr-labeler" / "config.yaml"
+    assert config_path == xdg_config_home / "pd-ocr-labeler" / "config.yaml"
 
 
 def test_get_default_source_projects_root_macos(monkeypatch, tmp_path):
@@ -377,7 +377,7 @@ def test_get_default_source_projects_root_macos(monkeypatch, tmp_path):
         tmp_path
         / "Library"
         / "Application Support"
-        / "pgdp-ocr-labeler"
+        / "pd-ocr-labeler"
         / "source-pgdp-data"
         / "output"
     )
@@ -397,11 +397,7 @@ def test_get_default_config_path_macos(monkeypatch, tmp_path):
     config_path = ConfigOperations.get_default_config_path()
 
     assert config_path == (
-        tmp_path
-        / "Library"
-        / "Application Support"
-        / "pgdp-ocr-labeler"
-        / "config.yaml"
+        tmp_path / "Library" / "Application Support" / "pd-ocr-labeler" / "config.yaml"
     )
 
 
@@ -419,7 +415,7 @@ def test_get_default_source_projects_root_windows(monkeypatch, tmp_path):
 
     root = ConfigOperations.get_default_source_projects_root()
 
-    assert root == appdata / "pgdp-ocr-labeler" / "source-pgdp-data" / "output"
+    assert root == appdata / "pd-ocr-labeler" / "source-pgdp-data" / "output"
 
 
 def test_get_default_config_path_windows(monkeypatch, tmp_path):
@@ -436,7 +432,7 @@ def test_get_default_config_path_windows(monkeypatch, tmp_path):
 
     config_path = ConfigOperations.get_default_config_path()
 
-    assert config_path == appdata / "pgdp-ocr-labeler" / "config.yaml"
+    assert config_path == appdata / "pd-ocr-labeler" / "config.yaml"
 
 
 def test_notify_invokes_on_change_callback(tmp_path):

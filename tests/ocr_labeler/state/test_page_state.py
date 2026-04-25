@@ -1214,7 +1214,7 @@ def test_persist_page_to_file_prefers_current_in_memory_page(tmp_path):
     )
 
     page_state._project_root = tmp_path
-    page_state._project = SimpleNamespace(source_lib="doctr-pgdp-labeled")
+    page_state._project = SimpleNamespace(source_lib="doctr-pd-labeled")
     page_state._current_page_index = 0
     page_state.current_page = current_page
     page_state.current_page_model = None
@@ -1259,7 +1259,7 @@ def test_auto_save_to_cache_does_not_mark_page_as_filesystem(tmp_path):
     )
 
     page_state._project_root = tmp_path
-    page_state._project = SimpleNamespace(source_lib="doctr-pgdp-labeled")
+    page_state._project = SimpleNamespace(source_lib="doctr-pd-labeled")
     page_state._current_page_index = 0
     page_state.current_page = current_page
     page_state.current_page_model = None

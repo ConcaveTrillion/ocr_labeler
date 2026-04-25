@@ -249,7 +249,7 @@ class PageOperations:
                 page_obj.add_ground_truth(ground_truth_string)
 
             page_obj.ocr_provenance = self._build_live_ocr_provenance(
-                source_lib="doctr-pgdp-labeled"
+                source_lib="doctr-pd-labeled"
             )
             return page_obj
 
@@ -261,7 +261,7 @@ class PageOperations:
         project_root: Path,
         save_directory: str | Path | None = None,
         project_id: str | None = None,
-        source_lib: str = "doctr-pgdp-labeled",
+        source_lib: str = "doctr-pd-labeled",
         original_page: PageModel | Page | None = None,
     ) -> bool:
         """Save a single page object to a file with both image copy and JSON metadata.
@@ -276,7 +276,7 @@ class PageOperations:
             save_directory: Directory to save files. When omitted, uses the
                 default user-local labeled-projects directory.
             project_id: Project identifier. If None, derives from project_root name.
-            source_lib: Source library identifier (default: "doctr-pgdp-labeled").
+            source_lib: Source library identifier (default: "doctr-pd-labeled").
             original_page: Original Page object before modifications (optional).
 
         Returns:

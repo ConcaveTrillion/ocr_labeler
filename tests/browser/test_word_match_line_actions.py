@@ -15,6 +15,8 @@ LINE_GT_TO_OCR = '[data-testid="line-gt-to-ocr-button"]'
 LINE_OCR_TO_GT = '[data-testid="line-ocr-to-gt-button"]'
 LINE_VALIDATE = '[data-testid="line-validate-button"]'
 LINE_DELETE = '[data-testid="line-delete-button"]'
+LINE_CARD = '[data-testid="line-card"]'
+WORD_VALIDATE = '[data-testid="word-validate-button"]'
 PARAGRAPH_EXPANDER = '[data-testid="paragraph-expander-button"]'
 
 
@@ -214,6 +216,80 @@ def test_line_validate_toggle(browser_app_url: str, browser_page) -> None:
 
     validate_btn = page.locator(LINE_VALIDATE).first
     expect(validate_btn).to_contain_text("Validate")
+
+
+@pytest.mark.browser
+def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -> None:
+    """Clicking the per-line Validate button must validate every word in that line.
+
+    Regression: the targeted word-validation event handler in TextTabs was
+    comparing against ``self.page_index`` (frozen at construction time) instead
+    of the live current page index.  On every page other than the first, the
+    handler dropped the event, so the in-memory line match was never updated
+    and the rerendered card showed every word as unvalidated even though the
+    underlying word labels had been toggled.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Navigate to page 3 first — the bug only manifested on pages other than
+    # the initial page, since TextTabs.page_index defaulted to 0.
+    page_input = page.get_by_label("Page")
+    page_input.fill("3")
+    page_input.press("Enter")
+    expect(page_input).to_have_value("3", timeout=15_000)
+
+    _switch_to_all_lines(page)
+    page.locator(LINE_VALIDATE).first.wait_for(state="visible", timeout=15_000)
+
+    # Page 1 has 7 lines, page 3 has 35.  Wait until the line card count
+    # reflects page 3 — otherwise the navigation may still be pending and we
+    # would be operating on page-1 cards while ``current_page_index`` flips
+    # to 2 mid-click, causing the targeted validation event to be dropped
+    # for the wrong reason.
+    expect(page.locator(LINE_CARD)).to_have_count(35, timeout=15_000)
+
+    # Find the first line card with >= 2 OCR words so the bug
+    # (only first word validated, or no words validated) is observable.
+    cards = page.locator(LINE_CARD)
+    target_index = -1
+    target_word_count = 0
+    for i in range(cards.count()):
+        card = cards.nth(i)
+        if card.locator(LINE_VALIDATE).count() == 0:
+            continue
+        wc = card.locator(WORD_VALIDATE).count()
+        if wc >= 2:
+            target_index = i
+            target_word_count = wc
+            break
+
+    assert target_index >= 0, "Expected a line card with >= 2 OCR words"
+
+    def target_card():
+        # Re-resolve the locator each time: the line card DOM node is
+        # replaced by ``rerender_line_card`` on every validation toggle, so
+        # any previously captured handle becomes stale.
+        return page.locator(LINE_CARD).nth(target_index)
+
+    # All word-validate buttons should start grey (Quasar applies bg-grey for
+    # the unvalidated state).
+    green_words_before = target_card().locator(f"{WORD_VALIDATE}.bg-green").count()
+    assert green_words_before == 0, (
+        f"Expected no validated words before click, got {green_words_before}"
+    )
+
+    target_card().locator(LINE_VALIDATE).click()
+    page.wait_for_timeout(1000)
+
+    # After clicking Validate, every word in the line must be marked validated
+    # (Quasar applies bg-green when color=green is set on the button).
+    expect(target_card().locator(f"{WORD_VALIDATE}.bg-green")).to_have_count(
+        target_word_count
+    )
+
+    # And the line-validate button should now read "Unvalidate".
+    expect(target_card().locator(LINE_VALIDATE)).to_contain_text("Unvalidate")
 
 
 # ---------------------------------------------------------------------------

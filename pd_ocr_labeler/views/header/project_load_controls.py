@@ -11,6 +11,7 @@ from ...viewmodels.app.app_state_view_model import AppStateViewModel
 from ...viewmodels.project.project_state_view_model import ProjectStateViewModel
 from ..shared.button_styles import style_action_button
 from ..shared.view_helpers import NotificationMixin
+from .ocr_config_modal import OCRConfigModal
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class ProjectLoadControls(NotificationMixin):
         self._path_picker_current_label: ui.label | None = None
         self._path_picker_breadcrumbs: ui.row | None = None
         self._path_picker_list_container: ui.column | None = None
+        self.ocr_config_modal = OCRConfigModal(app_state_model, project_state_model)
 
     def build(self) -> ui.element:
         with (
@@ -100,6 +102,8 @@ class ProjectLoadControls(NotificationMixin):
             )
             style_action_button(self.source_folder_button, size="md")
 
+            self.ocr_settings_button = self.ocr_config_modal.build()
+
             ui.space()
 
             self.path_label = (
@@ -132,6 +136,7 @@ class ProjectLoadControls(NotificationMixin):
                 self.select,
                 self.load_project_button,
                 self.source_folder_button,
+                self.ocr_settings_button,
             ]
             for control in controls:
                 self._bind_disabled_from_safe(
@@ -163,11 +168,13 @@ class ProjectLoadControls(NotificationMixin):
             getattr(self, "select", None),
             getattr(self, "load_project_button", None),
             getattr(self, "source_folder_button", None),
+            getattr(self, "ocr_settings_button", None),
         ):
             if control is None:
                 continue
             control.set_enabled(enabled)
             control.update()
+        self.ocr_config_modal.sync_control_state()
 
     async def _load_selected_project(
         self,

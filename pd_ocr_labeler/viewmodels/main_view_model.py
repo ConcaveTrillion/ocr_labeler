@@ -239,3 +239,15 @@ class MainViewModel(BaseViewModel):
         if self.project_state_view_model:
             return self.project_state_view_model.command_get_navigation_status()
         return {}
+
+    def command_refresh_ocr_models(self) -> bool:
+        """Delegate OCR model refresh to app state view model."""
+        if self.app_state_view_model:
+            return self.app_state_view_model.command_refresh_ocr_models()
+        return False
+
+    def command_set_selected_ocr_model(self, model_key: str) -> bool:
+        """Delegate OCR model selection to app state view model."""
+        if self.app_state_view_model:
+            return self.app_state_view_model.command_set_selected_ocr_model(model_key)
+        return False

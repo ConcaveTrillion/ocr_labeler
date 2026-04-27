@@ -9,6 +9,10 @@ from typing import Callable
 
 from nicegui import run
 
+from ..operations.ocr.model_selection_operations import (
+    ModelSelectionOperations,
+    OCRModelOption,
+)
 from ..operations.persistence.config_operations import ConfigOperations
 from ..operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
@@ -56,6 +60,9 @@ class AppState:
     _notification_lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+    available_ocr_models: dict[str, OCRModelOption] = field(default_factory=dict)
+    ocr_model_options: dict[str, str] = field(default_factory=dict)
+    selected_ocr_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
 
     def queue_notification(self, message: str, kind: str = "info") -> None:
         """Queue a user notification for this browser-tab session."""
@@ -96,6 +103,11 @@ class AppState:
             logger.exception("__post_init__: failed to list available projects")
             self.available_projects = {}
 
+        try:
+            self.refresh_ocr_models(notify=False)
+        except Exception:
+            logger.exception("__post_init__: failed to discover OCR models")
+
         # Directly derive keys and set default selection to first project (if any)
         # without attempting to match current project_root or loading anything.
         try:
@@ -115,6 +127,62 @@ class AppState:
                 listener()
             except Exception:
                 logger.exception("AppState.notify: listener callback failed")
+
+    def _apply_selected_ocr_model_to_project_state(
+        self, project_state: ProjectState
+    ) -> None:
+        """Apply currently selected OCR model to a project state's parser."""
+        option = self.available_ocr_models.get(self.selected_ocr_model_key)
+        if option is None:
+            option = self.available_ocr_models.get(
+                ModelSelectionOperations.DEFAULT_MODEL_KEY
+            )
+        if option is None:
+            return
+
+        source_lib = (
+            "doctr-pd-labeled"
+            if option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+            else "doctr-pd-finetuned"
+        )
+        project_state.page_ops.configure_doctr_weights(
+            option.detection_weights_path,
+            option.recognition_weights_path,
+            source_lib=source_lib,
+            recognition_vocab=option.vocab,
+        )
+
+    def refresh_ocr_models(self, notify: bool = True) -> None:
+        """Refresh available OCR model options discovered from trainer outputs."""
+        options, labels = ModelSelectionOperations.discover_model_options()
+        self.available_ocr_models = options
+        self.ocr_model_options = labels
+        if self.selected_ocr_model_key not in self.available_ocr_models:
+            self.selected_ocr_model_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
+
+        for project_state in self.projects.values():
+            self._apply_selected_ocr_model_to_project_state(project_state)
+
+        if hasattr(self, "_default_project_state"):
+            self._apply_selected_ocr_model_to_project_state(self._default_project_state)
+
+        if notify:
+            self.notify()
+
+    def set_selected_ocr_model(self, model_key: str) -> bool:
+        """Set active OCR model key and apply it to all project states."""
+        if model_key not in self.available_ocr_models:
+            return False
+
+        self.selected_ocr_model_key = model_key
+        for project_state in self.projects.values():
+            self._apply_selected_ocr_model_to_project_state(project_state)
+
+        if hasattr(self, "_default_project_state"):
+            self._apply_selected_ocr_model_to_project_state(self._default_project_state)
+
+        self.notify()
+        return True
 
     # --------------- Project Loading ---------------
     async def load_project(
@@ -155,6 +223,8 @@ class AppState:
                 self.projects[project_key].on_change.append(self.notify)
             else:
                 self.projects[project_key].notification_sink = self.queue_notification
+
+            self._apply_selected_ocr_model_to_project_state(self.projects[project_key])
 
             # Delegate actual project loading to project state
             await self.projects[project_key].load_project(
@@ -222,6 +292,7 @@ class AppState:
                 notification_sink=self.queue_notification
             )
             self._default_project_state.on_change.append(self.notify)
+            self._apply_selected_ocr_model_to_project_state(self._default_project_state)
         return self._default_project_state
 
     # --------------- Project Discovery ---------------

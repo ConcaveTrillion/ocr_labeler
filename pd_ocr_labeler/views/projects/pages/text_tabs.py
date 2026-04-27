@@ -438,6 +438,19 @@ class TextTabs:
             "parent element" in message and "deleted" in message
         )
 
+    def _current_page_state_index(self) -> int:
+        """Return the live current page index from page state.
+
+        ``self.page_index`` is captured at construction time and is not updated
+        on navigation, so it cannot be used to filter targeted update events
+        for pages other than the initial one.  Targeted handlers should use
+        this helper instead.
+        """
+        page_state = self.page_state
+        if page_state is None:
+            return -1
+        return int(getattr(page_state, "_current_page_index", -1))
+
     def _is_ui_alive(self) -> bool:
         """Check whether the built container still belongs to an active UI tree."""
         if self._disposed:
@@ -559,7 +572,7 @@ class TextTabs:
         """Apply targeted GT updates to WordMatchView."""
         if not self._ensure_attached():
             return
-        if event.page_index != self.page_index:
+        if event.page_index != self._current_page_state_index():
             return
         if not getattr(self, "word_match_view", None):
             return
@@ -584,7 +597,7 @@ class TextTabs:
         """Apply targeted style updates to WordMatchView."""
         if not self._ensure_attached():
             return
-        if event.page_index != self.page_index:
+        if event.page_index != self._current_page_state_index():
             return
         if not getattr(self, "word_match_view", None):
             return
@@ -622,7 +635,7 @@ class TextTabs:
         """Apply targeted validation updates to WordMatchView."""
         if not self._ensure_attached():
             return
-        if event.page_index != self.page_index:
+        if event.page_index != self._current_page_state_index():
             return
         if not getattr(self, "word_match_view", None):
             return

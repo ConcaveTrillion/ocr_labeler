@@ -273,9 +273,8 @@ class WordMatchRenderer:
                                 with (
                                     ui.column()
                                     .classes("full-width")
-                                    .style(
-                                        "gap: 0; margin: 0; padding: 0;"
-                                    ) as line_slot
+                                    .style("gap: 0; margin: 0; padding: 0;")
+                                    .props('data-testid="line-card"') as line_slot
                                 ):
                                     self._line_card_refs[line_match.line_index] = (
                                         line_slot

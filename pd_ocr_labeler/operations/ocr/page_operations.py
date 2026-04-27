@@ -94,9 +94,29 @@ class PageOperations:
         # Store the predictor at instance level to avoid recreating it per-page
         self._docTR_predictor = docTR_predictor
         self._predictor_initialized = False
+        self._detection_weights_path: Path | None = None
+        self._recognition_weights_path: Path | None = None
+        self._recognition_vocab: str | None = None
+        self._ocr_source_lib: str = "doctr-pd-labeled"
         self._saved_provenance_by_page_id: dict[int, dict[str, Any]] = {}
         self._page_image_cache_dir: Path | None = None
         self.page_parser = self.build_initial_page_parser()
+
+    def configure_doctr_weights(
+        self,
+        detection_weights_path: Path | None,
+        recognition_weights_path: Path | None,
+        *,
+        source_lib: str,
+        recognition_vocab: str | None = None,
+    ) -> None:
+        """Configure optional fine-tuned DocTR weights for subsequent OCR calls."""
+        self._detection_weights_path = detection_weights_path
+        self._recognition_weights_path = recognition_weights_path
+        self._recognition_vocab = recognition_vocab
+        self._ocr_source_lib = source_lib
+        self._docTR_predictor = None
+        self._predictor_initialized = False
 
     def _resolve_page_image_cache_dir(self) -> Path:
         """Return the shared page-image cache directory."""
@@ -182,9 +202,28 @@ class PageOperations:
         """
         if not self._predictor_initialized:
             if self._docTR_predictor is None:
-                from pd_book_tools.ocr.doctr_support import get_default_doctr_predictor
+                if (
+                    self._detection_weights_path is not None
+                    and self._recognition_weights_path is not None
+                ):
+                    from pd_book_tools.ocr.doctr_support import (
+                        get_finetuned_torch_doctr_predictor,
+                    )
 
-                self._docTR_predictor = get_default_doctr_predictor()
+                    predictor = get_finetuned_torch_doctr_predictor(
+                        self._detection_weights_path,
+                        self._recognition_weights_path,
+                        vocab=self._recognition_vocab or "",
+                    )
+                    if predictor is None:
+                        raise RuntimeError("Failed to load fine-tuned DocTR weights")
+                    self._docTR_predictor = predictor
+                else:
+                    from pd_book_tools.ocr.doctr_support import (
+                        get_default_doctr_predictor,
+                    )
+
+                    self._docTR_predictor = get_default_doctr_predictor()
             self._predictor_initialized = True
         return self._docTR_predictor
 
@@ -249,7 +288,7 @@ class PageOperations:
                 page_obj.add_ground_truth(ground_truth_string)
 
             page_obj.ocr_provenance = self._build_live_ocr_provenance(
-                source_lib="doctr-pd-labeled"
+                source_lib=self._ocr_source_lib
             )
             return page_obj
 

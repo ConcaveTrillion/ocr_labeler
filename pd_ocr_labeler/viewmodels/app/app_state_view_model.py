@@ -23,6 +23,8 @@ class AppStateViewModel(BaseViewModel):
     selected_project_key: str | None = None
     selected_project_path: str = ""
     is_project_loaded: bool = False
+    ocr_model_options: dict[str, str] = field(default_factory=dict)
+    selected_ocr_model_key: str = "default"
 
     def __setattr__(self, name, value):
         """Override to ensure both NiceGUI binding and custom listeners work."""
@@ -35,6 +37,8 @@ class AppStateViewModel(BaseViewModel):
             "selected_project_key",
             "selected_project_path",
             "is_project_loaded",
+            "ocr_model_options",
+            "selected_ocr_model_key",
         ]:
             self.notify_property_changed(name, value)
 
@@ -80,6 +84,8 @@ class AppStateViewModel(BaseViewModel):
                 else ""
             )
             self.is_project_loaded = bool(self._app_state.current_project_key)
+            self.ocr_model_options = dict(self._app_state.ocr_model_options)
+            self.selected_ocr_model_key = self._app_state.selected_ocr_model_key
 
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Is Loading: %s", self.is_loading)
@@ -88,6 +94,8 @@ class AppStateViewModel(BaseViewModel):
                 logger.debug("Selected Project Key: %s", self.selected_project_key)
                 logger.debug("Selected Project Path: %s", self.selected_project_path)
                 logger.debug("Is Project Loaded: %s", self.is_project_loaded)
+                logger.debug("OCR model options count: %s", len(self.ocr_model_options))
+                logger.debug("Selected OCR model key: %s", self.selected_ocr_model_key)
                 logger.debug("AppStateViewModel update complete")
 
         else:
@@ -206,6 +214,23 @@ class AppStateViewModel(BaseViewModel):
         except Exception:
             logger.exception("Error getting display name for project '%s'", project_key)
             return project_key
+
+    def command_refresh_ocr_models(self) -> bool:
+        """Rescan OCR model outputs and refresh selectable options."""
+        try:
+            self._app_state.refresh_ocr_models()
+            return True
+        except Exception:
+            logger.exception("Error refreshing OCR model options")
+            return False
+
+    def command_set_selected_ocr_model(self, model_key: str) -> bool:
+        """Set the active OCR model key."""
+        try:
+            return self._app_state.set_selected_ocr_model(model_key)
+        except Exception:
+            logger.exception("Error selecting OCR model '%s'", model_key)
+            return False
 
     def command_is_project_available(self, key: str) -> bool:
         """Command to check if a project is available.

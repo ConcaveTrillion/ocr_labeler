@@ -296,7 +296,12 @@ def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
 
 
 def test_list_available_projects_missing_base_returns_empty(monkeypatch, tmp_path):
+    from pd_ocr_labeler.operations.persistence.config_operations import ConfigOperations
+
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setattr(ConfigOperations, "CONFIG_PATH", tmp_path / "config" / "config.yaml")
     state = AppState()
     assert state.list_available_projects() == {}
 

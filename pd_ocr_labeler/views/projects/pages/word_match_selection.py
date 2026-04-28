@@ -186,6 +186,35 @@ class WordMatchSelection:
         self.selected_word_indices = selected_word_indices
         self._view.refresh_after_selection_change()
 
+    def deselect_lines(self, line_indices: set[int]) -> bool:
+        """Remove the given lines (and their words) from the selection.
+
+        Also drops paragraphs that are no longer fully line-selected.
+        Returns True if the selection state changed.
+        """
+        if not line_indices:
+            return False
+        changed = False
+        for line_index in line_indices:
+            if line_index in self.selected_line_indices:
+                self.selected_line_indices.discard(line_index)
+                changed = True
+            line_word_keys = self._view._line_word_keys(line_index)
+            if line_word_keys & self.selected_word_indices:
+                self.selected_word_indices.difference_update(line_word_keys)
+                changed = True
+        affected_paragraphs = {
+            self._view._line_paragraph_index(line_index) for line_index in line_indices
+        }
+        for paragraph_index in affected_paragraphs:
+            if paragraph_index is None:
+                continue
+            if not self.is_paragraph_fully_line_selected(paragraph_index):
+                if paragraph_index in self.selected_paragraph_indices:
+                    self.selected_paragraph_indices.discard(paragraph_index)
+                    changed = True
+        return changed
+
     def refresh_line_checkbox_states(self) -> None:
         """Update rendered line-checkbox values from current selection state."""
         for line_index, checkbox in list(self._line_checkbox_refs.items()):

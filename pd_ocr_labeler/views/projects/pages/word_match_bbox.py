@@ -287,11 +287,23 @@ class WordMatchBbox:
 
         has_pending = (pd_left, pd_right, pd_top, pd_bottom) != (0.0, 0.0, 0.0, 0.0)
         if has_pending:
+            # Clamp to image bounds and round to integer pixel coordinates so
+            # that downstream refine routines (which slice the page image with
+            # these values) get integer indices.  Without rounding, deltas
+            # derived from normalized bboxes can yield float coords like
+            # ``60.0000000000001`` and trigger ``TypeError: slice indices must
+            # be integers`` inside ``BoundingBox._extract_roi``, which would
+            # otherwise be swallowed and surface as
+            # "Could not compute refine preview".
+            eff_x1_i = max(0, min(int(round(eff_x1)), page_width - 1))
+            eff_y1_i = max(0, min(int(round(eff_y1)), page_height - 1))
+            eff_x2_i = max(eff_x1_i + 1, min(int(round(eff_x2)), page_width))
+            eff_y2_i = max(eff_y1_i + 1, min(int(round(eff_y2)), page_height))
             try:
                 eff_bbox = bbox_from_dict(
                     {
-                        "top_left": {"x": eff_x1, "y": eff_y1},
-                        "bottom_right": {"x": eff_x2, "y": eff_y2},
+                        "top_left": {"x": eff_x1_i, "y": eff_y1_i},
+                        "bottom_right": {"x": eff_x2_i, "y": eff_y2_i},
                         "is_normalized": False,
                     }
                 )

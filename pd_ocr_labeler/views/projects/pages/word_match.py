@@ -38,6 +38,7 @@ LineIndicesAction: TypeAlias = Callable[[list[int]], bool]
 ParagraphIndicesAction: TypeAlias = Callable[[list[int]], bool]
 WordKeysAction: TypeAlias = Callable[[list[WordKey]], bool]
 LineWordAction: TypeAlias = Callable[[int, int], bool]
+SetWordsValidatedAction: TypeAlias = Callable[[list[WordKey], bool], bool]
 SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
 ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
 NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float, bool], bool]
@@ -85,6 +86,7 @@ class WordMatchView:
         edit_word_ground_truth_callback: EditWordGroundTruthAction | None = None,
         set_word_attributes_callback: SetWordAttributesAction | None = None,
         toggle_word_validated_callback: LineWordAction | None = None,
+        set_words_validated_callback: SetWordsValidatedAction | None = None,
         notify_callback: NotifyCallback | None = None,
         original_image_source_provider: Callable[[], str] | None = None,
     ):
@@ -151,6 +153,7 @@ class WordMatchView:
         self.edit_word_ground_truth_callback = edit_word_ground_truth_callback
         self.set_word_attributes_callback = set_word_attributes_callback
         self.toggle_word_validated_callback = toggle_word_validated_callback
+        self.set_words_validated_callback = set_words_validated_callback
         self.selection = WordMatchSelection(self)
         self.toolbar = WordMatchToolbar(self)
         self.gt_editing = WordMatchGtEditing(self)

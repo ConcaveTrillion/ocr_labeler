@@ -1145,23 +1145,43 @@ class WordMatchRenderer:
 
     def _handle_validate_line(self, line_match) -> None:
         """Validate or unvalidate all words in a line."""
-        callback = self._view.toggle_word_validated_callback
-        if callback is None:
+        batch_callback = self._view.set_words_validated_callback
+        toggle_callback = self._view.toggle_word_validated_callback
+        if batch_callback is None and toggle_callback is None:
             return
         # Snapshot before the loop: each callback toggles state, so reading
         # is_validated mid-loop would see already-toggled values.
         all_validated = line_match.is_fully_validated
+        validate = not all_validated
         targets = [
-            (wm.word_index, wm.is_validated)
+            (line_match.line_index, wm.word_index)
             for wm in line_match.word_matches
-            if wm.word_index is not None and wm.word_index >= 0
+            if wm.word_index is not None
+            and wm.word_index >= 0
+            and wm.is_validated != validate
         ]
-        for wi, was_validated in targets:
-            if all_validated and was_validated:
-                callback(line_match.line_index, wi)
-            elif not all_validated and not was_validated:
-                callback(line_match.line_index, wi)
-        self._rerender_or_hide_line(line_match.line_index)
+        if not targets:
+            return
+        # Prefer the batch callback so all word state mutates (and persists)
+        # before any UI repaint is triggered.
+        if batch_callback is not None:
+            batch_callback(targets, validate)
+        else:
+            assert toggle_callback is not None
+            for line_idx, word_idx in targets:
+                toggle_callback(line_idx, word_idx)
+        # If toggling causes the active filter to hide this line, drop it from
+        # the selection so the user isn't left with a hidden selected row.
+        line_index = line_match.line_index
+        refreshed_line_match = self._view._line_match_by_index(line_index)
+        selection_changed = False
+        if refreshed_line_match is not None and self._should_hide_line(
+            refreshed_line_match
+        ):
+            selection_changed = self._view.selection.deselect_lines({line_index})
+        self._rerender_or_hide_line(line_index)
+        if selection_changed:
+            self._view.refresh_after_selection_change()
 
     # ------------------------------------------------------------------
     # Local in-memory state updates

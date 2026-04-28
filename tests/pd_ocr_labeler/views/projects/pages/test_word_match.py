@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
@@ -3000,6 +3001,123 @@ def test_set_validation_for_keys_unvalidates(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Toolbar: deselection when validation hides lines
+# ---------------------------------------------------------------------------
+
+
+def test_set_validation_clears_selection_when_line_hidden_by_filter(monkeypatch):
+    """Validating a selected line under the 'Unvalidated Lines' filter clears its selection."""
+    view = WordMatchView(
+        toggle_word_validated_callback=lambda li, wi: True,
+    )
+    view.filter_mode = "Unvalidated Lines"
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+    view.selection.selected_line_indices = {0}
+    view.selection.selected_word_indices = {(0, 0)}
+
+    # Make the toggle callback flip the model so the line becomes fully validated
+    # and the filter will hide it.
+    def _toggle(li, wi):
+        wm.is_validated = True
+        return True
+
+    view.toggle_word_validated_callback = _toggle
+    monkeypatch.setattr(view.renderer, "update_lines_display", lambda: None)
+    monkeypatch.setattr(view.renderer, "_rerender_or_hide_line", lambda _line_idx: None)
+
+    view.toolbar._set_validation_for_keys([(0, 0)], validate=True)
+
+    assert view.selection.selected_line_indices == set()
+    assert view.selection.selected_word_indices == set()
+
+
+def test_set_validation_keeps_selection_when_line_remains_visible(monkeypatch):
+    """Validating under 'All Lines' (no hiding) preserves the existing selection."""
+    view = WordMatchView(
+        toggle_word_validated_callback=lambda li, wi: True,
+    )
+    view.filter_mode = "All Lines"
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+    view.selection.selected_line_indices = {0}
+    view.selection.selected_word_indices = {(0, 0)}
+
+    def _toggle(li, wi):
+        wm.is_validated = True
+        return True
+
+    view.toggle_word_validated_callback = _toggle
+    monkeypatch.setattr(view.renderer, "update_lines_display", lambda: None)
+    monkeypatch.setattr(view.renderer, "_rerender_or_hide_line", lambda _line_idx: None)
+
+    view.toolbar._set_validation_for_keys([(0, 0)], validate=True)
+
+    assert view.selection.selected_line_indices == {0}
+    assert view.selection.selected_word_indices == {(0, 0)}
+
+
+def test_handle_validate_line_clears_selection_when_line_hidden(monkeypatch):
+    """Per-line card validate button clears its line's selection when filter hides it."""
+    view = WordMatchView(
+        toggle_word_validated_callback=lambda li, wi: True,
+    )
+    view.filter_mode = "Unvalidated Lines"
+    wm = WordMatch(
+        ocr_text="a",
+        ground_truth_text="a",
+        match_status=MatchStatus.EXACT,
+        word_index=0,
+        is_validated=False,
+    )
+    lm = LineMatch(
+        line_index=0,
+        ocr_line_text="a",
+        ground_truth_line_text="a",
+        word_matches=[wm],
+    )
+    view.view_model.line_matches = [lm]
+    view.selection.selected_line_indices = {0}
+    view.selection.selected_word_indices = {(0, 0)}
+
+    def _toggle(li, wi):
+        wm.is_validated = True
+        return True
+
+    view.toggle_word_validated_callback = _toggle
+    monkeypatch.setattr(view.renderer, "_rerender_or_hide_line", lambda _line_idx: None)
+
+    view.renderer._handle_validate_line(lm)
+
+    assert view.selection.selected_line_indices == set()
+    assert view.selection.selected_word_indices == set()
+
+
+# ---------------------------------------------------------------------------
 # Toolbar: validation button enable/disable
 # ---------------------------------------------------------------------------
 
@@ -3044,3 +3162,135 @@ def test_validation_buttons_enabled_with_callback_and_selection():
     assert view.toolbar.validate_page_button.enabled is True
     assert view.toolbar.validate_lines_button.enabled is True
     assert view.toolbar.validate_words_button.enabled is True
+
+
+def _build_page_image_with_glyph(
+    *,
+    page_width: int = 200,
+    page_height: int = 100,
+    glyph_box: tuple[int, int, int, int] = (20, 30, 80, 70),
+) -> np.ndarray:
+    """Return an RGB page image with a dark filled rectangle ("glyph")."""
+    image = np.full((page_height, page_width, 3), 255, dtype=np.uint8)
+    gx1, gy1, gx2, gy2 = glyph_box
+    image[gy1:gy2, gx1:gx2] = 0
+    return image
+
+
+def test_compute_refine_preview_after_crop_right_returns_deltas():
+    """Regression: refine after crop-right must produce deltas, not None.
+
+    Reproduces the "Could not compute refine preview" error that occurs when
+    the user stages a crop-right inside the word edit dialog and then presses
+    refine: pending deltas already encode the crop, so ``compute_refine_preview_deltas``
+    must construct an effective bbox from the cropped region and successfully
+    refine it.
+    """
+    view = WordMatchView()
+
+    # Original word bbox (pixel space) covers the full glyph plus extra space
+    # to the right. After "Crop right" at fraction 0.5 the right edge moves to
+    # the middle of the bbox, leaving only the left half (which still contains
+    # the glyph) for the refine call.
+    bbox = BoundingBox(Point(10, 25), Point(110, 75), is_normalized=False)
+    word_object = SimpleNamespace(bounding_box=bbox)
+    word_match = SimpleNamespace(word_object=word_object)
+    page_image = _build_page_image_with_glyph()
+    line_match = SimpleNamespace(page_image=page_image)
+    view._line_match_by_index = lambda _line_index: line_match
+    view._line_word_match_by_ocr_index = lambda *_args: word_match
+
+    # Crop right at 50% mirrors _stage_crop_to_marker(direction="right").
+    bbox_width = float(bbox.width)
+    pending_deltas = (0.0, -bbox_width * 0.5, 0.0, 0.0)
+
+    deltas = view.bbox.compute_refine_preview_deltas(
+        line_index=0,
+        word_index=0,
+        expand=False,
+        pending_deltas=pending_deltas,
+    )
+
+    assert deltas is not None, (
+        "compute_refine_preview_deltas must not return None after a crop-right; "
+        "this is the regression that surfaces as 'Could not compute refine preview'."
+    )
+    left_delta, right_delta, top_delta, bottom_delta = deltas
+    # Refine must keep the cropped right edge no further out than the cropped
+    # bbox produced (i.e. right_delta must remain <= the staged crop delta).
+    assert right_delta <= 0.0
+    # Refine should tighten around the glyph (rows 30..70). The original bbox
+    # extends to y=25..75, so top_delta should be negative (move top down) and
+    # bottom_delta should be negative (move bottom up).
+    assert top_delta <= 0.0
+    assert bottom_delta <= 0.0
+    # Left edge of the glyph is at x=20; original left is x=10, so refined left
+    # should move inward (left_delta negative, since left_delta>0 expands left).
+    assert left_delta <= 0.0
+
+
+def test_compute_refine_preview_after_crop_right_normalized_bbox():
+    """Regression for crop-right + refine when bbox is stored normalized.
+
+    PGDP project bboxes are typically normalized to the page; the dialog stores
+    pending deltas in pixel space. The refine preview helper must reconcile the
+    two coordinate systems so a refine after crop-right does not surface as
+    'Could not compute refine preview'.
+    """
+    view = WordMatchView()
+
+    page_width, page_height = 200, 100
+    # Normalized bbox covering roughly x=10..110, y=25..75 in pixel space.
+    bbox = BoundingBox(
+        Point(10 / page_width, 25 / page_height),
+        Point(110 / page_width, 75 / page_height),
+        is_normalized=True,
+    )
+    word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
+    page_image = _build_page_image_with_glyph(
+        page_width=page_width, page_height=page_height
+    )
+    line_match = SimpleNamespace(page_image=page_image)
+
+    view._line_match_by_index = lambda _line_index: line_match
+    view._line_word_match_by_ocr_index = lambda *_args: word_match
+
+    bbox_width_px = (bbox.maxX - bbox.minX) * page_width
+    pending_deltas = (0.0, -bbox_width_px * 0.5, 0.0, 0.0)
+
+    deltas = view.bbox.compute_refine_preview_deltas(
+        line_index=0,
+        word_index=0,
+        expand=False,
+        pending_deltas=pending_deltas,
+    )
+
+    assert deltas is not None, (
+        "compute_refine_preview_deltas must not return None after a crop-right "
+        "on a normalized bbox."
+    )
+
+
+def test_compute_refine_preview_after_crop_right_expand():
+    """Regression for crop-right + Expand+Refine button."""
+    view = WordMatchView()
+
+    bbox = BoundingBox(Point(10, 25), Point(110, 75), is_normalized=False)
+    word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
+    page_image = _build_page_image_with_glyph()
+    line_match = SimpleNamespace(page_image=page_image)
+
+    view._line_match_by_index = lambda _line_index: line_match
+    view._line_word_match_by_ocr_index = lambda *_args: word_match
+
+    bbox_width = float(bbox.width)
+    pending_deltas = (0.0, -bbox_width * 0.5, 0.0, 0.0)
+
+    deltas = view.bbox.compute_refine_preview_deltas(
+        line_index=0,
+        word_index=0,
+        expand=True,
+        pending_deltas=pending_deltas,
+    )
+
+    assert deltas is not None

@@ -536,6 +536,80 @@ class PageState:
             )
             return False
 
+    def set_words_validated(
+        self,
+        keys: list[tuple[int, int]],
+        validate: bool,
+    ) -> bool:
+        """Set the validated flag for many words in a single batched operation.
+
+        Mutates each word's labels, then performs a *single* cache invalidation,
+        auto-save, and ``notify()`` at the end.  Per-word events are still
+        emitted so listeners that maintain in-memory mirrors stay in sync, but
+        the heavy UI repaint and disk save happen once.
+
+        Args:
+            keys: Iterable of ``(line_index, word_index)`` pairs to update.
+            validate: ``True`` to mark validated, ``False`` to unmark.
+
+        Returns:
+            True if the call completed without raising; False on error.
+        """
+        page = self.current_page
+        if not page:
+            logger.critical("No page available for batch word validation.")
+            return False
+
+        try:
+            lines = list(getattr(page, "lines", []) or [])
+            line_count = len(lines)
+            any_change = False
+            for line_index, word_index in keys:
+                if line_index < 0 or line_index >= line_count:
+                    logger.warning(
+                        "set_words_validated: invalid line_index=%s", line_index
+                    )
+                    continue
+                words = list(getattr(lines[line_index], "words", []) or [])
+                if word_index < 0 or word_index >= len(words):
+                    logger.warning(
+                        "set_words_validated: invalid word_index=%s", word_index
+                    )
+                    continue
+                word = words[word_index]
+                labels = set(getattr(word, "word_labels", []) or [])
+                already_validated = "validated" in labels
+                if validate and already_validated:
+                    continue
+                if not validate and not already_validated:
+                    continue
+                if validate:
+                    labels.add("validated")
+                else:
+                    labels.discard("validated")
+                word.word_labels = list(labels)
+                any_change = True
+                self._emit_word_validation_changed(
+                    WordValidationChangedEvent(
+                        page_index=self._current_page_index,
+                        line_index=line_index,
+                        word_index=word_index,
+                        is_validated=validate,
+                    )
+                )
+            if any_change:
+                self._invalidate_text_cache()
+                self._auto_save_to_cache()
+                self.notify()
+            return True
+        except Exception as e:
+            logger.exception(
+                "Error in batch word validation (validate=%s): %s",
+                validate,
+                e,
+            )
+            return False
+
     @notify_on_completion
     def persist_page_to_file(
         self,

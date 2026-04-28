@@ -303,6 +303,11 @@ class TextTabs:
             "toggle_word_validated",
             "Toggle word validated",
         )
+        set_words_validated_callback = _make_page_callback(
+            page_state,
+            "set_words_validated",
+            "Set words validated (batch)",
+        )
 
         apply_word_style_callback = None
         if set_word_attributes_callback is not None:
@@ -364,6 +369,7 @@ class TextTabs:
             edit_word_ground_truth_callback=edit_word_ground_truth_callback,
             set_word_attributes_callback=set_word_attributes_callback,
             toggle_word_validated_callback=toggle_word_validated_callback,
+            set_words_validated_callback=set_words_validated_callback,
             notify_callback=notify_callback,
             original_image_source_provider=original_image_source_provider,
         )

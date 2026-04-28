@@ -628,9 +628,12 @@ class WordMatchToolbar:
 
         Snapshots each word's current state *before* calling the callback so
         that we never re-read a value that a prior iteration already toggled.
+        Prefers the batch ``set_words_validated_callback`` so that all word
+        mutations are applied (and persisted) before any UI repaint.
         """
-        callback = self._view.toggle_word_validated_callback
-        if callback is None:
+        batch_callback = self._view.set_words_validated_callback
+        toggle_callback = self._view.toggle_word_validated_callback
+        if batch_callback is None and toggle_callback is None:
             return
         # Build snapshot: (line_idx, word_idx, currently_validated)
         snapshot: list[tuple[int, int, bool]] = []
@@ -643,14 +646,37 @@ class WordMatchToolbar:
                 continue
             snapshot.append((line_idx, word_idx, wm.is_validated))
 
+        targets: list[tuple[int, int]] = []
         toggled_lines: set[int] = set()
         for line_idx, word_idx, was_validated in snapshot:
             if validate and not was_validated:
-                callback(line_idx, word_idx)
+                targets.append((line_idx, word_idx))
                 toggled_lines.add(line_idx)
             elif not validate and was_validated:
-                callback(line_idx, word_idx)
+                targets.append((line_idx, word_idx))
                 toggled_lines.add(line_idx)
+
+        if not targets:
+            return
+
+        # Prefer a single batched call so all model state mutates before the
+        # UI is repainted. Falls back to per-word toggles for older callbacks.
+        if batch_callback is not None:
+            batch_callback(targets, validate)
+        else:
+            assert toggle_callback is not None
+            for line_idx, word_idx in targets:
+                toggle_callback(line_idx, word_idx)
+        # Deselect any toggled lines that the active filter will hide so the
+        # selection (line + word + paragraph) doesn't reference rows that are
+        # no longer visible.  ``deselect_lines`` discards each line's words
+        # and any paragraphs that are no longer fully line-selected.
+        hidden_lines = {
+            line_idx
+            for line_idx in toggled_lines
+            if self._is_line_hidden_by_filter(line_idx)
+        }
+        selection_changed = self._view.selection.deselect_lines(hidden_lines)
         # When a filter is active, lines may need to appear or disappear.
         # If any toggled line has no card ref it was hidden and needs to appear,
         # so fall back to a full rebuild.  Otherwise hide/rerender per-line.
@@ -663,6 +689,15 @@ class WordMatchToolbar:
         else:
             for line_idx in toggled_lines:
                 self._view.renderer._rerender_or_hide_line(line_idx)
+        if selection_changed:
+            self._view.refresh_after_selection_change()
+
+    def _is_line_hidden_by_filter(self, line_index: int) -> bool:
+        """Return True if the active filter excludes this line from display."""
+        line_match = self._view._line_match_by_index(line_index)
+        if line_match is None:
+            return False
+        return self._view.renderer._should_hide_line(line_match)
 
     def _handle_validate_page(self) -> None:
         all_lines = self._view._get_all_line_indices()
@@ -901,7 +936,10 @@ class WordMatchToolbar:
             self.clear_component_button.enabled = has_selected_words
 
         # Validation buttons
-        has_callback = self._view.toggle_word_validated_callback is not None
+        has_callback = (
+            self._view.toggle_word_validated_callback is not None
+            or self._view.set_words_validated_callback is not None
+        )
         has_any_lines = len(self._view._get_all_line_indices()) > 0
         has_selected_paragraphs = (
             len(self._view.selection.selected_paragraph_indices) > 0

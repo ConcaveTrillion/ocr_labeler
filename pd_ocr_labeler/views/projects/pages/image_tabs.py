@@ -67,6 +67,7 @@ class ImageTabs(NotificationMixin):
         on_paragraphs_selected: Callable[[set[int]], None] | None = None,
         on_word_rebox_drawn: Callable[[float, float, float, float], None] | None = None,
         on_word_add_drawn: Callable[[float, float, float, float], None] | None = None,
+        on_erase_rect_drawn: Callable[[float, float, float, float], None] | None = None,
     ):
         logger.debug("Initializing ImageTabs unified viewport")
         self.images: dict[str, ui.image] = {}
@@ -86,6 +87,7 @@ class ImageTabs(NotificationMixin):
         self._on_paragraphs_selected = on_paragraphs_selected
         self._on_word_rebox_drawn = on_word_rebox_drawn
         self._on_word_add_drawn = on_word_add_drawn
+        self._on_erase_rect_drawn = on_erase_rect_drawn
         self._drag_start: tuple[float, float] | None = None
         self._drag_current: tuple[float, float] | None = None
         self._drag_target_tab: str | None = None
@@ -93,6 +95,7 @@ class ImageTabs(NotificationMixin):
         self._drag_add_mode = False
         self._word_rebox_mode = False
         self._word_add_mode = False
+        self._erase_mode = False
         self._selected_word_indices: set[tuple[int, int]] = set()
         self._selected_paragraph_indices: set[int] = set()
         self._selected_word_boxes: list[tuple[float, float, float, float]] = []
@@ -147,6 +150,13 @@ class ImageTabs(NotificationMixin):
                         value=self.selection_mode,
                         on_change=lambda e: self._set_selection_mode(str(e.value)),
                     ).props("inline")
+                    erase_button = ui.button(
+                        "Erase Pixels",
+                        on_click=lambda _event: self.enable_erase_mode(),
+                    ).props("dense")
+                    erase_button.tooltip(
+                        "Drag a rectangle to erase pixels from the page image"
+                    )
 
                 with ui.row().classes("items-center gap-2 text-xs text-gray-600"):
                     ui.label("Legend").classes("text-xs text-gray-500")
@@ -236,6 +246,10 @@ class ImageTabs(NotificationMixin):
         self, tab_name: str, event: events.MouseEventArguments
     ) -> None:
         """Handle drag selection gestures on an interactive image tab."""
+        if self._erase_mode:
+            self._handle_erase_drag(event)
+            return
+
         if tab_name == "Words" and (self._word_rebox_mode or self._word_add_mode):
             self._handle_word_rebox_drag(event)
             return
@@ -354,6 +368,79 @@ class ImageTabs(NotificationMixin):
     def enable_word_add_mode(self) -> None:
         """Enable drag-to-add-word mode on the Words image tab."""
         self._word_add_mode = True
+
+    def enable_erase_mode(self) -> None:
+        """Enable drag-to-erase mode on the unified viewport image."""
+        self._clear_drag_state()
+        self._erase_mode = True
+        self._notify(
+            "Erase mode enabled: drag a rectangle to erase pixels",
+            type_="info",
+        )
+
+    def _handle_erase_drag(self, event: events.MouseEventArguments) -> None:
+        """Handle drag gesture when erase mode is active."""
+        event_type = getattr(event, "type", "")
+        x = float(getattr(event, "image_x", 0.0))
+        y = float(getattr(event, "image_y", 0.0))
+
+        if event_type == "mousedown":
+            self._drag_target_tab = "Words"
+            self._drag_start = (x, y)
+            self._drag_current = (x, y)
+            self._drag_remove_mode = False
+            self._drag_add_mode = False
+            self._render_drag_overlay("Words")
+            return
+
+        if self._drag_start is None or self._drag_target_tab != "Words":
+            return
+
+        if event_type == "mousemove":
+            self._drag_current = (x, y)
+            self._render_drag_overlay("Words")
+            return
+
+        if event_type == "mouseup":
+            self._drag_current = (x, y)
+            self._emit_erase_bbox()
+            self._drag_start = None
+            self._drag_current = None
+            self._drag_target_tab = None
+            self._drag_remove_mode = False
+            self._drag_add_mode = False
+            self._erase_mode = False
+            self._render_selection_overlay("Words")
+            return
+
+        if event_type == "mouseleave":
+            self._clear_drag_state()
+
+    def _emit_erase_bbox(self) -> None:
+        """Emit an erase rectangle in source image coordinates."""
+        if self._on_erase_rect_drawn is None:
+            return
+        if self._drag_start is None or self._drag_current is None:
+            return
+
+        page_state = getattr(self.page_state_view_model, "_page_state", None)
+        page = getattr(page_state, "current_page", None) if page_state else None
+        if page is None:
+            return
+
+        x1, y1, x2, y2 = self._normalized_rect(*self._drag_start, *self._drag_current)
+        scale_x, scale_y = self._get_display_scale(page, tab_name="Words")
+        if scale_x <= 0.0 or scale_y <= 0.0:
+            return
+
+        sx1 = x1 / scale_x
+        sy1 = y1 / scale_y
+        sx2 = x2 / scale_x
+        sy2 = y2 / scale_y
+        if sx2 <= sx1 or sy2 <= sy1:
+            return
+
+        self._on_erase_rect_drawn(sx1, sy1, sx2, sy2)
 
     def _emit_word_add_bbox(self) -> None:
         """Emit a drawn add-word rectangle in source image coordinates."""
@@ -595,6 +682,7 @@ class ImageTabs(NotificationMixin):
         self._drag_add_mode = False
         self._word_rebox_mode = False
         self._word_add_mode = False
+        self._erase_mode = False
         if "Viewport" not in self.images:
             self._clear_drag_overlay(self._selection_mode_tab())
         self._render_selection_overlay(self._selection_mode_tab())

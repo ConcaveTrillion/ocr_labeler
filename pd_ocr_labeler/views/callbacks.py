@@ -25,4 +25,5 @@ class PageActionCallbacks:
     refine_bboxes: PageActionCallback | None = None
     expand_refine_bboxes: PageActionCallback | None = None
     reload_ocr: PageActionCallback | None = None
+    reload_ocr_edited: PageActionCallback | None = None
     rematch_gt: PageActionCallback | None = None

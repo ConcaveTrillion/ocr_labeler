@@ -68,6 +68,45 @@ def render_word_split_marker(view: Any, split_key: tuple[int, int]) -> None:
                 'stroke="rgba(37, 99, 235, 0.55)" stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'
             )
 
+        # Draw a transient erase rectangle while drag-box erase mode is active.
+        if split_key in getattr(view, "_word_box_erase_mode_keys", set()):
+            start = getattr(view, "_word_box_erase_drag_start", {}).get(split_key)
+            current = getattr(view, "_word_box_erase_drag_current", {}).get(split_key)
+            if start is not None and current is not None:
+                sx, sy = start
+                cx, cy = current
+                left = max(0.0, min(float(sx), float(cx)))
+                right = min(marker_width, max(float(sx), float(cx)))
+                top = max(0.0, min(float(sy), float(cy)))
+                bottom = min(marker_height, max(float(sy), float(cy)))
+                if right > left and bottom > top:
+                    overlays.append(
+                        f'<rect x="{left:.2f}" y="{top:.2f}" '
+                        f'width="{(right - left):.2f}" height="{(bottom - top):.2f}" '
+                        'fill="rgba(239, 68, 68, 0.20)" stroke="#dc2626" '
+                        'stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'
+                    )
+
+        # Draw staged erase regions committed in-dialog but not yet applied.
+        staged_rects = getattr(view, "_word_box_erase_preview_rects", {}).get(
+            split_key,
+            [],
+        )
+        if staged_rects:
+            for fx1, fy1, fx2, fy2 in staged_rects:
+                left = max(0.0, min(marker_width, float(fx1) * marker_width))
+                right = max(0.0, min(marker_width, float(fx2) * marker_width))
+                top = max(0.0, min(marker_height, float(fy1) * marker_height))
+                bottom = max(0.0, min(marker_height, float(fy2) * marker_height))
+                if right <= left or bottom <= top:
+                    continue
+                overlays.append(
+                    f'<rect x="{left:.2f}" y="{top:.2f}" '
+                    f'width="{(right - left):.2f}" height="{(bottom - top):.2f}" '
+                    'fill="rgba(255, 255, 255, 0.92)" stroke="rgba(220, 38, 38, 0.75)" '
+                    'stroke-width="1" pointer-events="none" />'
+                )
+
         image.content = "".join(overlays)
     except Exception:
         view._safe_notify_once(
@@ -87,10 +126,11 @@ def handle_word_image_mouse(
     split_key = (line_index, word_index)
     event_type = str(getattr(event, "type", "") or "")
 
-    def _event_coords() -> tuple[float, float] | None:
+    def _event_coords(*, clamp_outside: bool = False) -> tuple[float, float] | None:
         image_width, image_height = view._word_split_image_sizes.get(
             split_key, (0.0, 0.0)
         )
+        previous = getattr(view, "_word_box_erase_drag_current", {}).get(split_key)
         raw_image_x = getattr(event, "image_x", None)
         raw_image_y = getattr(event, "image_y", None)
         raw_fallback_x = getattr(event, "x", None)
@@ -100,6 +140,8 @@ def handle_word_image_mouse(
             image_x = float(raw_image_x)
         elif raw_fallback_x is not None:
             image_x = float(raw_fallback_x)
+        elif clamp_outside and previous is not None:
+            image_x = float(previous[0])
         else:
             return None
 
@@ -107,19 +149,73 @@ def handle_word_image_mouse(
             image_y = float(raw_image_y)
         elif raw_fallback_y is not None:
             image_y = float(raw_fallback_y)
+        elif clamp_outside and previous is not None:
+            image_y = float(previous[1])
         else:
             image_y = float(image_height) / 2.0 if image_height > 0.0 else -1.0
 
+        if image_width <= 0.0 or image_height <= 0.0:
+            return None
+
+        if clamp_outside:
+            max_x = max(1.0, image_width)
+            max_y = max(1.0, image_height)
+            clamped_x = min(max(float(image_x), 1.0), max_x)
+            clamped_y = min(max(float(image_y), 1.0), max_y)
+            return (clamped_x, clamped_y)
+
         if (
-            image_width <= 0.0
-            or image_height <= 0.0
-            or image_x <= 0.0
+            image_x <= 0.0
             or image_y <= 0.0
             or image_x >= image_width
             or image_y >= image_height
         ):
             return None
         return (image_x, image_y)
+
+    erase_mode_active = split_key in getattr(view, "_word_box_erase_mode_keys", set())
+    active_dialog = getattr(view, "_active_word_edit_dialog", None)
+    if erase_mode_active and getattr(active_dialog, "_split_key", None) == split_key:
+        raw_button = getattr(event, "button", None)
+        raw_buttons = getattr(event, "buttons", None)
+        mouse_button: int | None = None
+        left_button_down: bool | None = None
+        if raw_button is not None:
+            try:
+                mouse_button = int(raw_button)
+            except Exception:
+                mouse_button = None
+        if raw_buttons is not None:
+            try:
+                left_button_down = bool(int(raw_buttons) & 1)
+            except Exception:
+                left_button_down = None
+
+        if event_type in {"mousedown", "mousemove", "mouseup", "mouseleave", "click"}:
+            if event_type == "mousedown" and mouse_button not in (None, 0):
+                return
+
+            coords = _event_coords(clamp_outside=True)
+            if event_type == "click":
+                # Ignore click-to-set-split-marker while erase-box mode is active.
+                return
+
+            # If the left button is released outside the image, some browsers
+            # won't dispatch a local mouseup. Finalize on the next move/leave.
+            if (
+                event_type in {"mousemove", "mouseleave"}
+                and split_key in getattr(view, "_word_box_erase_drag_start", {})
+                and left_button_down is False
+            ):
+                active_dialog._handle_box_erase_drag_event("mouseup", coords)
+                return
+
+            if event_type == "mouseleave":
+                # Keep drag box pinned at the nearest edge when cursor exits image.
+                active_dialog._handle_box_erase_drag_event("mousemove", coords)
+            else:
+                active_dialog._handle_box_erase_drag_event(event_type, coords)
+            return
 
     if event_type == "mouseenter":
         view._word_split_hover_keys.add(split_key)
@@ -266,6 +362,7 @@ class WordEditDialog:
             0.0,
             0.0,
         )
+        self._pending_erase_rects: list[tuple[float, float, float, float]] = []
 
         # Neighbour words
         line_match = view._line_match_by_index(line_index)
@@ -316,6 +413,238 @@ class WordEditDialog:
         self._vertical_split_button: Any = None
         self._saved_image_ref: Any = None
         self._saved_image_size: Any = None
+
+    def _handle_box_erase_drag_event(
+        self,
+        event_type: str,
+        coords: tuple[float, float] | None,
+    ) -> None:
+        split_key = self._split_key
+        view = self._view
+
+        if split_key not in view._word_box_erase_mode_keys:
+            return
+        if coords is None:
+            return
+
+        if event_type == "mousedown":
+            view._word_box_erase_drag_start[split_key] = coords
+            view._word_box_erase_drag_current[split_key] = coords
+            render_word_split_marker(view, split_key)
+            return
+
+        if event_type == "mousemove":
+            if split_key in view._word_box_erase_drag_start:
+                view._word_box_erase_drag_current[split_key] = coords
+                render_word_split_marker(view, split_key)
+            return
+
+        if event_type == "mouseup":
+            start = view._word_box_erase_drag_start.get(split_key)
+            if start is None:
+                return
+            view._word_box_erase_drag_current[split_key] = coords
+            self._erase_drawn_box(start, coords)
+            view._word_box_erase_drag_start.pop(split_key, None)
+            view._word_box_erase_drag_current.pop(split_key, None)
+            render_word_split_marker(view, split_key)
+
+    def _toggle_box_erase_mode(self) -> None:
+        view = self._view
+        split_key = self._split_key
+        if split_key in view._word_box_erase_mode_keys:
+            view._word_box_erase_mode_keys.discard(split_key)
+            view._word_box_erase_drag_start.pop(split_key, None)
+            view._word_box_erase_drag_current.pop(split_key, None)
+            view._safe_notify("Box erase disabled", type_="info")
+        else:
+            view._word_box_erase_mode_keys.add(split_key)
+            view._safe_notify("Box erase enabled: drag on image to erase", type_="info")
+        render_word_split_marker(view, split_key)
+
+    def _resolve_current_preview_bbox(
+        self,
+        *,
+        use_pending_deltas: bool,
+    ) -> tuple[float, float, float, float] | None:
+        view = self._view
+        line_word_match = view._line_word_match_by_ocr_index(
+            self._line_index,
+            self._split_word_index,
+        )
+        if line_word_match is None:
+            view._safe_notify(
+                "Selected word is no longer available",
+                type_="warning",
+            )
+            return None
+
+        line_match = view._line_match_by_index(self._line_index)
+        page_image = getattr(line_match, "page_image", None) if line_match else None
+        preview_bbox = None
+        if page_image is not None:
+            try:
+                preview_bbox = view.bbox.preview_bbox_for_word(
+                    line_word_match,
+                    page_image,
+                    line_index=self._line_index,
+                    word_index=self._split_word_index,
+                    bbox_preview_deltas=(
+                        self._pending_bbox_deltas if use_pending_deltas else None
+                    ),
+                )
+            except Exception:
+                preview_bbox = None
+
+        if preview_bbox is None:
+            word_object = getattr(line_word_match, "word_object", None)
+            bbox = getattr(word_object, "bounding_box", None)
+            if bbox is None:
+                view._safe_notify(
+                    "Cannot erase: invalid word bounding box",
+                    type_="warning",
+                )
+                return None
+
+            # Fallback path: normalize to pixel coordinates when word bbox is
+            # stored normalized and no preview bbox is available.
+            if bool(getattr(bbox, "is_normalized", False)):
+                page_state = getattr(view, "_page_state", None)
+                page = getattr(page_state, "current_page", None) if page_state else None
+                page_image = (
+                    getattr(page, "cv2_numpy_page_image", None) if page else None
+                )
+                image_shape = getattr(page_image, "shape", None)
+
+                page_width = float(getattr(page, "width", 0.0) or 0.0)
+                page_height = float(getattr(page, "height", 0.0) or 0.0)
+                if (
+                    (page_width <= 0.0 or page_height <= 0.0)
+                    and image_shape is not None
+                    and len(image_shape) >= 2
+                ):
+                    page_height = float(image_shape[0])
+                    page_width = float(image_shape[1])
+
+                if page_width > 0.0 and page_height > 0.0 and hasattr(bbox, "scale"):
+                    try:
+                        bbox = bbox.scale(page_width, page_height)
+                    except Exception:
+                        view._safe_notify(
+                            "Cannot erase: failed to scale normalized word bbox",
+                            type_="warning",
+                        )
+                        return None
+
+            preview_bbox = (
+                float(getattr(bbox, "minX", 0.0)),
+                float(getattr(bbox, "minY", 0.0)),
+                float(getattr(bbox, "maxX", 0.0)),
+                float(getattr(bbox, "maxY", 0.0)),
+            )
+
+        return (
+            float(preview_bbox[0]),
+            float(preview_bbox[1]),
+            float(preview_bbox[2]),
+            float(preview_bbox[3]),
+        )
+
+    def _erase_drawn_box(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+    ) -> None:
+        view = self._view
+        if view.erase_pixels_rect_callback is None:
+            view._safe_notify("Erase pixels function not available", type_="warning")
+            return
+
+        image_width, image_height = view._word_split_image_sizes.get(
+            self._split_key,
+            (0.0, 0.0),
+        )
+        if image_width <= 0.0 or image_height <= 0.0:
+            view._safe_notify("Cannot erase: missing word image size", type_="warning")
+            return
+
+        sx, sy = start
+        ex, ey = end
+        left_local = max(0.0, min(float(sx), float(ex)))
+        right_local = min(float(image_width), max(float(sx), float(ex)))
+        top_local = max(0.0, min(float(sy), float(ey)))
+        bottom_local = min(float(image_height), max(float(sy), float(ey)))
+
+        if right_local <= left_local or bottom_local <= top_local:
+            view._safe_notify("Erase area is empty", type_="warning")
+            return
+
+        preview_bbox = self._resolve_current_preview_bbox(use_pending_deltas=True)
+        if preview_bbox is None:
+            return
+
+        x1, y1, x2, y2 = preview_bbox
+        width = max(0.0, x2 - x1)
+        height = max(0.0, y2 - y1)
+        if width <= 0.0 or height <= 0.0:
+            view._safe_notify(
+                "Cannot erase: invalid word bounding box",
+                type_="warning",
+            )
+            return
+
+        fx1 = left_local / float(image_width)
+        fx2 = right_local / float(image_width)
+        fy1 = top_local / float(image_height)
+        fy2 = bottom_local / float(image_height)
+
+        rx1 = x1 + width * fx1
+        rx2 = x1 + width * fx2
+        ry1 = y1 + height * fy1
+        ry2 = y1 + height * fy2
+
+        if rx2 <= rx1 or ry2 <= ry1:
+            view._safe_notify("Erase area is empty", type_="warning")
+            return
+
+        self._pending_erase_rects.append((rx1, ry1, rx2, ry2))
+        preview_rect = (
+            max(0.0, min(1.0, fx1)),
+            max(0.0, min(1.0, fy1)),
+            max(0.0, min(1.0, fx2)),
+            max(0.0, min(1.0, fy2)),
+        )
+        view._word_box_erase_preview_rects.setdefault(self._split_key, []).append(
+            preview_rect
+        )
+        self._refresh_open_dialog_content()
+        render_word_split_marker(view, self._split_key)
+        view._safe_notify("Staged erase area; click Apply to commit", type_="info")
+
+    def _apply_pending_erase_rects(self) -> bool:
+        view = self._view
+        if not self._pending_erase_rects:
+            return True
+        if view.erase_pixels_rect_callback is None:
+            view._safe_notify("Erase pixels function not available", type_="warning")
+            return False
+
+        committed = 0
+        for rx1, ry1, rx2, ry2 in list(self._pending_erase_rects):
+            if view.erase_pixels_rect_callback(rx1, ry1, rx2, ry2):
+                committed += 1
+            else:
+                view._safe_notify("Failed to apply staged erase", type_="warning")
+                return False
+
+        self._pending_erase_rects.clear()
+        view._word_box_erase_preview_rects.pop(self._split_key, None)
+        view.renderer.refresh_local_line_match_from_line_object(self._line_index)
+        view.renderer.rerender_word_column(self._line_index, self._split_word_index)
+        view._safe_notify(
+            f"Applied {committed} staged erase region(s)", type_="positive"
+        )
+        return True
 
     # -- Word match helpers -------------------------------------------------
 
@@ -492,7 +821,7 @@ class WordEditDialog:
     # -- Zoom ---------------------------------------------------------------
 
     def _set_current_zoom(self, value: object) -> None:
-        if value not in (1, 2, 5):
+        if value not in (1, 2, 5, 10):
             return
         self._current_zoom = float(value)
         self._dialog_card.style(self._dialog_card_style_for_content())
@@ -789,6 +1118,89 @@ class WordEditDialog:
         )
         self._refresh_open_dialog_content()
 
+    def _erase_to_marker(self, direction: str) -> None:
+        """Erase pixels from the current word bbox toward the active marker."""
+        view = self._view
+        if view.erase_pixels_rect_callback is None:
+            view._safe_notify("Erase pixels function not available", type_="warning")
+            return
+
+        preview_bbox = self._resolve_current_preview_bbox(use_pending_deltas=True)
+        if preview_bbox is None:
+            return
+
+        x1, y1, x2, y2 = preview_bbox
+        width = max(0.0, x2 - x1)
+        height = max(0.0, y2 - y1)
+        if width <= 0.0 or height <= 0.0:
+            view._safe_notify(
+                "Cannot erase: invalid word bounding box",
+                type_="warning",
+            )
+            return
+
+        split_x_fraction = view._word_split_fractions.get(self._split_key)
+        split_y_fraction = view._word_split_y_fractions.get(self._split_key)
+        split_y_px = view._word_split_marker_y.get(self._split_key)
+        image_width, image_height = view._word_split_image_sizes.get(
+            self._split_key,
+            (0.0, 0.0),
+        )
+
+        if direction in {"left", "right"}:
+            if split_x_fraction is None:
+                view._safe_notify(
+                    "Click inside the word image to place a marker first",
+                    type_="warning",
+                )
+                return
+            fx = float(split_x_fraction)
+            if fx <= 0.0 or fx >= 1.0:
+                view._safe_notify("Marker is out of bounds", type_="warning")
+                return
+            marker_x = x1 + (width * fx)
+            if direction == "left":
+                erase_rect = (x1, y1, marker_x, y2)
+            else:
+                erase_rect = (marker_x, y1, x2, y2)
+        elif direction in {"above", "below"}:
+            if split_y_fraction is None:
+                if split_y_px is None or image_height <= 0.0:
+                    view._safe_notify(
+                        "Click inside the word image to place a marker first",
+                        type_="warning",
+                    )
+                    return
+                fy = float(split_y_px) / float(image_height)
+            else:
+                fy = float(split_y_fraction)
+
+            if fy <= 0.0 or fy >= 1.0:
+                view._safe_notify("Marker is out of bounds", type_="warning")
+                return
+
+            marker_y = y1 + (height * fy)
+            if direction == "above":
+                erase_rect = (x1, y1, x2, marker_y)
+            else:
+                erase_rect = (x1, marker_y, x2, y2)
+        else:
+            view._safe_notify("Unsupported erase direction", type_="warning")
+            return
+
+        rx1, ry1, rx2, ry2 = erase_rect
+        if rx2 <= rx1 or ry2 <= ry1:
+            view._safe_notify("Erase area is empty", type_="warning")
+            return
+
+        if view.erase_pixels_rect_callback(rx1, ry1, rx2, ry2):
+            view.renderer.refresh_local_line_match_from_line_object(self._line_index)
+            view.renderer.rerender_word_column(self._line_index, self._split_word_index)
+            self._refresh_open_dialog_content()
+            view._safe_notify("Erased pixels in word region", type_="positive")
+        else:
+            view._safe_notify("Failed to erase pixels", type_="warning")
+
     def _reset_pending_bbox_nudges(self) -> None:
         self._pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
         self._refresh_open_dialog_content()
@@ -873,6 +1285,8 @@ class WordEditDialog:
         self._refresh_open_dialog_content()
 
     def _apply_and_close(self) -> None:
+        if not self._apply_pending_erase_rects():
+            return
         left, right, top, bottom = self._pending_bbox_deltas
         if left != 0.0 or right != 0.0 or top != 0.0 or bottom != 0.0:
             self._apply_pending_bbox_nudges(refine_after=False)
@@ -894,6 +1308,12 @@ class WordEditDialog:
         view._word_split_hover_positions.pop(split_key, None)
         view._word_split_hover_keys.discard(split_key)
         view._word_split_y_fractions.pop(split_key, None)
+        view._word_box_erase_mode_keys.discard(split_key)
+        view._word_box_erase_drag_start.pop(split_key, None)
+        view._word_box_erase_drag_current.pop(split_key, None)
+        view._word_box_erase_preview_rects.pop(split_key, None)
+        if view._active_word_edit_dialog is self:
+            view._active_word_edit_dialog = None
         if view.renderer._word_dialog_refresh_key == split_key:
             view.renderer._word_dialog_refresh_key = None
             view.renderer._word_dialog_refresh_callback = None
@@ -967,12 +1387,13 @@ class WordEditDialog:
                         )
 
                         self._render_current_interactive_image()
+                        view._active_word_edit_dialog = self
                         view.renderer._word_dialog_refresh_key = split_key
                         view.renderer._word_dialog_refresh_callback = (
                             self._refresh_open_dialog_content
                         )
                         ui.toggle(
-                            options={1: "1x", 2: "2x", 5: "5x"},
+                            options={1: "1x", 2: "2x", 5: "5x", 10: "10x"},
                             value=2,
                             on_change=lambda event: self._set_current_zoom(event.value),
                         ).props("dense")
@@ -1263,6 +1684,15 @@ class WordEditDialog:
                         crop_right_button.props(
                             'data-testid="dialog-crop-right-button"'
                         )
+
+                    with ui.row().classes("items-center gap-2"):
+                        erase_mode_active = split_key in view._word_box_erase_mode_keys
+                        erase_box_button = ui.button(
+                            "Erase Box On" if erase_mode_active else "Erase Box",
+                            on_click=lambda _event: self._toggle_box_erase_mode(),
+                        ).tooltip("Toggle draw-box erase mode")
+                        style_word_text_button(erase_box_button, compact=True)
+                        erase_box_button.props('data-testid="dialog-erase-box-button"')
 
                     with ui.row().classes("items-center gap-2"):
                         refine_preview_button = ui.button(

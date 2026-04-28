@@ -42,6 +42,7 @@ SetWordsValidatedAction: TypeAlias = Callable[[list[WordKey], bool], bool]
 SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
 ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
 NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float, bool], bool]
+EraseRectAction: TypeAlias = Callable[[float, float, float, float], bool]
 EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
 SetWordAttributesAction: TypeAlias = Callable[
     [int, int, bool, bool, bool, bool, bool], bool
@@ -71,6 +72,7 @@ class WordMatchView:
         rebox_word_callback: ReboxAction | None = None,
         add_word_callback: Callable[[float, float, float, float], bool] | None = None,
         nudge_word_bbox_callback: NudgeAction | None = None,
+        erase_pixels_rect_callback: EraseRectAction | None = None,
         refine_words_callback: WordKeysAction | None = None,
         expand_then_refine_words_callback: WordKeysAction | None = None,
         expand_word_bboxes_callback: WordKeysAction | None = None,
@@ -128,6 +130,7 @@ class WordMatchView:
             add_word_callback
         )
         self.nudge_word_bbox_callback = nudge_word_bbox_callback
+        self.erase_pixels_rect_callback = erase_pixels_rect_callback
         self.refine_words_callback = refine_words_callback
         self.expand_then_refine_words_callback = expand_then_refine_words_callback
         self.expand_word_bboxes_callback = expand_word_bboxes_callback
@@ -179,6 +182,13 @@ class WordMatchView:
         self._word_crop_button_refs: dict[
             WordKey, tuple[object, object, object, object]
         ] = {}
+        self._word_box_erase_mode_keys: set[WordKey] = set()
+        self._word_box_erase_drag_start: dict[WordKey, tuple[float, float]] = {}
+        self._word_box_erase_drag_current: dict[WordKey, tuple[float, float]] = {}
+        self._word_box_erase_preview_rects: dict[
+            WordKey, list[tuple[float, float, float, float]]
+        ] = {}
+        self._active_word_edit_dialog: object | None = None
         self.notify_callback = notify_callback
         self._notified_error_keys: set[str] = set()
         logger.debug("WordMatchView initialization complete")

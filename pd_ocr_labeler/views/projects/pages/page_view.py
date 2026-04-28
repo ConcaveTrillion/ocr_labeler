@@ -56,6 +56,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             refine_bboxes=self._refine_bboxes_async,
             expand_refine_bboxes=self._expand_refine_bboxes_async,
             reload_ocr=self._reload_ocr_async,
+            reload_ocr_edited=self._reload_ocr_edited_async,
             rematch_gt=self._rematch_gt_async,
         )
 
@@ -77,6 +78,9 @@ class PageView:  # pragma: no cover - UI wrapper file
             if self.page_action_callbacks
             else None,
             on_reload_ocr=self.page_action_callbacks.reload_ocr
+            if self.page_action_callbacks
+            else None,
+            on_reload_ocr_edited=self.page_action_callbacks.reload_ocr_edited
             if self.page_action_callbacks
             else None,
             on_rematch_gt=self.page_action_callbacks.rematch_gt
@@ -359,7 +363,7 @@ class PageView:  # pragma: no cover - UI wrapper file
         self,
         _event: PageActionEvent = None,
     ):  # pragma: no cover - UI side effects
-        """Reload the current page with OCR processing asynchronously."""
+        """Reload OCR using the original source image asynchronously."""
         if self.project_view_model.is_project_loading:
             logger.debug("Reload OCR blocked - currently loading")
             return
@@ -404,6 +408,57 @@ class PageView:  # pragma: no cover - UI wrapper file
             except Exception as exc:  # noqa: BLE001
                 logger.error("OCR reload failed: %s", exc)
                 self._notify(f"OCR reload failed: {exc}", "negative")
+
+    async def _reload_ocr_edited_async(
+        self,
+        _event: PageActionEvent = None,
+    ):  # pragma: no cover - UI side effects
+        """Reload OCR using the current in-memory edited page image."""
+        if self.project_view_model.is_project_loading:
+            logger.debug("Reload OCR (edited image) blocked - currently loading")
+            return
+
+        async with self._action_context(
+            "Reloading OCR from edited image...", show_spinner=True
+        ):
+            logger.debug("Starting async OCR reload from edited image")
+            await asyncio.sleep(0.1)
+            try:
+                success = self.project_view_model.command_reload_page_with_ocr(
+                    use_edited_image=True
+                )
+                if success:
+                    project_state = getattr(
+                        self.project_view_model, "_project_state", None
+                    )
+                    current_page = None
+                    if project_state is not None:
+                        project = getattr(project_state, "project", None)
+                        page_index = getattr(
+                            project_state,
+                            "current_page_index",
+                            self.project_view_model.current_page_index,
+                        )
+                        if (
+                            project is not None
+                            and hasattr(project, "pages")
+                            and 0 <= page_index < len(project.pages)
+                        ):
+                            current_page = project.pages[page_index]
+
+                    if current_page is not None:
+                        self._sync_text_tabs(current_page)
+
+                    self.page_state_view_model.command_refresh_images()
+
+                    logger.info("OCR reloaded from edited image successfully")
+                    self._notify("Page reloaded with OCR from edited image", "positive")
+                else:
+                    logger.warning("Failed to reload OCR from edited image")
+                    self._notify("Failed to reload OCR from edited image", "negative")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("OCR reload from edited image failed: %s", exc)
+                self._notify(f"OCR reload from edited image failed: {exc}", "negative")
 
     async def _rematch_gt_async(
         self,

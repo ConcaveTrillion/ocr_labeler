@@ -455,13 +455,11 @@ class DocTRExportOperations:
                 logger.warning("No image for %s", json_path.name)
                 continue
 
-            cv2_image = cv2_imread(str(image_path))
+            cv2_image = _resolve_page_image(page, image_path)
             if cv2_image is None:
                 stats.pages_skipped_no_image += 1
                 logger.warning("cv2 failed to load image: %s", image_path)
                 continue
-
-            page.cv2_numpy_page_image = cv2_image
 
             # Resolve GT-first text and bboxes on all words
             _prepare_page_gt_first(page)
@@ -622,6 +620,20 @@ def _resolve_bbox(word: Word):
     return getattr(word, "bounding_box", None)
 
 
+def _resolve_page_image(page: Page, image_path: Path):
+    """Return page image, preferring in-memory edits over on-disk original."""
+    existing = getattr(page, "cv2_numpy_page_image", None)
+    if getattr(existing, "shape", None) is not None:
+        return existing
+
+    cv2_image = cv2_imread(str(image_path))
+    if cv2_image is None:
+        return None
+
+    page.cv2_numpy_page_image = cv2_image
+    return cv2_image
+
+
 # ---------------------------------------------------------------------------
 # In-memory single-page export (used by the GUI)
 # ---------------------------------------------------------------------------
@@ -649,13 +661,11 @@ def export_page_to_doctr(
     """
     stats = _MutableStats(pages_scanned=1)
 
-    cv2_image = cv2_imread(str(image_path))
+    cv2_image = _resolve_page_image(page, image_path)
     if cv2_image is None:
         logger.warning("cv2 failed to load image: %s", image_path)
         stats.pages_skipped_no_image += 1
         return stats.freeze()
-
-    page.cv2_numpy_page_image = cv2_image
     _prepare_page_gt_first(page)
 
     output_dir.mkdir(parents=True, exist_ok=True)

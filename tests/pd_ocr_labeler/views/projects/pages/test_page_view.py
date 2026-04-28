@@ -209,3 +209,39 @@ async def test_reload_ocr_async_forces_text_and_image_sync(monkeypatch):
     project_view_model.command_reload_page_with_ocr.assert_called_once()
     page_view._sync_text_tabs.assert_called_once_with(page)
     page_state_view_model.command_refresh_images.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reload_ocr_edited_async_forces_text_and_image_sync(monkeypatch):
+    """Reload OCR (edited image) should call command with edited-image flag and refresh views."""
+
+    page = SimpleNamespace(name="page_001.png")
+    project_state = SimpleNamespace(
+        current_page_index=0,
+        project=SimpleNamespace(pages=[page]),
+    )
+    project_view_model = SimpleNamespace(
+        is_project_loading=False,
+        current_page_index=0,
+        command_reload_page_with_ocr=Mock(return_value=True),
+        _project_state=project_state,
+    )
+    page_state_view_model = SimpleNamespace(command_refresh_images=Mock())
+
+    page_view = PageView(project_view_model, page_state_view_model)
+    page_view._sync_text_tabs = Mock()
+    page_view._notify = Mock()
+
+    @asynccontextmanager
+    async def _noop_action_context(*_args, **_kwargs):
+        yield
+
+    page_view._action_context = _noop_action_context
+
+    await page_view._reload_ocr_edited_async()
+
+    project_view_model.command_reload_page_with_ocr.assert_called_once_with(
+        use_edited_image=True
+    )
+    page_view._sync_text_tabs.assert_called_once_with(page)
+    page_state_view_model.command_refresh_images.assert_called_once()

@@ -234,6 +234,9 @@ class TextTabs:
         nudge_word_bbox_callback = _make_page_callback(
             page_state, "nudge_word_bbox", "Nudge word bbox"
         )
+        erase_pixels_rect_callback = _make_page_callback(
+            page_state, "erase_pixels_rect", "Erase pixels in rectangle"
+        )
         refine_words_callback = _make_page_callback(
             page_state, "refine_words", "Refine selected words"
         )
@@ -354,6 +357,7 @@ class TextTabs:
             rebox_word_callback=rebox_word_callback,
             add_word_callback=add_word_callback,
             nudge_word_bbox_callback=nudge_word_bbox_callback,
+            erase_pixels_rect_callback=erase_pixels_rect_callback,
             refine_words_callback=refine_words_callback,
             expand_then_refine_words_callback=expand_then_refine_words_callback,
             expand_word_bboxes_callback=expand_word_bboxes_callback,

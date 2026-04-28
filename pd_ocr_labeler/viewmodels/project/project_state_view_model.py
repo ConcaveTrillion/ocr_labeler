@@ -405,7 +405,7 @@ class ProjectStateViewModel(BaseViewModel):
             logger.exception("Error re-matching ground truth")
             return False
 
-    def command_reload_page_with_ocr(self) -> bool:
+    def command_reload_page_with_ocr(self, use_edited_image: bool = False) -> bool:
         """Command to reload the current page with OCR processing.
 
         Returns:
@@ -415,7 +415,9 @@ class ProjectStateViewModel(BaseViewModel):
             if not self._project_state:
                 logger.error("No project state available for OCR reload")
                 return False
-            self._project_state.reload_current_page_with_ocr()
+            self._project_state.reload_current_page_with_ocr(
+                use_edited_image=use_edited_image
+            )
             return True
         except Exception:
             logger.exception("Error reloading page with OCR")

@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from nicegui import Event
+from numpy import copy as np_copy
+from pd_book_tools.ocr.ground_truth_matching import (
+    update_line_with_best_matched_ground_truth_text,
+)
 from pd_book_tools.ocr.page import Page  # type: ignore
 
 from ..models.page_model import PageModel
@@ -922,14 +926,22 @@ class PageState:
             return None
 
     @notify_on_completion
-    def reload_page_with_ocr(self, page_index: int) -> None:
-        """Reload a specific page with OCR processing, bypassing any saved version.
+    def reload_page_with_ocr(
+        self, page_index: int, use_edited_image: bool = False
+    ) -> None:
+        """Reload a specific page with OCR processing.
 
         Args:
-            page_index: Zero-based page index to reload
+            page_index: Zero-based page index to reload.
+            use_edited_image: When True, rerun OCR on current in-memory edited
+                image pixels. When False, rerun OCR from original source image.
         """
         if not self._project:
             logger.warning("PageState.reload_page_with_ocr: no project context set")
+            return
+
+        if use_edited_image:
+            self._reload_page_with_ocr_from_current_image(page_index)
             return
 
         if 0 <= page_index < len(self._project.pages):
@@ -953,6 +965,95 @@ class PageState:
             logger.warning(
                 "PageState.reload_page_with_ocr: page_index %s out of range", page_index
             )
+
+    def _reload_page_with_ocr_from_current_image(self, page_index: int) -> None:
+        """Rerun OCR on current in-memory page image (post-edit pixels)."""
+        if not self._project or not self._project_state:
+            logger.warning(
+                "PageState._reload_page_with_ocr_from_current_image: missing project context"
+            )
+            return
+
+        if page_index < 0 or page_index >= len(self._project.pages):
+            logger.warning(
+                "PageState._reload_page_with_ocr_from_current_image: page_index %s out of range",
+                page_index,
+            )
+            return
+
+        current_page = self._project.pages[page_index]
+        if current_page is None:
+            logger.warning(
+                "PageState._reload_page_with_ocr_from_current_image: no current page loaded"
+            )
+            return
+
+        image = getattr(current_page, "cv2_numpy_page_image", None)
+        if image is None or getattr(image, "shape", None) is None:
+            logger.warning(
+                "PageState._reload_page_with_ocr_from_current_image: missing current page image; falling back to original-image reload"
+            )
+            self.reload_page_with_ocr(page_index, use_edited_image=False)
+            return
+
+        image_path = self._project.image_paths[page_index]
+        source_identifier = image_path.name
+
+        try:
+            from pd_book_tools.ocr.document import Document
+
+            predictor = self.page_ops._get_or_create_predictor()
+            doc = Document.from_image_ocr_via_doctr(
+                np_copy(image),
+                source_identifier=source_identifier,
+                predictor=predictor,
+            )
+            page_obj: Page = doc.pages[0]
+        except Exception:
+            logger.exception(
+                "PageState._reload_page_with_ocr_from_current_image: OCR parse failed"
+            )
+            return
+
+        page_obj.image_path = str(image_path)  # type: ignore[attr-defined]
+        page_obj.name = source_identifier  # type: ignore[attr-defined]
+        page_obj.index = page_index  # type: ignore[attr-defined]
+
+        try:
+            self.page_ops._reorganize_page_if_available(page_obj)
+        except Exception:
+            logger.debug(
+                "PageState._reload_page_with_ocr_from_current_image: page reorganize failed",
+                exc_info=True,
+            )
+
+        ground_truth_map = getattr(self._project, "ground_truth_map", {}) or {}
+        gt_text = self._project_state.find_ground_truth_text(
+            source_identifier, ground_truth_map
+        )
+        if gt_text:
+            with contextlib.suppress(Exception):
+                page_obj.add_ground_truth(gt_text)
+
+        with contextlib.suppress(Exception):
+            page_obj.ocr_provenance = self.page_ops._build_live_ocr_provenance(
+                source_lib=self.page_ops._ocr_source_lib
+            )
+
+        self._invalidate_page_image_cache(page_index)
+
+        self._project.pages[page_index] = page_obj
+        self._project_state.clear_page_model(page_index)
+        page_model = self._project_state.upsert_page_model(
+            page_index=page_index,
+            page=page_obj,
+            source="ocr",
+        )
+
+        self.current_page = page_obj
+        self.current_page_model = page_model
+        self._refresh_page_overlay_images(page_obj)
+        self._invalidate_text_cache()
 
     def _invalidate_page_image_cache(self, page_index: int) -> None:
         """Remove all cached overlay image files for a single page."""
@@ -982,13 +1083,16 @@ class PageState:
                 page_number,
             )
 
-    def reload_current_page_with_ocr(self, current_page_index: int) -> None:
-        """Reload the current page with OCR processing, bypassing any saved version.
+    def reload_current_page_with_ocr(
+        self, current_page_index: int, use_edited_image: bool = False
+    ) -> None:
+        """Reload the current page with OCR processing.
 
         Args:
-            current_page_index: Zero-based index of the current page
+            current_page_index: Zero-based index of the current page.
+            use_edited_image: When True, rerun OCR from edited in-memory image.
         """
-        self.reload_page_with_ocr(current_page_index)
+        self.reload_page_with_ocr(current_page_index, use_edited_image=use_edited_image)
 
     def save_current_page(
         self,
@@ -1121,6 +1225,8 @@ class PageState:
         line_index: int,
         *args,
         _finalize: str = "structural",
+        _rematch_ground_truth: bool = True,
+        _rematch_line_ground_truth: bool = False,
         _reraise: bool = False,
         **kwargs,
     ) -> bool:
@@ -1136,6 +1242,10 @@ class PageState:
             *args: Positional arguments forwarded to the block method.
             _finalize: ``"structural"`` or ``"bbox"`` — selects the
                 post-success finalizer.
+            _rematch_ground_truth: Whether structural finalize should re-run
+                page-wide ground-truth rematching.
+            _rematch_line_ground_truth: Whether to re-match only the edited
+                line from its pre-edit ground-truth text snapshot.
             _reraise: When *True*, re-raise exceptions instead of
                 returning *False*.
             **kwargs: Keyword arguments forwarded to the operation.
@@ -1155,11 +1265,28 @@ class PageState:
             )
             return False
 
+        line = lines[line_index]
+        line_ground_truth_snapshot = None
+        if _rematch_line_ground_truth:
+            line_ground_truth_snapshot = str(
+                getattr(line, "ground_truth_text", "") or ""
+            )
+
         try:
-            result = getattr(lines[line_index], block_op_name)(*args, **kwargs)
+            result = getattr(line, block_op_name)(*args, **kwargs)
             if result:
+                if _rematch_line_ground_truth:
+                    self._rematch_edited_line_ground_truth(
+                        line,
+                        line_ground_truth_snapshot,
+                        operation_label,
+                    )
                 if _finalize == "structural":
-                    self._finalize_structural_edit(page, operation_label)
+                    self._finalize_structural_edit(
+                        page,
+                        operation_label,
+                        rematch_ground_truth=_rematch_ground_truth,
+                    )
                 else:
                     self._finalize_bbox_edit(page)
             return result
@@ -1168,6 +1295,34 @@ class PageState:
             if _reraise:
                 raise
             return False
+
+    def _rematch_edited_line_ground_truth(
+        self,
+        line: object,
+        line_ground_truth_snapshot: str | None,
+        operation: str,
+    ) -> None:
+        """Re-match one edited line using the GT it had before the edit."""
+        gt_text = str(line_ground_truth_snapshot or "")
+        if not gt_text.strip():
+            return
+
+        try:
+            if hasattr(line, "unmatched_ground_truth_words"):
+                setattr(line, "unmatched_ground_truth_words", [])
+
+            for word in list(getattr(line, "words", []) or []):
+                with contextlib.suppress(Exception):
+                    word.ground_truth_text = ""
+
+            update_line_with_best_matched_ground_truth_text(
+                line=line,
+                ground_truth_text=gt_text,
+                previous_ground_truth_text="",
+            )
+            logger.debug("Re-matched edited line after %s", operation)
+        except Exception:
+            logger.exception("Failed to re-match edited line after %s", operation)
 
     def _dispatch_word_op(
         self,
@@ -1358,7 +1513,12 @@ class PageState:
             bool: True if merge succeeded, False otherwise.
         """
         return self._dispatch_block_op(
-            "merge_word_left", "word merge-left", line_index, word_index
+            "merge_word_left",
+            "word merge-left",
+            line_index,
+            word_index,
+            _rematch_ground_truth=False,
+            _rematch_line_ground_truth=True,
         )
 
     def merge_word_right(self, line_index: int, word_index: int) -> bool:
@@ -1372,7 +1532,12 @@ class PageState:
             bool: True if merge succeeded, False otherwise.
         """
         return self._dispatch_block_op(
-            "merge_word_right", "word merge-right", line_index, word_index
+            "merge_word_right",
+            "word merge-right",
+            line_index,
+            word_index,
+            _rematch_ground_truth=False,
+            _rematch_line_ground_truth=True,
         )
 
     def split_word(
@@ -1498,6 +1663,74 @@ class PageState:
         return self._dispatch_line_op(
             "add_word_to_page", "add word", x1, y1, x2, y2, text=text, _finalize="bbox"
         )
+
+    def erase_pixels_rect(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        fill_value: int = 255,
+    ) -> bool:
+        """Erase pixels in a rectangle on the current page image.
+
+        Args:
+            x1: Left x-coordinate in page pixel space.
+            y1: Top y-coordinate in page pixel space.
+            x2: Right x-coordinate in page pixel space.
+            y2: Bottom y-coordinate in page pixel space.
+            fill_value: Fill intensity in [0, 255] used for erased pixels.
+
+        Returns:
+            bool: True if image pixels were erased, False otherwise.
+        """
+        page = self.current_page
+        if page is None:
+            logger.warning("erase_pixels_rect: no current page")
+            return False
+
+        image = getattr(page, "cv2_numpy_page_image", None)
+        shape = getattr(image, "shape", None)
+        if shape is None or len(shape) < 2:
+            logger.warning("erase_pixels_rect: page image unavailable")
+            return False
+
+        try:
+            height = int(shape[0])
+            width = int(shape[1])
+        except Exception:
+            logger.warning("erase_pixels_rect: invalid page image shape")
+            return False
+
+        if width <= 0 or height <= 0:
+            logger.warning("erase_pixels_rect: empty page image")
+            return False
+
+        left = max(0, min(width, int(round(min(x1, x2)))))
+        right = max(0, min(width, int(round(max(x1, x2)))))
+        top = max(0, min(height, int(round(min(y1, y2)))))
+        bottom = max(0, min(height, int(round(max(y1, y2)))))
+
+        if right <= left or bottom <= top:
+            logger.debug(
+                "erase_pixels_rect: rectangle out of bounds or empty (%s, %s, %s, %s)",
+                x1,
+                y1,
+                x2,
+                y2,
+            )
+            return False
+
+        clamped_fill = max(0, min(255, int(fill_value)))
+
+        try:
+            image[top:bottom, left:right] = clamped_fill
+        except Exception:
+            logger.exception("erase_pixels_rect: failed to mutate page image")
+            return False
+
+        self._finalize_bbox_edit(page)
+        return True
 
     def nudge_word_bbox(
         self,
@@ -1863,16 +2096,27 @@ class PageState:
             self._current_page_index,
         )
 
-    def _finalize_structural_edit(self, page: object, operation: str) -> None:
+    def _finalize_structural_edit(
+        self,
+        page: object,
+        operation: str,
+        *,
+        rematch_ground_truth: bool = True,
+    ) -> None:
         """Run post-success page updates after structural OCR edits."""
         self._clear_all_validation(page)
 
-        try:
-            self._rematch_page_ground_truth(page, operation)
-        except _GroundTruthRematchSkipped:
-            logger.debug("Skipping GT rematch after %s (no GT available)", operation)
-        except Exception:
-            logger.exception("Failed to re-match ground truth after %s", operation)
+        if rematch_ground_truth:
+            try:
+                self._rematch_page_ground_truth(page, operation)
+            except _GroundTruthRematchSkipped:
+                logger.debug(
+                    "Skipping GT rematch after %s (no GT available)", operation
+                )
+            except Exception:
+                logger.exception("Failed to re-match ground truth after %s", operation)
+        else:
+            logger.debug("Skipping GT rematch after %s by operation policy", operation)
 
         self._refresh_page_overlay_images(page)
         self._invalidate_text_cache()

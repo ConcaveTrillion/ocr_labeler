@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 from pd_book_tools.geometry.bounding_box import BoundingBox
 from pd_book_tools.geometry.point import Point
 from pd_book_tools.ocr.block import Block, BlockCategory, BlockChildType
@@ -46,6 +47,22 @@ def _paragraph(lines: list[Block], y: int) -> Block:
         child_type=BlockChildType.BLOCKS,
         block_category=BlockCategory.PARAGRAPH,
     )
+
+
+def test_rematch_edited_line_ground_truth_rebuilds_word_ground_truth():
+    """Line-only rematch should repopulate per-word GT from prior line GT text."""
+    page_state = PageState()
+    line = _line([_word("alpha", 0), _word("beta", 20)], 0)
+    for word in line.words:
+        word.ground_truth_text = ""
+
+    page_state._rematch_edited_line_ground_truth(
+        line,
+        "alpha beta",
+        "word merge-right",
+    )
+
+    assert [word.ground_truth_text for word in line.words] == ["alpha", "beta"]
 
 
 def test_project_state_change_refreshes_loading_cache_when_page_finishes_loading(
@@ -424,8 +441,8 @@ def test_delete_words_reapplies_ground_truth_after_delete(monkeypatch):
     assert notified == ["changed"]
 
 
-def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
-    """Successful word merge-left should re-run GT matching and refresh overlays."""
+def test_merge_word_left_preserves_in_memory_ground_truth_after_merge(monkeypatch):
+    """Word merge-left should not trigger page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -433,6 +450,8 @@ def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
     class BlockStub:
+        ground_truth_text = "edited one edited two"
+
         def merge_word_left(self, _word_index):
             return True
 
@@ -458,20 +477,33 @@ def test_merge_word_left_reapplies_ground_truth_after_merge(monkeypatch):
     page_state._project = ProjectStub()
     page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
 
+    rematch_calls = []
+    monkeypatch.setattr(
+        page_state,
+        "_rematch_edited_line_ground_truth",
+        lambda line, snapshot, operation: rematch_calls.append(
+            (line, snapshot, operation)
+        ),
+    )
+
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
     result = page_state.merge_word_left(0, 1)
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
+    assert len(rematch_calls) == 1
+    assert rematch_calls[0][0] is page.lines[0]
+    assert rematch_calls[0][1] == "edited one edited two"
+    assert rematch_calls[0][2] == "word merge-left"
 
 
-def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
-    """Successful word merge-right should re-run GT matching and refresh overlays."""
+def test_merge_word_right_preserves_in_memory_ground_truth_after_merge(monkeypatch):
+    """Word merge-right should not trigger page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -479,6 +511,8 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
     class BlockStub:
+        ground_truth_text = "edited one edited two"
+
         def merge_word_right(self, _word_index):
             return True
 
@@ -504,16 +538,29 @@ def test_merge_word_right_reapplies_ground_truth_after_merge(monkeypatch):
     page_state._project = ProjectStub()
     page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
 
+    rematch_calls = []
+    monkeypatch.setattr(
+        page_state,
+        "_rematch_edited_line_ground_truth",
+        lambda line, snapshot, operation: rematch_calls.append(
+            (line, snapshot, operation)
+        ),
+    )
+
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
     result = page_state.merge_word_right(0, 0)
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
+    assert len(rematch_calls) == 1
+    assert rematch_calls[0][0] is page.lines[0]
+    assert rematch_calls[0][1] == "edited one edited two"
+    assert rematch_calls[0][2] == "word merge-right"
 
 
 def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
@@ -1349,3 +1396,23 @@ def test_reload_page_with_ocr_invalidates_page_image_cache_and_refreshes_overlay
     assert page_state.current_page_model is reloaded_model
     assert page_state.current_page_model.cached_image_filenames is None
     assert page_state._project_state.clear_calls == [0]
+
+
+def test_erase_pixels_rect_mutates_image_and_finalizes_bbox_edit():
+    page_state = PageState()
+    page_image = np.zeros((10, 12, 3), dtype=np.uint8)
+    page = SimpleNamespace(cv2_numpy_page_image=page_image)
+    page_state.current_page = page
+
+    finalized = {}
+    page_state._finalize_bbox_edit = lambda current_page: finalized.setdefault(
+        "page", current_page
+    )
+
+    result = page_state.erase_pixels_rect(2.0, 3.0, 7.0, 8.0, fill_value=255)
+
+    assert result is True
+    assert finalized["page"] is page
+    assert np.all(page_image[3:8, 2:7] == 255)
+    assert np.all(page_image[:3, :] == 0)
+    assert np.all(page_image[8:, :] == 0)

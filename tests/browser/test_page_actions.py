@@ -41,7 +41,7 @@ def test_action_buttons_present(browser_app_url: str, browser_page) -> None:
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    page.get_by_role("button", name="Reload OCR").wait_for(state="visible")
+    page.get_by_role("button", name="Reload OCR", exact=True).wait_for(state="visible")
     page.get_by_role("button", name="Save Page").wait_for(state="visible")
     page.get_by_role("button", name="Load Page").wait_for(state="visible")
 
@@ -124,7 +124,7 @@ def test_reload_ocr_button_click(browser_app_url: str, browser_page) -> None:
     gt_value_before = gt_input.input_value()
 
     # Click Reload OCR
-    page.get_by_role("button", name="Reload OCR").click()
+    page.get_by_role("button", name="Reload OCR", exact=True).click()
     _wait_for_notification(page)
 
     # Wait for page to re-render — edit-word-button reappears

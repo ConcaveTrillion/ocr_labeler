@@ -765,7 +765,32 @@ def test_reload_current_page_with_ocr_notifies_and_refreshes_cache():
     ):
         state.reload_current_page_with_ocr()
 
-    mock_page_state.reload_page_with_ocr.assert_called_once_with(0)
+    mock_page_state.reload_page_with_ocr.assert_called_once_with(
+        0, use_edited_image=False
+    )
+    mock_invalidate.assert_called_once()
+    mock_update_cache.assert_called_once_with(force=True)
+    mock_notify.assert_called_once()
+
+
+def test_reload_current_page_with_ocr_edited_image_mode_passes_flag():
+    """Edited-image OCR reload should be forwarded to PageState with explicit flag."""
+    state = ProjectState()
+    state.current_page_index = 2
+
+    mock_page_state = MagicMock()
+
+    with (
+        patch.object(state, "get_page_state", return_value=mock_page_state),
+        patch.object(state, "_invalidate_text_cache") as mock_invalidate,
+        patch.object(state, "_update_text_cache") as mock_update_cache,
+        patch.object(state, "notify") as mock_notify,
+    ):
+        state.reload_current_page_with_ocr(use_edited_image=True)
+
+    mock_page_state.reload_page_with_ocr.assert_called_once_with(
+        2, use_edited_image=True
+    )
     mock_invalidate.assert_called_once()
     mock_update_cache.assert_called_once_with(force=True)
     mock_notify.assert_called_once()

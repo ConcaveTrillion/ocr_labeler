@@ -43,6 +43,7 @@ class ContentArea:
             on_paragraphs_selected=self._on_paragraphs_selected,
             on_word_rebox_drawn=self._on_word_rebox_drawn,
             on_word_add_drawn=self._on_word_add_drawn,
+            on_erase_rect_drawn=self._on_erase_rect_drawn,
         )
         self.text_tabs.word_match_view.selection.set_selection_change_callback(
             self._on_right_panel_words_selected
@@ -129,6 +130,28 @@ class ContentArea:
     ) -> None:
         """Apply drawn image rectangle as a new word insertion."""
         self.text_tabs.word_match_view.bbox.apply_add_word_bbox(x1, y1, x2, y2)
+
+    def _on_erase_rect_drawn(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> None:
+        """Apply drawn image rectangle as an in-place pixel erase."""
+        callback = self.text_tabs.word_match_view.erase_pixels_rect_callback
+        if callback is None:
+            self.text_tabs.word_match_view._safe_notify(
+                "Erase pixels is not available",
+                type_="warning",
+            )
+            return
+
+        if not callback(x1, y1, x2, y2):
+            self.text_tabs.word_match_view._safe_notify(
+                "Failed to erase pixels",
+                type_="warning",
+            )
 
     def _on_word_view_image_ready(self, page_index: int, _source: str) -> None:
         """Notify text tabs when the page-matched word image source becomes available."""

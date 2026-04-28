@@ -11,7 +11,9 @@ from pd_book_tools.ocr.word import Word
 from pd_ocr_labeler.models.line_match_model import LineMatch
 from pd_ocr_labeler.models.word_match_model import MatchStatus, WordMatch
 from pd_ocr_labeler.views.projects.pages.word_edit_dialog import (
+    WordEditDialog,
     handle_word_image_click,
+    handle_word_image_mouse,
     render_word_split_marker,
 )
 from pd_ocr_labeler.views.projects.pages.word_match import WordMatchView
@@ -1287,6 +1289,138 @@ def test_handle_word_image_click_falls_back_to_generic_x_coordinate(monkeypatch)
 
     assert view._word_split_fractions[split_key] == pytest.approx(0.25)
     assert view._word_split_marker_x[split_key] == pytest.approx(25.0)
+
+
+def test_handle_word_image_mouse_routes_drag_events_to_box_erase_dialog():
+    view = WordMatchView()
+    split_key = (1, 2)
+    seen: list[tuple[str, tuple[float, float] | None]] = []
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._word_box_erase_mode_keys.add(split_key)
+    view._active_word_edit_dialog = SimpleNamespace(
+        _split_key=split_key,
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
+            (event_type, coords)
+        ),
+    )
+
+    handle_word_image_mouse(
+        view,
+        1,
+        2,
+        SimpleNamespace(type="mousedown", image_x=10.0, image_y=5.0),
+    )
+    handle_word_image_mouse(
+        view,
+        1,
+        2,
+        SimpleNamespace(type="mousemove", image_x=30.0, image_y=20.0),
+    )
+    handle_word_image_mouse(
+        view,
+        1,
+        2,
+        SimpleNamespace(type="mouseup", image_x=50.0, image_y=25.0),
+    )
+    handle_word_image_mouse(
+        view,
+        1,
+        2,
+        SimpleNamespace(type="click", image_x=50.0, image_y=25.0),
+    )
+
+    assert seen == [
+        ("mousedown", (10.0, 5.0)),
+        ("mousemove", (30.0, 20.0)),
+        ("mouseup", (50.0, 25.0)),
+    ]
+    assert split_key not in view._word_split_fractions
+
+
+def test_handle_word_image_mouse_clamps_box_erase_drag_to_image_edges():
+    view = WordMatchView()
+    split_key = (0, 0)
+    seen: list[tuple[str, tuple[float, float] | None]] = []
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._word_box_erase_mode_keys.add(split_key)
+    view._active_word_edit_dialog = SimpleNamespace(
+        _split_key=split_key,
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
+            (event_type, coords)
+        ),
+    )
+
+    handle_word_image_mouse(
+        view,
+        0,
+        0,
+        SimpleNamespace(type="mousedown", image_x=10.0, image_y=5.0),
+    )
+    handle_word_image_mouse(
+        view,
+        0,
+        0,
+        SimpleNamespace(type="mousemove", image_x=150.0, image_y=-20.0),
+    )
+    handle_word_image_mouse(
+        view,
+        0,
+        0,
+        SimpleNamespace(type="mouseleave", image_x=180.0, image_y=50.0),
+    )
+
+    assert seen == [
+        ("mousedown", (10.0, 5.0)),
+        ("mousemove", (100.0, 1.0)),
+        ("mousemove", (100.0, 40.0)),
+    ]
+
+
+def test_handle_word_image_mouse_ignores_non_left_mousedown_for_box_erase():
+    view = WordMatchView()
+    split_key = (0, 0)
+    seen: list[tuple[str, tuple[float, float] | None]] = []
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._word_box_erase_mode_keys.add(split_key)
+    view._active_word_edit_dialog = SimpleNamespace(
+        _split_key=split_key,
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
+            (event_type, coords)
+        ),
+    )
+
+    handle_word_image_mouse(
+        view,
+        0,
+        0,
+        SimpleNamespace(type="mousedown", image_x=10.0, image_y=10.0, button=2),
+    )
+
+    assert seen == []
+
+
+def test_handle_word_image_mouse_finalizes_drag_when_left_button_released_outside():
+    view = WordMatchView()
+    split_key = (0, 0)
+    seen: list[tuple[str, tuple[float, float] | None]] = []
+    view._word_split_image_sizes[split_key] = (100.0, 40.0)
+    view._word_box_erase_mode_keys.add(split_key)
+    view._word_box_erase_drag_start[split_key] = (8.0, 8.0)
+    view._active_word_edit_dialog = SimpleNamespace(
+        _split_key=split_key,
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
+            (event_type, coords)
+        ),
+    )
+
+    handle_word_image_mouse(
+        view,
+        0,
+        0,
+        SimpleNamespace(type="mousemove", image_x=140.0, image_y=25.0, buttons=0),
+    )
+
+    assert seen == [("mouseup", (100.0, 25.0))]
 
 
 def test_crop_word_to_marker_prefers_stored_y_fraction(monkeypatch):
@@ -3081,6 +3215,35 @@ def test_set_validation_keeps_selection_when_line_remains_visible(monkeypatch):
     assert view.selection.selected_word_indices == {(0, 0)}
 
 
+def test_word_view_image_source_update_refreshes_open_word_dialog(monkeypatch):
+    view = WordMatchView()
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(view, "_has_active_ui_context", lambda _element: True)
+    monkeypatch.setattr(
+        view.renderer,
+        "update_lines_display",
+        lambda: calls.__setitem__("updated", True),
+    )
+    monkeypatch.setattr(
+        view.renderer,
+        "refresh_open_word_dialog_for",
+        lambda line_index, word_index: calls.setdefault("dialog", []).append(
+            (line_index, word_index)
+        ),
+    )
+    view.renderer._word_dialog_refresh_key = (2, 4)
+
+    view.bbox.on_image_sources_updated(
+        {
+            "word_view_original_image_source": "data:image/png;base64,abc123",
+        }
+    )
+
+    assert calls["updated"] is True
+    assert calls["dialog"] == [(2, 4)]
+
+
 def test_handle_validate_line_clears_selection_when_line_hidden(monkeypatch):
     """Per-line card validate button clears its line's selection when filter hides it."""
     view = WordMatchView(
@@ -3115,6 +3278,53 @@ def test_handle_validate_line_clears_selection_when_line_hidden(monkeypatch):
 
     assert view.selection.selected_line_indices == set()
     assert view.selection.selected_word_indices == set()
+
+
+def test_rerender_or_hide_line_hides_incrementally_when_mismatched_filter_hides_line(
+    monkeypatch,
+):
+    """When a line is filtered out, use incremental hide and avoid full rebuild."""
+    view = WordMatchView()
+    view.filter_mode = "Mismatched Lines"
+    line_match = LineMatch(
+        line_index=0,
+        ocr_line_text="same",
+        ground_truth_line_text="same",
+        word_matches=[
+            WordMatch(
+                ocr_text="same",
+                ground_truth_text="same",
+                match_status=MatchStatus.EXACT,
+                word_index=0,
+            )
+        ],
+        paragraph_index=0,
+    )
+    view.view_model.line_matches = [line_match]
+    view.renderer._line_to_paragraph = {0: 0}
+
+    seen = {"updated": 0, "rerendered": 0, "hidden": 0}
+    monkeypatch.setattr(
+        view.renderer,
+        "update_lines_display",
+        lambda: seen.__setitem__("updated", seen["updated"] + 1),
+    )
+    monkeypatch.setattr(
+        view.renderer,
+        "_hide_line_card",
+        lambda _line_idx: seen.__setitem__("hidden", seen["hidden"] + 1),
+    )
+    monkeypatch.setattr(
+        view.renderer,
+        "rerender_line_card",
+        lambda _line_idx: seen.__setitem__("rerendered", seen["rerendered"] + 1),
+    )
+
+    view.renderer._rerender_or_hide_line(0)
+
+    assert seen["updated"] == 0
+    assert seen["hidden"] == 1
+    assert seen["rerendered"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -3294,3 +3504,94 @@ def test_compute_refine_preview_after_crop_right_expand():
     )
 
     assert deltas is not None
+
+
+def test_word_dialog_erase_scales_normalized_bbox_to_page_pixels():
+    captured: dict[str, tuple[float, float, float, float]] = {}
+
+    normalized_bbox = BoundingBox(
+        Point(0.1, 0.2),
+        Point(0.6, 0.4),
+        is_normalized=True,
+    )
+    line_word_match = SimpleNamespace(
+        word_object=SimpleNamespace(bounding_box=normalized_bbox)
+    )
+
+    view = WordMatchView()
+    view.erase_pixels_rect_callback = lambda x1, y1, x2, y2: (
+        captured.setdefault("rect", (x1, y1, x2, y2)) or True
+    )
+    view._line_word_match_by_ocr_index = lambda *_args: line_word_match
+    view._line_match_by_index = lambda _line_index: None
+    view._word_split_fractions = {(0, 0): 0.5}
+    view._word_split_y_fractions = {}
+    view._word_split_marker_y = {}
+    view._word_split_image_sizes = {(0, 0): (100.0, 100.0)}
+    view._safe_notify = lambda *_args, **_kwargs: None
+    view._page_state = SimpleNamespace(
+        current_page=SimpleNamespace(
+            width=200,
+            height=100,
+            cv2_numpy_page_image=np.zeros((100, 200, 3), dtype=np.uint8),
+        )
+    )
+    view.renderer.refresh_local_line_match_from_line_object = lambda _line_index: None
+    view.renderer.rerender_word_column = lambda _line_index, _word_index: None
+
+    dialog = WordEditDialog(
+        view,
+        line_index=0,
+        word_index=0,
+        split_word_index=0,
+        word_match=SimpleNamespace(),
+    )
+    dialog._refresh_open_dialog_content = lambda: None
+
+    dialog._erase_to_marker("right")
+
+    assert captured["rect"] == (70.0, 20.0, 120.0, 40.0)
+
+
+def test_word_dialog_erase_drawn_box_maps_local_to_page_pixels():
+    captured: dict[str, tuple[float, float, float, float]] = {}
+
+    word_bbox = BoundingBox(
+        Point(10, 20),
+        Point(110, 60),
+        is_normalized=False,
+    )
+    line_word_match = SimpleNamespace(
+        word_object=SimpleNamespace(bounding_box=word_bbox)
+    )
+
+    view = WordMatchView()
+    view.erase_pixels_rect_callback = lambda x1, y1, x2, y2: (
+        captured.setdefault("rect", (x1, y1, x2, y2)) or True
+    )
+    view._line_word_match_by_ocr_index = lambda *_args: line_word_match
+    view._line_match_by_index = lambda _line_index: None
+    view._word_split_image_sizes = {(0, 0): (100.0, 40.0)}
+    view._safe_notify = lambda *_args, **_kwargs: None
+    view.renderer.refresh_local_line_match_from_line_object = lambda _line_index: None
+    view.renderer.rerender_word_column = lambda _line_index, _word_index: None
+
+    dialog = WordEditDialog(
+        view,
+        line_index=0,
+        word_index=0,
+        split_word_index=0,
+        word_match=SimpleNamespace(),
+    )
+    dialog._refresh_open_dialog_content = lambda: None
+
+    dialog._erase_drawn_box((25.0, 10.0), (75.0, 30.0))
+    assert "rect" not in captured
+    assert dialog._pending_erase_rects == [(35.0, 30.0, 85.0, 50.0)]
+    assert view._word_box_erase_preview_rects[(0, 0)] == [(0.25, 0.25, 0.75, 0.75)]
+
+    assert dialog._apply_pending_erase_rects() is True
+
+    assert captured["rect"] == (35.0, 30.0, 85.0, 50.0)
+    assert dialog._pending_erase_rects == []
+    assert (0, 0) not in view._word_box_erase_preview_rects

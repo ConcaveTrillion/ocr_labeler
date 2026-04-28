@@ -25,6 +25,7 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
         on_save_project: PageActionCallback | None = None,
         on_load_page: PageActionCallback | None = None,
         on_reload_ocr: PageActionCallback | None = None,
+        on_reload_ocr_edited: PageActionCallback | None = None,
         on_rematch_gt: PageActionCallback | None = None,
     ):
         logger.debug("Initializing PageActions")
@@ -37,12 +38,14 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
         self._on_save_project = on_save_project
         self._on_load_page = on_load_page
         self._on_reload_ocr = on_reload_ocr
+        self._on_reload_ocr_edited = on_reload_ocr_edited
         self._on_rematch_gt = on_rematch_gt
 
         self.save_button = None
         self.save_project_button = None
         self.load_button = None
         self.reload_ocr_button = None
+        self.reload_ocr_edited_button = None
         self.rematch_gt_button = None
         self.export_button = None
         self.page_name_box = None
@@ -65,6 +68,12 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
                     "Reload OCR", on_click=self._on_reload_ocr
                 )
                 style_action_button(self.reload_ocr_button, size="md")
+
+            if self._on_reload_ocr_edited:
+                self.reload_ocr_edited_button = ui.button(
+                    "Reload OCR (Edited)", on_click=self._on_reload_ocr_edited
+                ).tooltip("Run OCR on the current edited image (after erase ops)")
+                style_action_button(self.reload_ocr_edited_button, size="md")
 
             if self._on_save_page:
                 self.save_button = ui.button("Save Page", on_click=self._on_save_page)
@@ -137,6 +146,7 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
         """Bind disabled state from view model to all page action buttons."""
         buttons = [
             self.reload_ocr_button,
+            self.reload_ocr_edited_button,
             self.save_button,
             self.save_project_button,
             self.load_button,
@@ -163,6 +173,7 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
 
         for button in (
             self.reload_ocr_button,
+            self.reload_ocr_edited_button,
             self.save_button,
             self.save_project_button,
             self.load_button,

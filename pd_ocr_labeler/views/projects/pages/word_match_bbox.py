@@ -447,6 +447,16 @@ class WordMatchBbox:
         self._view.renderer._last_display_signature = None
         self._view.renderer.update_lines_display()
 
+        # Keep an open word-edit dialog in sync with the latest page image.
+        dialog_key = self._view.renderer._word_dialog_refresh_key
+        if dialog_key is None:
+            return
+        try:
+            line_index, word_index = dialog_key
+        except Exception:
+            return
+        self._view.renderer.refresh_open_word_dialog_for(line_index, word_index)
+
     # ------------------------------------------------------------------
     # Rebox / start-rebox
     # ------------------------------------------------------------------

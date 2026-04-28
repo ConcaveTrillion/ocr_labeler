@@ -1287,6 +1287,36 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
     assert calls == [(2, 3, 1.0, -1.0, 2.0, -2.0, True)]
 
 
+def test_text_tabs_erase_pixels_rect_callback_invokes_page_state_method():
+    project_state = SimpleNamespace(
+        on_change=[],
+        project=SimpleNamespace(pages=[]),
+        current_page_index=0,
+    )
+    calls = []
+    page_state = SimpleNamespace(
+        on_change=[],
+        _project_state=project_state,
+        current_gt_text="",
+        current_ocr_text="",
+        current_page=None,
+        _current_page_index=0,
+        copy_ground_truth_to_ocr=lambda *_: False,
+        erase_pixels_rect=lambda x1, y1, x2, y2: calls.append((x1, y1, x2, y2)) or True,
+    )
+
+    text_tabs = TextTabs(page_state=page_state, page_index=19)
+    result = text_tabs.word_match_view.erase_pixels_rect_callback(
+        10.0,
+        11.0,
+        20.0,
+        21.0,
+    )
+
+    assert result is True
+    assert calls == [(10.0, 11.0, 20.0, 21.0)]
+
+
 def test_text_tabs_expand_then_refine_words_callback_invokes_page_state_method():
     project_state = SimpleNamespace(
         on_change=[],

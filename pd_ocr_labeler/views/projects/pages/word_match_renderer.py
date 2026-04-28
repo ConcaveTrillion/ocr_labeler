@@ -36,6 +36,8 @@ class WordMatchRenderer:
     def __init__(self, view: WordMatchView) -> None:
         self._view = view
         self._line_card_refs: dict[int, object] = {}
+        self._line_to_paragraph: dict[int, int | None] = {}
+        self._paragraph_group_refs: dict[int | None, object] = {}
         self._word_column_refs: dict[WordKey, object] = {}
         self._last_display_signature = None
         self._display_update_call_count: int = 0
@@ -155,6 +157,8 @@ class WordMatchRenderer:
         self._view.gt_editing._word_style_button_refs = {}
         self._word_column_refs = {}
         self._line_card_refs = {}
+        self._line_to_paragraph = {}
+        self._paragraph_group_refs = {}
         self._view.selection._line_checkbox_refs = {}
         self._view.selection._paragraph_checkbox_refs = {}
         self._view.gt_editing._word_gt_input_refs = {}
@@ -206,7 +210,10 @@ class WordMatchRenderer:
                     paragraph_index,
                     True,
                 )
-                with ui.column().classes("full-width").style("gap: 0; margin: 0;"):
+                with (
+                    ui.column().classes("full-width").style("gap: 0; margin: 0;")
+                ) as paragraph_group:
+                    self._paragraph_group_refs[paragraph_index] = paragraph_group
                     with (
                         ui.row()
                         .classes(
@@ -270,6 +277,9 @@ class WordMatchRenderer:
                             .style("gap: 0; margin: 0; padding: 0;")
                         ):
                             for line_match in paragraph_line_matches:
+                                self._line_to_paragraph[line_match.line_index] = (
+                                    paragraph_index
+                                )
                                 with (
                                     ui.column()
                                     .classes("full-width")
@@ -925,6 +935,7 @@ class WordMatchRenderer:
                             image_source,
                             events=[
                                 "mousedown",
+                                "mouseup",
                                 "click",
                                 "mousemove",
                                 "mouseenter",
@@ -1113,11 +1124,36 @@ class WordMatchRenderer:
 
     def _hide_line_card(self, line_index: int) -> None:
         """Remove a single line card from the display."""
+        paragraph_index = self._line_to_paragraph.pop(line_index, None)
         line_slot = self._line_card_refs.pop(line_index, None)
         if line_slot is not None:
             line_slot.delete()
+        self._prune_empty_paragraph_group(paragraph_index)
         # Invalidate cached signature so the next full rebuild is not skipped.
         self._last_display_signature = None
+
+    def _paragraph_has_visible_lines(self, paragraph_index: int | None) -> bool:
+        """Return True when paragraph still has lines matching the active filter."""
+        for line_match in self._view.view_model.line_matches:
+            if getattr(line_match, "paragraph_index", None) != paragraph_index:
+                continue
+            if not self._should_hide_line(line_match):
+                return True
+        return False
+
+    def _prune_empty_paragraph_group(self, paragraph_index: int | None) -> None:
+        """Delete paragraph group container when it no longer has visible lines."""
+        if self._paragraph_has_visible_lines(paragraph_index):
+            return
+
+        group = self._paragraph_group_refs.pop(paragraph_index, None)
+        if group is not None:
+            group.delete()
+
+        if paragraph_index is not None:
+            self._view.selection._paragraph_checkbox_refs.pop(paragraph_index, None)
+            self._view.selection.selected_paragraph_indices.discard(paragraph_index)
+        self._paragraph_expanded.pop(paragraph_index, None)
 
     def _rerender_or_hide_line(self, line_index: int) -> None:
         """Rerender a line card, or hide it if the active filter excludes it."""

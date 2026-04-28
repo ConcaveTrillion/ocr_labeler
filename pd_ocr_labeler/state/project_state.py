@@ -884,14 +884,24 @@ class ProjectState:
         logger.debug("current_page_model: returning page model")
         return result
 
-    def reload_current_page_with_ocr(self):
-        """Reload the current page with OCR processing, bypassing any saved version."""
+    def reload_current_page_with_ocr(self, use_edited_image: bool = False):
+        """Reload the current page with OCR processing.
+
+        Args:
+            use_edited_image: When True, rerun OCR on the current in-memory page
+                image (including erase edits). When False, rerun OCR from the
+                original source image file.
+        """
         logger.debug(
-            "reload_current_page_with_ocr: called, current_index=%s",
+            "reload_current_page_with_ocr: called, current_index=%s use_edited_image=%s",
             self.current_page_index,
+            use_edited_image,
         )
         page_state = self.get_page_state(self.current_page_index)
-        page_state.reload_page_with_ocr(self.current_page_index)
+        page_state.reload_page_with_ocr(
+            self.current_page_index,
+            use_edited_image=use_edited_image,
+        )
         # Invalidate cache since page content may have changed
         self._invalidate_text_cache()
         # Recompute cache and notify listeners so same-page OCR reloads are

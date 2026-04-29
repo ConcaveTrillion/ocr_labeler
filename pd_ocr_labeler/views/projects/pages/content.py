@@ -75,7 +75,14 @@ class ContentArea:
 
     def _update_stats_label(self, text: str) -> None:
         if self._stats_label:
-            self._stats_label.set_text(text)
+            model_summary = (
+                getattr(self.page_state_view_model, "current_page_ocr_models_text", "")
+                or ""
+            ).strip()
+            if model_summary:
+                self._stats_label.set_text(f"{text} • {model_summary}")
+            else:
+                self._stats_label.set_text(text)
 
     def _on_images_updated(self, image_dict: dict[str, str]) -> None:
         """Fan out image updates to left image tabs and right word-match slices."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +26,52 @@ class ModelSelectionOperations:
     DEFAULT_MODEL_KEY = "default"
     DEFAULT_MODEL_LABEL = "Built-in DocTR (default)"
     MODEL_STORE_DIRNAME = "pd-ml-models"
+    PREFERRED_ALL_PROFILES = {"all", "base-ocr"}
+    TIMESTAMP_SUFFIX_PATTERN = re.compile(r"(\d{10})$")
+
+    @classmethod
+    def _is_preferred_profile_key(cls, key: str) -> bool:
+        profile_name = key.split("/", 1)[0].strip().lower()
+        return profile_name in cls.PREFERRED_ALL_PROFILES
+
+    @classmethod
+    def _latest_key(cls, keys: list[str]) -> str | None:
+        if not keys:
+            return None
+
+        def sort_key(key: str) -> tuple[int, str, str]:
+            signature = key.split("/", 1)[1] if "/" in key else key
+            match = cls.TIMESTAMP_SUFFIX_PATTERN.search(signature)
+            timestamp = match.group(1) if match else ""
+            return (1 if match else 0, timestamp, key)
+
+        return max(keys, key=sort_key)
+
+    @classmethod
+    def _candidate_keys_for_component(
+        cls,
+        options: dict[str, OCRModelOption],
+        component: str,
+    ) -> list[str]:
+        if component == "detection":
+            keys = [
+                key
+                for key, option in options.items()
+                if key != cls.DEFAULT_MODEL_KEY
+                and option.detection_weights_path is not None
+            ]
+        elif component == "recognition":
+            keys = [
+                key
+                for key, option in options.items()
+                if key != cls.DEFAULT_MODEL_KEY
+                and option.recognition_weights_path is not None
+            ]
+        else:
+            raise ValueError(f"Unknown component '{component}'")
+
+        preferred = [key for key in keys if cls._is_preferred_profile_key(key)]
+        return preferred or keys
 
     @staticmethod
     def _stem_signature(stem: str) -> str:
@@ -115,3 +162,34 @@ class ModelSelectionOperations:
 
         labels = {k: option.label for k, option in options.items()}
         return options, labels
+
+    @classmethod
+    def find_preferred_all_model_key(
+        cls, options: dict[str, OCRModelOption]
+    ) -> str | None:
+        """Return the latest preferred fine-tuned key for the global/all profile."""
+        keys = [
+            key
+            for key, option in options.items()
+            if key != cls.DEFAULT_MODEL_KEY
+            and cls._is_preferred_profile_key(key)
+            and option.detection_weights_path is not None
+            and option.recognition_weights_path is not None
+        ]
+        return cls._latest_key(keys)
+
+    @classmethod
+    def find_latest_detection_model_key(
+        cls, options: dict[str, OCRModelOption]
+    ) -> str | None:
+        """Return the latest available detection model key (prefer all/base-ocr profiles)."""
+        return cls._latest_key(cls._candidate_keys_for_component(options, "detection"))
+
+    @classmethod
+    def find_latest_recognition_model_key(
+        cls, options: dict[str, OCRModelOption]
+    ) -> str | None:
+        """Return the latest available recognition model key (prefer all/base-ocr profiles)."""
+        return cls._latest_key(
+            cls._candidate_keys_for_component(options, "recognition")
+        )

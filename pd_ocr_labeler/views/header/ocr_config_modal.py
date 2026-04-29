@@ -21,7 +21,8 @@ class OCRConfigModal(NotificationMixin):
         self.project_state_model = project_state_model
         self._notified_error_keys: set[str] = set()
         self._dialog: ui.dialog | None = None
-        self._model_select: ui.select | None = None
+        self._detection_model_select: ui.select | None = None
+        self._recognition_model_select: ui.select | None = None
         self._trigger_button: ui.button | None = None
 
     def build(self) -> ui.button:
@@ -35,20 +36,34 @@ class OCRConfigModal(NotificationMixin):
                 "Select built-in OCR or a fine-tuned model pair produced by pd-ocr-trainer."
             ).classes("text-sm text-gray-500")
 
-            self._model_select = ui.select(
-                label="OCR model",
-                options=self.app_state_model.ocr_model_options,
-                value=self.app_state_model.selected_ocr_model_key,
+            self._detection_model_select = ui.select(
+                label="Detection model",
+                options=self.app_state_model.ocr_detection_model_options,
+                value=self.app_state_model.selected_ocr_detection_model_key,
+                with_input=True,
+            ).classes("w-full")
+            self._recognition_model_select = ui.select(
+                label="Recognition model",
+                options=self.app_state_model.ocr_recognition_model_options,
+                value=self.app_state_model.selected_ocr_recognition_model_key,
                 with_input=True,
             ).classes("w-full")
 
             self._bind_from_safe(
-                self._model_select,
+                self._detection_model_select,
                 "options",
                 self.app_state_model,
-                "ocr_model_options",
-                key="ocr-model-options-binding",
-                message="OCR model list may not refresh automatically",
+                "ocr_detection_model_options",
+                key="ocr-detection-model-options-binding",
+                message="OCR detection model list may not refresh automatically",
+            )
+            self._bind_from_safe(
+                self._recognition_model_select,
+                "options",
+                self.app_state_model,
+                "ocr_recognition_model_options",
+                key="ocr-recognition-model-options-binding",
+                message="OCR recognition model list may not refresh automatically",
             )
 
             with ui.row().classes("w-full justify-between pt-2"):
@@ -73,10 +88,22 @@ class OCRConfigModal(NotificationMixin):
         _event: events.ClickEventArguments | None = None,
     ) -> None:
         self.app_state_model.command_refresh_ocr_models()
-        if self._model_select is not None:
-            self._model_select.options = self.app_state_model.ocr_model_options
-            self._model_select.value = self.app_state_model.selected_ocr_model_key
-            self._model_select.update()
+        if self._detection_model_select is not None:
+            self._detection_model_select.options = (
+                self.app_state_model.ocr_detection_model_options
+            )
+            self._detection_model_select.value = (
+                self.app_state_model.selected_ocr_detection_model_key
+            )
+            self._detection_model_select.update()
+        if self._recognition_model_select is not None:
+            self._recognition_model_select.options = (
+                self.app_state_model.ocr_recognition_model_options
+            )
+            self._recognition_model_select.value = (
+                self.app_state_model.selected_ocr_recognition_model_key
+            )
+            self._recognition_model_select.update()
         if self._dialog is not None:
             self._dialog.open()
 
@@ -92,11 +119,30 @@ class OCRConfigModal(NotificationMixin):
         _event: events.ClickEventArguments | None = None,
     ) -> None:
         success = self.app_state_model.command_refresh_ocr_models()
-        if self._model_select is not None:
-            self._model_select.options = self.app_state_model.ocr_model_options
-            if self._model_select.value not in self.app_state_model.ocr_model_options:
-                self._model_select.value = self.app_state_model.selected_ocr_model_key
-            self._model_select.update()
+        if self._detection_model_select is not None:
+            self._detection_model_select.options = (
+                self.app_state_model.ocr_detection_model_options
+            )
+            if (
+                self._detection_model_select.value
+                not in self.app_state_model.ocr_detection_model_options
+            ):
+                self._detection_model_select.value = (
+                    self.app_state_model.selected_ocr_detection_model_key
+                )
+            self._detection_model_select.update()
+        if self._recognition_model_select is not None:
+            self._recognition_model_select.options = (
+                self.app_state_model.ocr_recognition_model_options
+            )
+            if (
+                self._recognition_model_select.value
+                not in self.app_state_model.ocr_recognition_model_options
+            ):
+                self._recognition_model_select.value = (
+                    self.app_state_model.selected_ocr_recognition_model_key
+                )
+            self._recognition_model_select.update()
 
         if success:
             self._notify("OCR model list refreshed", "positive")
@@ -107,20 +153,30 @@ class OCRConfigModal(NotificationMixin):
         self,
         _event: events.ClickEventArguments | None = None,
     ) -> None:
-        if self._model_select is None:
-            return
-        selected_key = str(self._model_select.value or "").strip()
-        if not selected_key:
-            self._notify("Select an OCR model first", "warning")
+        if (
+            self._detection_model_select is None
+            or self._recognition_model_select is None
+        ):
             return
 
-        success = self.app_state_model.command_set_selected_ocr_model(selected_key)
+        detection_key = str(self._detection_model_select.value or "").strip()
+        recognition_key = str(self._recognition_model_select.value or "").strip()
+        if not detection_key or not recognition_key:
+            self._notify(
+                "Select both detection and recognition models first", "warning"
+            )
+            return
+
+        success = self.app_state_model.command_set_selected_ocr_models(
+            detection_key,
+            recognition_key,
+        )
         if success:
-            self._notify("OCR model updated", "positive")
+            self._notify("OCR models updated", "positive")
             if self._dialog is not None:
                 self._dialog.close()
         else:
-            self._notify("Failed to apply OCR model", "negative")
+            self._notify("Failed to apply OCR models", "negative")
 
     def sync_control_state(self) -> None:
         """Force trigger button enabled state to the latest computed value."""

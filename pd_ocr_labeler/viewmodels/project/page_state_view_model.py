@@ -50,6 +50,7 @@ class PageStateViewModel(BaseViewModel):
     page_source: str = ""
     current_page_source_text: str = ""
     current_page_source_tooltip: str = ""
+    current_page_ocr_models_text: str = ""
     current_export_status_text: str = ""
 
     # Page state reference
@@ -266,6 +267,7 @@ class PageStateViewModel(BaseViewModel):
         if not self._page_state:
             self.current_page_source_text = "(NO PAGE)"
             self.current_page_source_tooltip = ""
+            self.current_page_ocr_models_text = ""
             self.current_export_status_text = ""
             return
 
@@ -287,10 +289,14 @@ class PageStateViewModel(BaseViewModel):
             self.current_page_source_tooltip = (
                 self._page_state.current_page_source_tooltip
             )
+            self.current_page_ocr_models_text = (
+                self._page_state.current_page_ocr_models_summary
+            )
         except Exception:
             logger.debug("Failed to sync source badge from PageState", exc_info=True)
             self.current_page_source_text = "(NO PAGE)"
             self.current_page_source_tooltip = ""
+            self.current_page_ocr_models_text = ""
 
         try:
             from pd_ocr_labeler.operations.export.doctr_export import ExportStatus

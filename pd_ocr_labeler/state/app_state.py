@@ -62,7 +62,11 @@ class AppState:
     )
     available_ocr_models: dict[str, OCRModelOption] = field(default_factory=dict)
     ocr_model_options: dict[str, str] = field(default_factory=dict)
+    ocr_detection_model_options: dict[str, str] = field(default_factory=dict)
+    ocr_recognition_model_options: dict[str, str] = field(default_factory=dict)
     selected_ocr_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
+    selected_ocr_detection_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
+    selected_ocr_recognition_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
 
     def queue_notification(self, message: str, kind: str = "info") -> None:
         """Queue a user notification for this browser-tab session."""
@@ -132,33 +136,84 @@ class AppState:
         self, project_state: ProjectState
     ) -> None:
         """Apply currently selected OCR model to a project state's parser."""
-        option = self.available_ocr_models.get(self.selected_ocr_model_key)
-        if option is None:
-            option = self.available_ocr_models.get(
-                ModelSelectionOperations.DEFAULT_MODEL_KEY
-            )
-        if option is None:
+        detection_option = self.available_ocr_models.get(
+            self.selected_ocr_detection_model_key
+        )
+        recognition_option = self.available_ocr_models.get(
+            self.selected_ocr_recognition_model_key
+        )
+        default_option = self.available_ocr_models.get(
+            ModelSelectionOperations.DEFAULT_MODEL_KEY
+        )
+
+        if detection_option is None:
+            detection_option = default_option
+        if recognition_option is None:
+            recognition_option = default_option
+        if detection_option is None or recognition_option is None:
             return
 
         source_lib = (
             "doctr-pd-labeled"
-            if option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+            if (
+                detection_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+                and recognition_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+            )
             else "doctr-pd-finetuned"
         )
         project_state.page_ops.configure_doctr_weights(
-            option.detection_weights_path,
-            option.recognition_weights_path,
+            detection_option.detection_weights_path,
+            recognition_option.recognition_weights_path,
             source_lib=source_lib,
-            recognition_vocab=option.vocab,
+            recognition_vocab=recognition_option.vocab,
         )
+
+    def _sync_legacy_selected_ocr_model_key(self) -> None:
+        """Keep the legacy single model key in sync for backward compatibility."""
+        if (
+            self.selected_ocr_detection_model_key
+            == self.selected_ocr_recognition_model_key
+        ):
+            self.selected_ocr_model_key = self.selected_ocr_detection_model_key
+            return
+        self.selected_ocr_model_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
+
+    def _ensure_selected_ocr_keys_are_valid(self) -> None:
+        """Clamp selected detection/recognition keys to available options."""
+        default_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
+        if self.selected_ocr_detection_model_key not in self.available_ocr_models:
+            self.selected_ocr_detection_model_key = default_key
+        if self.selected_ocr_recognition_model_key not in self.available_ocr_models:
+            self.selected_ocr_recognition_model_key = default_key
+
+        if self.selected_ocr_detection_model_key == default_key:
+            latest_detection_key = (
+                ModelSelectionOperations.find_latest_detection_model_key(
+                    self.available_ocr_models
+                )
+            )
+            if latest_detection_key is not None:
+                self.selected_ocr_detection_model_key = latest_detection_key
+
+        if self.selected_ocr_recognition_model_key == default_key:
+            latest_recognition_key = (
+                ModelSelectionOperations.find_latest_recognition_model_key(
+                    self.available_ocr_models
+                )
+            )
+            if latest_recognition_key is not None:
+                self.selected_ocr_recognition_model_key = latest_recognition_key
+
+        self._sync_legacy_selected_ocr_model_key()
 
     def refresh_ocr_models(self, notify: bool = True) -> None:
         """Refresh available OCR model options discovered from trainer outputs."""
         options, labels = ModelSelectionOperations.discover_model_options()
         self.available_ocr_models = options
         self.ocr_model_options = labels
-        if self.selected_ocr_model_key not in self.available_ocr_models:
-            self.selected_ocr_model_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
+        self.ocr_detection_model_options = dict(labels)
+        self.ocr_recognition_model_options = dict(labels)
+        self._ensure_selected_ocr_keys_are_valid()
 
         for project_state in self.projects.values():
             self._apply_selected_ocr_model_to_project_state(project_state)
@@ -171,10 +226,20 @@ class AppState:
 
     def set_selected_ocr_model(self, model_key: str) -> bool:
         """Set active OCR model key and apply it to all project states."""
-        if model_key not in self.available_ocr_models:
+        return self.set_selected_ocr_models(model_key, model_key)
+
+    def set_selected_ocr_models(
+        self, detection_model_key: str, recognition_model_key: str
+    ) -> bool:
+        """Set active OCR detection/recognition model keys and apply globally."""
+        if detection_model_key not in self.available_ocr_models:
+            return False
+        if recognition_model_key not in self.available_ocr_models:
             return False
 
-        self.selected_ocr_model_key = model_key
+        self.selected_ocr_detection_model_key = detection_model_key
+        self.selected_ocr_recognition_model_key = recognition_model_key
+        self._sync_legacy_selected_ocr_model_key()
         for project_state in self.projects.values():
             self._apply_selected_ocr_model_to_project_state(project_state)
 

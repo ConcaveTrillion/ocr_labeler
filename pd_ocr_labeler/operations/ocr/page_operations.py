@@ -1378,6 +1378,75 @@ class PageOperations:
 
         return "\n".join(lines)
 
+    def get_page_ocr_model_pair(self, page: PageModel | Page | None) -> tuple[str, str]:
+        """Return resolved detection/recognition model labels for a page."""
+        if page is None:
+            return UNKNOWN_METADATA_VALUE, UNKNOWN_METADATA_VALUE
+
+        provenance = self._resolve_saved_provenance(page)
+        if not isinstance(provenance, dict):
+            return UNKNOWN_METADATA_VALUE, UNKNOWN_METADATA_VALUE
+
+        ocr_data = provenance.get("ocr")
+        if not isinstance(ocr_data, dict):
+            return UNKNOWN_METADATA_VALUE, UNKNOWN_METADATA_VALUE
+
+        models = ocr_data.get("models")
+        if not isinstance(models, list) or not models:
+            return UNKNOWN_METADATA_VALUE, UNKNOWN_METADATA_VALUE
+
+        names: list[str] = []
+        for model in models:
+            if not isinstance(model, dict):
+                continue
+            model_name = str(model.get("name") or "").strip()
+            if not model_name:
+                continue
+            model_version = str(model.get("version") or "").strip()
+            if model_version and model_version != UNKNOWN_METADATA_VALUE:
+                names.append(f"{model_name} ({model_version})")
+            else:
+                names.append(model_name)
+
+        if not names:
+            return UNKNOWN_METADATA_VALUE, UNKNOWN_METADATA_VALUE
+
+        detection_name: str | None = None
+        recognition_name: str | None = None
+        unused_names: list[str] = []
+
+        for model_name in names:
+            lowered = model_name.lower()
+            if detection_name is None and "det" in lowered:
+                detection_name = model_name
+                continue
+            if recognition_name is None and ("rec" in lowered or "reco" in lowered):
+                recognition_name = model_name
+                continue
+            unused_names.append(model_name)
+
+        if detection_name is None and unused_names:
+            detection_name = unused_names.pop(0)
+        if recognition_name is None and unused_names:
+            recognition_name = unused_names.pop(0)
+
+        if detection_name is None and names:
+            detection_name = names[0]
+        if recognition_name is None:
+            recognition_name = (
+                detection_name if detection_name else UNKNOWN_METADATA_VALUE
+            )
+
+        return (
+            detection_name or UNKNOWN_METADATA_VALUE,
+            recognition_name or UNKNOWN_METADATA_VALUE,
+        )
+
+    def get_page_ocr_model_pair_summary(self, page: PageModel | Page | None) -> str:
+        """Return compact detection/recognition model summary for UI text blocks."""
+        detection_name, recognition_name = self.get_page_ocr_model_pair(page)
+        return f"det: {detection_name} | rec: {recognition_name}"
+
     def _resolve_saved_provenance(
         self, page: PageModel | Page
     ) -> dict[str, Any] | None:

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from pd_ocr_labeler.operations.ocr.model_selection_operations import OCRModelOption
 from pd_ocr_labeler.state.app_state import AppState
 
 
@@ -318,6 +319,84 @@ def test_get_source_projects_root_creates_default_config_file(tmp_path):
     assert root == ConfigOperations.get_default_source_projects_root()
     contents = config_path.read_text(encoding="utf-8")
     assert "source_projects_root:" in contents
+
+
+def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
+    """AppState prefers the latest all-profile fine-tuned model when discovered."""
+
+    def fake_discover_model_options():
+        options = {
+            "default": OCRModelOption(
+                key="default",
+                label="Built-in DocTR (default)",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+            ),
+            "all/run-001": OCRModelOption(
+                key="all/run-001",
+                label="all: run-001",
+                detection_weights_path=Path("/tmp/det.pt"),
+                recognition_weights_path=Path("/tmp/rec.pt"),
+                vocab="abc",
+            ),
+            "all/run-2026042909": OCRModelOption(
+                key="all/run-2026042909",
+                label="all: run-2026042909",
+                detection_weights_path=Path("/tmp/det-new.pt"),
+                recognition_weights_path=Path("/tmp/rec-new.pt"),
+                vocab="abc",
+            ),
+        }
+        labels = {key: option.label for key, option in options.items()}
+        return options, labels
+
+    monkeypatch.setattr(
+        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        fake_discover_model_options,
+    )
+
+    state = AppState()
+    assert state.selected_ocr_detection_model_key == "all/run-2026042909"
+    assert state.selected_ocr_recognition_model_key == "all/run-2026042909"
+
+
+def test_set_selected_ocr_models_updates_detection_and_recognition(monkeypatch):
+    """Dual model selection accepts different detection and recognition keys."""
+
+    def fake_discover_model_options():
+        options = {
+            "default": OCRModelOption(
+                key="default",
+                label="Built-in DocTR (default)",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+            ),
+            "det/profile-a": OCRModelOption(
+                key="det/profile-a",
+                label="det/profile-a",
+                detection_weights_path=Path("/tmp/det-a.pt"),
+                recognition_weights_path=Path("/tmp/rec-a.pt"),
+            ),
+            "rec/profile-b": OCRModelOption(
+                key="rec/profile-b",
+                label="rec/profile-b",
+                detection_weights_path=Path("/tmp/det-b.pt"),
+                recognition_weights_path=Path("/tmp/rec-b.pt"),
+                vocab="xyz",
+            ),
+        }
+        labels = {key: option.label for key, option in options.items()}
+        return options, labels
+
+    monkeypatch.setattr(
+        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        fake_discover_model_options,
+    )
+
+    state = AppState()
+    assert state.set_selected_ocr_models("det/profile-a", "rec/profile-b") is True
+    assert state.selected_ocr_detection_model_key == "det/profile-a"
+    assert state.selected_ocr_recognition_model_key == "rec/profile-b"
 
 
 def test_get_source_projects_root_uses_monkeypatched_config_path(monkeypatch, tmp_path):

@@ -908,6 +908,34 @@ class PageState:
         )
 
     @property
+    def current_page_ocr_models_summary(self) -> str:
+        """Get compact OCR detection/recognition model summary for current page."""
+        if self._project_state and (
+            self._project_state.is_project_loading or self._project_state.is_navigating
+        ):
+            return ""
+
+        if (
+            not self._project
+            or not self._project.pages
+            or self._current_page_index < 0
+            or self._current_page_index >= len(self._project.pages)
+        ):
+            return ""
+
+        page = self._project.pages[self._current_page_index]
+        if page is None or not self._project_state:
+            return ""
+
+        page_model = None
+        if hasattr(self._project_state, "get_page_model"):
+            page_model = self._project_state.get_page_model(self._current_page_index)
+
+        return self._project_state.page_ops.get_page_ocr_model_pair_summary(
+            page_model if page_model is not None else page
+        )
+
+    @property
     def current_page_export_status_enum(self) -> str | None:
         """Return the raw export status value for the current page.
 

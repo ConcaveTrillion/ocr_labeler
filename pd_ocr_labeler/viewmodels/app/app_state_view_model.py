@@ -25,6 +25,10 @@ class AppStateViewModel(BaseViewModel):
     is_project_loaded: bool = False
     ocr_model_options: dict[str, str] = field(default_factory=dict)
     selected_ocr_model_key: str = "default"
+    ocr_detection_model_options: dict[str, str] = field(default_factory=dict)
+    ocr_recognition_model_options: dict[str, str] = field(default_factory=dict)
+    selected_ocr_detection_model_key: str = "default"
+    selected_ocr_recognition_model_key: str = "default"
 
     def __setattr__(self, name, value):
         """Override to ensure both NiceGUI binding and custom listeners work."""
@@ -39,6 +43,10 @@ class AppStateViewModel(BaseViewModel):
             "is_project_loaded",
             "ocr_model_options",
             "selected_ocr_model_key",
+            "ocr_detection_model_options",
+            "ocr_recognition_model_options",
+            "selected_ocr_detection_model_key",
+            "selected_ocr_recognition_model_key",
         ]:
             self.notify_property_changed(name, value)
 
@@ -86,6 +94,18 @@ class AppStateViewModel(BaseViewModel):
             self.is_project_loaded = bool(self._app_state.current_project_key)
             self.ocr_model_options = dict(self._app_state.ocr_model_options)
             self.selected_ocr_model_key = self._app_state.selected_ocr_model_key
+            self.ocr_detection_model_options = dict(
+                self._app_state.ocr_detection_model_options
+            )
+            self.ocr_recognition_model_options = dict(
+                self._app_state.ocr_recognition_model_options
+            )
+            self.selected_ocr_detection_model_key = (
+                self._app_state.selected_ocr_detection_model_key
+            )
+            self.selected_ocr_recognition_model_key = (
+                self._app_state.selected_ocr_recognition_model_key
+            )
 
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Is Loading: %s", self.is_loading)
@@ -96,6 +116,14 @@ class AppStateViewModel(BaseViewModel):
                 logger.debug("Is Project Loaded: %s", self.is_project_loaded)
                 logger.debug("OCR model options count: %s", len(self.ocr_model_options))
                 logger.debug("Selected OCR model key: %s", self.selected_ocr_model_key)
+                logger.debug(
+                    "Selected OCR detection key: %s",
+                    self.selected_ocr_detection_model_key,
+                )
+                logger.debug(
+                    "Selected OCR recognition key: %s",
+                    self.selected_ocr_recognition_model_key,
+                )
                 logger.debug("AppStateViewModel update complete")
 
         else:
@@ -230,6 +258,23 @@ class AppStateViewModel(BaseViewModel):
             return self._app_state.set_selected_ocr_model(model_key)
         except Exception:
             logger.exception("Error selecting OCR model '%s'", model_key)
+            return False
+
+    def command_set_selected_ocr_models(
+        self, detection_model_key: str, recognition_model_key: str
+    ) -> bool:
+        """Set active OCR detection/recognition model keys."""
+        try:
+            return self._app_state.set_selected_ocr_models(
+                detection_model_key,
+                recognition_model_key,
+            )
+        except Exception:
+            logger.exception(
+                "Error selecting OCR models detection='%s' recognition='%s'",
+                detection_model_key,
+                recognition_model_key,
+            )
             return False
 
     def command_is_project_available(self, key: str) -> bool:

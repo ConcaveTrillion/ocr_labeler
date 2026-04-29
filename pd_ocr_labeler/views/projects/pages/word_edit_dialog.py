@@ -373,15 +373,20 @@ class WordEditDialog:
         }
         self._previous_word_match = indexed.get(split_word_index - 1)
         self._next_word_match = indexed.get(split_word_index + 1)
+
+        # Merge eligibility should be based on the full OCR line, not only the
+        # currently rendered/matched subset of words.
+        line_object = getattr(line_match, "line_object", None) if line_match else None
+        line_words = list(getattr(line_object, "words", []) or [])
+        has_current_word = 0 <= split_word_index < len(line_words)
+        has_previous_word = has_current_word and split_word_index > 0
+        has_next_word = has_current_word and (split_word_index + 1) < len(line_words)
+
         self._can_merge_previous = (
-            view.merge_word_left_callback is not None
-            and split_word_index >= 0
-            and self._previous_word_match is not None
+            view.merge_word_left_callback is not None and has_previous_word
         )
         self._can_merge_next = (
-            view.merge_word_right_callback is not None
-            and split_word_index >= 0
-            and self._next_word_match is not None
+            view.merge_word_right_callback is not None and has_next_word
         )
 
         # Style / scope / component options and current selection

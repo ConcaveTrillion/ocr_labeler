@@ -374,13 +374,42 @@ class WordEditDialog:
         self._previous_word_match = indexed.get(split_word_index - 1)
         self._next_word_match = indexed.get(split_word_index + 1)
 
-        # Merge eligibility should be based on the full OCR line, not only the
-        # currently rendered/matched subset of words.
+        # Merge eligibility should be based on real neighboring OCR words, even
+        # when word indices are sparse after editing operations.
         line_object = getattr(line_match, "line_object", None) if line_match else None
         line_words = list(getattr(line_object, "words", []) or [])
-        has_current_word = 0 <= split_word_index < len(line_words)
-        has_previous_word = has_current_word and split_word_index > 0
-        has_next_word = has_current_word and (split_word_index + 1) < len(line_words)
+        ordered_word_indices: list[int] = []
+        for pos, word in enumerate(line_words):
+            raw_index = getattr(word, "word_index", None)
+            if isinstance(raw_index, int) and raw_index >= 0:
+                ordered_word_indices.append(raw_index)
+            else:
+                ordered_word_indices.append(pos)
+
+        if not ordered_word_indices:
+            ordered_word_indices = sorted(
+                idx for idx in indexed.keys() if isinstance(idx, int) and idx >= 0
+            )
+
+        current_pos = (
+            ordered_word_indices.index(split_word_index)
+            if split_word_index in ordered_word_indices
+            else -1
+        )
+        if current_pos >= 0:
+            has_previous_word = current_pos > 0
+            has_next_word = current_pos < (len(ordered_word_indices) - 1)
+        else:
+            has_previous_word = any(
+                idx < split_word_index
+                for idx in indexed.keys()
+                if isinstance(idx, int) and idx >= 0
+            )
+            has_next_word = any(
+                idx > split_word_index
+                for idx in indexed.keys()
+                if isinstance(idx, int) and idx >= 0
+            )
 
         self._can_merge_previous = (
             view.merge_word_left_callback is not None and has_previous_word

@@ -111,6 +111,20 @@ class PageState:
             except Exception:
                 logger.exception("PageState.notify: listener callback failed")
 
+    @staticmethod
+    def _resolve_word_position(words: list, word_index: int) -> int | None:
+        """Resolve a UI word index to a concrete position within ``words``.
+
+        Some UI paths emit sparse OCR indices (for example after edits), while
+        state mutation helpers operate on positional list indices.
+        """
+        if 0 <= word_index < len(words):
+            return word_index
+        for pos, word in enumerate(words):
+            if getattr(word, "word_index", None) == word_index:
+                return pos
+        return None
+
     def _emit_word_style_changed(self, event: WordStyleChangedEvent) -> None:
         """Notify listeners of a targeted word-style mutation."""
         logger.debug(
@@ -504,13 +518,16 @@ class PageState:
                 return False
 
             words = list(getattr(lines[line_index], "words", []) or [])
-            if word_index < 0 or word_index >= len(words):
+            resolved_word_index = self._resolve_word_position(words, word_index)
+            if resolved_word_index is None:
                 logger.warning(
-                    "toggle_word_validated: invalid word_index=%s", word_index
+                    "toggle_word_validated: invalid word_index=%s for line_index=%s",
+                    word_index,
+                    line_index,
                 )
                 return False
 
-            word = words[word_index]
+            word = words[resolved_word_index]
             labels = set(getattr(word, "word_labels", []) or [])
             is_validated = "validated" not in labels
             if is_validated:
@@ -575,12 +592,15 @@ class PageState:
                     )
                     continue
                 words = list(getattr(lines[line_index], "words", []) or [])
-                if word_index < 0 or word_index >= len(words):
+                resolved_word_index = self._resolve_word_position(words, word_index)
+                if resolved_word_index is None:
                     logger.warning(
-                        "set_words_validated: invalid word_index=%s", word_index
+                        "set_words_validated: invalid word_index=%s for line_index=%s",
+                        word_index,
+                        line_index,
                     )
                     continue
-                word = words[word_index]
+                word = words[resolved_word_index]
                 labels = set(getattr(word, "word_labels", []) or [])
                 already_validated = "validated" in labels
                 if validate and already_validated:

@@ -819,23 +819,23 @@ class WordMatchRenderer:
             edit_button.props('data-testid="edit-word-button"')
             style_word_icon_button(edit_button)
 
-            # Validation toggle next to edit button
-            validated = getattr(word_match, "is_validated", False)
-            val_btn = ui.button(
-                icon="check",
-                on_click=lambda _event, li=line_index, wi=split_word_index: (
-                    self._handle_toggle_word_validated(li, wi, _event)
-                ),
-            ).tooltip("Validated" if validated else "Mark as validated")
-            val_btn.props('size=xs unelevated round data-testid="word-validate-button"')
-            if validated:
-                val_btn.props("color=green text-color=white")
-            else:
-                val_btn.props("color=grey text-color=white")
-            val_btn.disabled = (
-                self._view.toggle_word_validated_callback is None
-                or split_word_index < 0
-            )
+            # Validation toggle applies only to OCR-backed words.
+            if split_word_index >= 0:
+                validated = getattr(word_match, "is_validated", False)
+                val_btn = ui.button(
+                    icon="check",
+                    on_click=lambda _event, li=line_index, wi=split_word_index: (
+                        self._handle_toggle_word_validated(li, wi, _event)
+                    ),
+                ).tooltip("Validated" if validated else "Mark as validated")
+                val_btn.props(
+                    'size=xs unelevated round data-testid="word-validate-button"'
+                )
+                if validated:
+                    val_btn.props("color=green text-color=white")
+                else:
+                    val_btn.props("color=grey text-color=white")
+                val_btn.disabled = self._view.toggle_word_validated_callback is None
 
     def _open_word_edit_dialog(
         self,
@@ -1189,13 +1189,26 @@ class WordMatchRenderer:
         # is_validated mid-loop would see already-toggled values.
         all_validated = line_match.is_fully_validated
         validate = not all_validated
-        targets = [
-            (line_match.line_index, wm.word_index)
-            for wm in line_match.word_matches
-            if wm.word_index is not None
-            and wm.word_index >= 0
-            and wm.is_validated != validate
-        ]
+        targets: list[tuple[int, int]] = []
+        line_object = getattr(line_match, "line_object", None)
+        words = list(getattr(line_object, "words", []) or [])
+        if words:
+            for pos, word in enumerate(words):
+                word_index = getattr(word, "word_index", None)
+                if not isinstance(word_index, int) or word_index < 0:
+                    word_index = pos
+                labels = set(getattr(word, "word_labels", []) or [])
+                is_validated = "validated" in labels
+                if is_validated != validate:
+                    targets.append((line_match.line_index, word_index))
+        else:
+            targets = [
+                (line_match.line_index, wm.word_index)
+                for wm in line_match.word_matches
+                if wm.word_index is not None
+                and wm.word_index >= 0
+                and wm.is_validated != validate
+            ]
         if not targets:
             return
         # Prefer the batch callback so all word state mutates (and persists)
@@ -1206,6 +1219,14 @@ class WordMatchRenderer:
             assert toggle_callback is not None
             for line_idx, word_idx in targets:
                 toggle_callback(line_idx, word_idx)
+        # Rebuild this line from source-of-truth objects so rerendered word
+        # buttons reflect current validation labels even if event delivery lags.
+        refreshed_from_source = self.refresh_local_line_match_from_line_object(
+            line_match.line_index
+        )
+        if not refreshed_from_source:
+            for line_idx, word_idx in targets:
+                self._view.apply_word_validation_change(line_idx, word_idx, validate)
         # If toggling causes the active filter to hide this line, drop it from
         # the selection so the user isn't left with a hidden selected row.
         line_index = line_match.line_index
@@ -1278,6 +1299,9 @@ class WordMatchRenderer:
             fuzz_score=fuzz_score,
             word_index=word_index,
             word_object=word_object,
+            is_validated=(
+                "validated" in set(getattr(word_object, "word_labels", []) or [])
+            ),
         )
 
     def refresh_local_line_match_from_line_object(self, line_index: int) -> bool:

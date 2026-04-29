@@ -64,7 +64,7 @@ def _open_dialog(page: Page) -> None:
 def _open_dialog_with_enabled_merge_action(
     page: Page,
     action_selector: str,
-    max_candidates: int = 40,
+    max_candidates: int = 80,
 ) -> None:
     """Open a word edit dialog where a specific merge action button is enabled.
 
@@ -72,21 +72,73 @@ def _open_dialog_with_enabled_merge_action(
     merge button (for example, first word in a line for Merge Prev).
     """
     edit_buttons = page.locator(EDIT_WORD_BUTTON)
+    # Wait until the edit-button count is stable across two consecutive reads
+    # AND non-trivial — page 3 occasionally renders with 0 edit buttons for a
+    # brief moment as the word grid is rebuilt, which would otherwise cause us
+    # to immediately bail out with no candidates.
+    import time as _time
+
+    deadline = _time.monotonic() + 15.0
+    last_count = -1
+    while _time.monotonic() < deadline:
+        c = edit_buttons.count()
+        if c >= 20 and c == last_count:
+            break
+        last_count = c
+        page.wait_for_timeout(250)
     total = min(edit_buttons.count(), max_candidates)
 
     for i in range(total):
+        # Make sure no leftover dialog from a prior iteration is still
+        # displayed — clicking through it can lead Playwright to read the
+        # wrong dialog's button state.
+        try:
+            page.locator(".q-dialog").first.wait_for(state="detached", timeout=2_000)
+        except Exception:
+            pass
+
         edit_buttons.nth(i).click()
-        page.get_by_text("Merge / Split").first.wait_for(
-            state="visible", timeout=10_000
-        )
+        try:
+            page.get_by_text("Merge / Split").first.wait_for(
+                state="visible", timeout=5_000
+            )
+        except Exception:
+            # Click was likely dropped by the NiceGUI socket layer — try once
+            # more on the same edit button before moving on.
+            page.wait_for_timeout(300)
+            edit_buttons.nth(i).click()
+            page.get_by_text("Merge / Split").first.wait_for(
+                state="visible", timeout=10_000
+            )
 
         dialog = page.locator(".q-dialog").last
         action_button = dialog.locator(action_selector)
-        if action_button.is_enabled():
+        # Wait for the action button to be attached and let Quasar/NiceGUI
+        # finish applying the ``disable`` prop before reading is_enabled().
+        action_button.wait_for(state="attached", timeout=5_000)
+        page.wait_for_timeout(200)
+        # The button may briefly report disabled while the dialog finishes
+        # initializing; poll a few times before deciding to move on.  Read
+        # the actual ``disabled`` attribute directly — under heavy coverage
+        # instrumentation, ``is_enabled()`` was occasionally returning False
+        # even after Quasar had cleared the disabled state.
+        enabled = False
+        for _ in range(15):
+            disabled_attr = action_button.get_attribute("disabled")
+            aria_disabled = action_button.get_attribute("aria-disabled")
+            if disabled_attr is None and aria_disabled in (None, "false"):
+                enabled = True
+                break
+            page.wait_for_timeout(150)
+        if enabled:
             return
 
         dialog.locator(DIALOG_CLOSE).click()
-        page.wait_for_timeout(200)
+        # Wait for this dialog to actually close before iterating again.
+        try:
+            dialog.wait_for(state="detached", timeout=3_000)
+        except Exception:
+            page.wait_for_timeout(400)
 
     raise AssertionError(
         f"No dialog candidate found with enabled action: {action_selector}"

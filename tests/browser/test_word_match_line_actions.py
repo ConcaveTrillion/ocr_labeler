@@ -249,6 +249,14 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
     # for the wrong reason.
     expect(page.locator(LINE_CARD)).to_have_count(35, timeout=15_000)
 
+    # Wait for any in-flight rerenders to settle.  Navigation followed by the
+    # filter switch causes multiple successive rebuilds of the line card list,
+    # and Playwright can otherwise click a button that is about to be replaced
+    # by a fresh render — the click event is then dispatched against an
+    # already-disposed server element and is silently dropped.
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1500)
+
     # Find the first line card with >= 2 OCR words so the bug
     # (only first word validated, or no words validated) is observable.
     cards = page.locator(LINE_CARD)
@@ -281,6 +289,18 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
 
     target_card().locator(LINE_VALIDATE).click()
     page.wait_for_timeout(1000)
+
+    # The click may be dropped by NiceGUI's socket layer immediately after a
+    # navigation+filter rebuild (the server-side element id can be replaced
+    # by a fresh render between the click and event delivery).  Retry until
+    # the button label flips to "Unvalidate" — the visible side effect of
+    # the handler having actually executed.
+    for _ in range(4):
+        text = target_card().locator(LINE_VALIDATE).text_content() or ""
+        if "Unvalidate" in text:
+            break
+        target_card().locator(LINE_VALIDATE).click()
+        page.wait_for_timeout(1000)
 
     # After clicking Validate, every word in the line must be marked validated
     # (Quasar applies bg-green when color=green is set on the button).

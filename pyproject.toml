@@ -47,7 +47,7 @@ include = [
 ]
 
 [tool.uv.sources]
-pd-book-tools = { path = "../pd-book-tools", editable = true }
+pd-book-tools = { git = "https://github.com/ConcaveTrillion/pd-book-tools.git" }
 
 [tool.coverage.run]
 source = ["pd_ocr_labeler"]

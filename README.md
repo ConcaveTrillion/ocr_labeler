@@ -87,29 +87,26 @@ Prerequisites
   helpers. In many setups it is available transitively, but install it
   manually if overlays/previews are missing (see section below).
 
-Clone Repositories
-------------------
+Clone Repository
+----------------
 
-This project depends on `pd-book-tools` via a relative path (configured in `pyproject.toml`). Place both repos side‑by‑side:
-
-```text
-parent_dir/
- pd-book-tools/
- pd_ocr_labeler/   (this repo)
-```
-
-Example:
+This project depends on `pd-book-tools`, which is fetched automatically from
+GitHub by uv (configured in `pyproject.toml`). No local clone of
+`pd-book-tools` is required.
 
 ```bash
-git clone https://github.com/your-org/pd-book-tools.git
-git clone https://github.com/your-org/pd_ocr_labeler.git
-cd pd_ocr_labeler
+git clone https://github.com/ConcaveTrillion/pd-ocr-labeler.git
+cd pd-ocr-labeler
 ```
 
 Install Dependencies
 --------------------
 
-First, follow instructions for uv and CUDA support in the pd-book-tools readme.
+`pd-book-tools` is resolved automatically from GitHub by uv — no manual clone needed.
+
+**CUDA is highly recommended.** OCR inference is significantly faster on GPU. Ensure the appropriate
+PyTorch CUDA index is configured before syncing (see the
+[pd-book-tools README](https://github.com/ConcaveTrillion/pd-book-tools#readme) for setup details).
 
 Using the Makefile (recommended):
 

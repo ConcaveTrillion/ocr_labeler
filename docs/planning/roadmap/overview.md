@@ -18,6 +18,8 @@ Status: forward roadmap snapshot (updated 2026-04-22).
 - Disconnect flush + optional cache prewarm
 - Derived word/line cache strategy and debounced GT updates
 - Distribution strategy and packaging variants
+- **Mac / Apple Silicon (MPS) support** — test and validate OCR inference on Apple Silicon via PyTorch MPS backend;
+  ensure device selection (CUDA > MPS > CPU) works correctly in the labeler's OCR page operations
 
 ## Integrated Sequence
 

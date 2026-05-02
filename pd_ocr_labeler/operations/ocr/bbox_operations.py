@@ -24,6 +24,62 @@ class BboxOperations:
     """Bbox refinement and expansion operations for selected page items."""
 
     # ------------------------------------------------------------------
+    # Internal recompute helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _recompute_lines_and_ancestors(
+        page: Page, affected_line_indices: set[int]
+    ) -> None:
+        """Recompute bboxes for affected lines, their parent items, and the page.
+
+        Replaces the full ``page.finalize_page_structure()`` call with a
+        targeted recompute scoped to the lines that actually changed.
+        Works with both flat page structures (page → lines → words) and
+        hierarchical structures (page → paragraphs → lines → words).
+        """
+        if not affected_line_indices:
+            return
+
+        lines = list(page.lines)
+
+        # Recompute each affected line's bbox (unions its word bboxes)
+        affected_line_objects: set[int] = set()
+        for li in affected_line_indices:
+            if 0 <= li < len(lines):
+                affected_line_objects.add(id(lines[li]))
+                try:
+                    lines[li].recompute_bounding_box()
+                except Exception:
+                    logger.warning("Failed to recompute bbox for line %s", li)
+
+        # Recompute each top-level page item (paragraph or line) that contains
+        # at least one affected line.  ``item.lines`` safely returns [self] for
+        # WORDS blocks and traverses into children for BLOCKS blocks, so this
+        # works regardless of the page's nesting depth.
+        seen_item_ids: set[int] = set()
+        for item in page.items:
+            item_id = id(item)
+            if item_id in seen_item_ids:
+                continue
+            try:
+                item_lines = item.lines
+            except Exception:
+                continue
+            if any(id(line) in affected_line_objects for line in item_lines):
+                seen_item_ids.add(item_id)
+                try:
+                    item.recompute_bounding_box()
+                except Exception:
+                    logger.warning("Failed to recompute parent item bbox")
+
+        # Recompute the page bbox (unions top-level item bboxes)
+        try:
+            page.recompute_bounding_box()
+        except Exception:
+            logger.warning("Failed to recompute page bbox")
+
+    # ------------------------------------------------------------------
     # Internal iteration helpers
     # ------------------------------------------------------------------
 
@@ -41,6 +97,7 @@ class BboxOperations:
             return False
         try:
             changed = False
+            affected_line_indices: set[int] = set()
             for line_index, word_index in unique_keys:
                 line_words = page.validated_line_words(line_index)
                 if line_words is None:
@@ -54,11 +111,13 @@ class BboxOperations:
                         len(line_words) - 1,
                     )
                     return False
-                changed = operation(line_words[word_index]) or changed
+                if operation(line_words[word_index]):
+                    changed = True
+                    affected_line_indices.add(line_index)
             if not changed:
                 logger.warning("Selected words could not be processed (%s)", label)
                 return False
-            page.finalize_page_structure()
+            self._recompute_lines_and_ancestors(page, affected_line_indices)
             logger.info("%s %d selected words", label, len(unique_keys))
             return True
         except Exception as e:
@@ -80,6 +139,7 @@ class BboxOperations:
         try:
             lines = list(page.lines)
             changed = False
+            changed_line_indices: set[int] = set()
             for line_index in unique_indices:
                 if line_index < 0 or line_index >= len(lines):
                     logger.warning(
@@ -89,11 +149,13 @@ class BboxOperations:
                         len(lines) - 1,
                     )
                     return False
-                changed = operation(lines[line_index]) or changed
+                if operation(lines[line_index]):
+                    changed = True
+                    changed_line_indices.add(line_index)
             if not changed:
                 logger.warning("Selected lines could not be processed (%s)", label)
                 return False
-            page.finalize_page_structure()
+            self._recompute_lines_and_ancestors(page, changed_line_indices)
             logger.info("%s %d selected lines", label, len(unique_indices))
             return True
         except Exception as e:
@@ -118,6 +180,7 @@ class BboxOperations:
                 logger.warning("Page has no paragraphs (%s)", label)
                 return False
             changed = False
+            changed_paragraph_indices: set[int] = set()
             for paragraph_index in unique_indices:
                 if paragraph_index < 0 or paragraph_index >= len(paragraphs):
                     logger.warning(
@@ -127,11 +190,37 @@ class BboxOperations:
                         len(paragraphs) - 1,
                     )
                     return False
-                changed = operation(paragraphs[paragraph_index]) or changed
+                if operation(paragraphs[paragraph_index]):
+                    changed = True
+                    changed_paragraph_indices.add(paragraph_index)
             if not changed:
                 logger.warning("Selected paragraphs could not be processed (%s)", label)
                 return False
-            page.finalize_page_structure()
+            # Targeted recompute: lines within changed paragraphs, then
+            # paragraphs themselves, then the page.  The _op functions for
+            # expand/refine paragraphs already call line and paragraph
+            # recompute; doing it again here is idempotent and ensures
+            # correctness for all paragraph operation variants.
+            for paragraph_index in changed_paragraph_indices:
+                para = paragraphs[paragraph_index]
+                for line in getattr(para, "lines", None) or []:
+                    try:
+                        line.recompute_bounding_box()
+                    except Exception:
+                        logger.warning(
+                            "Failed to recompute line bbox in paragraph %s",
+                            paragraph_index,
+                        )
+                try:
+                    para.recompute_bounding_box()
+                except Exception:
+                    logger.warning(
+                        "Failed to recompute paragraph %s bbox", paragraph_index
+                    )
+            try:
+                page.recompute_bounding_box()
+            except Exception:
+                logger.warning("Failed to recompute page bbox")
             logger.info("%s %d selected paragraphs", label, len(unique_indices))
             return True
         except Exception as e:

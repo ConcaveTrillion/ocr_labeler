@@ -62,6 +62,28 @@ class WordValidationChangedEvent:
     is_validated: bool
 
 
+@dataclass(frozen=True)
+class LineGroundTruthCopiedEvent:
+    """Typed event emitted when OCR was bulk-copied to GT for a single line."""
+
+    page_index: int
+    line_index: int
+
+
+@dataclass(frozen=True)
+class WordBboxChangedEvent:
+    """Typed event emitted when a single word's bounding box was edited.
+
+    Allows targeted listeners (e.g. the word match view) to coalesce out the
+    broad page-state refresh that follows ``notify()``, since the dialog
+    layer already re-renders the affected word column directly.
+    """
+
+    page_index: int
+    line_index: int
+    word_index: int
+
+
 class _GroundTruthRematchSkipped(Exception):
     """Raised when GT rematch cannot proceed (no GT text or missing methods)."""
 
@@ -85,6 +107,7 @@ class PageState:
     on_word_validation_change: Event[WordValidationChangedEvent] = field(
         default_factory=Event
     )
+    on_word_bbox_change: Event[WordBboxChangedEvent] = field(default_factory=Event)
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Project | None = field(default=None, init=False)
@@ -165,6 +188,21 @@ class PageState:
             event.is_validated,
         )
         self.on_word_validation_change.emit(event)
+
+    def _emit_word_bbox_changed(self, event: WordBboxChangedEvent) -> None:
+        """Notify listeners of a targeted word bbox mutation.
+
+        The word-edit dialog already re-renders the affected word column
+        directly, so this event lets broad page-state listeners coalesce
+        out their full word-match rebuild.
+        """
+        logger.debug(
+            "[word_bbox_event] emitted page=%s line=%s word=%s",
+            event.page_index,
+            event.line_index,
+            event.word_index,
+        )
+        self.on_word_bbox_change.emit(event)
 
     def _resolve_workspace_save_directory(
         self, save_directory: str | Path | None
@@ -1194,6 +1232,7 @@ class PageState:
         operation_label: str,
         *args,
         _finalize: str = "structural",
+        _rematch_ground_truth: bool = True,
         _reraise: bool = False,
         **kwargs,
     ) -> bool:
@@ -1208,6 +1247,10 @@ class PageState:
             *args: Positional arguments forwarded to the page method.
             _finalize: ``"structural"`` or ``"bbox"`` — selects the
                 post-success finalizer.
+            _rematch_ground_truth: Whether structural finalize should re-run
+                page-wide ground-truth rematching. Set to ``False`` for
+                operations that do not change line/word content (e.g.
+                paragraph splits) to preserve per-word GT customizations.
             _reraise: When *True*, re-raise exceptions instead of
                 returning *False*.
             **kwargs: Keyword arguments forwarded to the operation.
@@ -1217,11 +1260,30 @@ class PageState:
             logger.critical("No page available for %s", operation_label)
             return False
 
+        gt_snapshot = self._snapshot_word_gt_by_id(page)
+
         try:
             result = getattr(page, line_op_name)(*args, **kwargs)
             if result:
                 if _finalize == "structural":
-                    self._finalize_structural_edit(page, operation_label)
+                    self._finalize_structural_edit(
+                        page,
+                        operation_label,
+                        rematch_ground_truth=_rematch_ground_truth,
+                        gt_snapshot=gt_snapshot,
+                    )
+                elif _finalize == "word_bbox":
+                    line_index_arg = args[0] if len(args) >= 1 else None
+                    word_index_arg = args[1] if len(args) >= 2 else None
+                    self._finalize_word_bbox_edit(
+                        page,
+                        line_index=(
+                            line_index_arg if isinstance(line_index_arg, int) else None
+                        ),
+                        word_index=(
+                            word_index_arg if isinstance(word_index_arg, int) else None
+                        ),
+                    )
                 else:
                     self._finalize_bbox_edit(page)
             return result
@@ -1320,6 +1382,8 @@ class PageState:
                 getattr(line, "ground_truth_text", "") or ""
             )
 
+        gt_snapshot = self._snapshot_word_gt_by_id(page)
+
         try:
             result = getattr(line, block_op_name)(*args, **kwargs)
             if result:
@@ -1334,7 +1398,10 @@ class PageState:
                         page,
                         operation_label,
                         rematch_ground_truth=_rematch_ground_truth,
+                        gt_snapshot=gt_snapshot,
                     )
+                elif _finalize == "word_bbox":
+                    self._finalize_word_bbox_edit(page)
                 else:
                     self._finalize_bbox_edit(page)
             return result
@@ -1434,11 +1501,17 @@ class PageState:
         if _pass_page_image:
             args = (page.cv2_numpy_page_image, *args)
 
+        gt_snapshot = self._snapshot_word_gt_by_id(page)
+
         try:
             result = getattr(words[word_index], word_op_name)(*args, **kwargs)
             if result:
                 if _finalize == "structural":
-                    self._finalize_structural_edit(page, operation_label)
+                    self._finalize_structural_edit(
+                        page, operation_label, gt_snapshot=gt_snapshot
+                    )
+                elif _finalize == "word_bbox":
+                    self._finalize_word_bbox_edit(page)
                 else:
                     self._finalize_bbox_edit(page)
             return result
@@ -1457,7 +1530,14 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
-        return self._dispatch_line_op("merge_lines", "line merge", line_indices)
+        # Word identity is preserved across the merge; skip page-wide GT
+        # rematch so per-word GT customizations survive.
+        return self._dispatch_line_op(
+            "merge_lines",
+            "line merge",
+            line_indices,
+            _rematch_ground_truth=False,
+        )
 
     def delete_lines(self, line_indices: list[int]) -> bool:
         """Delete selected lines on the current page.
@@ -1468,7 +1548,14 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
-        return self._dispatch_line_op("delete_lines", "line deletion", line_indices)
+        # Surviving words on other lines retain their per-word GT; skip
+        # page-wide rematch.
+        return self._dispatch_line_op(
+            "delete_lines",
+            "line deletion",
+            line_indices,
+            _rematch_ground_truth=False,
+        )
 
     def merge_paragraphs(self, paragraph_indices: list[int]) -> bool:
         """Merge selected paragraphs on the current page into the first selected paragraph.
@@ -1479,8 +1566,14 @@ class PageState:
         Returns:
             bool: True if merge succeeded, False otherwise.
         """
+        # Paragraph merges only regroup existing lines; word/line content is
+        # unchanged, so skip page-wide GT rematch to preserve per-word GT
+        # customizations.
         return self._dispatch_line_op(
-            "merge_paragraphs", "paragraph merge", paragraph_indices
+            "merge_paragraphs",
+            "paragraph merge",
+            paragraph_indices,
+            _rematch_ground_truth=False,
         )
 
     def delete_paragraphs(self, paragraph_indices: list[int]) -> bool:
@@ -1492,8 +1585,12 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
+        # Surviving content retains its per-word GT; skip page-wide rematch.
         return self._dispatch_line_op(
-            "delete_paragraphs", "paragraph deletion", paragraph_indices
+            "delete_paragraphs",
+            "paragraph deletion",
+            paragraph_indices,
+            _rematch_ground_truth=False,
         )
 
     def split_paragraphs(self, paragraph_indices: list[int]) -> bool:
@@ -1505,8 +1602,14 @@ class PageState:
         Returns:
             bool: True if any selected paragraph was split, False otherwise.
         """
+        # Paragraph splits only regroup existing lines; word/line content is
+        # unchanged, so skip page-wide GT rematch to preserve per-word GT
+        # customizations.
         return self._dispatch_line_op(
-            "split_paragraphs", "paragraph split", paragraph_indices
+            "split_paragraphs",
+            "paragraph split",
+            paragraph_indices,
+            _rematch_ground_truth=False,
         )
 
     def split_paragraph_after_line(self, line_index: int) -> bool:
@@ -1518,10 +1621,13 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
+        # Paragraph splits only regroup existing lines; skip page-wide GT
+        # rematch to preserve per-word GT customizations.
         return self._dispatch_line_op(
             "split_paragraph_after_line",
             "paragraph split-after-line",
             line_index,
+            _rematch_ground_truth=False,
         )
 
     def split_paragraph_with_selected_lines(self, line_indices: list[int]) -> bool:
@@ -1533,10 +1639,13 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
+        # Paragraph splits only regroup existing lines; skip page-wide GT
+        # rematch to preserve per-word GT customizations.
         return self._dispatch_line_op(
             "split_paragraph_with_selected_lines",
             "paragraph split-by-selected-lines",
             line_indices,
+            _rematch_ground_truth=False,
         )
 
     def delete_words(self, word_keys: list[tuple[int, int]]) -> bool:
@@ -1548,7 +1657,13 @@ class PageState:
         Returns:
             bool: True if deletion succeeded, False otherwise.
         """
-        return self._dispatch_line_op("delete_words", "word deletion", word_keys)
+        # Surviving words retain their per-word GT; skip page-wide rematch.
+        return self._dispatch_line_op(
+            "delete_words",
+            "word deletion",
+            word_keys,
+            _rematch_ground_truth=False,
+        )
 
     def merge_word_left(self, line_index: int, word_index: int) -> bool:
         """Merge selected word into its immediate left neighbor.
@@ -1604,12 +1719,17 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
+        # Splitting a word affects only the containing line; rematch GT for
+        # that line only so per-word GT customizations on other lines are
+        # preserved.
         return self._dispatch_block_op(
             "split_word_at_fraction",
             "word split",
             line_index,
             word_index,
             split_fraction,
+            _rematch_ground_truth=False,
+            _rematch_line_ground_truth=True,
         )
 
     def split_word_vertically_and_assign_to_closest_line(
@@ -1628,12 +1748,15 @@ class PageState:
         Returns:
             bool: True if split/reassignment succeeded, False otherwise.
         """
+        # Word identity is preserved on unaffected lines; skip page-wide
+        # rematch so per-word GT customizations survive.
         return self._dispatch_line_op(
             "split_word_vertically_and_assign_to_closest_line",
             "word split vertical closest-line",
             line_index,
             word_index,
             split_fraction,
+            _rematch_ground_truth=False,
         )
 
     def split_line_after_word(
@@ -1650,8 +1773,13 @@ class PageState:
         Returns:
             bool: True if split succeeded, False otherwise.
         """
+        # Word identity is preserved across the split; skip page-wide rematch.
         return self._dispatch_line_op(
-            "split_line_after_word", "line split-after-word", line_index, word_index
+            "split_line_after_word",
+            "line split-after-word",
+            line_index,
+            word_index,
+            _rematch_ground_truth=False,
         )
 
     def rebox_word(
@@ -1814,7 +1942,7 @@ class PageState:
             top_delta,
             bottom_delta,
             refine_after=refine_after,
-            _finalize="bbox",
+            _finalize="word_bbox",
             _reraise=True,
         )
 
@@ -1981,10 +2109,12 @@ class PageState:
         Returns:
             bool: True if extraction succeeded, False otherwise.
         """
+        # Word identity is preserved; skip page-wide rematch.
         return self._dispatch_line_op(
             "split_line_with_selected_words",
             "selected-word single-line extraction",
             word_keys,
+            _rematch_ground_truth=False,
         )
 
     def split_lines_into_selected_and_unselected_words(
@@ -1992,10 +2122,12 @@ class PageState:
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Split each affected line into selected/unselected word lines."""
+        # Word identity is preserved; skip page-wide rematch.
         return self._dispatch_line_op(
             "split_lines_into_selected_and_unselected_words",
             "selected/unselected per-line split",
             word_keys,
+            _rematch_ground_truth=False,
         )
 
     def group_selected_words_into_new_paragraph(
@@ -2010,10 +2142,12 @@ class PageState:
         Returns:
             bool: True if grouping succeeded, False otherwise.
         """
+        # Word identity is preserved; skip page-wide rematch.
         return self._dispatch_line_op(
             "group_selected_words_into_new_paragraph",
             "selected-word paragraph grouping",
             word_keys,
+            _rematch_ground_truth=False,
         )
 
     def get_page_texts(self, page_index: int) -> tuple[str, str]:
@@ -2150,10 +2284,15 @@ class PageState:
         operation: str,
         *,
         rematch_ground_truth: bool = True,
+        gt_snapshot: dict[int, str] | None = None,
     ) -> None:
-        """Run post-success page updates after structural OCR edits."""
-        self._clear_all_validation(page)
+        """Run post-success page updates after structural OCR edits.
 
+        When *gt_snapshot* (id-keyed pre-edit per-word GT mapping) is
+        provided, ``validated`` labels are cleared only for words whose GT
+        actually changed.  Otherwise, all ``validated`` labels are cleared
+        (legacy fallback).
+        """
         if rematch_ground_truth:
             try:
                 self._rematch_page_ground_truth(page, operation)
@@ -2165,6 +2304,11 @@ class PageState:
                 logger.exception("Failed to re-match ground truth after %s", operation)
         else:
             logger.debug("Skipping GT rematch after %s by operation policy", operation)
+
+        if gt_snapshot is not None:
+            self._clear_validation_for_changed_gt_by_id(page, gt_snapshot)
+        else:
+            self._clear_all_validation(page)
 
         self._refresh_page_overlay_images(page)
         self._invalidate_text_cache()
@@ -2196,6 +2340,53 @@ class PageState:
         except Exception:
             logger.debug("Error snapshotting word GT", exc_info=True)
         return snapshot
+
+    def _snapshot_word_gt_by_id(self, page: object) -> dict[int, str]:
+        """Return a snapshot of per-word GT text keyed by ``id(word)``.
+
+        Unlike :meth:`_snapshot_word_ground_truth`, this is robust across
+        structural edits that change line/word indices: surviving word
+        objects retain their identity so the snapshot can be looked up after
+        the edit completes.
+        """
+        snapshot: dict[int, str] = {}
+        try:
+            for line in getattr(page, "lines", []) or []:
+                for word in getattr(line, "words", []) or []:
+                    snapshot[id(word)] = str(
+                        getattr(word, "ground_truth_text", "") or ""
+                    )
+        except Exception:
+            logger.debug("Error snapshotting word GT by id", exc_info=True)
+        return snapshot
+
+    def _clear_validation_for_changed_gt_by_id(
+        self,
+        page: object,
+        gt_snapshot: dict[int, str],
+    ) -> None:
+        """Clear 'validated' only for words whose GT changed vs the id-keyed snapshot.
+
+        Words that did not exist before the edit (no entry in the snapshot)
+        are treated as changed, since they cannot have been previously
+        validated.
+        """
+        try:
+            for line in getattr(page, "lines", []) or []:
+                for word in getattr(line, "words", []) or []:
+                    old_gt = gt_snapshot.get(id(word))
+                    new_gt = str(getattr(word, "ground_truth_text", "") or "")
+                    if old_gt is None or old_gt != new_gt:
+                        labels = getattr(word, "word_labels", None)
+                        if labels and "validated" in labels:
+                            labels_set = set(labels)
+                            labels_set.discard("validated")
+                            word.word_labels = list(labels_set)
+        except Exception:
+            logger.debug(
+                "Error clearing validation for changed GT words by id",
+                exc_info=True,
+            )
 
     def _clear_validation_for_changed_gt(
         self,
@@ -2260,6 +2451,49 @@ class PageState:
         self._auto_save_to_cache()
         self.notify()
 
+    def _finalize_word_bbox_edit(
+        self,
+        page: object,
+        *,
+        line_index: int | None = None,
+        word_index: int | None = None,
+    ) -> None:
+        """Run post-success updates after a single-word bbox edit.
+
+        Like :meth:`_finalize_bbox_edit`, but invalidates page-level overlay
+        images without synchronously regenerating them. The viewmodel's
+        async image-update pipeline regenerates the overlays on a background
+        thread, so single-word bbox tweaks (e.g. nudge, crop, refine) do not
+        block the main thread on a full page-image rebuild. The word-edit
+        dialog handles its own targeted refresh of the affected word.
+
+        The original page image is intentionally **not** invalidated and the
+        page-level overlay refresh nonce is **not** bumped: a single-word
+        bbox tweak does not change the original page pixels, so the URL for
+        the original page image must remain stable. Every per-word column
+        renders as a CSS slice over that shared URL — bumping the nonce
+        would force every word slice to re-fetch the (unchanged) page image
+        and produce a visible flicker of "all per-word images regenerating".
+        """
+        self._refresh_page_overlay_images(page, eager=False, bump_nonce=False)
+        # Emit the bbox-changed event BEFORE auto-save so that text_tabs'
+        # _on_word_bbox_changed listener can pre-load _last_word_match_page_key
+        # with the updated key.  persist_page_to_file carries @notify_on_completion
+        # which fires page_state.notify() → the full app-state-change chain including
+        # _sync_text_tabs → update_word_matches.  If the key is not pre-loaded first,
+        # the dedup check always fails and a full DOM rebuild fires on every crop.
+        if line_index is not None and word_index is not None:
+            with contextlib.suppress(Exception):
+                self._emit_word_bbox_changed(
+                    WordBboxChangedEvent(
+                        page_index=self._current_page_index,
+                        line_index=line_index,
+                        word_index=word_index,
+                    )
+                )
+        self._auto_save_to_cache()
+        self.notify()
+
     def _auto_save_to_cache(self) -> None:
         """Persist the current page to the cache directory after edits.
 
@@ -2286,8 +2520,30 @@ class PageState:
         except Exception:
             logger.debug("Auto-save to cache error", exc_info=True)
 
-    def _refresh_page_overlay_images(self, page: object) -> None:
-        """Refresh page overlay images so bbox layers redraw after line edits."""
+    def _refresh_page_overlay_images(
+        self,
+        page: object,
+        *,
+        eager: bool = True,
+        bump_nonce: bool = True,
+    ) -> None:
+        """Refresh page overlay images so bbox layers redraw after line edits.
+
+        When ``eager`` is True (default), regenerate overlay images
+        synchronously via ``page.refresh_page_images()``. When False, only
+        invalidate cached overlays + bump the cache-busting nonce; the
+        viewmodel's async image-update pipeline will regenerate them on a
+        background thread without blocking the UI.
+
+        When ``bump_nonce`` is False, suppress the page-level cache-busting
+        nonce and skip the broad ``cached_image_filenames`` invalidation.
+        Use this for edits that do **not** alter the original page pixels
+        (e.g. single-word bbox tweaks): keeping the original page image URL
+        stable prevents every CSS-slice word column from re-fetching the
+        shared background image. Page-overlay images self-invalidate via
+        their content-hash filenames once their numpy slots are nulled, so
+        the nonce is not required to bust their URLs.
+        """
         overlay_attrs = (
             "cv2_numpy_page_image_paragraph_with_bboxes",
             "cv2_numpy_page_image_line_with_bboxes",
@@ -2299,18 +2555,24 @@ class PageState:
             with contextlib.suppress(Exception):
                 setattr(page, attr_name, None)
 
-        # Invalidate cached image filenames so the view model's fast path
-        # doesn't serve stale overlay images from disk.
-        if self.current_page_model is not None:
-            self.current_page_model.cached_image_filenames = None
+        if bump_nonce:
+            # Invalidate cached image filenames so the view model's fast path
+            # doesn't serve stale overlay images from disk.
+            if self.current_page_model is not None:
+                self.current_page_model.cached_image_filenames = None
 
-        # Force downstream image URL cache-busting for this edit cycle.
-        with contextlib.suppress(Exception):
-            setattr(
-                page,
-                "_pd_ocr_labeler_overlay_refresh_nonce",
-                self._next_overlay_refresh_nonce(),
-            )
+            # Force downstream image URL cache-busting for this edit cycle.
+            with contextlib.suppress(Exception):
+                setattr(
+                    page,
+                    "_pd_ocr_labeler_overlay_refresh_nonce",
+                    self._next_overlay_refresh_nonce(),
+                )
+
+        if not eager:
+            # Defer regeneration: the viewmodel's async pipeline will detect
+            # the invalidated overlays and regen on a background thread.
+            return
 
         refresh_method = getattr(page, "refresh_page_images", None)
         if callable(refresh_method):

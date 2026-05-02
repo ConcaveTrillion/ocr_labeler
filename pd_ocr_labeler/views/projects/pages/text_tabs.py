@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 from ....state import PageState
 from ....state.page_state import (
+    LineGroundTruthCopiedEvent,
+    WordBboxChangedEvent,
     WordGroundTruthChangedEvent,
     WordStyleChangedEvent,
     WordValidationChangedEvent,
@@ -399,6 +401,14 @@ class TextTabs:
                 self._on_word_validation_changed
             )
 
+        if self.page_state and hasattr(self.page_state, "on_word_bbox_change"):
+            self.page_state.on_word_bbox_change.subscribe(self._on_word_bbox_changed)
+
+        if self.page_state and hasattr(self.page_state, "on_line_ground_truth_copied"):
+            self.page_state.on_line_ground_truth_copied.subscribe(
+                self._on_line_ground_truth_copied
+            )
+
         project_state = (
             self.page_state._project_state
             if self.page_state and hasattr(self.page_state, "_project_state")
@@ -431,6 +441,18 @@ class TextTabs:
             with contextlib.suppress(Exception):
                 self.page_state.on_word_validation_change.unsubscribe(
                     self._on_word_validation_changed
+                )
+
+        if self.page_state and hasattr(self.page_state, "on_word_bbox_change"):
+            with contextlib.suppress(Exception):
+                self.page_state.on_word_bbox_change.unsubscribe(
+                    self._on_word_bbox_changed
+                )
+
+        if self.page_state and hasattr(self.page_state, "on_line_ground_truth_copied"):
+            with contextlib.suppress(Exception):
+                self.page_state.on_line_ground_truth_copied.unsubscribe(
+                    self._on_line_ground_truth_copied
                 )
 
         project_state = (
@@ -660,6 +682,60 @@ class TextTabs:
             event.line_index,
             event.word_index,
             event.is_validated,
+        )
+
+        page = self.page_state.current_page if self.page_state is not None else None
+        if page is not None:
+            self._last_word_match_page_key = self._build_word_match_page_key(page)
+
+    def _on_line_ground_truth_copied(self, event: LineGroundTruthCopiedEvent) -> None:
+        """Apply targeted refresh after OCR was bulk-copied to GT for a line.
+
+        Refreshes only the affected line card instead of rebuilding all lines.
+        The ``notify()`` call that follows in the state layer is coalesced via
+        the updated page-key dedupe mechanism.
+        """
+        if not self._ensure_attached():
+            return
+        if event.page_index != self._current_page_state_index():
+            return
+        if not getattr(self, "word_match_view", None):
+            return
+
+        logger.debug(
+            "[word_match_refresh] targeted.line_gt_copied.consumed page=%s line=%s",
+            event.page_index,
+            event.line_index,
+        )
+        self.word_match_view.gt_editing.apply_line_ground_truth_copy(event.line_index)
+
+        page = self.page_state.current_page if self.page_state is not None else None
+        if page is not None:
+            self._last_word_match_page_key = self._build_word_match_page_key(page)
+
+    def _on_word_bbox_changed(self, event: WordBboxChangedEvent) -> None:
+        """Coalesce broad word-match rebuild after a single-word bbox edit.
+
+        The word-edit dialog already calls ``rerender_word_column`` for the
+        affected word after a successful bbox apply. The page state then
+        fires ``notify()``, which would normally trigger a full rebuild via
+        :meth:`update_word_matches`. Updating ``_last_word_match_page_key``
+        here lets the dedupe check inside ``update_word_matches`` skip that
+        redundant rebuild so the rest of the page's per-word images do not
+        flicker / regenerate.
+        """
+        if not self._ensure_attached():
+            return
+        if event.page_index != self._current_page_state_index():
+            return
+        if not getattr(self, "word_match_view", None):
+            return
+
+        logger.debug(
+            "[word_match_refresh] targeted.word_bbox_changed.consumed page=%s line=%s word=%s",
+            event.page_index,
+            event.line_index,
+            event.word_index,
         )
 
         page = self.page_state.current_page if self.page_state is not None else None

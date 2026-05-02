@@ -119,8 +119,8 @@ def test_project_state_change_refreshes_loading_cache_when_page_finishes_loading
     assert page_state.current_gt_text == "ground truth text"
 
 
-def test_merge_lines_reapplies_ground_truth_after_merge(monkeypatch):
-    """Successful line merge should re-run page GT matching to keep word GT aligned."""
+def test_merge_lines_preserves_in_memory_ground_truth_after_merge(monkeypatch):
+    """Successful line merge should not trigger destructive page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -157,8 +157,8 @@ def test_merge_lines_reapplies_ground_truth_after_merge(monkeypatch):
     result = page_state.merge_lines([0, 1])
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
 
@@ -202,10 +202,10 @@ def test_get_page_texts_falls_back_to_project_image_path_for_gt_lookup(tmp_path)
     assert gt_text == "ground truth text"
 
 
-def test_merge_lines_reapplies_gt_via_project_image_path_when_page_name_missing(
+def test_merge_lines_does_not_rematch_when_page_name_missing(
     monkeypatch,
 ):
-    """Merge rematch should work even when current page has no name attribute value."""
+    """Merge should succeed without page-wide rematch even when page has no name."""
     page_state = PageState()
 
     class ProjectStub:
@@ -243,17 +243,21 @@ def test_merge_lines_reapplies_gt_via_project_image_path_when_page_name_missing(
     result = page_state.merge_lines([0, 1])
 
     assert result is True
-    assert page_state.current_page.removed_gt is True
-    assert page_state.current_page.added_gt == "ground truth content"
+    assert page_state.current_page.removed_gt is False
+    assert page_state.current_page.added_gt is None
     assert notified == ["changed"]
 
 
-def test_merge_lines_rematches_ground_truth_on_merged_line():
-    """After merging lines, GT matching should rerun and annotate merged line text."""
+def test_merge_lines_preserves_per_word_ground_truth_on_merged_line():
+    """After merging lines, per-word GT should survive (no destructive rematch)."""
     page_state = PageState()
 
-    line1 = _line([_word("alpha", 0)], 0)
-    line2 = _line([_word("beta", 20)], 20)
+    word_a = _word("alpha", 0)
+    word_a.ground_truth_text = "ALPHA-CUSTOM"
+    word_b = _word("beta", 20)
+    word_b.ground_truth_text = "BETA-CUSTOM"
+    line1 = _line([word_a], 0)
+    line2 = _line([word_b], 20)
     page = Page(width=100, height=100, page_index=0, items=[line1, line2])
     page.name = "page_001.png"
 
@@ -267,7 +271,7 @@ def test_merge_lines_rematches_ground_truth_on_merged_line():
         "ProjectStub",
         (),
         {
-            "ground_truth_map": {"page_001.png": "alpha beta"},
+            "ground_truth_map": {"page_001.png": "different unrelated gt"},
             "image_paths": [Path("/tmp/page_001.png")],
         },
     )()
@@ -275,12 +279,13 @@ def test_merge_lines_rematches_ground_truth_on_merged_line():
 
     assert page_state.merge_lines([0, 1]) is True
     assert len(page.lines) == 1
-    assert page.lines[0].text == "alpha beta"
-    assert page.lines[0].ground_truth_text == "alpha beta"
+    merged_word_gts = [w.ground_truth_text for w in page.lines[0].words]
+    assert "ALPHA-CUSTOM" in merged_word_gts
+    assert "BETA-CUSTOM" in merged_word_gts
 
 
-def test_delete_lines_reapplies_ground_truth_after_delete(monkeypatch):
-    """Successful line deletion should re-run page GT matching to keep alignment stable."""
+def test_delete_lines_preserves_in_memory_ground_truth_after_delete(monkeypatch):
+    """Line deletion should not trigger destructive page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -317,8 +322,8 @@ def test_delete_lines_reapplies_ground_truth_after_delete(monkeypatch):
     result = page_state.delete_lines([1])
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
 
@@ -353,8 +358,8 @@ def test_merge_paragraphs_rematches_ground_truth_on_merged_paragraph():
     assert page.paragraphs[0].text == "alpha\nbeta"
 
 
-def test_delete_paragraphs_reapplies_ground_truth_after_delete(monkeypatch):
-    """Successful paragraph deletion should re-run GT matching and refresh overlays."""
+def test_delete_paragraphs_preserves_in_memory_ground_truth_after_delete(monkeypatch):
+    """Paragraph deletion should not trigger destructive page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -391,14 +396,14 @@ def test_delete_paragraphs_reapplies_ground_truth_after_delete(monkeypatch):
     result = page_state.delete_paragraphs([0])
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
 
 
-def test_delete_words_reapplies_ground_truth_after_delete(monkeypatch):
-    """Successful word deletion should re-run GT matching and refresh overlays."""
+def test_delete_words_preserves_in_memory_ground_truth_after_delete(monkeypatch):
+    """Word deletion should not trigger destructive page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -435,8 +440,8 @@ def test_delete_words_reapplies_ground_truth_after_delete(monkeypatch):
     result = page_state.delete_words([(0, 1)])
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
 
@@ -564,7 +569,7 @@ def test_merge_word_right_preserves_in_memory_ground_truth_after_merge(monkeypat
 
 
 def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
-    """Successful word split should re-run GT matching and refresh overlays."""
+    """Successful word split should rematch only the affected line, not the whole page."""
     page_state = PageState()
 
     class ProjectStub:
@@ -572,6 +577,8 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
             self.ground_truth_map = {"page_001.png": "ground truth content"}
 
     class BlockStub:
+        ground_truth_text = "alpha beta"
+
         def split_word_at_fraction(self, _word_index, _split_fraction):
             return True
 
@@ -597,20 +604,36 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     page_state._project = ProjectStub()
     page_state.find_ground_truth_text = lambda page_name, gt_map: gt_map.get(page_name)
 
+    rematch_calls = []
+    monkeypatch.setattr(
+        page_state,
+        "_rematch_edited_line_ground_truth",
+        lambda line, snapshot, operation: rematch_calls.append(
+            (line, snapshot, operation)
+        ),
+    )
+
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
     result = page_state.split_word(0, 0, 0.5)
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    # split_word must NOT trigger a page-wide GT rematch — only the affected
+    # line is rematched (so per-word GT customizations on other lines are
+    # preserved).
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
+    assert len(rematch_calls) == 1
+    assert rematch_calls[0][0] is page.lines[0]
+    assert rematch_calls[0][1] == "alpha beta"
+    assert rematch_calls[0][2] == "word split"
 
 
-def test_split_word_vertical_closest_line_reapplies_ground_truth(monkeypatch):
-    """Vertical split should re-run GT matching and refresh overlays."""
+def test_split_word_vertical_closest_line_preserves_ground_truth(monkeypatch):
+    """Vertical split should not trigger destructive page-wide GT rematch."""
     page_state = PageState()
 
     class ProjectStub:
@@ -649,8 +672,8 @@ def test_split_word_vertical_closest_line_reapplies_ground_truth(monkeypatch):
     result = page_state.split_word_vertically_and_assign_to_closest_line(0, 0, 0.5)
 
     assert result is True
-    assert page.removed_gt is True
-    assert page.added_gt == "ground truth content"
+    assert page.removed_gt is False
+    assert page.added_gt is None
     assert page.overlay_refresh_called is True
     assert notified == ["changed"]
 
@@ -716,13 +739,20 @@ def test_rebox_word_invalidates_overlay_cache_before_refresh(monkeypatch):
     assert page.cv2_numpy_page_image_word_with_bboxes == "fresh-word-overlay"
 
 
-def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
-    """Successful word bbox nudge should refresh overlays and notify listeners."""
+def test_nudge_word_bbox_invalidates_overlays_without_eager_refresh(monkeypatch):
+    """Word bbox nudge should invalidate page overlays and notify, but not
+    synchronously regenerate them — the viewmodel's async pipeline handles
+    regen on a background thread so the UI does not block on the apply.
+    """
     page_state = PageState()
 
     class PageStub:
         def __init__(self):
             self.overlay_refresh_called = False
+            self.cv2_numpy_page_image_paragraph_with_bboxes = object()
+            self.cv2_numpy_page_image_line_with_bboxes = object()
+            self.cv2_numpy_page_image_word_with_bboxes = object()
+            self.cv2_numpy_page_image_matched_word_with_colors = object()
 
         def refresh_page_images(self):
             self.overlay_refresh_called = True
@@ -747,8 +777,77 @@ def test_nudge_word_bbox_refreshes_overlay_and_notifies(monkeypatch):
     result = page_state.nudge_word_bbox(0, 1, 1.0, 1.0, -1.0, -1.0)
 
     assert result is True
-    assert page.overlay_refresh_called is True
+    # Overlays must be invalidated so the async pipeline regenerates them...
+    assert page.cv2_numpy_page_image_paragraph_with_bboxes is None
+    assert page.cv2_numpy_page_image_line_with_bboxes is None
+    assert page.cv2_numpy_page_image_word_with_bboxes is None
+    assert page.cv2_numpy_page_image_matched_word_with_colors is None
+    # ...but page.refresh_page_images() must NOT be called synchronously.
+    assert page.overlay_refresh_called is False
     assert notified == ["changed"]
+
+
+def test_nudge_word_bbox_preserves_original_image_url_stability(monkeypatch):
+    """Word bbox nudge must NOT bump the page-level overlay refresh nonce
+    or invalidate ``cached_image_filenames``.
+
+    The original page image is unchanged by a single-word bbox tweak, and
+    every per-word column renders as a CSS slice over that shared URL.
+    Bumping the nonce or invalidating filename cache would cause every
+    per-word slice to re-fetch the (unchanged) page image and produce a
+    visible flicker of "all per-word images regenerating". A targeted
+    ``WordBboxChangedEvent`` is also emitted so listeners can coalesce out
+    the broad word-match rebuild.
+    """
+    page_state = PageState()
+
+    class PageStub:
+        def __init__(self):
+            self.cv2_numpy_page_image_paragraph_with_bboxes = object()
+            self.cv2_numpy_page_image_line_with_bboxes = object()
+            self.cv2_numpy_page_image_word_with_bboxes = object()
+            self.cv2_numpy_page_image_matched_word_with_colors = object()
+
+        def nudge_word_bbox(
+            self,
+            _line_index,
+            _word_index,
+            _left,
+            _right,
+            _top,
+            _bottom,
+            refine_after=True,
+        ):
+            return True
+
+    class PageModelStub:
+        cached_image_filenames = {"original": "preexisting.png"}
+
+    page = PageStub()
+    page_state.current_page = page
+    page_state.current_page_model = PageModelStub()
+
+    received_events: list = []
+    page_state.on_word_bbox_change.subscribe(received_events.append)
+
+    nonce_before = getattr(page, "_pd_ocr_labeler_overlay_refresh_nonce", None)
+
+    result = page_state.nudge_word_bbox(2, 3, 1.0, 1.0, -1.0, -1.0)
+
+    assert result is True
+    nonce_after = getattr(page, "_pd_ocr_labeler_overlay_refresh_nonce", None)
+    # Nonce must remain unchanged so the original page image URL stays
+    # stable for word-slice CSS background-image references.
+    assert nonce_after == nonce_before
+    # Filename cache must be preserved so the fast image path does not
+    # force a re-encode of the unchanged original.
+    assert page_state.current_page_model.cached_image_filenames == {
+        "original": "preexisting.png"
+    }
+    # Targeted event was emitted with correct identity.
+    assert len(received_events) == 1
+    assert received_events[0].line_index == 2
+    assert received_events[0].word_index == 3
 
 
 def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
@@ -1051,6 +1150,354 @@ def test_split_paragraph_with_selected_lines_splits_selected_vs_unselected():
     assert len(page.paragraphs) == 2
     assert [line.text for line in page.paragraphs[0].lines] == ["alpha", "gamma"]
     assert [line.text for line in page.paragraphs[1].lines] == ["beta"]
+
+
+def _make_split_page_state_with_custom_word_gt(
+    page_gt_text: str,
+) -> tuple[PageState, "Page"]:
+    """Build a PageState whose page has per-word GT that differs from page-level GT.
+
+    Used to verify that paragraph-split operations do not run a page-wide GT
+    rematch (which would clobber the per-word GT customizations).
+    """
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0)], 0)
+    line2 = _line([_word("beta", 20)], 20)
+    line3 = _line([_word("gamma", 40)], 40)
+    para = _paragraph([line1, line2, line3], 0)
+    page = Page(width=100, height=100, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    # Simulate user having copied OCR->GT on each line (per-word GT set to a
+    # custom value). The page-level GT mapping below intentionally differs so
+    # that any page-wide rematch would overwrite these values.
+    for line in (line1, line2, line3):
+        for word in line.words:
+            word.ground_truth_text = f"custom-{word.text}"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": page_gt_text},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+    return page_state, page
+
+
+def test_split_paragraph_after_line_preserves_per_word_ground_truth():
+    """Paragraph split must NOT trigger page-wide GT rematch (regression test).
+
+    Reproduces the bug where splitting a paragraph at a specific line caused
+    per-word GT (e.g. set via line-level Copy OCR->GT) to be lost because the
+    structural-edit finalizer re-applied the page-level GT mapping.
+    """
+    page_state, page = _make_split_page_state_with_custom_word_gt("alpha\nbeta\ngamma")
+
+    assert page_state.split_paragraph_after_line(0) is True
+
+    gts = [word.ground_truth_text for line in page.lines for word in line.words]
+    assert gts == ["custom-alpha", "custom-beta", "custom-gamma"]
+
+
+def test_split_paragraph_with_selected_lines_preserves_per_word_ground_truth():
+    """Split-by-selected-lines must NOT trigger page-wide GT rematch."""
+    page_state, page = _make_split_page_state_with_custom_word_gt("alpha\nbeta\ngamma")
+
+    assert page_state.split_paragraph_with_selected_lines([0, 2]) is True
+
+    gts_by_text = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts_by_text == {
+        "alpha": "custom-alpha",
+        "beta": "custom-beta",
+        "gamma": "custom-gamma",
+    }
+
+
+def test_split_paragraphs_preserves_per_word_ground_truth():
+    """split_paragraphs (one-paragraph-per-line) must NOT trigger GT rematch."""
+    page_state, page = _make_split_page_state_with_custom_word_gt("alpha\nbeta\ngamma")
+
+    assert page_state.split_paragraphs([0]) is True
+
+    gts = [word.ground_truth_text for line in page.lines for word in line.words]
+    assert gts == ["custom-alpha", "custom-beta", "custom-gamma"]
+
+
+def test_merge_paragraphs_preserves_per_word_ground_truth():
+    """Paragraph merge must NOT trigger page-wide GT rematch (regression test).
+
+    Merging two paragraphs only regroups existing lines under one paragraph;
+    word/line content is unchanged. Re-running page-wide GT matching from
+    project.ground_truth_map would clobber per-word GT the user copied in
+    via line-level Copy OCR->GT.
+    """
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0)], 0)
+    line2 = _line([_word("beta", 20)], 20)
+    para1 = _paragraph([line1], 0)
+    para2 = _paragraph([line2], 30)
+    page = Page(width=100, height=100, page_index=0, items=[para1, para2])
+    page.name = "page_001.png"
+
+    # User has copied OCR->GT on each line; the page-level GT mapping below
+    # intentionally differs so any page-wide rematch would overwrite these.
+    for line in (line1, line2):
+        for word in line.words:
+            word.ground_truth_text = f"custom-{word.text}"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": "alpha\n\nbeta"},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    assert page_state.merge_paragraphs([0, 1]) is True
+    assert len(page.paragraphs) == 1
+
+    gts = [word.ground_truth_text for line in page.lines for word in line.words]
+    assert gts == ["custom-alpha", "custom-beta"]
+
+
+def test_split_paragraph_after_line_preserves_validated_word_labels():
+    """Paragraph split must not strip 'validated' labels from unchanged words."""
+    page_state, page = _make_split_page_state_with_custom_word_gt("alpha\nbeta\ngamma")
+    for line in page.lines:
+        for word in line.words:
+            word.word_labels = ["validated"]
+
+    assert page_state.split_paragraph_after_line(0) is True
+
+    for line in page.lines:
+        for word in line.words:
+            assert "validated" in (word.word_labels or []), (
+                f"validated label removed from unchanged word {word.text}"
+            )
+
+
+def test_split_word_preserves_per_word_ground_truth_on_other_lines():
+    """split_word must rematch only the affected line; other lines keep custom GT."""
+    page_state = PageState()
+
+    # Two lines, each with its own custom per-word GT.
+    line1 = _line([_word("alphabeta", 0)], 0)
+    line2 = _line([_word("gamma", 0), _word("delta", 30)], 20)
+    para = _paragraph([line1, line2], 0)
+    page = Page(width=120, height=100, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    for line in (line1, line2):
+        for word in line.words:
+            word.ground_truth_text = f"custom-{word.text}"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": "alphabeta\ngamma delta"},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+
+    # Split "alphabeta" (line 0, word 0) at the midpoint.
+    assert page_state.split_word(0, 0, 0.5) is True
+
+    # Line 1 (unaffected) keeps its custom per-word GT.
+    line2_after = page.lines[1]
+    gts_line2 = [word.ground_truth_text for word in line2_after.words]
+    assert gts_line2 == ["custom-gamma", "custom-delta"]
+
+
+def _make_multiword_page_state_with_custom_word_gt() -> tuple[PageState, "Page"]:
+    """Two-line, multi-word page with custom per-word GT and mismatched page GT."""
+    page_state = PageState()
+
+    line1 = _line([_word("alpha", 0), _word("beta", 20), _word("gamma", 40)], 0)
+    line2 = _line([_word("delta", 0), _word("epsilon", 20), _word("zeta", 40)], 20)
+    para = _paragraph([line1, line2], 0)
+    page = Page(width=120, height=100, page_index=0, items=[para])
+    page.name = "page_001.png"
+
+    for line in (line1, line2):
+        for word in line.words:
+            word.ground_truth_text = f"custom-{word.text}"
+
+    page_state.current_page = page
+    page_state.current_page_model = type(
+        "PageModelStub",
+        (),
+        {"name": "page_001.png", "image_path": None},
+    )()
+    page_state._project = type(
+        "ProjectStub",
+        (),
+        {
+            "ground_truth_map": {"page_001.png": "wholly\ndifferent\nground truth"},
+            "image_paths": [Path("/tmp/page_001.png")],
+        },
+    )()
+    page_state._current_page_index = 0
+    return page_state, page
+
+
+def test_split_line_after_word_preserves_per_word_ground_truth():
+    """Splitting a line after a word must preserve per-word GT on every word."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    assert page_state.split_line_after_word(0, 0) is True
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "alpha": "custom-alpha",
+        "beta": "custom-beta",
+        "gamma": "custom-gamma",
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_split_line_with_selected_words_preserves_per_word_ground_truth():
+    """Extracting selected words into a new line must preserve per-word GT."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    assert page_state.split_line_with_selected_words([(0, 1), (1, 1)]) is True
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "alpha": "custom-alpha",
+        "beta": "custom-beta",
+        "gamma": "custom-gamma",
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_split_lines_into_selected_and_unselected_words_preserves_per_word_ground_truth():
+    """Per-line split into selected/unselected word lines must preserve GT."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    assert (
+        page_state.split_lines_into_selected_and_unselected_words([(0, 1), (1, 0)])
+        is True
+    )
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "alpha": "custom-alpha",
+        "beta": "custom-beta",
+        "gamma": "custom-gamma",
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_group_selected_words_into_new_paragraph_preserves_per_word_ground_truth():
+    """Grouping words into a new paragraph must preserve per-word GT."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    assert page_state.group_selected_words_into_new_paragraph([(0, 0), (1, 2)]) is True
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "alpha": "custom-alpha",
+        "beta": "custom-beta",
+        "gamma": "custom-gamma",
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_split_word_vertically_and_assign_to_closest_line_preserves_other_word_gt():
+    """Vertical word split must preserve per-word GT on the unaffected line."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    # Split "beta" (line 0, word 1). The unaffected line 1 must retain its
+    # custom per-word GT (page-wide rematch would clobber it).
+    assert (
+        page_state.split_word_vertically_and_assign_to_closest_line(0, 1, 0.5) is True
+    )
+
+    line2_gts = {word.text: word.ground_truth_text for word in page.lines[-1].words}
+    assert line2_gts == {
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_delete_words_preserves_per_word_ground_truth_on_surviving_words():
+    """Deleting words must not clobber per-word GT on surviving words."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    # Delete the middle word from each line.
+    assert page_state.delete_words([(0, 1), (1, 1)]) is True
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "alpha": "custom-alpha",
+        "gamma": "custom-gamma",
+        "delta": "custom-delta",
+        "zeta": "custom-zeta",
+    }
+
+
+def test_delete_lines_preserves_per_word_ground_truth_on_surviving_lines():
+    """Deleting a line must not clobber per-word GT on the surviving line."""
+    page_state, page = _make_multiword_page_state_with_custom_word_gt()
+
+    assert page_state.delete_lines([0]) is True
+
+    gts = {
+        word.text: word.ground_truth_text for line in page.lines for word in line.words
+    }
+    assert gts == {
+        "delta": "custom-delta",
+        "epsilon": "custom-epsilon",
+        "zeta": "custom-zeta",
+    }
 
 
 def test_split_line_after_word_splits_line_into_two_lines():

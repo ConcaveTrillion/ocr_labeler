@@ -37,9 +37,28 @@ Common commands:
 - Run app: `make run`
 - CI pipeline: `make ci`
 
-## Runtime logs (Linux)
+## Runtime logs
 
-- Linux session/runtime logs are stored under `/home/user/.local/share/pd-ocr-labeler/logs`.
+Per-session log files are written as `session_<YYYYMMDD>_<HHMMSS>_<pid>.log` under
+the OS-aware app data root, resolved by
+`PersistencePathsOperations.get_logs_root()` in
+[persistence_paths_operations.py](pd_ocr_labeler/operations/persistence/persistence_paths_operations.py).
+
+| OS | Default log directory |
+| --- | --- |
+| Linux | `$XDG_DATA_HOME/pd-ocr-labeler/logs` (default `~/.local/share/pd-ocr-labeler/logs`) |
+| macOS | `~/Library/Application Support/pd-ocr-labeler/logs` |
+| Windows | `%APPDATA%/pd-ocr-labeler/logs` (default `%USERPROFILE%/AppData/Roaming/pd-ocr-labeler/logs`) |
+
+Inside this dev container, that resolves to
+`/home/vscode/.local/share/pd-ocr-labeler/logs/`. The most recent session is
+the file with the latest mtime; use `ls -lat` to find it.
+
+Other useful runtime paths (same `get_*_root()` helpers):
+
+- Page image cache: `$XDG_CACHE_HOME/pd-ocr-labeler/page-images` (cleared by `make clean-cache`).
+- Saved labeled projects: `<data root>/pd-ocr-labeler/labeled-projects`.
+- Logs cleanup: `make clean-logs`.
 
 ## Validation rules
 

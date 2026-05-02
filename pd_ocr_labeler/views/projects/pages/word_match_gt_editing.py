@@ -381,6 +381,26 @@ class WordMatchGtEditing:
         self._view.selection.refresh_line_checkbox_states()
         self._view.selection.refresh_paragraph_checkbox_states()
 
+    def apply_line_ground_truth_copy(self, line_index: int) -> None:
+        """Apply a targeted refresh after all words in a line had GT copied from OCR.
+
+        Refreshes the entire line's view-model data from the underlying line
+        object in a single pass, then re-renders the line card once.  This is
+        more efficient than emitting per-word GT-changed events (which would
+        re-render the card N times for an N-word line).
+        """
+        logger.debug(
+            "[word_match_refresh] targeted.line_gt_copied.apply line=%s",
+            line_index,
+        )
+        self._view.renderer.refresh_local_line_match_from_line_object(line_index)
+        self._view._update_summary()
+        self._view.renderer.rerender_line_card(line_index)
+        self._view.toolbar.update_button_state()
+        self._view.selection.refresh_word_checkbox_states()
+        self._view.selection.refresh_line_checkbox_states()
+        self._view.selection.refresh_paragraph_checkbox_states()
+
     def apply_word_style_change(
         self,
         line_index: int,

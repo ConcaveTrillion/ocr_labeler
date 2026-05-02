@@ -1353,6 +1353,22 @@ class WordEditDialog:
             view.renderer._word_dialog_refresh_callback = None
         if self._split_word_index >= 0:
             view.gt_editing._word_style_button_refs.pop(split_key, None)
+        # Remove the dialog element from its parent container so repeated
+        # opens do not accumulate hidden dialogs (each carrying base64
+        # word-image data, SVG overlays, tag chips, etc.) in the DOM and
+        # server-side element tree, which progressively slows the app.
+        dialog = getattr(self, "_dialog", None)
+        if dialog is not None:
+            try:
+                dialog.clear()
+            except Exception:
+                pass
+            try:
+                dialog.delete()
+            except Exception:
+                pass
+            self._dialog = None
+            self._dialog_card = None
 
     # -- Main dialog UI builder ---------------------------------------------
 

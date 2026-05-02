@@ -291,8 +291,8 @@ def test_text_tabs_updates_when_paragraph_structure_changes_even_if_lines_same()
     assert text_tabs.word_match_view.update_from_page.call_count == 2
 
 
-def test_text_tabs_merge_callback_rematches_gt_on_merged_line(tmp_path):
-    """TextTabs merge callback should merge lines and rematch GT text on merged line."""
+def test_text_tabs_merge_callback_does_not_rematch_gt_on_merged_line(tmp_path):
+    """TextTabs merge callback should merge lines without page-wide GT rematch."""
     page_state = PageState()
 
     line1 = _line([_word("alpha", 0)], 0)
@@ -337,11 +337,13 @@ def test_text_tabs_merge_callback_rematches_gt_on_merged_line(tmp_path):
     assert result is True
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha beta"
-    assert page.lines[0].ground_truth_text == "alpha beta"
+    # Line merge no longer triggers a destructive page-wide GT rematch; the
+    # merged line keeps whatever per-word GT was set (none in this fixture).
+    assert page.lines[0].ground_truth_text.strip() == ""
 
 
-def test_text_tabs_delete_callback_rematches_gt_after_delete(tmp_path):
-    """TextTabs delete callback should remove lines and rematch GT text."""
+def test_text_tabs_delete_callback_does_not_rematch_gt_after_delete(tmp_path):
+    """TextTabs delete callback should remove lines without page-wide GT rematch."""
     page_state = PageState()
 
     line1 = _line([_word("alpha", 0)], 0)
@@ -386,7 +388,8 @@ def test_text_tabs_delete_callback_rematches_gt_after_delete(tmp_path):
     assert result is True
     assert len(page.lines) == 1
     assert page.lines[0].text == "alpha"
-    assert page.lines[0].ground_truth_text == "alpha"
+    # Line deletion no longer triggers a destructive page-wide GT rematch.
+    assert page.lines[0].ground_truth_text == ""
 
 
 def test_text_tabs_ocr_to_gt_callback_invokes_page_state_method():

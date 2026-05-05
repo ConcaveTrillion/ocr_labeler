@@ -42,16 +42,22 @@ def browser_projects_root(tmp_path_factory, browser_test_fixtures_dir) -> Path:
 def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
     """Start the app as a subprocess with pre-saved OCR data and yield the URL.
 
-    Sets XDG_DATA_HOME so that the app finds pre-saved page JSON files
-    instead of attempting live OCR (which requires ML models).
+    Sets XDG_DATA_HOME / XDG_CACHE_HOME / XDG_CONFIG_HOME so the subprocess
+    finds pre-saved page JSON files (avoiding live OCR / ML models) AND so
+    config writes triggered by the UI (for example
+    ``ConfigOperations.set_source_projects_root`` from the source-folder
+    dialog test) cannot leak into the developer's real
+    ``~/.config/pd-ocr-labeler/``.
 
     Under pytest-xdist, each worker is a separate process and gets its own
     session-scoped fixture instance (including a unique random free port).
     """
     # Set up XDG directories for the subprocess
     xdg_base = tmp_path_factory.mktemp("xdg")
+    xdg_config_home = xdg_base / "config"
     xdg_data_home = xdg_base / "data"
     xdg_cache_home = xdg_base / "cache"
+    xdg_config_home.mkdir(parents=True, exist_ok=True)
 
     # Copy pre-saved page JSONs into the expected location
     labeled_dir = xdg_data_home / "pd-ocr-labeler" / "labeled-projects"
@@ -79,6 +85,7 @@ def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
     ]
 
     env = {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}
+    env["XDG_CONFIG_HOME"] = str(xdg_config_home)
     env["XDG_DATA_HOME"] = str(xdg_data_home)
     env["XDG_CACHE_HOME"] = str(xdg_cache_home)
 

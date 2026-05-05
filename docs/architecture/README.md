@@ -4,9 +4,9 @@ Architecture documentation is organized into smaller, topic-focused files.
 
 Status: maintained incrementally; validate details against current implementation.
 
-Last validated: 2026-04-16.
+Last validated: 2026-05-04.
 
-## Current Code Map (2026-04-16 snapshot)
+## Current Code Map (2026-05-04 snapshot)
 
 - App entry and routing:
   - `pd_ocr_labeler/app.py`
@@ -33,15 +33,16 @@ Last validated: 2026-04-16.
 - View layer:
   - `pd_ocr_labeler/views/main_view.py`
   - `pd_ocr_labeler/views/callbacks.py`
-  - `pd_ocr_labeler/views/header/{header,project_load_controls}.py`
+  - `pd_ocr_labeler/views/header/{header,project_load_controls,ocr_config_modal}.py`
   - `pd_ocr_labeler/views/projects/{project_view,project_navigation_controls}.py`
   - `pd_ocr_labeler/views/projects/pages/{page_view,page_actions,content,image_tabs,text_tabs}.py`
   - `pd_ocr_labeler/views/projects/pages/{word_match,word_match_toolbar,word_match_renderer,word_match_selection,word_match_actions,word_match_bbox,word_match_gt_editing}.py`
   - `pd_ocr_labeler/views/projects/pages/{word_edit_dialog,word_operations,export_dialog}.py`
-  - `pd_ocr_labeler/views/shared/{base_view,button_styles}.py`
+  - `pd_ocr_labeler/views/shared/{base_view,button_styles,view_helpers}.py`
 - Operations:
   - `pd_ocr_labeler/operations/ocr/{navigation_operations,page_operations,text_operations,line_operations,word_operations,ocr_service}.py`
-  - `pd_ocr_labeler/operations/persistence/{config_operations,persistence_paths_operations,project_discovery_operations,project_operations}.py`
+  - `pd_ocr_labeler/operations/ocr/{bbox_operations,image_cache_operations,model_selection_operations}.py`
+  - `pd_ocr_labeler/operations/persistence/{config_operations,persistence_paths_operations,project_discovery_operations,project_operations,session_state_operations}.py`
   - `pd_ocr_labeler/operations/export/{doctr_export,cli}.py`
   - `pd_ocr_labeler/operations/validation/` (placeholder — not yet implemented)
 - Services:
@@ -74,6 +75,10 @@ Use this map as the first checkpoint when reconciling architecture docs with imp
 ## External Model Alignment
 
 - [pd-book-tools Model Alignment](pd-book-tools-model-alignment.md)
+
+## OCR Model Selection
+
+- [OCR Model Selection](ocr-model-selection.md)
 
 ## Threading Notes
 

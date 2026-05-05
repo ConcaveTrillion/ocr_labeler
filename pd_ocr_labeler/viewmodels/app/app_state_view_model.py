@@ -24,11 +24,12 @@ class AppStateViewModel(BaseViewModel):
     selected_project_path: str = ""
     is_project_loaded: bool = False
     ocr_model_options: dict[str, str] = field(default_factory=dict)
-    selected_ocr_model_key: str = "default"
+    selected_ocr_model_key: str = "huggingface"
     ocr_detection_model_options: dict[str, str] = field(default_factory=dict)
     ocr_recognition_model_options: dict[str, str] = field(default_factory=dict)
-    selected_ocr_detection_model_key: str = "default"
-    selected_ocr_recognition_model_key: str = "default"
+    selected_ocr_detection_model_key: str = "huggingface"
+    selected_ocr_recognition_model_key: str = "huggingface"
+    hf_pinned_revision: str = ""
 
     def __setattr__(self, name, value):
         """Override to ensure both NiceGUI binding and custom listeners work."""
@@ -47,6 +48,7 @@ class AppStateViewModel(BaseViewModel):
             "ocr_recognition_model_options",
             "selected_ocr_detection_model_key",
             "selected_ocr_recognition_model_key",
+            "hf_pinned_revision",
         ]:
             self.notify_property_changed(name, value)
 
@@ -106,6 +108,7 @@ class AppStateViewModel(BaseViewModel):
             self.selected_ocr_recognition_model_key = (
                 self._app_state.selected_ocr_recognition_model_key
             )
+            self.hf_pinned_revision = self._app_state.hf_pinned_revision or ""
 
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Is Loading: %s", self.is_loading)
@@ -275,6 +278,15 @@ class AppStateViewModel(BaseViewModel):
                 detection_model_key,
                 recognition_model_key,
             )
+            return False
+
+    def command_set_hf_pinned_revision(self, revision: str | None) -> bool:
+        """Pin the published HF OCR model to a tag/branch/SHA (or clear)."""
+        try:
+            self._app_state.set_hf_pinned_revision(revision)
+            return True
+        except Exception:
+            logger.exception("Error setting HF pinned revision '%s'", revision)
             return False
 
     def command_is_project_available(self, key: str) -> bool:

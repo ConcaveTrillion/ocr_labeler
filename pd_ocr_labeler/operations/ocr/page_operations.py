@@ -11,6 +11,7 @@ import json
 import logging
 import shutil
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -72,6 +73,16 @@ class PageLoadInfo(NamedTuple):
     file_prefix: str
 
 
+@dataclass(frozen=True)
+class HuggingFaceWeightsDescriptor:
+    """Lazy-resolved Hugging Face weight reference for a single role."""
+
+    repo: str
+    filename: str
+    revision: str | None = None
+    role: str = "detection"  # "detection" | "recognition"
+
+
 class PageOperations:
     """Handle page-level operations like save, load, export, and reset.
 
@@ -98,6 +109,8 @@ class PageOperations:
         self._recognition_weights_path: Path | None = None
         self._recognition_vocab: str | None = None
         self._ocr_source_lib: str = "doctr-pd-labeled"
+        self._detection_hf: HuggingFaceWeightsDescriptor | None = None
+        self._recognition_hf: HuggingFaceWeightsDescriptor | None = None
         self._saved_provenance_by_page_id: dict[int, dict[str, Any]] = {}
         self._page_image_cache_dir: Path | None = None
         self.page_parser = self.build_initial_page_parser()
@@ -109,12 +122,22 @@ class PageOperations:
         *,
         source_lib: str,
         recognition_vocab: str | None = None,
+        detection_hf: HuggingFaceWeightsDescriptor | None = None,
+        recognition_hf: HuggingFaceWeightsDescriptor | None = None,
     ) -> None:
-        """Configure optional fine-tuned DocTR weights for subsequent OCR calls."""
+        """Configure DocTR weights (local files or lazy-resolved HF).
+
+        Provide ``detection_weights_path`` / ``recognition_weights_path`` for
+        local ``.pt`` files. Provide ``detection_hf`` / ``recognition_hf`` to
+        defer the download until the first OCR call. Mixing local + HF across
+        the two roles is supported.
+        """
         self._detection_weights_path = detection_weights_path
         self._recognition_weights_path = recognition_weights_path
         self._recognition_vocab = recognition_vocab
         self._ocr_source_lib = source_lib
+        self._detection_hf = detection_hf
+        self._recognition_hf = recognition_hf
         self._docTR_predictor = None
         self._predictor_initialized = False
 
@@ -194,14 +217,67 @@ class PageOperations:
         except FileNotFoundError:
             return
 
+    def _resolve_hf_weights(
+        self, descriptor: HuggingFaceWeightsDescriptor
+    ) -> tuple[Path, str | None]:
+        """Download a single HF weights file and return ``(path, vocab_text)``.
+
+        Also pulls the ``.arch`` and ``.vocab`` sidecar siblings into the same
+        HF cache snapshot directory. ``pd_book_tools`` reads them from the
+        ``.pt`` file's directory, so co-locating them is required for the
+        finetuned predictor to pick up the correct architecture and vocab.
+
+        ``vocab_text`` is populated only for the recognition role when a
+        ``.vocab`` sidecar is present.
+        """
+        try:
+            from pd_book_tools.hf import OCR_MODEL_SIDECARS, hf_download
+        except ImportError as exc:
+            raise RuntimeError(
+                "pd_book_tools.hf is required to download published OCR models. "
+                "Install/upgrade pd-book-tools via `make setup`."
+            ) from exc
+
+        local_path = hf_download(
+            descriptor.repo,
+            descriptor.filename,
+            descriptor.revision,
+            sidecars=OCR_MODEL_SIDECARS,
+        )
+
+        vocab_text: str | None = None
+        if descriptor.role == "recognition":
+            vocab_path = local_path.with_suffix(".vocab")
+            if vocab_path.is_file():
+                try:
+                    vocab_text = vocab_path.read_text(encoding="utf-8")
+                except OSError:
+                    vocab_text = None
+
+        return local_path, vocab_text
+
+    def _resolve_pending_hf_weights(self) -> None:
+        """Download any HF descriptors and populate the corresponding paths."""
+        if self._detection_hf is not None and self._detection_weights_path is None:
+            det_path, _ = self._resolve_hf_weights(self._detection_hf)
+            self._detection_weights_path = det_path
+        if self._recognition_hf is not None and self._recognition_weights_path is None:
+            reco_path, vocab_text = self._resolve_hf_weights(self._recognition_hf)
+            self._recognition_weights_path = reco_path
+            if vocab_text and not self._recognition_vocab:
+                self._recognition_vocab = vocab_text
+
     def _get_or_create_predictor(self):
         """Get or create the DocTR predictor instance.
 
         Lazy initialization to avoid loading models until actually needed.
         Ensures each PageOperations instance has its own predictor for thread safety.
+        Hugging Face weights are downloaded lazily on first call; download
+        failures propagate so the caller can surface a notification.
         """
         if not self._predictor_initialized:
             if self._docTR_predictor is None:
+                self._resolve_pending_hf_weights()
                 if (
                     self._detection_weights_path is not None
                     and self._recognition_weights_path is not None

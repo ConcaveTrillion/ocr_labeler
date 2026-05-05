@@ -36,6 +36,39 @@ coverage and plan new tests.
 
 ---
 
+## 1b. Header — OCR Configuration Modal
+
+**Source:** `pd_ocr_labeler/views/header/ocr_config_modal.py`
+
+The trigger is rendered alongside the project load controls
+(`project_load_controls.py` instantiates `OCRConfigModal` and calls
+`build()`). Disabled state is bound from
+`ProjectStateViewModel.is_controls_disabled`.
+
+### Header Trigger
+
+| # | Label / Icon | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 109 | `tune` icon | `_open` | Open OCR Configuration dialog (rescans available models on open) | No |
+
+### Dialog Buttons
+
+| # | Label | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 110 | **Rescan Models** | `_rescan_models` | Re-scan local trainer outputs and HF cache; refreshes both selects | No |
+| 111 | **Cancel** | `_close` | Close dialog without applying changes | No |
+| 112 | **Apply** | `_apply_selection` | Apply HF revision pin (if changed) then commit selected detection / recognition pair | No |
+
+### Dialog Inputs (non-button)
+
+| # | Type | Handler / Binding | Description | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 113 | **Detection model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_detection_model_options`; applied via `command_set_selected_ocr_models` | Pick detection weights (HF default + local trainer outputs) | No |
+| 114 | **Recognition model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_recognition_model_options`; applied via `command_set_selected_ocr_models` | Pick recognition weights (HF default + local trainer outputs) | No |
+| 115 | **Hugging Face revision pin** (`ui.input`) | applied via `command_set_hf_pinned_revision` | Optional revision/tag/commit SHA pinning the HF download (empty = latest) | No |
+
+---
+
 ## 2. Project Navigation Controls
 
 **Source:** `pd_ocr_labeler/views/projects/project_navigation_controls.py`
@@ -283,6 +316,7 @@ These are not buttons but have meaningful UI interactions.
 | Area | Total | Browser-Tested | Coverage |
 | --- | --- | --- | --- |
 | Header / Load Controls | 9 | 1 | 11% |
+| Header / OCR Config Modal | 7 | 0 | 0% |
 | Navigation Controls | 4 | 3 | 75% |
 | Page Actions | 4 | 2 (one partial) | 50% |
 | Toolbar — Page Row | 6 | 0 | 0% |
@@ -294,7 +328,7 @@ These are not buttons but have meaningful UI interactions.
 | Renderer — Word Buttons | 3 | 1 | 33% |
 | Word Edit Dialog | 29 | 3 | 10% |
 | Other Interactive Controls | 15 | 9 | 60% |
-| **TOTAL** | **107** | **21** | **20%** |
+| **TOTAL** | **114** | **21** | **18%** |
 
 ### Highest-Priority Gaps (by user-impact)
 
@@ -305,3 +339,5 @@ These are not buttons but have meaningful UI interactions.
 5. **Rematch GT button** — not tested at all
 6. **Per-word validate toggle** — not tested
 7. **Line/word selection checkboxes** — only word checkbox tested
+8. **OCR Configuration modal** (trigger + Rescan/Cancel/Apply +
+   detection/recognition/HF-revision inputs) — not tested

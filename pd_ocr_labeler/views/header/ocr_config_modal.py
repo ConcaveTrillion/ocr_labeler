@@ -23,6 +23,7 @@ class OCRConfigModal(NotificationMixin):
         self._dialog: ui.dialog | None = None
         self._detection_model_select: ui.select | None = None
         self._recognition_model_select: ui.select | None = None
+        self._hf_revision_input: ui.input | None = None
         self._trigger_button: ui.button | None = None
 
     def build(self) -> ui.button:
@@ -33,7 +34,9 @@ class OCRConfigModal(NotificationMixin):
         ):
             ui.label("OCR Configuration").classes("text-lg font-bold")
             ui.label(
-                "Select built-in OCR or a fine-tuned model pair produced by pd-ocr-trainer."
+                "By default the labeler downloads the latest published OCR "
+                "model from Hugging Face. Pick a local fine-tuned pair from "
+                "pd-ocr-trainer here, or pin a specific HF revision below."
             ).classes("text-sm text-gray-500")
 
             self._detection_model_select = ui.select(
@@ -65,6 +68,12 @@ class OCRConfigModal(NotificationMixin):
                 key="ocr-recognition-model-options-binding",
                 message="OCR recognition model list may not refresh automatically",
             )
+
+            self._hf_revision_input = ui.input(
+                label="Hugging Face revision pin",
+                value=self.app_state_model.hf_pinned_revision or "",
+                placeholder="leave empty for latest (e.g. v1.2.0 or commit SHA)",
+            ).classes("w-full")
 
             with ui.row().classes("w-full justify-between pt-2"):
                 ui.button("Rescan Models", on_click=self._rescan_models).props("flat")
@@ -104,6 +113,11 @@ class OCRConfigModal(NotificationMixin):
                 self.app_state_model.selected_ocr_recognition_model_key
             )
             self._recognition_model_select.update()
+        if self._hf_revision_input is not None:
+            self._hf_revision_input.value = (
+                self.app_state_model.hf_pinned_revision or ""
+            )
+            self._hf_revision_input.update()
         if self._dialog is not None:
             self._dialog.open()
 
@@ -166,6 +180,18 @@ class OCRConfigModal(NotificationMixin):
                 "Select both detection and recognition models first", "warning"
             )
             return
+
+        # Apply HF revision pin first so subsequent model selection sees the
+        # refreshed option list (refresh_ocr_models is invoked by the pin
+        # setter when the value actually changes).
+        new_revision = (
+            str(self._hf_revision_input.value or "").strip()
+            if self._hf_revision_input is not None
+            else ""
+        )
+        previous_revision = self.app_state_model.hf_pinned_revision or ""
+        if new_revision != previous_revision:
+            self.app_state_model.command_set_hf_pinned_revision(new_revision or None)
 
         success = self.app_state_model.command_set_selected_ocr_models(
             detection_key,

@@ -22,7 +22,18 @@ Small, low-context tasks for reconciling docs with code. Do only a few at a time
 - [ ] Verify `docs/architecture/pd-book-tools-model-alignment.md` against current word_operations migration to `text_style_labels`/`word_components`
 - [ ] Document word operations architecture (WordOperations + SelectedWordOperationsProcessor pattern)
 - [ ] Verify `docs/architecture/ui-action-buttons.md` coverage numbers against actual test files
-- [ ] Update `docs/architecture/async/affected-files.md` to include export operations
+- [x] Update `docs/architecture/async/affected-files.md` to include export operations (2026-05-05)
+- [x] Update architecture code map with bbox / image cache / model selection /
+  session state operations and new view modules (2026-05-04)
+- [x] Add `ocr-model-selection.md` covering the model selection flow (2026-05-04)
+- [x] Cover Hugging Face model integration in `ocr-model-selection.md`
+  (default repo, revision pin, lazy download, sidecars, offline fallback) (2026-05-04)
+- [x] Add `ocr_config_modal` to `ui-action-buttons.md` (header trigger,
+  dialog Rescan / Cancel / Apply, detection/recognition selects, HF revision pin) (2026-05-05)
+- [x] Add `image_cache_operations` and `bbox_operations` notes to
+  `async/affected-files.md` if any blocking I/O paths reference them
+  (2026-05-05; image_cache added with `write_bytes` rationale,
+  bbox_operations omitted — no file I/O paths)
 
 Suggested workflow:
 

@@ -13,6 +13,7 @@ from ..operations.ocr.model_selection_operations import (
     ModelSelectionOperations,
     OCRModelOption,
 )
+from ..operations.ocr.page_operations import HuggingFaceWeightsDescriptor
 from ..operations.persistence.config_operations import ConfigOperations
 from ..operations.persistence.project_discovery_operations import (
     ProjectDiscoveryOperations,
@@ -21,6 +22,32 @@ from ..operations.persistence.session_state_operations import SessionStateOperat
 from .project_state import ProjectState
 
 logger = logging.getLogger(__name__)
+
+
+def _hf_descriptor(
+    option: OCRModelOption, *, role: str
+) -> HuggingFaceWeightsDescriptor | None:
+    """Return a Hugging Face descriptor for ``option`` and ``role``.
+
+    Returns ``None`` for non-HF options or when the option is missing the
+    filename for the requested role.
+    """
+    if not option.is_huggingface or not option.hf_repo:
+        return None
+    if role == "detection":
+        filename = option.hf_detection_filename
+    elif role == "recognition":
+        filename = option.hf_recognition_filename
+    else:
+        raise ValueError(f"Unknown HF role {role!r}")
+    if not filename:
+        return None
+    return HuggingFaceWeightsDescriptor(
+        repo=option.hf_repo,
+        filename=filename,
+        revision=option.hf_revision,
+        role=role,
+    )
 
 
 @dataclass
@@ -64,9 +91,11 @@ class AppState:
     ocr_model_options: dict[str, str] = field(default_factory=dict)
     ocr_detection_model_options: dict[str, str] = field(default_factory=dict)
     ocr_recognition_model_options: dict[str, str] = field(default_factory=dict)
-    selected_ocr_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
-    selected_ocr_detection_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
-    selected_ocr_recognition_model_key: str = ModelSelectionOperations.DEFAULT_MODEL_KEY
+    selected_ocr_model_key: str = ModelSelectionOperations.HF_LATEST_KEY
+    selected_ocr_detection_model_key: str = ModelSelectionOperations.HF_LATEST_KEY
+    selected_ocr_recognition_model_key: str = ModelSelectionOperations.HF_LATEST_KEY
+    hf_pinned_revision: str | None = None
+    _last_ocr_selection_reason: str = ""
 
     def queue_notification(self, message: str, kind: str = "info") -> None:
         """Queue a user notification for this browser-tab session."""
@@ -153,19 +182,22 @@ class AppState:
         if detection_option is None or recognition_option is None:
             return
 
-        source_lib = (
-            "doctr-pd-labeled"
-            if (
-                detection_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
-                and recognition_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
-            )
-            else "doctr-pd-finetuned"
-        )
+        if detection_option.is_huggingface or recognition_option.is_huggingface:
+            source_lib = "doctr-pd-huggingface"
+        elif (
+            detection_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+            and recognition_option.key == ModelSelectionOperations.DEFAULT_MODEL_KEY
+        ):
+            source_lib = "doctr-pd-labeled"
+        else:
+            source_lib = "doctr-pd-finetuned"
         project_state.page_ops.configure_doctr_weights(
             detection_option.detection_weights_path,
             recognition_option.recognition_weights_path,
             source_lib=source_lib,
             recognition_vocab=recognition_option.vocab,
+            detection_hf=_hf_descriptor(detection_option, role="detection"),
+            recognition_hf=_hf_descriptor(recognition_option, role="recognition"),
         )
 
     def _sync_legacy_selected_ocr_model_key(self) -> None:
@@ -179,36 +211,90 @@ class AppState:
         self.selected_ocr_model_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
 
     def _ensure_selected_ocr_keys_are_valid(self) -> None:
-        """Clamp selected detection/recognition keys to available options."""
+        """Clamp selected detection/recognition keys to available options.
+
+        On first refresh (or whenever the selection no longer exists), pick
+        defaults via :py:meth:`ModelSelectionOperations.pick_default_keys`,
+        which prefers HF latest when reachable and >= newest local mtime.
+        Falls back to local-latest, then to stock Mindee, with a notification
+        when HF is unreachable.
+        """
         default_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
-        if self.selected_ocr_detection_model_key not in self.available_ocr_models:
-            self.selected_ocr_detection_model_key = default_key
-        if self.selected_ocr_recognition_model_key not in self.available_ocr_models:
-            self.selected_ocr_recognition_model_key = default_key
 
-        if self.selected_ocr_detection_model_key == default_key:
-            latest_detection_key = (
-                ModelSelectionOperations.find_latest_detection_model_key(
-                    self.available_ocr_models
-                )
-            )
-            if latest_detection_key is not None:
-                self.selected_ocr_detection_model_key = latest_detection_key
+        det_present = self.selected_ocr_detection_model_key in self.available_ocr_models
+        reco_present = (
+            self.selected_ocr_recognition_model_key in self.available_ocr_models
+        )
 
-        if self.selected_ocr_recognition_model_key == default_key:
-            latest_recognition_key = (
-                ModelSelectionOperations.find_latest_recognition_model_key(
-                    self.available_ocr_models
-                )
-            )
-            if latest_recognition_key is not None:
-                self.selected_ocr_recognition_model_key = latest_recognition_key
+        # Auto-pick when the current selection is missing OR is the
+        # historical "default" stock fallback (so existing installs upgrade
+        # to the HF-preferring picker on first refresh).
+        needs_autopick = (
+            not det_present
+            or not reco_present
+            or self.selected_ocr_detection_model_key == default_key
+            or self.selected_ocr_recognition_model_key == default_key
+        )
+
+        if needs_autopick:
+            (
+                detection_key,
+                recognition_key,
+                reason,
+            ) = ModelSelectionOperations.pick_default_keys(self.available_ocr_models)
+            self.selected_ocr_detection_model_key = detection_key
+            self.selected_ocr_recognition_model_key = recognition_key
+            self._announce_selection_reason(reason)
 
         self._sync_legacy_selected_ocr_model_key()
 
+    def _announce_selection_reason(self, reason: str) -> None:
+        """Queue a one-shot notification when the auto-pick reason changes."""
+        if reason == self._last_ocr_selection_reason:
+            return
+        self._last_ocr_selection_reason = reason
+
+        message_kind = {
+            "hf-latest": (
+                f"Using latest published OCR model from "
+                f"{ModelSelectionOperations.HF_LATEST_KEY}",
+                "info",
+            ),
+            "hf-only": (
+                "Using published Hugging Face OCR model (no local fine-tuned "
+                "models found).",
+                "info",
+            ),
+            "local-newer-than-hf": (
+                "Local fine-tuned OCR model is newer than the published "
+                "Hugging Face model — using local.",
+                "info",
+            ),
+            "local-only-hf-unreachable": (
+                "Hugging Face is unreachable; using latest local OCR model.",
+                "warning",
+            ),
+            "hf-unreachable-no-local": (
+                "Hugging Face is unreachable and no local OCR models found — "
+                "falling back to built-in DocTR.",
+                "negative",
+            ),
+            "stock-fallback": (
+                "No OCR models available — falling back to built-in DocTR.",
+                "warning",
+            ),
+        }
+        entry = message_kind.get(reason)
+        if entry is None:
+            return
+        message, kind = entry
+        self.queue_notification(message, kind)
+
     def refresh_ocr_models(self, notify: bool = True) -> None:
         """Refresh available OCR model options discovered from trainer outputs."""
-        options, labels = ModelSelectionOperations.discover_model_options()
+        options, labels = ModelSelectionOperations.discover_model_options(
+            hf_pinned_revision=self.hf_pinned_revision,
+        )
         self.available_ocr_models = options
         self.ocr_model_options = labels
         self.ocr_detection_model_options = dict(labels)
@@ -248,6 +334,20 @@ class AppState:
 
         self.notify()
         return True
+
+    def set_hf_pinned_revision(self, revision: str | None) -> None:
+        """Pin the published Hugging Face OCR model to a specific revision.
+
+        ``revision`` may be a tag, branch, or commit SHA. Passing ``None``
+        (or an empty/whitespace string) clears the pin and falls back to the
+        ``main`` branch / latest published revision.
+        """
+        normalized = revision.strip() if revision else ""
+        new_pin = normalized or None
+        if new_pin == self.hf_pinned_revision:
+            return
+        self.hf_pinned_revision = new_pin
+        self.refresh_ocr_models(notify=True)
 
     # --------------- Project Loading ---------------
     async def load_project(

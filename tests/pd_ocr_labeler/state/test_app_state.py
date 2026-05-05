@@ -322,9 +322,13 @@ def test_get_source_projects_root_creates_default_config_file(tmp_path):
 
 
 def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
-    """AppState prefers the latest all-profile fine-tuned model when discovered."""
+    """AppState prefers the latest all-profile fine-tuned model when discovered.
 
-    def fake_discover_model_options():
+    HF probe is mocked to be unreachable, so the picker falls through to the
+    latest local fine-tuned model (the historical behaviour for this case).
+    """
+
+    def fake_discover_model_options(*args, **kwargs):
         options = {
             "default": OCRModelOption(
                 key="default",
@@ -363,7 +367,7 @@ def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
 def test_set_selected_ocr_models_updates_detection_and_recognition(monkeypatch):
     """Dual model selection accepts different detection and recognition keys."""
 
-    def fake_discover_model_options():
+    def fake_discover_model_options(*args, **kwargs):
         options = {
             "default": OCRModelOption(
                 key="default",
@@ -397,6 +401,79 @@ def test_set_selected_ocr_models_updates_detection_and_recognition(monkeypatch):
     assert state.set_selected_ocr_models("det/profile-a", "rec/profile-b") is True
     assert state.selected_ocr_detection_model_key == "det/profile-a"
     assert state.selected_ocr_recognition_model_key == "rec/profile-b"
+
+
+def test_set_hf_pinned_revision_triggers_refresh(monkeypatch):
+    """Pinning a revision invokes discover_model_options with the new pin."""
+
+    captured_pins: list[str | None] = []
+
+    def fake_discover_model_options(*args, **kwargs):
+        captured_pins.append(kwargs.get("hf_pinned_revision"))
+        options = {
+            "huggingface": OCRModelOption(
+                key="huggingface",
+                label="Hugging Face: latest",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+                hf_repo="CT2534/pd-ocr-models",
+                hf_detection_filename="detection/x.pt",
+                hf_recognition_filename="recognition/x.pt",
+                hf_revision=kwargs.get("hf_pinned_revision"),
+                hf_last_modified=None,
+            ),
+            "default": OCRModelOption(
+                key="default",
+                label="Built-in DocTR (default)",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+            ),
+        }
+        labels = {k: o.label for k, o in options.items()}
+        return options, labels
+
+    monkeypatch.setattr(
+        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        fake_discover_model_options,
+    )
+
+    state = AppState()
+    state.set_hf_pinned_revision("v1.2.3")
+    assert state.hf_pinned_revision == "v1.2.3"
+    # Initial __post_init__ + post-pin refresh => at least 2 calls; latest carries the pin.
+    assert captured_pins[-1] == "v1.2.3"
+
+
+def test_set_hf_pinned_revision_clears_when_empty_string(monkeypatch):
+    def fake_discover_model_options(*args, **kwargs):
+        options = {
+            "huggingface": OCRModelOption(
+                key="huggingface",
+                label="Hugging Face: latest",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+                hf_repo="CT2534/pd-ocr-models",
+                hf_detection_filename="detection/x.pt",
+                hf_recognition_filename="recognition/x.pt",
+            ),
+            "default": OCRModelOption(
+                key="default",
+                label="Built-in DocTR (default)",
+                detection_weights_path=None,
+                recognition_weights_path=None,
+            ),
+        }
+        return options, {k: o.label for k, o in options.items()}
+
+    monkeypatch.setattr(
+        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        fake_discover_model_options,
+    )
+
+    state = AppState()
+    state.set_hf_pinned_revision("v1.2.3")
+    state.set_hf_pinned_revision("   ")
+    assert state.hf_pinned_revision is None
 
 
 def test_get_source_projects_root_uses_monkeypatched_config_path(monkeypatch, tmp_path):

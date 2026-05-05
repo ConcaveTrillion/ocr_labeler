@@ -1,21 +1,116 @@
-.PHONY: install setup reinstall reset-venv reset-full upgrade-deps test test-single test-k test-browser lint py-lint md-lint lint-fix py-lint-fix md-lint-fix format pre-commit-check build clean clean-logs clean-cache clean-image-cache help run run-verbose run-page-timing release-patch release-minor release-major _do-release
+.PHONY: help setup install uninstall reset reset-full remove-venv reinstall \
+	upgrade-deps upgrade-pd-book-tools prefetch-models \
+	test test-verbose test-single test-k test-browser coverage \
+	lint py-lint md-lint lint-fix py-lint-fix md-lint-fix format pre-commit-check \
+	ci build clean clean-logs clean-cache clean-image-cache \
+	run run-verbose run-page-timing \
+	release-patch release-minor release-major _do-release
 
 help: ## Show this help message
 	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies and set up development environment
+# ---------------------------------------------------------------------------
+# GPU index resolution (used by setup / install / upgrade-deps)
+# ---------------------------------------------------------------------------
+# `GPU` is a make var: cpu | auto | cuXXX (e.g. cu124).
+# Default is auto — detect via nvidia-smi.
+# `GPU=cpu` forces CPU even on a GPU box. `GPU=cu124` forces a specific tag.
+GPU ?= auto
+
+# Shell snippet that sets $$EXTRA_INDEX and $$CUDA_TAG based on $(GPU).
+# Call inside a recipe with: $(_resolve_gpu_index)
+define _resolve_gpu_index
+	EXTRA_INDEX=""; \
+	CUDA_TAG=""; \
+	case "$(GPU)" in \
+		cpu) \
+			echo "💻 GPU=cpu — using CPU-only PyTorch."; \
+			;; \
+		cu*) \
+			CUDA_TAG="$(GPU)"; \
+			EXTRA_INDEX="https://download.pytorch.org/whl/$$CUDA_TAG"; \
+			echo "🟢 GPU=$$CUDA_TAG — using PyTorch from $$EXTRA_INDEX."; \
+			;; \
+		auto) \
+			if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then \
+				CUDA_VER=$$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9]*\.[0-9]*\).*/\1/p' | head -1); \
+				if [ -n "$$CUDA_VER" ]; then \
+					CUDA_TAG="cu$$(echo "$$CUDA_VER" | tr -d '.')"; \
+					EXTRA_INDEX="https://download.pytorch.org/whl/$$CUDA_TAG"; \
+					echo "🟢 Detected CUDA $$CUDA_VER — using PyTorch with $$CUDA_TAG support."; \
+				else \
+					echo "⚠️  nvidia-smi found but could not detect CUDA version — falling back to CPU."; \
+				fi; \
+			elif [ "$$(uname)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ]; then \
+				echo "🍎 Detected Apple Silicon — MPS acceleration will be used automatically."; \
+			else \
+				echo "💻 No GPU detected — using CPU-only PyTorch."; \
+			fi; \
+			;; \
+		*) \
+			echo "❌ Invalid GPU=$(GPU). Use cpu | auto | cuXXX (e.g. cu124)." >&2; \
+			exit 2; \
+			;; \
+	esac
+endef
+
+# Post-sync torch wheel swap. After `uv sync`, if a CUDA index was resolved
+# but the installed torch is still the CPU build, reinstall torch + vision +
+# audio from the CUDA index. Idempotent: skips if torch is already CUDA.
+define _maybe_install_cuda_torch
+	@$(_resolve_gpu_index); \
+	if [ -z "$$EXTRA_INDEX" ]; then \
+		exit 0; \
+	fi; \
+	CURRENT_CUDA=$$(uv run --no-sync python -c "import torch; print(torch.version.cuda or '')" 2>/dev/null || echo ""); \
+	if [ -n "$$CURRENT_CUDA" ]; then \
+		echo "✅ torch already installed with CUDA $$CURRENT_CUDA — no swap needed."; \
+		exit 0; \
+	fi; \
+	echo "🔁 Reinstalling torch torchvision torchaudio from $$EXTRA_INDEX..."; \
+	uv pip install --reinstall torch torchvision torchaudio --index-url "$$EXTRA_INDEX"; \
+	echo "✅ torch swapped to $$CUDA_TAG build."
+endef
+
+# ---------------------------------------------------------------------------
+# Environment setup / install
+# ---------------------------------------------------------------------------
+
+setup: ## Set up dev environment (sync deps + Playwright + pre-commit + auto-swap CUDA torch + prefetch HF models). Override with GPU=cpu|cuXXX or NO_PREFETCH=1
 	@echo "📦 Installing dependencies..."
 	uv sync --group all-dev
 	@echo "🌐 Installing Playwright Chromium browser and system dependencies..."
 	uv run playwright install --with-deps chromium
 	@echo "🪝 Setting up pre-commit hooks..."
 	uv run pre-commit install
-	@echo "✅ Installation complete!"
+	$(_maybe_install_cuda_torch)
+	@$(MAKE) --no-print-directory prefetch-models
+	@echo "✅ Setup complete!"
 
-setup: install ## Alias for install
+install: ## Install pd-ocr-labeler as a uv tool + prefetch HF models (override with GPU=cpu|cuXXX or NO_PREFETCH=1)
+	@$(_resolve_gpu_index); \
+	echo "📦 Installing pd-ocr-labeler from local source..."; \
+	if [ -n "$$EXTRA_INDEX" ]; then \
+		uv tool install --reinstall . --extra-index-url "$$EXTRA_INDEX"; \
+	else \
+		uv tool install --reinstall .; \
+	fi; \
+	echo "✅ pd-ocr-labeler installed. Run: pd-ocr-labeler-ui ."
+	@if [ -z "$$NO_PREFETCH" ]; then \
+		echo "📥 Prefetching HF models..."; \
+		pd-ocr-labeler-prefetch || echo "⚠️  Prefetch failed — models will download on first use."; \
+	else \
+		echo "ℹ️  NO_PREFETCH set — skipping HF model prefetch."; \
+	fi
 
-reinstall: reset-venv ## Alias for reset-venv (backward compatibility)
+prefetch-models: ## Pre-warm HF cache for default OCR + layout models (skippable with NO_PREFETCH=1)
+	@uv run --no-sync python -m pd_ocr_labeler.prefetch || echo "⚠️  Prefetch failed — models will download on first use."
+
+uninstall: ## Remove the installed pd-ocr-labeler uv tool
+	@echo "🗑️  Uninstalling pd-ocr-labeler..."
+	uv tool uninstall pd-ocr-labeler || true
+	@echo "✅ pd-ocr-labeler uninstalled."
 
 remove-venv: ## Remove the virtual environment
 	@echo "🗑️  Removing existing virtual environment..."
@@ -25,7 +120,7 @@ remove-venv: ## Remove the virtual environment
 reset: ## Rebuild virtual environment (keeps UV cache)
 	@$(MAKE) --no-print-directory clean
 	@$(MAKE) --no-print-directory remove-venv
-	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory setup
 	@echo "✅ Environment Reset!"
 
 reset-full: ## Nuclear option: clear everything and redownload
@@ -35,15 +130,32 @@ reset-full: ## Nuclear option: clear everything and redownload
 	@echo "🧹 Clearing UV cache..."
 	uv cache clean
 	@echo "⬇️ Dependencies should download fresh now."
-	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory setup
 	@echo "💥 Full reset complete! Everything is fresh!"
 
-upgrade-deps: ## Upgrade dependencies and sync local environment
+reinstall: reset ## Alias for reset (backward compatibility)
+
+upgrade-deps: ## Upgrade dependencies and sync local environment (auto-swaps CUDA torch; override with GPU=cpu|cuXXX)
 	@echo "⬆️ Upgrading dependency lockfile..."
 	uv lock --upgrade
 	@echo "📦 Syncing upgraded dependencies..."
 	uv sync --group all-dev
+	$(_maybe_install_cuda_torch)
 	@echo "✅ Dependencies upgraded and environment synced!"
+
+upgrade-pd-book-tools: ## Upgrade pd-book-tools pin to latest GitHub tag
+	@echo "🔍 Fetching latest pd-book-tools tag..."
+	$(eval LATEST_TAG := $(shell curl -sSf "https://api.github.com/repos/ConcaveTrillion/pd-book-tools/tags" | grep '"name"' | head -1 | sed 's/.*"name": "\(.*\)".*/\1/'))
+	@if [ -z "$(LATEST_TAG)" ]; then echo "❌ Could not fetch latest tag." && exit 1; fi
+	@echo "📌 Pinning to $(LATEST_TAG)..."
+	@sed -i 's|pd-book-tools = { git = "https://github.com/ConcaveTrillion/pd-book-tools.git", tag = ".*" }|pd-book-tools = { git = "https://github.com/ConcaveTrillion/pd-book-tools.git", tag = "$(LATEST_TAG)" }|' pyproject.toml
+	@echo "📦 Syncing..."
+	uv sync --group all-dev
+	@echo "✅ pd-book-tools upgraded to $(LATEST_TAG)!"
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 test: ## Run tests with parallelization
 	@echo "🧪 Running tests (parallelized)..."
@@ -80,7 +192,11 @@ coverage: ## Run tests with coverage report (parallelized)
 	uv run pytest --cov=pd_ocr_labeler --cov-report=html -n auto -v -ra
 	@echo "📊 Coverage report generated in htmlcov/index.html"
 
-lint: ## Run linting checks
+# ---------------------------------------------------------------------------
+# Lint / format
+# ---------------------------------------------------------------------------
+
+lint: ## Run linting checks (Python + Markdown)
 	@echo "🔍 Running linting checks..."
 	@$(MAKE) --no-print-directory py-lint
 	@$(MAKE) --no-print-directory md-lint
@@ -107,7 +223,7 @@ md-lint-fix: ## Auto-fix Markdown lint issues
 	@echo "📝 Auto-fixing Markdown lint issues..."
 	uv run pre-commit run --hook-stage manual markdownlint-cli2-fix --all-files
 
-format: ## Format code
+format: ## Format code (ruff format, then lint)
 	@echo "✨ Formatting code..."
 	uv run ruff format
 	@$(MAKE) --no-print-directory lint
@@ -116,9 +232,13 @@ pre-commit-check: ## Run pre-commit on all files
 	@echo "🪝 Running pre-commit on all files..."
 	uv run pre-commit run --all-files
 
-ci: ## Run complete CI pipeline (install [idempotent], pre-commit, test, build)
+# ---------------------------------------------------------------------------
+# CI / build
+# ---------------------------------------------------------------------------
+
+ci: ## Run complete CI pipeline (setup [idempotent], pre-commit, test, build)
 	@echo "🚀 Running complete CI pipeline..."
-	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory setup
 	@$(MAKE) --no-print-directory pre-commit-check
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory build
@@ -128,6 +248,10 @@ build: ## Build distribution packages (wheel and sdist)
 	@echo "📦 Building distribution packages..."
 	uv build
 	@echo "✅ Build complete! Check dist/ directory for packages."
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
 
 run: ## Run the OCR labeler UI with current directory as project
 	@echo "🚀 Starting OCR Labeler UI..."
@@ -140,6 +264,10 @@ run-verbose: ## Run the OCR labeler UI with verbose logging
 run-page-timing: ## Run the OCR labeler UI with isolated page timing logs
 	@echo "🚀 Starting OCR Labeler UI (page timing mode)..."
 	uv run pd-ocr-labeler-ui . --page-timing
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
 
 clean: ## Clean up cache, temporary files, and logs (keeps venv and UV cache)
 	@echo "🧹 Cleaning Python cache files..."
@@ -168,14 +296,9 @@ clean-cache: ## Remove pre-rendered image cache from OS-aware and legacy local p
 
 clean-image-cache: clean-cache ## Backward-compatible alias for clean-cache
 
-clean-lc-run-verbose:
-	@$(MAKE) --no-print-directory clean-logs
-	@$(MAKE) --no-print-directory clean-image-cache
-	@$(MAKE) --no-print-directory run-verbose
-
-clean-l-run-verbose:
-	@$(MAKE) --no-print-directory clean-logs
-	@$(MAKE) --no-print-directory run-verbose
+# ---------------------------------------------------------------------------
+# Releases
+# ---------------------------------------------------------------------------
 
 release-patch: ## Bump patch version and create a git tag (e.g. 0.1.0 -> 0.1.1)
 	uv version --bump patch

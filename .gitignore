@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Local uv source overrides (e.g. pointing pd-book-tools at a local path)
+uv.toml
+
 # Tests
 .coverage*
 htmlcov**

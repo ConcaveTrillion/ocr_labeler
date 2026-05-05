@@ -11,11 +11,13 @@ Shared instructions for AI coding agents working in this repository (Copilot, Cl
 ## Source of truth (read order)
 
 1. `README.md`
-2. `docs/architecture/README.md`
-3. `docs/planning/README.md`
-4. `docs/architecture/nicegui-patterns.md`
-5. `docs/architecture/async/overview.md`
-6. `docs/architecture/async/migration-patterns.md`
+2. `DEVELOPMENT.md` (developer workflow + Make targets)
+3. `docs/usage/README.md` (end-user behavior; consult before changing UX)
+4. `docs/architecture/README.md`
+5. `docs/planning/README.md`
+6. `docs/architecture/nicegui-patterns.md`
+7. `docs/architecture/async/overview.md`
+8. `docs/architecture/async/migration-patterns.md`
 
 ## Workflow and tooling
 
@@ -25,17 +27,25 @@ Shared instructions for AI coding agents working in this repository (Copilot, Cl
   command (for example, highly targeted `pytest -k` runs).
 - If running in VS Code, tasks are optional wrappers around Make targets.
 - Dependency manager: `uv` (Python `>=3.13`).
-- Local non-editable dependency: sibling repo `../pd-book-tools`.
+- `pd-book-tools` is pinned in `pyproject.toml` at a published git tag.
+  To work against a local checkout, drop a `uv.toml` (gitignored) with
+  a `[tool.uv.sources]` override — see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 Common commands:
 
-- Install: `make install`
+- Bootstrap dev environment: `make setup`
+- Install global `uv tool` (PATH-level command for end users): `make install`
 - Test: `make test`
 - Lint: `make lint`
 - Format: `make format`
 - Build: `make build`
 - Run app: `make run`
 - CI pipeline: `make ci`
+
+Note: `make install` and `make setup` are different. `setup` provisions
+the dev venv (and pre-commit, Playwright). `install` runs
+`uv tool install` so `pd-ocr-labeler-ui` is on the user's PATH.
+For agents working on the codebase, you almost always want `make setup`.
 
 ## Runtime logs
 

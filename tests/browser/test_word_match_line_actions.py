@@ -18,6 +18,7 @@ LINE_DELETE = '[data-testid="line-delete-button"]'
 LINE_CARD = '[data-testid="line-card"]'
 WORD_VALIDATE = '[data-testid="word-validate-button"]'
 PARAGRAPH_EXPANDER = '[data-testid="paragraph-expander-button"]'
+PARAGRAPH_LABEL = '[data-testid="paragraph-label-button"]'
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,40 @@ def test_paragraph_expander_present(browser_app_url: str, browser_page) -> None:
 # ---------------------------------------------------------------------------
 # Paragraph expander
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_paragraph_label_button_present_and_toggles(
+    browser_app_url: str, browser_page
+) -> None:
+    """Paragraph label button materializes and toggles expand state on click.
+
+    The label button is the wide clickable text rendered next to the
+    chevron expander. It triggers the same `_toggle_paragraph_expanded`
+    handler, so clicking it should collapse the paragraph body just like
+    clicking the chevron does.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    label_btn = page.locator(PARAGRAPH_LABEL).first
+    expect(label_btn).to_be_visible()
+
+    # Wait for line cards to render before counting.
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
+    count_before = page.locator(LINE_DELETE).count()
+    assert count_before > 0, "Expected at least one line card to be visible"
+
+    # Clicking the label button should collapse the paragraph body — the
+    # rendered line-card count for this paragraph should decrease.
+    label_btn.click()
+    expect(page.locator(LINE_DELETE)).not_to_have_count(count_before, timeout=5_000)
+    count_after_collapse = page.locator(LINE_DELETE).count()
+    assert count_after_collapse < count_before
+
+    # Click again to re-expand and confirm the toggle is symmetric.
+    page.locator(PARAGRAPH_LABEL).first.click()
+    expect(page.locator(LINE_DELETE)).to_have_count(count_before)
 
 
 @pytest.mark.browser

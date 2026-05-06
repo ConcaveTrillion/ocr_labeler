@@ -25,6 +25,31 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Match Renderer Paragraph Label Button (Done)
+
+The paragraph label button rendered next to the chevron expander in
+`word_match_renderer.py` (the wide clickable `flat dense no-caps`
+button that displays the paragraph label and shares the same
+`_toggle_paragraph_expanded` handler) now exposes a stable
+`data-testid` prop:
+
+- `paragraph-label-button` — the label-text button. Useful for
+  asserting the alternate paragraph toggle target (the label, not
+  the chevron) is reachable, and for distinguishing it from
+  `paragraph-expander-button` in tests that need to click a
+  specific one of the two toggle entry points.
+
+A new browser regression test
+`tests/browser/test_word_match_line_actions.py::test_paragraph_label_button_present_and_toggles`
+asserts the label button materializes, clicking it collapses the
+paragraph body (line-card count drops), and clicking again restores
+the original count — matching the contract of the existing chevron
+expander tests. New selector constant `PARAGRAPH_LABEL` added to the
+selectors block at the top of the file. Architecture doc
+`docs/architecture/ui-action-buttons.md` Paragraph Expander table
+updated to include a `data-testid` column and a row 57b for the
+label button alongside the existing chevron entry.
+
 ### Stable data-testid Backfill — Project Navigation Page Input + Total Label (Done)
 
 The page-number `ui.number` input and the `/ N` total-count `ui.label`

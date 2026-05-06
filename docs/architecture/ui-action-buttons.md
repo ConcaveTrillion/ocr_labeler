@@ -196,9 +196,10 @@ operation is not applicable at that scope.
 
 ### Paragraph Expander
 
-| # | Icon | Handler | Browser-Tested |
-| --- | --- | --- | --- |
-| 57 | `expand_more` / `chevron_right` | `_toggle_paragraph_expanded` | No |
+| # | Icon / Label | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 57 | `expand_more` / `chevron_right` icon button | `_toggle_paragraph_expanded` | `paragraph-expander-button` | Yes — `test_paragraph_expander_toggle` |
+| 57b | Paragraph label text button (wide clickable label, same toggle) | `_toggle_paragraph_expanded` | `paragraph-label-button` | Yes — `test_paragraph_label_button_present_and_toggles` |
 
 ### Line Card Action Buttons (rendered per line)
 

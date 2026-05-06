@@ -266,9 +266,10 @@ class WordMatchRenderer:
                             on_click=lambda _event, index=paragraph_index: (
                                 self._toggle_paragraph_expanded(index)
                             ),
-                        ).props("flat dense no-caps align=left").classes(
-                            "grow justify-start text-left"
-                        )
+                        ).props(
+                            "flat dense no-caps align=left"
+                            ' data-testid="paragraph-label-button"'
+                        ).classes("grow justify-start text-left")
 
                     if paragraph_is_expanded:
                         with (

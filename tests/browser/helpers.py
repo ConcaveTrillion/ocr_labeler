@@ -31,8 +31,8 @@ def load_project(page: Page, project_name: str, timeout: int = 60_000) -> None:
     # Wait for dropdown popup and click the target project option
     page.locator(".q-menu .q-item").get_by_text(project_name).click()
 
-    # Click the LOAD button
-    page.get_by_role("button", name="LOAD").click()
+    # Click the LOAD button (testid'd in ProjectLoadControls)
+    page.locator('[data-testid="load-project-button"]').click()
 
     # Wait for loading overlay to appear then disappear
     loading_overlay = page.locator("[data-nicegui-mark='project-loading-overlay']")

@@ -25,6 +25,31 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Project Load Controls + Source Folder Dialog (Done)
+
+`ProjectLoadControls` controls now carry `data-testid` props for stable
+selection from Playwright tests and the `pd-ocr-labeler-driver` agent:
+
+- Header row: `project-select`, `load-project-button`,
+  `source-folder-button`.
+- Source-folder dialog buttons: `source-folder-home-button`,
+  `source-folder-up-button`, `source-folder-open-typed-button`,
+  `source-folder-use-current-button`, `source-folder-cancel-button`,
+  `source-folder-apply-button`.
+- Source-folder dialog non-button elements: `source-folder-path-input`,
+  `source-folder-current-path-label`.
+
+Existing browser tests in `tests/browser/test_source_folder_dialog.py`,
+`tests/browser/test_browser_smoke.py`, `tests/browser/test_home_page.py`,
+`tests/browser/test_project_loading.py`, and `tests/browser/helpers.py`
+migrated from accessible-name / role / fragile-CSS selectors to
+`[data-testid="..."]` selectors. The OCR Configuration modal trigger
+(`tune` icon) and its dialog body remain untestid'd and on the
+backfill backlog.
+
+Architecture doc `docs/architecture/ui-action-buttons.md` updated to
+record each new testid alongside the label.
+
 ### Stable data-testid Backfill — Project Navigation Controls (Done)
 
 `ProjectNavigationControls` buttons now carry `data-testid` props

@@ -12,27 +12,35 @@ coverage and plan new tests.
 
 ### Main Controls
 
-| # | Label / Icon | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 1 | **LOAD** | `_load_selected_project` | Load selected project | Yes — click + assertions |
-| 2 | 📁 `folder_open` icon | `_open_source_folder_dialog` | Open source folder picker dialog | No |
+| # | Label / Icon | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Project select | `project-select` | n/a (binding) | Pick which project to load | Yes — selected via `.q-select` first; testid available |
+| 1 | **LOAD** | `load-project-button` | `_load_selected_project` | Load selected project | Yes — click + assertions |
+| 2 | `folder_open` icon | `source-folder-button` | `_open_source_folder_dialog` | Open source folder picker dialog | Yes — opens dialog (testid) |
 
 ### Source Folder Dialog
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 3 | **Home** | `_path_picker_go_home` | Navigate picker to home directory | No |
-| 4 | **Up** | `_path_picker_go_up` | Navigate picker to parent directory | No |
-| 5 | **Open Typed Path** | `_open_typed_source_path` | Open path typed in input field | No |
-| 6 | **Use Current** | `_use_current_folder` | Use current folder as source | No |
-| 7 | **Cancel** | `dialog.close` | Close dialog without saving | No |
-| 8 | **Apply** | `_apply_source_folder` | Apply selected source folder | No |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 3 | **Home** | `source-folder-home-button` | `_path_picker_go_home` | Navigate picker to home directory | Yes — click + path label |
+| 4 | **Up** | `source-folder-up-button` | `_path_picker_go_up` | Navigate picker to parent directory | Yes — click |
+| 5 | **Open Typed Path** | `source-folder-open-typed-button` | `_open_typed_source_path` | Open path typed in input field | Yes — click + path label |
+| 6 | **Use Current** | `source-folder-use-current-button` | `_use_current_folder` | Use current folder as source | Yes — click |
+| 7 | **Cancel** | `source-folder-cancel-button` | `dialog.close` | Close dialog without saving | Yes — click |
+| 8 | **Apply** | `source-folder-apply-button` | `_apply_source_folder` | Apply selected source folder | Yes — click + dropdown rescan |
+
+### Source Folder Dialog Inputs / Labels (non-button)
+
+| # | Element | `data-testid` | Description |
+| --- | --- | --- | --- |
+| 8a | Path input | `source-folder-path-input` | Path text input bound to picker |
+| 8b | Current path label | `source-folder-current-path-label` | Label showing currently browsed picker dir |
 
 ### Source Folder Dialog Keyboard Shortcuts
 
 | # | Event | Handler | Description | Browser-Tested |
 | --- | --- | --- | --- | --- |
-| 9 | `Enter` in path input | `_on_source_path_enter` | Navigate to typed path | No |
+| 9 | `Enter` in path input | `_on_source_path_enter` | Navigate to typed path | Yes — fill + press Enter |
 
 ---
 

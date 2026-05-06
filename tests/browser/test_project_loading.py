@@ -39,7 +39,7 @@ def test_load_project_shows_loading_overlay(browser_app_url: str, browser_page) 
     page.locator(".q-menu .q-item").get_by_text("browser-test-project").click()
 
     # Click LOAD
-    page.get_by_role("button", name="LOAD").click()
+    page.locator('[data-testid="load-project-button"]').click()
 
     # The loading overlay should become visible (may be brief)
     loading_overlay = page.locator("[data-nicegui-mark='project-loading-overlay']")

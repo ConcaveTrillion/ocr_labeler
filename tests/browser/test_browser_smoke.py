@@ -126,5 +126,5 @@ def test_home_page_renders_core_controls(app_url: str, browser_page) -> None:
     page.goto(app_url, wait_until="networkidle")
 
     page.get_by_text("No Project Loaded").first.wait_for(state="visible")
-    page.get_by_role("button", name="LOAD").wait_for(state="visible")
+    page.locator('[data-testid="load-project-button"]').wait_for(state="visible")
     page.get_by_text("Project").first.wait_for(state="visible")

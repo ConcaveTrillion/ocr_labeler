@@ -39,7 +39,7 @@ def test_load_button_present(browser_app_url: str, browser_page) -> None:
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
 
-    page.get_by_role("button", name="LOAD").wait_for(state="visible")
+    page.locator('[data-testid="load-project-button"]').wait_for(state="visible")
 
 
 @pytest.mark.browser

@@ -9,8 +9,8 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 21, after closing prior gap 3 as a
-duplicate-coverage no-op + deep review).
+Last refreshed: 2026-05-06 (iter 22, after landing the cross-line
+split-by-selection click test).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -45,26 +45,29 @@ queued by recent iterations. Items are ordered by leverage / ease.
    that review (multi-word and cross-line topologies for
    split-by-selection and extract-line) are queued under "Real
    remaining gaps" below as items 4-6.
-4. **Cross-line `split-by-selection` click test** — select word 0 on
-   line 0 *and* word 0 on line 1, click
-   `line-split-by-selection-button`, assert `LINE_DELETE_CARD` delta
-   of `+2` (each affected line splits into a selected/unselected
-   pair). This is the test that distinguishes split-by-selection
-   from extract-line; existing iter-20 test only exercises the
-   single-line single-word degenerate path. Unblocked by the same
-   fixture iters 19/20 used.
+4. ~~**Cross-line `split-by-selection` click test**~~ — **CLOSED in
+   iter 22.** New `test_line_split_by_selection_cross_line` selects
+   word 0 on line 0 and word 0 on line 1, clicks
+   `line-split-by-selection-button`, and asserts `LINE_DELETE_CARD`
+   delta of `+2`. The cross-line word index is computed by counting
+   word-checkboxes that precede the second `line-delete-button` in
+   DOM order via a small `page.evaluate` JS helper.
 5. **Cross-line `extract-line-from-selection` ("form-line") click
-   test** — same selection as item 4, but click
+   test** — same selection topology as iter-22's item 4, but click
    `word-form-line-button` instead. Assert `LINE_DELETE_CARD` delta
    of `+1` (one new line containing both selected words; residuals
    stay in their original lines). Pairs with item 4 to prove the
-   per-affected-line vs single-output-line semantic distinction.
+   per-affected-line vs single-output-line semantic distinction. The
+   cross-line index helper from iter 22's test can be lifted directly
+   (or even hoisted to a module-level helper if reused twice).
 6. **Multi-word same-line `split-by-selection` non-contiguous click
    test** — select words 0 and 2 on a multi-word line (skip word 1),
    click `line-split-by-selection-button`, assert `LINE_DELETE_CARD`
    delta of `+1`. Selected partition is `[w_0, w_2]`; unselected is
    `[w_1, w_3, ...]`. Proves the selected partition is not required
-   to be contiguous on the source line.
+   to be contiguous on the source line. Requires line 0 to have at
+   least 3 words, which the existing iter-19/20 fixture (page 1, 7
+   lines / 21 words) supports.
 
 ### Lower-priority / queued
 
@@ -126,6 +129,36 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### Toolbar Line Scope — Cross-Line Split-By-Selection Coverage (Iter 22, Done)
+
+Iter-21's review identified a load-bearing gap: `line-split-by-selection-button`
+is semantically distinct from `word-form-line-button` only when the
+selection spans multiple source lines, but every existing browser test
+exercised the degenerate single-word single-line path with a `+1` line
+delta — which both buttons satisfy.  Iter 22 closed the cross-line
+`split-by-selection` gap.
+
+This iteration:
+
+- Added `test_line_split_by_selection_cross_line` to
+  `tests/browser/test_toolbar_line_actions.py`.  The test selects word
+  0 on line 0 and word 0 on line 1, clicks the button, and asserts a
+  `LINE_DELETE_CARD` delta of `+2` (each affected source line splits
+  into a selected + unselected pair — the per-affected-line topology
+  documented in the iter-21 review at
+  `docs/review-notes/2026-05-06-toolbar-split-family.md`).
+- Word checkboxes are flat across line cards, so to find word 0 of
+  line 1 in the global checkbox list, the test uses a small
+  `page.evaluate` JS helper that counts how many word-checkboxes
+  precede the second `line-delete-button` in DOM order.  That count
+  equals line 0's word count, which equals the global checkbox index
+  of line 1 / word 0.
+
+Pure additive — no source mutations.  Full `make ci` green
+(912 passed; one pre-existing flake on
+`TestNiceGuiIntegration::test_load_button_prevents_multiple_clicks`
+went green on retry, as expected).
 
 ### Toolbar Split Family Deep Review (Iter 21, Done)
 

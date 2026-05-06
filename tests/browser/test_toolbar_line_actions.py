@@ -490,3 +490,78 @@ def test_line_split_by_selection(browser_app_url: str, browser_page) -> None:
 
     # Line count should increase by 1 (one line became two).
     expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection_cross_line(browser_app_url: str, browser_page) -> None:
+    """Cross-line split-by-selection: line count increases by 2.
+
+    The distinguishing semantic of
+    ``split_lines_into_selected_and_unselected_words`` (vs
+    ``split_line_with_selected_words`` / "form-line") is that it
+    partitions **each affected source line** into a selected + unselected
+    pair.  When the selection spans two source lines, the operation
+    therefore produces *two* additional lines (each source line splits
+    into two).  See
+    ``docs/review-notes/2026-05-06-toolbar-split-family.md`` for the full
+    distinguishing-coverage analysis.
+
+    This test selects word 0 on line 0 *and* word 0 on line 1, then
+    clicks ``line-split-by-selection-button`` and asserts a ``+2`` delta
+    on the line-card count.  Pairs with the iter-20
+    ``test_line_split_by_selection`` (which exercised the degenerate
+    single-line ``+1`` case) to lock in both the per-line and cross-line
+    contracts.
+
+    To find word 0 of line 1 in the *flat* word-checkbox list, we count
+    how many word-checkboxes precede the second ``line-delete-button`` in
+    DOM order — that is line 0's word count, and the global checkbox
+    index for line 1 / word 0.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 2, "Expected at least 2 line cards on page 1"
+
+    # Compute the global flat-list index of line 1's first word checkbox.
+    # Word-checkboxes for line N appear between line-delete-button N and
+    # line-delete-button N+1 in DOM order, so the count of word-checkboxes
+    # that precede line-delete-button[1] equals line 0's word count, which
+    # is the global index of line 1 / word 0.
+    line_1_word_0_index = page.evaluate(
+        """() => {
+            const ldbs = Array.from(
+                document.querySelectorAll('[data-testid="line-delete-button"]')
+            );
+            if (ldbs.length < 2) return -1;
+            const second = ldbs[1];
+            const wcbs = Array.from(
+                document.querySelectorAll('[data-testid="word-checkbox"]')
+            );
+            let count = 0;
+            for (const w of wcbs) {
+                if (w.compareDocumentPosition(second) &
+                    Node.DOCUMENT_POSITION_FOLLOWING) {
+                    count += 1;
+                }
+            }
+            return count;
+        }"""
+    )
+    assert line_1_word_0_index >= 1, (
+        f"Expected line 0 to have at least 1 word; got index {line_1_word_0_index}"
+    )
+
+    _select_word(page, 0)
+    _select_word(page, line_1_word_0_index)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Each of the two affected source lines splits into a (selected,
+    # unselected) pair, so line count increases by 2.
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 2)

@@ -12,7 +12,7 @@ def wait_for_app_ready(page: Page, timeout: int = 30_000) -> None:
 
 def wait_for_page_number(page: Page, expected: str, timeout: int = 30_000) -> None:
     """Poll until the page number input shows the expected value."""
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     expect(page_input).to_have_value(expected, timeout=timeout)
 
 
@@ -59,7 +59,7 @@ def navigate_to_page(page: Page, page_number: int, timeout: int = 60_000) -> Non
         timeout: Maximum time to wait for navigation.
     """
     # Find and fill the page number input
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.fill(str(page_number))
 
     # Click the Go To button
@@ -71,11 +71,11 @@ def navigate_to_page(page: Page, page_number: int, timeout: int = 60_000) -> Non
 
 def get_current_page_number(page: Page) -> str:
     """Read the current page number from the navigation input."""
-    return page.get_by_label("Page").input_value()
+    return page.locator('[data-testid="nav-page-input"]').input_value()
 
 
 def get_page_total_text(page: Page) -> str:
     """Read the total page count text (e.g., '/ 3')."""
     # The total is displayed as a label like "/ 3" next to the page input
-    total_label = page.locator("text=/\\/ \\d+/").first
+    total_label = page.locator('[data-testid="nav-page-total-label"]')
     return total_label.text_content() or ""

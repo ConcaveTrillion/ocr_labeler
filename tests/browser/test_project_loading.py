@@ -90,7 +90,7 @@ def test_load_specific_page_via_url(browser_app_url: str, browser_page) -> None:
     )
 
     # Verify we're on page 2
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.wait_for(state="visible")
     assert page_input.input_value() == "2"
 

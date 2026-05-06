@@ -57,9 +57,10 @@ class ProjectNavigationControls(
                         "keydown.enter",
                         lambda event: self._on_goto(self.page_input.value, event),
                     )
-                    .props("autocomplete=off")
+                    .props('autocomplete=off data-testid="nav-page-input"')
                 )
                 self.page_total = ui.label("")
+                self.page_total.props('data-testid="nav-page-total-label"')
                 self._bind_disabled_from_safe(
                     self.prev_button,
                     self.viewmodel,

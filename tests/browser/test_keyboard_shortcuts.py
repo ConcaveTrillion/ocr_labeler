@@ -37,10 +37,23 @@ def test_page_input_present(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     expect(page_input).to_be_visible()
     # Initial value should be 1
     expect(page_input).to_have_value("1")
+
+
+@pytest.mark.browser
+def test_page_total_label_present(browser_app_url: str, browser_page) -> None:
+    """The '/ N' total-count label is reachable via testid and shows the total."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    total_label = page.locator('[data-testid="nav-page-total-label"]')
+    expect(total_label).to_be_visible()
+    # Browser-test fixture has 3 pages; allow any positive count to keep this
+    # robust if the fixture grows. The format is `/ N`.
+    expect(total_label).to_have_text(re.compile(r"^\s*/\s*\d+\s*$"))
 
 
 @pytest.mark.browser
@@ -51,7 +64,7 @@ def test_page_input_accepts_only_valid_numbers(
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     # Fill with 0 (below minimum of 1) and press Enter
     page_input.fill("0")
     page_input.press("Enter")
@@ -72,7 +85,7 @@ def test_enter_in_page_input_navigates(browser_app_url: str, browser_page) -> No
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.fill("2")
     page.wait_for_timeout(200)
     page_input.press("Enter")
@@ -81,7 +94,7 @@ def test_enter_in_page_input_navigates(browser_app_url: str, browser_page) -> No
     wait_for_page_loaded(page)
 
     # Verify page content has changed (page input now shows 2)
-    expect(page.get_by_label("Page")).to_have_value("2")
+    expect(page.locator('[data-testid="nav-page-input"]')).to_have_value("2")
 
 
 # ---------------------------------------------------------------------------

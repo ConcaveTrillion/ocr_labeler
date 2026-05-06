@@ -62,11 +62,11 @@ def test_two_tabs_different_pages(browser_app_url: str, browser_context) -> None
     )
 
     # Verify tab1 is on page 1
-    tab1_page_input = tab1.get_by_label("Page")
+    tab1_page_input = tab1.locator('[data-testid="nav-page-input"]')
     assert tab1_page_input.input_value() == "1"
 
     # Verify tab2 is on page 3
-    tab2_page_input = tab2.get_by_label("Page")
+    tab2_page_input = tab2.locator('[data-testid="nav-page-input"]')
     assert tab2_page_input.input_value() == "3"
 
     tab1.close()

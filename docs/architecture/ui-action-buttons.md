@@ -87,6 +87,13 @@ The trigger is rendered alongside the project load controls
 | 11 | **Next** | `nav-next-button` | `_on_next` | Navigate to next page | Yes — click + disabled state |
 | 12 | **Go To:** | `nav-goto-button` | `_on_goto` | Navigate to specific page number | Yes — fill + click |
 
+The page-number `ui.number` input and the `/ N` total-count `ui.label`
+that sit beside the Prev/Next/Go-to buttons in the navigation toolbar
+also expose stable testids for Playwright tests and the
+`pd-ocr-labeler-driver` agent: `nav-page-input` (the `<input>` itself,
+since `data-testid` lands on the inner element for `ui.number`) and
+`nav-page-total-label` (the `<div>` wrapping the total text).
+
 ### Navigation Keyboard Shortcuts
 
 | # | Event | Handler | Description | Browser-Tested |

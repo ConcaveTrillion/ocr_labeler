@@ -234,7 +234,7 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
 
     # Navigate to page 3 first — the bug only manifested on pages other than
     # the initial page, since TextTabs.page_index defaulted to 0.
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.fill("3")
     page_input.press("Enter")
     expect(page_input).to_have_value("3", timeout=15_000)

@@ -25,6 +25,21 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Project Navigation Page Input + Total Label (Done)
+
+The page-number `ui.number` input and the `/ N` total-count `ui.label`
+in `ProjectNavigationControls` now expose `data-testid` props
+(`nav-page-input` and `nav-page-total-label`). This finishes the nav
+toolbar contract started in iter 2 (Prev/Next/Go-to). All browser
+tests that selected the page input via `get_by_label("Page")` and the
+helpers `wait_for_page_number` / `navigate_to_page` /
+`get_current_page_number` / `get_page_total_text` migrated to the
+testid selectors. A new browser regression test
+`tests/browser/test_keyboard_shortcuts.py::test_page_total_label_present`
+asserts the total label is reachable via testid and matches `/ N`.
+Architecture doc `docs/architecture/ui-action-buttons.md` updated with
+a paragraph after the navigation table to record the new testids.
+
 ### Stable data-testid Backfill — Word Edit Dialog Header Label (Done)
 
 The Word Edit Dialog's header text label ("Edit Line N, Word M") at

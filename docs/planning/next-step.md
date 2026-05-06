@@ -238,7 +238,12 @@ queued by recent iterations. Items are ordered by leverage / ease.
   `test_page_actions.py` (8 tests).
 - Keyboard shortcuts: 6 tests in
   `tests/browser/test_keyboard_shortcuts.py`.
-- Image tab controls: 10 tests in `tests/browser/test_image_tabs.py`.
+- Image tab controls: 11 tests in `tests/browser/test_image_tabs.py`
+  (now includes `test_erase_pixels_button_enables_erase_mode` as of
+  iter 35 — closes the previously-untested "Erase Pixels" toolbar
+  button by asserting clicking it surfaces the
+  "Erase mode enabled: drag a rectangle to erase pixels" info
+  notification and produces no `bg-negative` notification).
 - OCRConfigModal: 7 tests in `tests/browser/test_ocr_config_modal.py`.
 
 ## Done Criteria

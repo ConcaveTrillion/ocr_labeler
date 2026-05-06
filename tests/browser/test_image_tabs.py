@@ -173,3 +173,36 @@ def test_selection_mode_radio_buttons(browser_app_url: str, browser_page) -> Non
     # Switch back to Word mode
     page.get_by_text("Word").first.click()
     page.wait_for_timeout(500)
+
+
+@pytest.mark.browser
+def test_erase_pixels_button_enables_erase_mode(
+    browser_app_url: str, browser_page
+) -> None:
+    """Clicking 'Erase Pixels' arms erase mode and surfaces an info notification.
+
+    The button is in the image-tab toolbar (next to the Selection Mode radio)
+    and wires to ``ImageTabs.enable_erase_mode``. That handler sets
+    ``self._erase_mode = True`` and emits a single info-typed notification
+    "Erase mode enabled: drag a rectangle to erase pixels". Without a
+    follow-up drag, that notification is the only externally-observable
+    effect of the click — and it's a non-negative type, so we additionally
+    assert no ``bg-negative`` notification fired (the Quasar info type is
+    rendered as a non-negative class).
+    """
+    page = browser_page
+    page.goto(browser_app_url, wait_until="networkidle")
+    wait_for_app_ready(page)
+    load_project(page, "browser-test-project")
+    wait_for_page_loaded(page)
+
+    erase_button = page.get_by_role("button", name="Erase Pixels").first
+    expect(erase_button).to_be_visible()
+    erase_button.click()
+
+    # The info notification carries the on-click message.
+    notification = page.locator(".q-notification:has-text('Erase mode enabled')").first
+    notification.wait_for(state="visible", timeout=10_000)
+
+    # No failure path should have triggered a negative notification.
+    assert page.locator(".q-notification.bg-negative").count() == 0

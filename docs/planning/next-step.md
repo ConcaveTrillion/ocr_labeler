@@ -25,6 +25,25 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — OCR Configuration Modal (Done)
+
+`OCRConfigModal` now exposes `data-testid` props on every load-bearing
+control so future Playwright tests and the `pd-ocr-labeler-driver`
+agent can select by testid instead of relying on visible label copy
+or fragile q-select wrappers:
+
+- Header trigger: `ocr-config-trigger-button` (the `tune` icon).
+- Dialog buttons: `ocr-rescan-models-button`, `ocr-config-cancel-button`,
+  `ocr-config-apply-button`.
+- Dialog inputs: `ocr-detection-model-select`,
+  `ocr-recognition-model-select`, `ocr-hf-revision-input`.
+
+No browser tests existed for this modal yet, so this commit is purely
+a contract-establishing testid backfill — adding browser regression
+coverage for the modal is queued as a follow-up. Architecture doc
+`docs/architecture/ui-action-buttons.md` updated to record each new
+testid alongside the label.
+
 ### Stable data-testid Backfill — Project Load Controls + Source Folder Dialog (Done)
 
 `ProjectLoadControls` controls now carry `data-testid` props for stable

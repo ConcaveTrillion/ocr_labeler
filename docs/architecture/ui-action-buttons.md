@@ -55,25 +55,25 @@ The trigger is rendered alongside the project load controls
 
 ### Header Trigger
 
-| # | Label / Icon | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 109 | `tune` icon | `_open` | Open OCR Configuration dialog (rescans available models on open) | No |
+| # | Label / Icon | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 109 | `tune` icon | `ocr-config-trigger-button` | `_open` | Open OCR Configuration dialog (rescans available models on open) | No |
 
 ### Dialog Buttons
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 110 | **Rescan Models** | `_rescan_models` | Re-scan local trainer outputs and HF cache; refreshes both selects | No |
-| 111 | **Cancel** | `_close` | Close dialog without applying changes | No |
-| 112 | **Apply** | `_apply_selection` | Apply HF revision pin (if changed) then commit selected detection / recognition pair | No |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 110 | **Rescan Models** | `ocr-rescan-models-button` | `_rescan_models` | Re-scan local trainer outputs and HF cache; refreshes both selects | No |
+| 111 | **Cancel** | `ocr-config-cancel-button` | `_close` | Close dialog without applying changes | No |
+| 112 | **Apply** | `ocr-config-apply-button` | `_apply_selection` | Apply HF revision pin (if changed) then commit selected detection / recognition pair | No |
 
 ### Dialog Inputs (non-button)
 
-| # | Type | Handler / Binding | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 113 | **Detection model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_detection_model_options`; applied via `command_set_selected_ocr_models` | Pick detection weights (HF default + local trainer outputs) | No |
-| 114 | **Recognition model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_recognition_model_options`; applied via `command_set_selected_ocr_models` | Pick recognition weights (HF default + local trainer outputs) | No |
-| 115 | **Hugging Face revision pin** (`ui.input`) | applied via `command_set_hf_pinned_revision` | Optional revision/tag/commit SHA pinning the HF download (empty = latest) | No |
+| # | Type | `data-testid` | Handler / Binding | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 113 | **Detection model** (`ui.select`, `with_input=True`) | `ocr-detection-model-select` | bound to `AppStateViewModel.ocr_detection_model_options`; applied via `command_set_selected_ocr_models` | Pick detection weights (HF default + local trainer outputs) | No |
+| 114 | **Recognition model** (`ui.select`, `with_input=True`) | `ocr-recognition-model-select` | bound to `AppStateViewModel.ocr_recognition_model_options`; applied via `command_set_selected_ocr_models` | Pick recognition weights (HF default + local trainer outputs) | No |
+| 115 | **Hugging Face revision pin** (`ui.input`) | `ocr-hf-revision-input` | applied via `command_set_hf_pinned_revision` | Optional revision/tag/commit SHA pinning the HF download (empty = latest) | No |
 
 ---
 

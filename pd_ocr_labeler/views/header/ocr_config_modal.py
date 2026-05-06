@@ -45,12 +45,18 @@ class OCRConfigModal(NotificationMixin):
                 value=self.app_state_model.selected_ocr_detection_model_key,
                 with_input=True,
             ).classes("w-full")
+            self._detection_model_select.props(
+                'data-testid="ocr-detection-model-select"'
+            )
             self._recognition_model_select = ui.select(
                 label="Recognition model",
                 options=self.app_state_model.ocr_recognition_model_options,
                 value=self.app_state_model.selected_ocr_recognition_model_key,
                 with_input=True,
             ).classes("w-full")
+            self._recognition_model_select.props(
+                'data-testid="ocr-recognition-model-select"'
+            )
 
             self._bind_from_safe(
                 self._detection_model_select,
@@ -74,14 +80,21 @@ class OCRConfigModal(NotificationMixin):
                 value=self.app_state_model.hf_pinned_revision or "",
                 placeholder="leave empty for latest (e.g. v1.2.0 or commit SHA)",
             ).classes("w-full")
+            self._hf_revision_input.props('data-testid="ocr-hf-revision-input"')
 
             with ui.row().classes("w-full justify-between pt-2"):
-                ui.button("Rescan Models", on_click=self._rescan_models).props("flat")
+                rescan_btn = ui.button(
+                    "Rescan Models", on_click=self._rescan_models
+                ).props("flat")
+                rescan_btn.props('data-testid="ocr-rescan-models-button"')
                 with ui.row().classes("gap-2"):
-                    ui.button("Cancel", on_click=self._close).props("flat")
-                    ui.button("Apply", on_click=self._apply_selection)
+                    cancel_btn = ui.button("Cancel", on_click=self._close).props("flat")
+                    cancel_btn.props('data-testid="ocr-config-cancel-button"')
+                    apply_btn = ui.button("Apply", on_click=self._apply_selection)
+                    apply_btn.props('data-testid="ocr-config-apply-button"')
 
         self._trigger_button = ui.button(icon="tune", on_click=self._open)
+        self._trigger_button.props('data-testid="ocr-config-trigger-button"')
         style_action_button(self._trigger_button, size="md")
         self._bind_disabled_from_safe(
             self._trigger_button,

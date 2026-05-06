@@ -16,6 +16,7 @@ from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 LINE_MERGE = '[data-testid="line-merge-button"]'
 LINE_REFINE = '[data-testid="line-refine-bboxes-button"]'
 LINE_EXPAND_REFINE = '[data-testid="line-expand-refine-bboxes-button"]'
+LINE_EXPAND_BBOXES = '[data-testid="line-expand-bboxes-button"]'
 LINE_SPLIT_AFTER_WORD = '[data-testid="line-split-after-word-button"]'
 LINE_SPLIT_BY_SELECTION = '[data-testid="line-split-by-selection-button"]'
 LINE_FORM_PARAGRAPH = '[data-testid="line-form-paragraph-button"]'
@@ -35,6 +36,7 @@ ALL_LINE_BUTTONS = [
     LINE_MERGE,
     LINE_REFINE,
     LINE_EXPAND_REFINE,
+    LINE_EXPAND_BBOXES,
     LINE_SPLIT_AFTER_WORD,
     LINE_SPLIT_BY_SELECTION,
     LINE_FORM_PARAGRAPH,
@@ -131,6 +133,7 @@ def test_line_scope_buttons_enabled_with_selection(
     for selector in [
         LINE_REFINE,
         LINE_EXPAND_REFINE,
+        LINE_EXPAND_BBOXES,
         LINE_GT_TO_OCR,
         LINE_OCR_TO_GT,
         LINE_VALIDATE,
@@ -166,6 +169,7 @@ def test_line_scope_buttons_have_tooltips(browser_app_url: str, browser_page) ->
         (LINE_MERGE, "Merge selected lines"),
         (LINE_REFINE, "Refine selected lines"),
         (LINE_EXPAND_REFINE, "Expand then refine selected lines"),
+        (LINE_EXPAND_BBOXES, "Expand selected line bboxes"),
         (LINE_SPLIT_AFTER_WORD, "Split the selected line"),
         (LINE_SPLIT_BY_SELECTION, "Split line"),
         (LINE_FORM_PARAGRAPH, "Select lines to form a new paragraph"),
@@ -211,6 +215,25 @@ def test_line_expand_refine(browser_app_url: str, browser_page) -> None:
 
     _select_line(page, 0)
     page.locator(LINE_EXPAND_REFINE).click()
+    _wait_for_notification(page)
+
+
+@pytest.mark.browser
+def test_line_expand_bboxes(browser_app_url: str, browser_page) -> None:
+    """Select line, click Expand bboxes: success notification appears.
+
+    Pure-padding bbox expansion (no refine pass).  Same enable invariant
+    as Refine / Expand+Refine: ``callback is not None and >= 1 line
+    selected``.  The handler reports ``Expanded bboxes in N lines`` on
+    success or a warning notification on failure — either way a Quasar
+    notification fires, which is what we assert.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    _select_line(page, 0)
+    page.locator(LINE_EXPAND_BBOXES).click()
     _wait_for_notification(page)
 
 

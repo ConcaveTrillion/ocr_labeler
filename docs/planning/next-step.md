@@ -25,6 +25,36 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Toolbar Line Scope — Expand BBoxes Button Coverage (Done)
+
+`line-expand-bboxes-button` (`open_in_full` icon) is the line-scope
+toolbar button that pads the selected line's bounding boxes without
+running a full refine pass.  It is wired to
+`_handle_expand_bbox_selected_lines` and shares the same enable
+invariant as Refine / Expand+Refine
+(`expand_line_bboxes_callback is not None and >= 1 line selected`),
+but had **zero** browser test coverage — it was missing from
+`ALL_LINE_BUTTONS` in `tests/browser/test_toolbar_line_actions.py`,
+absent from the enabled-with-selection assertion list, missing from
+the tooltip table, and had no click test.
+
+This iteration:
+
+- Added `LINE_EXPAND_BBOXES` selector constant.
+- Added it to `ALL_LINE_BUTTONS` so
+  `test_line_scope_buttons_disabled_without_selection` now covers it.
+- Added it to the enabled-with-selection assertion list in
+  `test_line_scope_buttons_enabled_with_selection`.
+- Added a tooltip-row entry (`"Expand selected line bboxes"`) to
+  `test_line_scope_buttons_have_tooltips`.
+- Added a dedicated `test_line_expand_bboxes` click test that
+  selects line 0, clicks the button, and asserts a Quasar
+  notification fires (mirroring `test_line_refine` /
+  `test_line_expand_refine`).
+
+Pure additive — no source mutations.  Full `make ci` green
+(908 passed).
+
 ### OCR Configuration Modal — Detection/Recognition Select Cancel-Cycle Browser Test (Done)
 
 Iter-15 follow-up to iter-14's HF revision cancel-revert test. The

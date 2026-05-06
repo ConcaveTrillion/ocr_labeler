@@ -23,7 +23,7 @@ def test_load_project_via_ui(browser_app_url: str, browser_page) -> None:
     )
 
     # Navigation controls should now be visible
-    page.get_by_role("button", name="Next").wait_for(state="visible")
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible")
 
 
 @pytest.mark.browser
@@ -48,7 +48,7 @@ def test_load_project_shows_loading_overlay(browser_app_url: str, browser_page) 
     loading_overlay.wait_for(state="hidden", timeout=60_000)
 
     # Project should now be loaded
-    page.get_by_role("button", name="Next").wait_for(state="visible")
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible")
 
 
 @pytest.mark.browser
@@ -72,7 +72,9 @@ def test_load_project_via_direct_url(browser_app_url: str, browser_page) -> None
     page.goto(url, wait_until="networkidle")
 
     # Wait for the project to load
-    page.get_by_role("button", name="Next").wait_for(state="visible", timeout=60_000)
+    page.locator('[data-testid="nav-next-button"]').wait_for(
+        state="visible", timeout=60_000
+    )
 
 
 @pytest.mark.browser
@@ -83,7 +85,9 @@ def test_load_specific_page_via_url(browser_app_url: str, browser_page) -> None:
     page.goto(url, wait_until="networkidle")
 
     # Wait for the page to load
-    page.get_by_role("button", name="Next").wait_for(state="visible", timeout=60_000)
+    page.locator('[data-testid="nav-next-button"]').wait_for(
+        state="visible", timeout=60_000
+    )
 
     # Verify we're on page 2
     page_input = page.get_by_label("Page")

@@ -67,6 +67,6 @@ def test_no_navigation_before_load(browser_app_url: str, browser_page) -> None:
     wait_for_app_ready(page)
 
     # Navigation buttons should not be visible
-    assert page.get_by_role("button", name="Prev").count() == 0
-    assert page.get_by_role("button", name="Next").count() == 0
-    assert page.get_by_role("button", name="Go To:").count() == 0
+    assert page.locator('[data-testid="nav-prev-button"]').count() == 0
+    assert page.locator('[data-testid="nav-next-button"]').count() == 0
+    assert page.locator('[data-testid="nav-goto-button"]').count() == 0

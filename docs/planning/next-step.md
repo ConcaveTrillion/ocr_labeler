@@ -25,6 +25,25 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Project Navigation Controls (Done)
+
+`ProjectNavigationControls` buttons now carry `data-testid` props
+(`nav-prev-button`, `nav-next-button`, `nav-goto-button`) for stable
+selection from Playwright tests and the `pd-ocr-labeler-driver`
+agent. All existing browser tests that selected these controls by
+accessible name (`tests/browser/helpers.py`,
+`tests/browser/test_navigation.py`,
+`tests/browser/test_session_isolation.py`,
+`tests/browser/test_project_loading.py`,
+`tests/browser/test_home_page.py`) migrated to
+`[data-testid="..."]` selectors. The page-number input and total
+label still rely on accessible-label selection (`get_by_label("Page")`),
+which is intentionally a more stable contract than button copy.
+Architecture-doc button table in
+`docs/architecture/ui-action-buttons.md` updated to record each new
+testid alongside the label. Other load-bearing controls remain on
+the testid backfill backlog for follow-up iterations.
+
 ### Stable data-testid Backfill — Page Actions (Done)
 
 `PageActions` buttons now carry `data-testid` props for stable

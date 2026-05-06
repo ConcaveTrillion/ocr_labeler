@@ -73,11 +73,11 @@ The trigger is rendered alongside the project load controls
 
 **Source:** `pd_ocr_labeler/views/projects/project_navigation_controls.py`
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 10 | **Prev** | `_on_prev` | Navigate to previous page | Yes — click + disabled state |
-| 11 | **Next** | `_on_next` | Navigate to next page | Yes — click + disabled state |
-| 12 | **Go To:** | `_on_goto` | Navigate to specific page number | Yes — fill + click |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 10 | **Prev** | `nav-prev-button` | `_on_prev` | Navigate to previous page | Yes — click + disabled state |
+| 11 | **Next** | `nav-next-button` | `_on_next` | Navigate to next page | Yes — click + disabled state |
+| 12 | **Go To:** | `nav-goto-button` | `_on_goto` | Navigate to specific page number | Yes — fill + click |
 
 ### Navigation Keyboard Shortcuts
 

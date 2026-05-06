@@ -39,7 +39,9 @@ def load_project(page: Page, project_name: str, timeout: int = 60_000) -> None:
     loading_overlay.wait_for(state="hidden", timeout=timeout)
 
     # Wait for navigation controls to appear (indicates project loaded)
-    page.get_by_role("button", name="Next").wait_for(state="visible", timeout=timeout)
+    page.locator('[data-testid="nav-next-button"]').wait_for(
+        state="visible", timeout=timeout
+    )
 
 
 def wait_for_page_loaded(page: Page, timeout: int = 60_000) -> None:
@@ -61,7 +63,7 @@ def navigate_to_page(page: Page, page_number: int, timeout: int = 60_000) -> Non
     page_input.fill(str(page_number))
 
     # Click the Go To button
-    page.get_by_role("button", name="Go To:").click()
+    page.locator('[data-testid="nav-goto-button"]').click()
 
     # Wait for navigation to complete
     wait_for_page_loaded(page, timeout=timeout)

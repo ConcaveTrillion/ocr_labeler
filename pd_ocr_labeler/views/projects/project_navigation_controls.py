@@ -40,13 +40,16 @@ class ProjectNavigationControls(
         with ui.column().classes("gap-2") as container:
             with ui.row().classes("items-center gap-2"):
                 self.prev_button = ui.button("Prev", on_click=self._on_prev)
+                self.prev_button.props('data-testid="nav-prev-button"')
                 style_action_button(self.prev_button, size="md")
                 self.next_button = ui.button("Next", on_click=self._on_next)
+                self.next_button.props('data-testid="nav-next-button"')
                 style_action_button(self.next_button, size="md")
                 self.goto_button = ui.button(
                     "Go To:",
                     on_click=lambda event: self._on_goto(self.page_input.value, event),
                 )
+                self.goto_button.props('data-testid="nav-goto-button"')
                 style_action_button(self.goto_button, size="md")
                 self.page_input = (
                     ui.number(label="Page", value=1, min=1, format="%d")

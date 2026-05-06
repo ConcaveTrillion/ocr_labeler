@@ -614,6 +614,112 @@ def test_dialog_apply_component_via_dropdown(
     page.locator(DIALOG_CLOSE).click()
 
 
+# ---------------------------------------------------------------------------
+# Apply Scope via dropdown selection (drives ``dialog-scope-select`` to set
+# scope on a previously-applied style; verifies the chip text re-renders to
+# include the scope suffix per ``_word_display_tag_items`` line 639).
+#
+# Closes the third-and-final dialog dropdown trio: iter 28 covered
+# ``dialog-style-select``, iter 29 covered ``dialog-component-select``, and
+# this iter covers ``dialog-scope-select``.  The scope select differs from
+# the other two in two ways:
+#
+# 1. There is no separate "Apply Scope" button — the on-change handler
+#    ``_apply_scope_for_selected_style`` fires immediately on dropdown
+#    selection (see ``word_edit_dialog.py`` line 1548-1552).
+# 2. Scope is meaningful only when a style is already applied to the chip,
+#    so the test must apply a style first, then change scope.
+#
+# The chip-text format with scope is ``"<Style> (<Scope.title()>)"`` per
+# ``_word_display_tag_items`` line 639 — e.g. picking "Italics" then
+# "Part" yields chip text "Italics (Part)".
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_apply_scope_via_dropdown(browser_app_url: str, browser_page) -> None:
+    """Apply Italics → open scope select → pick "Part" → chip reads "Italics (Part)".
+
+    Verifies that:
+
+    1. Clicking the q-select wrapper (``DIALOG_SCOPE_SELECT`` testid lands
+       on the wrapper, not the underlying menu) opens the q-menu.
+    2. Selecting a q-item by visible text drives the on-change handler
+       ``_apply_scope_for_selected_style`` directly (no separate Apply
+       button).
+    3. ``WordOperations.apply_scope_to_word_style`` re-renders the existing
+       style chip with the scope suffix per
+       ``WordMatchView._word_display_tag_items`` line 639.
+
+    Counterpart to ``test_dialog_apply_style_via_dropdown`` and
+    ``test_dialog_apply_component_via_dropdown`` (the other two dialog
+    dropdowns).  This test closes the dropdown trio.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    dialog = page.locator(".q-dialog").last
+    chips_before = dialog.locator(DIALOG_TAG_CHIP).count()
+
+    # Step 1: apply "Italics" via the style dropdown so we have a styled
+    # chip on which scope is meaningful.  Mirrors the first half of
+    # ``test_dialog_apply_style_via_dropdown``.
+    dialog.locator(DIALOG_STYLE_SELECT).click()
+    page.get_by_role("option", name="Italics").first.click()
+    page.wait_for_timeout(200)
+    page.locator(DIALOG_APPLY_STYLE).click()
+    page.wait_for_timeout(500)
+
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
+    italics_chip = dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics").first
+    # ``WordOperations.apply_style_to_word`` hard-codes the initial scope
+    # to "whole" (see ``word_operations.py`` line 134-137), so the chip
+    # text after the style apply is "Italics (Whole)" plus the inline
+    # clear-icon button's "close" text.  Use ``to_contain_text`` to
+    # pin the *scope-suffix* portion specifically — this is the value
+    # we will verify changes after the scope dropdown drive below.
+    expect(italics_chip).to_contain_text("(Whole)")
+
+    # Step 2: drive the scope-select dropdown to "Part" (different from
+    # the post-apply default of "Whole").  The on-change handler fires
+    # immediately, applying scope to the most recently selected style
+    # (Italics) — there is no separate Apply Scope button to click.
+    dialog.locator(DIALOG_SCOPE_SELECT).click()
+    page.get_by_role("option", name="Part").first.click()
+    page.wait_for_timeout(500)
+
+    # Step 3: chip count should be unchanged (still one Italics chip),
+    # but the chip's scope suffix should now read "(Part)" per
+    # ``_word_display_tag_items`` line 639's f-string format
+    # (``f"{display} ({normalized_scope.title()})"``).  Re-locate the
+    # chip after re-render — the prior locator handle may be stale since
+    # ``_render_tag_chips`` re-creates the chips.
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
+    italics_chip_after = (
+        dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics").first
+    )
+    expect(italics_chip_after).to_contain_text("(Part)")
+    # And specifically *not* "(Whole)" any more — proves the scope
+    # actually changed rather than a duplicate chip being added.
+    expect(italics_chip_after).not_to_contain_text("(Whole)")
+
+    # Cleanup: hover the chip and click its embedded clear icon to remove
+    # the style entirely (clearing the style also discards its scope), so
+    # subsequent tests on the same fixture session start clean.  Mirrors
+    # the cleanup pattern in ``test_dialog_apply_style_via_dropdown``.
+    italics_chip_after.hover()
+    page.wait_for_timeout(200)
+    clear_btn = italics_chip_after.locator(DIALOG_TAG_CLEAR_BUTTON).first
+    expect(clear_btn).to_be_visible(timeout=5_000)
+    clear_btn.click()
+    page.wait_for_timeout(500)
+
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before)
+
+    page.locator(DIALOG_CLOSE).click()
+
+
 # ===========================================================================
 # Commit 9 — Merge / Split / Delete  (Buttons 71-75)
 # ===========================================================================

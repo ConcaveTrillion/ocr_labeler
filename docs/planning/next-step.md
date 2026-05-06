@@ -9,10 +9,9 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 29, after landing the symmetric
-in-dialog Apply-Component dropdown-drive browser test that picks a
-non-default component value ("Superscript") and verifies the
-resulting chip text matches).
+Last refreshed: 2026-05-06 (iter 30, after landing the
+in-dialog Apply-Scope dropdown-drive browser test — closes the
+dialog dropdown trio (style → component → scope)).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -137,12 +136,20 @@ queued by recent iterations. Items are ordered by leverage / ease.
   and (b) the chip text is "Superscript". Cleanup uses the
   symmetric `dialog-clear-component-button` (the existing affordance
   for component chips) to restore baseline state.
-- **Apply-Scope select wiring inside dialog** —
-  `dialog-scope-select` has no dropdown-drive coverage at all; the
-  scope value is only ever set indirectly via `_set_selected_style`'s
-  scope sync. Apply a style first, pick "Whole" or "Part" from the
-  scope dropdown, assert chip display now ends with "(Whole)" or
-  "(Part)" per `_word_display_tag_items` line 639.
+- ~~**Apply-Scope select wiring inside dialog**~~ — **CLOSED in
+  iter 30.** New `test_dialog_apply_scope_via_dropdown` in
+  `tests/browser/test_word_edit_dialog.py` first applies "Italics"
+  via the style dropdown (which produces chip text "Italics (Whole)"
+  because `WordOperations.apply_style_to_word` hard-codes the initial
+  scope to `"whole"` — see `word_operations.py` line 134-137), then
+  clicks the `dialog-scope-select` q-select wrapper, picks "Part",
+  and asserts the chip text now contains `(Part)` and not `(Whole)`
+  per `_word_display_tag_items` line 639's
+  `f"{display} ({normalized_scope.title()})"` format.  The on-change
+  handler `_apply_scope_for_selected_style` fires immediately on
+  dropdown selection — no separate Apply Scope button.  Closes the
+  dialog dropdown trio: style (iter 28), component (iter 29), scope
+  (this iter).
 - **`test_load_button_prevents_multiple_clicks` flake** — known
   pre-existing flake; retry up to 3x in CI. Not a coverage gap, but
   worth fixing or marking `flaky` once we have time.
@@ -163,9 +170,11 @@ queued by recent iterations. Items are ordered by leverage / ease.
   `paragraph-expand-bboxes-button` click coverage as of iter 18).
 - Toolbar page scope: 8 tests in
   `tests/browser/test_toolbar_page_actions.py`.
-- Word edit dialog: 29 tests in `tests/browser/test_word_edit_dialog.py`
+- Word edit dialog: 31 tests in `tests/browser/test_word_edit_dialog.py`
   covering header, style (default-apply, dropdown-pick-apply, per-chip
-  clear), merge/split/delete, crop, refine, all 8 nudges, reset,
+  clear), component (default-apply, dropdown-pick-apply, clear),
+  scope (dropdown-pick-apply changes chip suffix from "(Whole)" to
+  "(Part)"), merge/split/delete, crop, refine, all 8 nudges, reset,
   apply, apply+refine.
 - Source folder dialog: 10 tests in
   `tests/browser/test_source_folder_dialog.py`.

@@ -230,11 +230,17 @@ operation is not applicable at that scope.
 
 ### Style / Component Controls (in dialog)
 
-| # | Label | Handler | Browser-Tested |
-| --- | --- | --- | --- |
-| 67 | **Apply Style** | `_apply_selected_style_from_dialog` | Yes — click |
-| 68 | **Apply Component** | `_apply_selected_component_from_dialog(enabled=True)` | Yes — click |
-| 69 | **Clear Component** | `_apply_selected_component_from_dialog(enabled=False)` | No |
+| # | Label | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 67 | **Apply Style** | `_apply_selected_style_from_dialog` | `dialog-apply-style-button` | Yes — click |
+| 68 | **Apply Component** | `_apply_selected_component_from_dialog(enabled=True)` | `dialog-apply-component-button` | Yes — click |
+| 69 | **Clear Component** | `_apply_selected_component_from_dialog(enabled=False)` | `dialog-clear-component-button` | No |
+
+The companion select widgets in this row also carry stable testids:
+`dialog-style-select` (Style dropdown), `dialog-scope-select` (Scope
+dropdown), `dialog-component-select` (Component dropdown). The GT
+edit input near the dialog header carries `dialog-gt-input` on the
+inner `<input>` element.
 
 ### Tag Chip Clear (in dialog)
 
@@ -270,16 +276,16 @@ operation is not applicable at that scope.
 
 ### Fine-Tune Nudge Buttons
 
-| # | Label | Edge | Direction | Handler | Browser-Tested |
-| --- | --- | --- | --- | --- | --- |
-| 82 | **X−** | Left | ← shrink | `_accumulate_bbox_nudge(left_units=-1)` | No |
-| 83 | **X+** | Left | → expand | `_accumulate_bbox_nudge(left_units=1)` | No |
-| 84 | **X−** | Right | ← shrink | `_accumulate_bbox_nudge(right_units=-1)` | No |
-| 85 | **X+** | Right | → expand | `_accumulate_bbox_nudge(right_units=1)` | No |
-| 86 | **Y−** | Top | ↑ shrink | `_accumulate_bbox_nudge(top_units=-1)` | No |
-| 87 | **Y+** | Top | ↓ expand | `_accumulate_bbox_nudge(top_units=1)` | No |
-| 88 | **Y−** | Bottom | ↑ shrink | `_accumulate_bbox_nudge(bottom_units=-1)` | No |
-| 89 | **Y+** | Bottom | ↓ expand | `_accumulate_bbox_nudge(bottom_units=1)` | No |
+| # | Label | Edge | Direction | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- | --- | --- |
+| 82 | **X−** | Left | ← shrink | `_accumulate_bbox_nudge(left_units=-1)` | `dialog-nudge-left-minus-button` | Visibility |
+| 83 | **X+** | Left | → expand | `_accumulate_bbox_nudge(left_units=1)` | `dialog-nudge-left-plus-button` | Yes — click |
+| 84 | **X−** | Right | ← shrink | `_accumulate_bbox_nudge(right_units=-1)` | `dialog-nudge-right-minus-button` | Visibility |
+| 85 | **X+** | Right | → expand | `_accumulate_bbox_nudge(right_units=1)` | `dialog-nudge-right-plus-button` | Visibility |
+| 86 | **Y−** | Top | ↑ shrink | `_accumulate_bbox_nudge(top_units=-1)` | `dialog-nudge-top-minus-button` | Visibility |
+| 87 | **Y+** | Top | ↓ expand | `_accumulate_bbox_nudge(top_units=1)` | `dialog-nudge-top-plus-button` | Visibility |
+| 88 | **Y−** | Bottom | ↑ shrink | `_accumulate_bbox_nudge(bottom_units=-1)` | `dialog-nudge-bottom-minus-button` | Visibility |
+| 89 | **Y+** | Bottom | ↓ expand | `_accumulate_bbox_nudge(bottom_units=1)` | `dialog-nudge-bottom-plus-button` | Visibility |
 
 ### Apply / Reset Bbox Edits
 

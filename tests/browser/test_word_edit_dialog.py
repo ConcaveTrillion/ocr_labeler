@@ -41,6 +41,22 @@ DIALOG_RESET_NUDGES = '[data-testid="dialog-reset-nudges-button"]'
 DIALOG_APPLY_NUDGES = '[data-testid="dialog-apply-nudges-button"]'
 DIALOG_APPLY_REFINE_NUDGES = '[data-testid="dialog-apply-refine-nudges-button"]'
 
+# Dialog inputs / selects
+DIALOG_GT_INPUT = '[data-testid="dialog-gt-input"]'
+DIALOG_STYLE_SELECT = '[data-testid="dialog-style-select"]'
+DIALOG_SCOPE_SELECT = '[data-testid="dialog-scope-select"]'
+DIALOG_COMPONENT_SELECT = '[data-testid="dialog-component-select"]'
+
+# Dialog nudge buttons (left / right edge X-/X+, top / bottom edge Y-/Y+)
+DIALOG_NUDGE_LEFT_MINUS = '[data-testid="dialog-nudge-left-minus-button"]'
+DIALOG_NUDGE_LEFT_PLUS = '[data-testid="dialog-nudge-left-plus-button"]'
+DIALOG_NUDGE_RIGHT_MINUS = '[data-testid="dialog-nudge-right-minus-button"]'
+DIALOG_NUDGE_RIGHT_PLUS = '[data-testid="dialog-nudge-right-plus-button"]'
+DIALOG_NUDGE_TOP_MINUS = '[data-testid="dialog-nudge-top-minus-button"]'
+DIALOG_NUDGE_TOP_PLUS = '[data-testid="dialog-nudge-top-plus-button"]'
+DIALOG_NUDGE_BOTTOM_MINUS = '[data-testid="dialog-nudge-bottom-minus-button"]'
+DIALOG_NUDGE_BOTTOM_PLUS = '[data-testid="dialog-nudge-bottom-plus-button"]'
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -164,7 +180,7 @@ def test_dialog_opens_on_edit_button_click(browser_app_url: str, browser_page) -
     expect(dialog.locator("text=/Edit Line \\d+, Word \\d+/")).to_be_visible()
 
     # GT input should be present
-    gt_input = dialog.get_by_label("GT")
+    gt_input = dialog.locator(DIALOG_GT_INPUT)
     expect(gt_input).to_be_visible()
 
     # OCR text label should be visible (monospace text element)
@@ -222,7 +238,7 @@ def test_dialog_apply_and_close(browser_app_url: str, browser_page) -> None:
     _open_dialog(page)
     dialog = page.locator(".q-dialog").last
 
-    gt_input = dialog.get_by_label("GT")
+    gt_input = dialog.locator(DIALOG_GT_INPUT)
     expect(gt_input).to_be_visible()
     original_gt = gt_input.input_value()
 
@@ -240,7 +256,7 @@ def test_dialog_apply_and_close(browser_app_url: str, browser_page) -> None:
     # Re-open dialog to verify the change persisted
     _open_dialog(page)
     dialog = page.locator(".q-dialog").last
-    gt_input = dialog.get_by_label("GT")
+    gt_input = dialog.locator(DIALOG_GT_INPUT)
     expect(gt_input).to_have_value("XYZZY_APPLY")
 
     # Restore original value
@@ -323,8 +339,9 @@ def test_dialog_clear_component(browser_app_url: str, browser_page) -> None:
 
     dialog = page.locator(".q-dialog").last
 
-    # Select component and apply
-    dialog.get_by_label("Component").click()
+    # Select component and apply (data-testid lands on the q-select wrapper;
+    # clicking it opens the menu).
+    dialog.locator(DIALOG_COMPONENT_SELECT).click()
     page.get_by_role("option", name="Footnote Marker").first.click()
     page.locator(DIALOG_APPLY_COMPONENT).click()
     page.wait_for_timeout(500)
@@ -626,11 +643,15 @@ def test_dialog_nudge_buttons_present(browser_app_url: str, browser_page) -> Non
     expect(page.locator(DIALOG_APPLY_NUDGES)).to_be_visible()
     expect(page.locator(DIALOG_APPLY_REFINE_NUDGES)).to_be_visible()
 
-    # Verify nudge direction buttons by text
-    expect(page.get_by_role("button", name="X+").first).to_be_visible()
-    expect(page.get_by_role("button", name="X-").first).to_be_visible()
-    expect(page.get_by_role("button", name="Y+").first).to_be_visible()
-    expect(page.get_by_role("button", name="Y-").first).to_be_visible()
+    # Verify nudge direction buttons via stable testids — all 8 must be present.
+    expect(page.locator(DIALOG_NUDGE_LEFT_MINUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_LEFT_PLUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_RIGHT_MINUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_RIGHT_PLUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_TOP_MINUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_TOP_PLUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_BOTTOM_MINUS)).to_be_visible()
+    expect(page.locator(DIALOG_NUDGE_BOTTOM_PLUS)).to_be_visible()
 
 
 @pytest.mark.browser
@@ -678,7 +699,7 @@ def test_dialog_nudge_buttons(browser_app_url: str, browser_page) -> None:
     _open_dialog(page)
 
     # Click Left X+
-    page.get_by_role("button", name="X+").first.click()
+    page.locator(DIALOG_NUDGE_LEFT_PLUS).click()
     page.wait_for_timeout(500)
 
     # Pending label should show non-zero left delta
@@ -696,7 +717,7 @@ def test_dialog_reset_nudges(browser_app_url: str, browser_page) -> None:
     _open_dialog(page)
 
     # Make a nudge
-    page.get_by_role("button", name="X+").first.click()
+    page.locator(DIALOG_NUDGE_LEFT_PLUS).click()
     page.wait_for_timeout(300)
 
     # Reset
@@ -719,7 +740,7 @@ def test_dialog_apply_nudges(browser_app_url: str, browser_page) -> None:
     _open_dialog(page)
 
     # Make a nudge
-    page.get_by_role("button", name="X+").first.click()
+    page.locator(DIALOG_NUDGE_LEFT_PLUS).click()
     page.wait_for_timeout(300)
 
     apply_btn = page.locator(DIALOG_APPLY_NUDGES)
@@ -742,7 +763,7 @@ def test_dialog_apply_and_refine_nudges(browser_app_url: str, browser_page) -> N
     _open_dialog(page)
 
     # Make a nudge
-    page.get_by_role("button", name="X+").first.click()
+    page.locator(DIALOG_NUDGE_LEFT_PLUS).click()
     page.wait_for_timeout(300)
 
     apply_refine_btn = page.locator(DIALOG_APPLY_REFINE_NUDGES)

@@ -1456,7 +1456,7 @@ class WordEditDialog:
                                 label="GT",
                                 value=gt_initial_value,
                             )
-                            .props("dense outlined")
+                            .props('dense outlined data-testid="dialog-gt-input"')
                             .classes("monospace")
                         )
                         view.gt_editing._set_word_gt_input_width(
@@ -1510,7 +1510,9 @@ class WordEditDialog:
                         options=self._style_options,
                         value=self._selected_style_value,
                         label="Style",
-                    ).props("dense outlined options-dense")
+                    ).props(
+                        'dense outlined options-dense data-testid="dialog-style-select"'
+                    )
                     style_select.classes("text-caption")
                     style_select.style(
                         "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
@@ -1522,7 +1524,9 @@ class WordEditDialog:
                         options=self._scope_options,
                         value=self._selected_scope_value,
                         label="Scope",
-                    ).props("dense outlined options-dense")
+                    ).props(
+                        'dense outlined options-dense data-testid="dialog-scope-select"'
+                    )
                     self._scope_select.classes("text-caption")
                     self._scope_select.style(
                         "min-width: 96px; max-width: 108px; font-size: 0.72rem;"
@@ -1549,7 +1553,9 @@ class WordEditDialog:
                         options=self._component_options,
                         value=self._selected_component_value,
                         label="Component",
-                    ).props("dense outlined options-dense")
+                    ).props(
+                        'dense outlined options-dense data-testid="dialog-component-select"'
+                    )
                     component_select.classes("text-caption")
                     component_select.style(
                         "min-width: 138px; max-width: 162px; font-size: 0.72rem;"
@@ -1798,6 +1804,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(left_minus_button, compact=True)
+                        left_minus_button.props(
+                            'data-testid="dialog-nudge-left-minus-button"'
+                        )
                         left_plus_button = ui.button(
                             "X+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1808,6 +1817,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(left_plus_button, compact=True)
+                        left_plus_button.props(
+                            'data-testid="dialog-nudge-left-plus-button"'
+                        )
 
                         ui.label("Right")
                         right_minus_button = ui.button(
@@ -1820,6 +1832,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(right_minus_button, compact=True)
+                        right_minus_button.props(
+                            'data-testid="dialog-nudge-right-minus-button"'
+                        )
                         right_plus_button = ui.button(
                             "X+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1830,6 +1845,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(right_plus_button, compact=True)
+                        right_plus_button.props(
+                            'data-testid="dialog-nudge-right-plus-button"'
+                        )
 
                     with ui.row().classes("items-center gap-1"):
                         ui.label("Top")
@@ -1843,6 +1861,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(top_minus_button, compact=True)
+                        top_minus_button.props(
+                            'data-testid="dialog-nudge-top-minus-button"'
+                        )
                         top_plus_button = ui.button(
                             "Y+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1853,6 +1874,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(top_plus_button, compact=True)
+                        top_plus_button.props(
+                            'data-testid="dialog-nudge-top-plus-button"'
+                        )
 
                         ui.label("Bottom")
                         bottom_minus_button = ui.button(
@@ -1865,6 +1889,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(bottom_minus_button, compact=True)
+                        bottom_minus_button.props(
+                            'data-testid="dialog-nudge-bottom-minus-button"'
+                        )
                         bottom_plus_button = ui.button(
                             "Y+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1875,6 +1902,9 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(bottom_plus_button, compact=True)
+                        bottom_plus_button.props(
+                            'data-testid="dialog-nudge-bottom-plus-button"'
+                        )
 
                     with ui.row().classes("items-center gap-2"):
                         ui.label(

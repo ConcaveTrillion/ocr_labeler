@@ -25,6 +25,33 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Edit Dialog Selects, GT Input, and Nudge Buttons (Done)
+
+The Word Edit Dialog's three style/scope/component `ui.select` widgets,
+its GT `ui.input`, and the eight bbox fine-tune nudge buttons now carry
+stable `data-testid` props so Playwright tests and the
+`pd-ocr-labeler-driver` agent can target them without falling back to
+`get_by_label("GT" | "Component")` or `get_by_role("button", name="X+")`
+patterns:
+
+- Inputs / selects: `dialog-gt-input`, `dialog-style-select`,
+  `dialog-scope-select`, `dialog-component-select`.
+- Nudge buttons (Left/Right edge X-/X+, Top/Bottom edge Y-/Y+):
+  `dialog-nudge-left-minus-button`, `dialog-nudge-left-plus-button`,
+  `dialog-nudge-right-minus-button`, `dialog-nudge-right-plus-button`,
+  `dialog-nudge-top-minus-button`, `dialog-nudge-top-plus-button`,
+  `dialog-nudge-bottom-minus-button`, `dialog-nudge-bottom-plus-button`.
+
+Existing browser tests in `tests/browser/test_word_edit_dialog.py`
+migrated from accessible-label / role-by-text selectors to
+`[data-testid="..."]` selectors for the GT input, the Component
+select-as-dropdown opener, and all nudge clicks/visibility assertions.
+Architecture doc `docs/architecture/ui-action-buttons.md` updated to
+record the new testids in the Style/Component Controls and Fine-Tune
+Nudge Buttons tables. The remaining dialog buttons (header
+check/close, merge/split/delete, crop, refine, reset/apply nudges)
+were already testid'd in earlier commits.
+
 ### Stable data-testid Backfill — Word Match Apply-Style/Component Selects (Done)
 
 The Word Match scope-action toolbar grid (Page / Paragraph / Line /

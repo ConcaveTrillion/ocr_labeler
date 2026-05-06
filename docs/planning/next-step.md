@@ -25,6 +25,29 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### OCR Configuration Modal — Detection/Recognition Select Cancel-Cycle Browser Test (Done)
+
+Iter-15 follow-up to iter-14's HF revision cancel-revert test. The
+modal's `_open` handler also unconditionally resets each select's value
+to the canonical `selected_ocr_*_model_key` on every open
+(`ocr_config_modal.py:113-128`), but at app start (no trainer outputs
+discovered) the `huggingface` key is the *only* registered option, so
+the UI cannot meaningfully change the value to a second one and assert
+revert. The new test
+`test_ocr_config_model_selects_open_menu_and_survive_cancel` asserts
+the still-meaningful weaker invariants:
+
+- Clicking each testid'd select wrapper opens a Quasar `q-menu` with at
+  least one selectable `.q-item` (proves wiring is intact and `_open`
+  did not crash on selects).
+- After dismissing each menu via Escape, then Cancel + re-open of the
+  parent modal, both select wrappers remain visible (proves the reset
+  path is idempotent and Cancel doesn't corrupt select state).
+
+Same fixture/helper/file as iter-13/14; pure additive. Queued: a full
+value cancel-revert mirroring iter-14 once a trainer-output fixture
+provides ≥2 selectable options.
+
 ### OCR Configuration Modal — HF Revision Cancel-Revert Browser Test (Done)
 
 Follow-up to the iter-13 OCRConfigModal smoke tests: a fourth test

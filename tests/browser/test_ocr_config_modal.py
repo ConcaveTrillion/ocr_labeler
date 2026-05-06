@@ -133,3 +133,63 @@ def test_ocr_config_hf_revision_edit_reverts_on_cancel(
     # Re-open and verify the sentinel did NOT persist.
     _open_modal(page)
     expect(revision_input).to_have_value(initial_value)
+
+
+@pytest.mark.browser
+def test_ocr_config_model_selects_open_menu_and_survive_cancel(
+    browser_app_url: str, browser_page
+) -> None:
+    """Detection/recognition select wrappers open a menu, and modal lifecycle
+    preserves their visible state across an open -> cancel -> re-open cycle.
+
+    The modal's ``_open`` handler unconditionally resets each select's value
+    to the canonical ``selected_ocr_*_model_key`` on every open (see
+    ``ocr_config_modal.py:113-128``). At app start (no trainer outputs
+    discovered) the only registered option is ``huggingface``, so we can't
+    meaningfully *change* the value from the UI to test revert. Instead we
+    assert the weaker but still meaningful invariants:
+
+      * Clicking each testid'd select wrapper opens a Quasar ``q-menu`` with
+        at least one selectable option (proves the select is wired up and
+        ``_open`` did not crash on it).
+      * After cancel + re-open, both wrappers remain visible (proves the
+        reset path is idempotent and Cancel doesn't corrupt select state).
+
+    A future iteration with trainer-output fixtures can extend this to a
+    full value cancel-revert mirroring the HF revision test above.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_modal(page)
+
+    detection_select = page.locator(OCR_DETECTION_SELECT)
+    recognition_select = page.locator(OCR_RECOGNITION_SELECT)
+    expect(detection_select).to_be_visible()
+    expect(recognition_select).to_be_visible()
+
+    # Open the detection select's menu and assert at least one option is
+    # listed. Then dismiss the menu by pressing Escape (clicking elsewhere
+    # may close the dialog; Escape only closes the inner q-menu in Quasar).
+    detection_select.click()
+    menu = page.locator(".q-menu").last
+    expect(menu).to_be_visible(timeout=5_000)
+    assert menu.locator(".q-item").count() >= 1
+    page.keyboard.press("Escape")
+    expect(menu).not_to_be_visible(timeout=5_000)
+
+    # Same exercise for the recognition select.
+    recognition_select.click()
+    menu = page.locator(".q-menu").last
+    expect(menu).to_be_visible(timeout=5_000)
+    assert menu.locator(".q-item").count() >= 1
+    page.keyboard.press("Escape")
+    expect(menu).not_to_be_visible(timeout=5_000)
+
+    # Cancel the dialog and re-open it; both selects should still be visible
+    # — i.e. the open lifecycle is stable across cancels.
+    page.locator(OCR_CONFIG_CANCEL).click()
+    expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)
+
+    _open_modal(page)
+    expect(page.locator(OCR_DETECTION_SELECT)).to_be_visible()
+    expect(page.locator(OCR_RECOGNITION_SELECT)).to_be_visible()

@@ -9,15 +9,20 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 44, after closing the HF-revision
-Cancel-revert *mechanism* unit-test gap surfaced in iter 33). The
-negative-path Apply test remains **infeasible without either an
-env-var production hook or restructuring the browser fixture to run
-in-process**; both options require human approval and are filed
-under "Blocked on human approval" below. Iter 33's remaining queued
-candidate (atomic `apply_ocr_config` command — production-code
-change, needs human approval) is filed under "Blocked on human
-approval"; the iter-34 review also surfaces a track of pure
+Last refreshed: 2026-05-06 (iter 45, after pinning the
+``_apply_selection`` success path, the empty-selection guard, and
+the iter-33 partial-commit characterization at the unit level).
+Iter 44 unlocked the in-process modal-unit-test pattern for
+``OCRConfigModal``; iter 45 reused it to land 5 more tests. The
+negative-path Apply *browser* test remains **infeasible without
+either an env-var production hook or restructuring the browser
+fixture to run in-process**; both options require human approval and
+are filed under "Blocked on human approval" below — but the
+*characterization* of the negative path is now covered at the unit
+level (see "OCRConfigModal Apply Path Unit Tests" below). Iter 33's
+remaining queued candidate (atomic `apply_ocr_config` command —
+production-code change, needs human approval) is filed under "Blocked
+on human approval"; the iter-34 review also surfaces a track of pure
 test-infrastructure cleanup (centralizing duplicated `_select_word`
 / `_setup` / `_wait_for_notification` helpers into
 `tests/browser/helpers.py`).
@@ -326,6 +331,52 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### OCRConfigModal — Apply Path Unit Tests (Iter 45, Done)
+
+Iter 44 established the in-process modal-unit-test pattern (mock
+widgets attached after construction, bypassing ``build()``).  Iter 45
+reused it to pin three previously-untested branches of
+``_apply_selection``:
+
+- ``TestApplySelectionSuccessPath`` (3 tests):
+  - No-edit Apply (HF revision unchanged): pin setter is *not*
+    called, models setter receives the as-typed keys, positive
+    notification fires, dialog closes.
+  - Apply with HF revision edit: pin setter is called *before*
+    models setter (ordering documented in
+    ``ocr_config_modal.py:197-208``), positive notification, close.
+  - Clearing the HF revision (changed empty string): pin setter
+    receives ``None`` not ``""``, dialog closes.
+- ``TestApplySelectionGuards`` (1 test): empty detection key →
+  warning notification, **no** state mutations (pin setter and models
+  setter both skipped), dialog stays open.
+- ``TestApplySelectionPartialCommit`` (1 test): characterizes
+  iter-33 finding 4.1.  When the pin setter succeeds but the models
+  setter fails, the pin is **already committed** before the failure
+  is detected — the dialog stays open with a negative notification,
+  but state is half-applied.  This test pins the *current* behavior
+  so that any future fix making the apply atomic (rollback or
+  pre-validate model keys) deliberately fails this test, forcing it
+  to be updated in lockstep with the production fix.
+
+Pattern: ``monkeypatch.setattr(modal, "_notify", notify_mock)`` —
+the ``_notify`` helper is on ``NotificationMixin`` and the simplest
+hook point for asserting what notification (and which type) the
+handler emitted.  ``monkeypatch.setattr`` on the bound-method
+attribute name does the right thing without needing to mock the
+underlying ``app_state.queue_notification``.
+
+A small ``_wire_apply_selection_inputs`` helper populates
+``modal._detection_model_select.value``,
+``modal._recognition_model_select.value``, and
+``modal._hf_revision_input.value`` — the three live-widget reads
+``_apply_selection`` makes before dispatching to the app-state
+commands.
+
+Pure additive — no source mutations.  Targeted file passes 15/15
+(was 10).  Full ``make ci`` green on first try (945 passed, was 940;
+ruff-format auto-fixed one trailing blank-line on commit).
 
 ### OCRConfigModal — HF Revision Cancel-Revert Mechanism Unit Test (Iter 44, Done)
 

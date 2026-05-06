@@ -191,3 +191,190 @@ async def test_open_propagates_various_persisted_revisions(persisted_revision):
 
     expected = persisted_revision or ""
     assert modal._hf_revision_input.value == expected
+
+
+def _wire_apply_selection_inputs(
+    modal: OCRConfigModal,
+    *,
+    detection_value: str = "huggingface",
+    recognition_value: str = "huggingface",
+    revision_value: str = "",
+) -> None:
+    """Populate the modal's mock select / input widgets with values.
+
+    ``_apply_selection`` reads the live widget ``.value`` attributes
+    rather than going through the app-state model, so tests must wire
+    these explicitly before invoking the handler.
+    """
+    modal._detection_model_select.value = detection_value
+    modal._recognition_model_select.value = recognition_value
+    modal._hf_revision_input.value = revision_value
+
+
+class TestApplySelectionSuccessPath:
+    """``_apply_selection`` happy path: both commands succeed, dialog closes.
+
+    Pins three load-bearing behaviors:
+      1. Successful apply emits a single ``positive`` notification.
+      2. Successful apply closes the dialog.
+      3. The pin setter is gated by ``new_revision != previous_revision`` —
+         a no-op revision skips ``command_set_hf_pinned_revision`` entirely.
+    """
+
+    async def test_apply_no_edit_calls_models_setter_and_closes(self, monkeypatch):
+        app_state = Mock()
+        app_state.hf_pinned_revision = "v1.2.3"
+        app_state.command_set_selected_ocr_models = Mock(return_value=True)
+        app_state.command_set_hf_pinned_revision = Mock(return_value=True)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        _wire_apply_selection_inputs(
+            modal,
+            detection_value="huggingface",
+            recognition_value="huggingface",
+            revision_value="v1.2.3",  # unchanged
+        )
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._apply_selection()
+
+        # No-op revision: pin setter must NOT be called.
+        app_state.command_set_hf_pinned_revision.assert_not_called()
+        # Models setter must be called with the as-typed keys.
+        app_state.command_set_selected_ocr_models.assert_called_once_with(
+            "huggingface", "huggingface"
+        )
+        notify_mock.assert_called_once_with("OCR models updated", "positive")
+        modal._dialog.close.assert_called_once_with()
+
+    async def test_apply_with_revision_edit_calls_pin_setter_then_models(
+        self, monkeypatch
+    ):
+        app_state = Mock()
+        app_state.hf_pinned_revision = "v1.0.0"
+        app_state.command_set_selected_ocr_models = Mock(return_value=True)
+        app_state.command_set_hf_pinned_revision = Mock(return_value=True)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        _wire_apply_selection_inputs(
+            modal,
+            detection_value="huggingface",
+            recognition_value="huggingface",
+            revision_value="v2.0.0",  # changed
+        )
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._apply_selection()
+
+        app_state.command_set_hf_pinned_revision.assert_called_once_with("v2.0.0")
+        app_state.command_set_selected_ocr_models.assert_called_once_with(
+            "huggingface", "huggingface"
+        )
+        notify_mock.assert_called_once_with("OCR models updated", "positive")
+        modal._dialog.close.assert_called_once_with()
+
+    async def test_apply_clearing_revision_passes_none_to_pin_setter(self, monkeypatch):
+        """Empty new revision when previous was non-empty must reset pin to None."""
+        app_state = Mock()
+        app_state.hf_pinned_revision = "v1.0.0"
+        app_state.command_set_selected_ocr_models = Mock(return_value=True)
+        app_state.command_set_hf_pinned_revision = Mock(return_value=True)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        _wire_apply_selection_inputs(
+            modal,
+            detection_value="huggingface",
+            recognition_value="huggingface",
+            revision_value="",  # changed -> clear pin
+        )
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._apply_selection()
+
+        # Critical: empty -> None, not empty -> "".
+        app_state.command_set_hf_pinned_revision.assert_called_once_with(None)
+        modal._dialog.close.assert_called_once_with()
+
+
+class TestApplySelectionGuards:
+    """``_apply_selection`` rejects empty selections without mutating state."""
+
+    async def test_apply_with_empty_detection_warns_and_keeps_dialog_open(
+        self, monkeypatch
+    ):
+        app_state = Mock()
+        app_state.hf_pinned_revision = ""
+        app_state.command_set_selected_ocr_models = Mock(return_value=True)
+        app_state.command_set_hf_pinned_revision = Mock(return_value=True)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        _wire_apply_selection_inputs(
+            modal,
+            detection_value="",  # empty -> guard
+            recognition_value="huggingface",
+            revision_value="",
+        )
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._apply_selection()
+
+        notify_mock.assert_called_once_with(
+            "Select both detection and recognition models first", "warning"
+        )
+        # No state mutations whatsoever — pin and models setters skipped.
+        app_state.command_set_hf_pinned_revision.assert_not_called()
+        app_state.command_set_selected_ocr_models.assert_not_called()
+        # Dialog remains open.
+        modal._dialog.close.assert_not_called()
+
+
+class TestApplySelectionPartialCommit:
+    """Characterize the partial-commit failure documented in iter-33 review.
+
+    When the HF pin setter succeeds but ``command_set_selected_ocr_models``
+    fails, the current implementation has *already committed* the pin
+    change before discovering the failure — leaving the modal in a
+    half-applied state: the pin is persisted, but the user-visible models
+    are not, and the dialog stays open with a negative notification.
+
+    This is documented as iter-33 finding 4.1.  This test pins the
+    *current* behavior so any future fix to make the apply atomic
+    (rollback the pin, or pre-validate the model keys before committing
+    the pin) deliberately fails this test, forcing the test to be updated
+    in lockstep with the production fix.
+    """
+
+    async def test_models_failure_after_pin_commit_leaves_pin_committed(
+        self, monkeypatch
+    ):
+        app_state = Mock()
+        app_state.hf_pinned_revision = "v1.0.0"
+        app_state.command_set_hf_pinned_revision = Mock(return_value=True)
+        # Models setter fails — simulating either a bad key or a
+        # post-rescan disappearance of the previously-valid option.
+        app_state.command_set_selected_ocr_models = Mock(return_value=False)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        _wire_apply_selection_inputs(
+            modal,
+            detection_value="huggingface",
+            recognition_value="huggingface",
+            revision_value="v2.0.0",  # pin changes
+        )
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._apply_selection()
+
+        # Pin was committed BEFORE the models setter failed.  This is the
+        # partial-commit hazard.
+        app_state.command_set_hf_pinned_revision.assert_called_once_with("v2.0.0")
+        app_state.command_set_selected_ocr_models.assert_called_once()
+        # Negative notification fires.
+        notify_mock.assert_called_once_with("Failed to apply OCR models", "negative")
+        # Dialog stays open so the user can correct the selection.
+        modal._dialog.close.assert_not_called()

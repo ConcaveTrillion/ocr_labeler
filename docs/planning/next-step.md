@@ -9,10 +9,16 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 31, after fixing the
-pre-existing `test_load_button_prevents_multiple_clicks` flake by
-removing the racy transient `should_see("Loading projectID...")`
-assertion — see iter 31 entry below).
+Last refreshed: 2026-05-06 (iter 34, after a deep review of the
+browser-test selection helpers — see
+`docs/review-notes/2026-05-06-browser-test-selection-helpers.md`).
+Iter 33's queued top-3 (atomic `apply_ocr_config` command,
+negative-path Apply browser test, HF-revision Cancel-revert
+mechanism test) are still the next coverage candidates; the iter-34
+review surfaces a fourth, lower-stakes track of pure
+test-infrastructure cleanup (centralizing the duplicated
+per-file `_select_word` / `_setup` / `_wait_for_notification`
+helpers into `tests/browser/helpers.py`).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains

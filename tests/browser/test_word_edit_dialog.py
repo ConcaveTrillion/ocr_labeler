@@ -63,6 +63,14 @@ DIALOG_NUDGE_BOTTOM_PLUS = '[data-testid="dialog-nudge-bottom-plus-button"]'
 DIALOG_TAG_CHIPS_SLOT = '[data-testid="dialog-tag-chips-slot"]'
 DIALOG_TAG_CHIPS_ROW = '[data-testid="dialog-tag-chips-row"]'
 DIALOG_TAG_CHIP = '[data-testid="word-edit-tag-chip"]'
+# Per-chip close-icon clear button rendered inside each ``DIALOG_TAG_CHIP``;
+# becomes visible on chip hover (``mouseenter``).  This is the only
+# style-clear affordance inside the dialog — there is no parallel
+# ``dialog-clear-style-button`` to mirror ``dialog-clear-component-button``,
+# because in the dialog the "Apply Component / Clear Component" button pair
+# is for the component select while styles are cleared per-chip via this
+# close icon.
+DIALOG_TAG_CLEAR_BUTTON = '[data-testid="word-edit-tag-clear-button"]'
 
 # Dialog zoom
 DIALOG_CURRENT_ZOOM_TOGGLE = '[data-testid="dialog-current-zoom-toggle"]'
@@ -377,6 +385,77 @@ def test_dialog_clear_component(browser_app_url: str, browser_page) -> None:
     # Component chip should be removed (count returns to before)
     final_chip_count = page.locator(DIALOG_TAG_CHIP).count()
     assert final_chip_count < chip_count
+
+    # Close dialog
+    page.locator(DIALOG_CLOSE).click()
+
+
+# ---------------------------------------------------------------------------
+# Per-chip clear (style chip): the missing mirror of clear-component
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_clear_style_chip(browser_app_url: str, browser_page) -> None:
+    """Apply Style → style chip appears; click chip's clear icon → chip removed.
+
+    Counterpart to ``test_dialog_clear_component``.  There is **no**
+    ``dialog-clear-style-button`` to mirror ``dialog-clear-component-button``
+    — in the dialog, styles are cleared per-chip via the ``close`` icon
+    rendered *inside* each ``word-edit-tag-chip`` (see
+    ``word_edit_dialog.py::_render_tag_chips`` ll. 827-846).  That close
+    icon carries testid ``word-edit-tag-clear-button`` and is rendered
+    invisible by default, becoming visible on chip ``mouseenter``.
+
+    To match the pre-existing renderer-side cleanup pattern in
+    ``test_dialog_apply_style`` (which uses the *renderer* chip's clear
+    button after the dialog is closed), this test exercises the
+    *in-dialog* path: apply a style, hover the chip, click its clear
+    icon, and assert the chip count drops back.  This locks in:
+
+    1. The ``word-edit-tag-clear-button`` testid is reachable inside
+       ``word-edit-tag-chip`` rows.
+    2. Hover-to-reveal works (the clear button is interactable after
+       ``mouseenter``).
+    3. The clear handler removes the style from the active word and
+       triggers ``_render_tag_chips`` to drop the chip.
+
+    The asymmetry (no parallel button) is captured in the planning
+    doc's "Tag-chip clear in dialog" entry; this test closes that
+    coverage gap by verifying the only affordance that exists.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    chips_before = page.locator(DIALOG_TAG_CHIP).count()
+
+    # Apply Style — a default style is preselected on dialog open.
+    page.locator(DIALOG_APPLY_STYLE).click()
+    page.wait_for_timeout(500)
+
+    chips_after_apply = page.locator(DIALOG_TAG_CHIP).count()
+    assert chips_after_apply > chips_before, (
+        f"Expected chip count to increase after Apply Style; "
+        f"before={chips_before} after={chips_after_apply}"
+    )
+
+    # Hover the most-recently-added chip to reveal its clear button.
+    chip = page.locator(DIALOG_TAG_CHIP).last
+    chip.hover()
+    page.wait_for_timeout(200)
+
+    clear_btn = chip.locator(DIALOG_TAG_CLEAR_BUTTON).first
+    expect(clear_btn).to_be_visible(timeout=5_000)
+    clear_btn.click()
+    page.wait_for_timeout(500)
+
+    # Style chip should be removed; count returns to (or below) the baseline.
+    chips_final = page.locator(DIALOG_TAG_CHIP).count()
+    assert chips_final < chips_after_apply, (
+        f"Expected chip count to drop after clear-icon click; "
+        f"before-clear={chips_after_apply} after-clear={chips_final}"
+    )
 
     # Close dialog
     page.locator(DIALOG_CLOSE).click()

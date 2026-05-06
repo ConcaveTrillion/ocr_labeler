@@ -52,14 +52,30 @@ queued by recent iterations. Items are ordered by leverage / ease.
    delta of `+2`. The cross-line word index is computed by counting
    word-checkboxes that precede the second `line-delete-button` in
    DOM order via a small `page.evaluate` JS helper.
-5. **Cross-line `extract-line-from-selection` ("form-line") click
-   test** — same selection topology as iter-22's item 4, but click
-   `word-form-line-button` instead. Assert `LINE_DELETE_CARD` delta
-   of `+1` (one new line containing both selected words; residuals
-   stay in their original lines). Pairs with item 4 to prove the
-   per-affected-line vs single-output-line semantic distinction. The
-   cross-line index helper from iter 22's test can be lifted directly
-   (or even hoisted to a module-level helper if reused twice).
+5. ~~**Cross-line `extract-line-from-selection` ("form-line") click
+   test, +1 delta**~~ — **PIVOTED in iter 23.** Pre-flight passed
+   (testid exists at `word-form-line-button`, button enables on
+   cross-line selection), but the predicted `+1` delta from iter-21's
+   review and the pd-book-tools unit test
+   `test_split_line_with_selected_words_moves_words_into_single_new_line`
+   does **not** match the running browser fixture: a cross-line
+   selection of words `(0, 0)` and `(1, 0)` on a `[3, 3, 1, 5, 3, 2, 4]`
+   line/word fixture produced an actual delta of `+2` (line layout
+   went from `[3, 3, 1, 5, 3, 2, 4]` to `[1, 1, 2, 2, 1, 5, 3, 2, 4]`
+   — the leading `[3, 3]` became `[1, 1, 2, 2]`). This is the same
+   layout `line-split-by-selection-button` would produce — both
+   buttons appear empirically indistinguishable on this fixture for
+   cross-line two-word `(0, 0) + (1, 0)` selection. **Investigation
+   needed** before this test can land: either (a) the labeler dispatch
+   path differs from the unit-test path (state-layer or selection
+   massaging may be reordering inputs), (b) the unit test's worked
+   examples don't reflect the actual cross-line behavior on a real
+   page structure, or (c) the toolbar review's `+1` worked example
+   was wrong. Iter-23 deleted the failing test, pivoted to candidate 3
+   (Tag-chip clear in dialog), and queued this for a future iter
+   gated on root-cause analysis (single Python-side unit test
+   reproducing the multi-line shape, with `print()` of pre/post line
+   layouts, would resolve it in one shot).
 6. **Multi-word same-line `split-by-selection` non-contiguous click
    test** — select words 0 and 2 on a multi-word line (skip word 1),
    click `line-split-by-selection-button`, assert `LINE_DELETE_CARD`
@@ -68,14 +84,30 @@ queued by recent iterations. Items are ordered by leverage / ease.
    to be contiguous on the source line. Requires line 0 to have at
    least 3 words, which the existing iter-19/20 fixture (page 1, 7
    lines / 21 words) supports.
+7. **Investigate iter-23's `+2` discrepancy on
+   `word-form-line-button` cross-line selection.** Add a
+   `pd-book-tools` unit test that mirrors the live fixture's layout
+   exactly (line 0 = 3 words, line 1 = 3 words, both in same
+   paragraph, page has additional unrelated lines), call
+   `split_line_with_selected_words([(0, 0), (1, 0)])`, and
+   `print(...)` per-line word counts before/after. If the `+2`
+   reproduces in the unit test, fix the docstring + review notes; if
+   `+1` reproduces in the unit test, instrument the labeler-side
+   dispatch (`PageState.split_line_with_selected_words` →
+   `_dispatch_line_op`) to find the divergence.
 
 ### Lower-priority / queued
 
-- **Tag-chip clear in dialog** — `test_dialog_clear_component`
-  exists, but a parallel `test_dialog_clear_style` (clearing a
-  style chip rather than a component chip) is not present. Confirm
-  whether the dialog separately exposes a clear-style affordance
-  before queueing.
+- ~~**Tag-chip clear in dialog**~~ — **CLOSED in iter 23.** Pre-flight
+  audit found there is no parallel `dialog-clear-style-button` to
+  mirror `dialog-clear-component-button`: in the dialog, styles are
+  cleared *only* via the per-chip `word-edit-tag-clear-button`
+  close-icon child rendered inside each `word-edit-tag-chip` (visible
+  on hover). The new test
+  `test_dialog_clear_style_chip` in
+  `tests/browser/test_word_edit_dialog.py` exercises the only
+  affordance that exists: applies a default style, hovers the new
+  chip, clicks its embedded clear icon, asserts chip count drops.
 - **Apply-Style / Apply-Component / Scope select wiring inside
   dialog** — `dialog-style-select`, `dialog-scope-select`,
   `dialog-component-select` are testid'd but no test opens them and
@@ -129,6 +161,35 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### Word Edit Dialog — Per-Chip Style-Clear Coverage (Iter 23, Done)
+
+Iter 23's first candidate (cross-line `word-form-line-button` `+1`
+delta test) failed the pre-flight: the predicted `+1` delta from the
+iter-21 review and the pd-book-tools unit tests does not match the
+live browser fixture, which produced `+2` instead — see item 5 in the
+priority list for the queued investigation. Iter 23 pivoted to the
+queued candidate-3 work ("Tag-chip clear in dialog").
+
+The pre-flight audit confirmed no parallel
+`dialog-clear-style-button` exists in the dialog; styles are cleared
+*only* via the per-chip close-icon button rendered inside each
+`word-edit-tag-chip` (visible on hover, testid
+`word-edit-tag-clear-button`). The existing `test_dialog_apply_style`
+test reaches the *renderer*-side chip's clear button after closing
+the dialog, but no test exercised the in-dialog tag clear.
+
+This iteration:
+
+- Added selector constant `DIALOG_TAG_CLEAR_BUTTON` to
+  `tests/browser/test_word_edit_dialog.py` with a multi-line comment
+  documenting the no-parallel-button asymmetry.
+- Added `test_dialog_clear_style_chip`: opens the dialog, clicks
+  Apply Style (default style is preselected), asserts chip count
+  rose, hovers the most-recent chip, clicks its embedded clear
+  button, asserts chip count fell back below the post-apply count.
+
+Pure additive — no source mutations. New test passes in 6.8s.
 
 ### Toolbar Line Scope — Cross-Line Split-By-Selection Coverage (Iter 22, Done)
 

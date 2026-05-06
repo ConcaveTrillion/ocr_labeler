@@ -9,8 +9,8 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 22, after landing the cross-line
-split-by-selection click test).
+Last refreshed: 2026-05-06 (iter 24, after landing the non-contiguous
+within-line split-by-selection click test).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -76,14 +76,16 @@ queued by recent iterations. Items are ordered by leverage / ease.
    gated on root-cause analysis (single Python-side unit test
    reproducing the multi-line shape, with `print()` of pre/post line
    layouts, would resolve it in one shot).
-6. **Multi-word same-line `split-by-selection` non-contiguous click
-   test** — select words 0 and 2 on a multi-word line (skip word 1),
-   click `line-split-by-selection-button`, assert `LINE_DELETE_CARD`
-   delta of `+1`. Selected partition is `[w_0, w_2]`; unselected is
-   `[w_1, w_3, ...]`. Proves the selected partition is not required
-   to be contiguous on the source line. Requires line 0 to have at
-   least 3 words, which the existing iter-19/20 fixture (page 1, 7
-   lines / 21 words) supports.
+6. ~~**Multi-word same-line `split-by-selection` non-contiguous click
+   test**~~ — **CLOSED in iter 24.** New
+   `test_line_split_by_selection_non_contiguous` selects words 0 and 2
+   of line 0 (skipping word 1), clicks
+   `line-split-by-selection-button`, and asserts a `LINE_DELETE_CARD`
+   delta of `+1`. The empirical delta matched iter-21's review's
+   predicted `+1`: the source line splits into selected `[w_0, w_2]`
+   and unselected `[w_1]` partitions for net one extra line card. Test
+   uses the same `page.evaluate` line-0-word-count helper as iter 22's
+   cross-line test to sanity-check the fixture has >=3 words on line 0.
 7. **Investigate iter-23's `+2` discrepancy on
    `word-form-line-button` cross-line selection.** Add a
    `pd-book-tools` unit test that mirrors the live fixture's layout
@@ -161,6 +163,35 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### Toolbar Line Scope — Non-Contiguous Within-Line Split-By-Selection Coverage (Iter 24, Done)
+
+Iter-21's review identified a third distinguishing-coverage gap:
+the `split_lines_into_selected_and_unselected_words` primitive does
+*not* require the selected partition to be contiguous on the source
+line — `{w_0, w_2}` selected on `[w_0, w_1, w_2]` should produce
+`[w_0, w_2]` (selected) plus `[w_1]` (unselected), net +1 line. None
+of the existing browser tests exercised this invariant: iter-19's
+`split-after-word` requires *exactly one* selection (so always
+contiguous), and iter-20/22's `split-by-selection` tests selected
+either a single word or one word per line.
+
+This iteration:
+
+- Added `test_line_split_by_selection_non_contiguous` to
+  `tests/browser/test_toolbar_line_actions.py`. The test selects
+  word 0 and word 2 of line 0 (skipping word 1), clicks
+  `line-split-by-selection-button`, and asserts a `LINE_DELETE_CARD`
+  delta of `+1`. A small `page.evaluate` JS helper (mirroring
+  iter-22's pattern) sanity-checks line 0 has >=3 words by counting
+  word-checkboxes that precede the second `line-delete-button` in
+  DOM order.
+- The empirical delta matched iter-21's review's predicted `+1` —
+  no review-note correction needed (contrast with iter-23's
+  `word-form-line-button` cross-line `+2` discrepancy that remains
+  queued).
+
+Pure additive — no source mutations.
 
 ### Word Edit Dialog — Per-Chip Style-Clear Coverage (Iter 23, Done)
 

@@ -565,3 +565,82 @@ def test_line_split_by_selection_cross_line(browser_app_url: str, browser_page) 
     # Each of the two affected source lines splits into a (selected,
     # unselected) pair, so line count increases by 2.
     expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 2)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection_non_contiguous(
+    browser_app_url: str, browser_page
+) -> None:
+    """Non-contiguous same-line split-by-selection: line count increases by 1.
+
+    Distinguishing-coverage test from the iter-21 review (item 3 in
+    ``docs/review-notes/2026-05-06-toolbar-split-family.md``). Selects
+    words 0 and 2 of line 0 (skipping word 1), clicks
+    ``line-split-by-selection-button``, and asserts a ``+1`` delta on
+    the line-card count: the source line splits into a "selected" line
+    (``[w_0, w_2]``) and an "unselected" line (``[w_1]``).  This proves
+    the selected partition is *not* required to be contiguous on the
+    source line — both `split_line_after_word` (which requires exactly
+    one selection and produces a contiguous cut) and the unit-test-style
+    contiguous selection on `split_lines_into_selected_and_unselected`
+    fail to exercise this invariant.
+
+    The browser-test-project page 1 fresh OCR materializes 7 lines with
+    multiple words (line 0 has 3 words / global flat-list indices 0, 1,
+    2), so global indices 0 and 2 reliably map to words 0 and 2 of
+    line 0 with word 1 left unselected.
+
+    The empirical line-count delta on the live fixture matches the
+    iter-21 review's predicted ``+1``: word 1 stays in its own
+    "unselected" line and words 0 + 2 form a new "selected" line, net
+    one extra line card.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    # Sanity-check: line 0 must have at least 3 words for words 0 and 2
+    # to both live on line 0 (with word 1 in between, unselected).
+    # Global flat-list indices are guaranteed to map 1:1 to line 0's
+    # word 0 / 1 / 2 because word checkboxes appear in DOM order
+    # grouped by line card.
+    line_0_word_count = page.evaluate(
+        """() => {
+            const ldbs = Array.from(
+                document.querySelectorAll('[data-testid="line-delete-button"]')
+            );
+            if (ldbs.length < 1) return 0;
+            const first_boundary = ldbs.length >= 2 ? ldbs[1] : null;
+            const wcbs = Array.from(
+                document.querySelectorAll('[data-testid="word-checkbox"]')
+            );
+            if (first_boundary === null) return wcbs.length;
+            let count = 0;
+            for (const w of wcbs) {
+                if (w.compareDocumentPosition(first_boundary) &
+                    Node.DOCUMENT_POSITION_FOLLOWING) {
+                    count += 1;
+                }
+            }
+            return count;
+        }"""
+    )
+    assert line_0_word_count >= 3, (
+        f"Expected line 0 to have >=3 words for non-contiguous selection; "
+        f"got {line_0_word_count}"
+    )
+
+    _select_word(page, 0)
+    _select_word(page, 2)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Single source line affected; splits into selected ([w_0, w_2]) and
+    # unselected ([w_1]) partitions — net +1 line.
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)

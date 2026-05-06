@@ -148,8 +148,8 @@ but it does *not* exercise the genuinely distinguishing logic.
 - Enabled-with-selection: yes (iter 16)
 - Tooltip: yes
 - Click (single-word, +1 line): yes (iter 20)
-- Click (multi-word): none
-- Click (cross-line): none
+- Click (multi-word non-contiguous, +1 line): yes (iter 24)
+- Click (cross-line, +2 line): yes (iter 22)
 
 **`word-form-line-button` ("extract")**
 

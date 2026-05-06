@@ -9,7 +9,8 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 20, after closing prior gap 1).
+Last refreshed: 2026-05-06 (iter 21, after closing prior gap 3 as a
+duplicate-coverage no-op + deep review).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -31,15 +32,39 @@ queued by recent iterations. Items are ordered by leverage / ease.
    the backend model-scan path to be exercisable in the browser
    fixture; Apply needs HF / local model availability plus state
    mutation assertions.
-3. **`line-extract-from-selection-button` click test** — the
-   word-scope toolbar exposes `extract_line_from_selection_button`
-   wired to `split_line_with_selected_words_callback` (enables when
-   `>= 1 word selected`). Sister button to split-by-selection that
-   currently has no click test. Pattern: select word(s) on page 1,
-   click button, assert `LINE_DELETE_CARD` delta. Behavior for a
-   single-word selection on a multi-word line: extracts the selected
-   word(s) into a new line, leaves the unselected portion intact —
-   net +1 line (mirrors split-by-selection).
+3. ~~**`line-extract-from-selection-button` click test**~~ — **CLOSED
+   in iter 21 as duplicate.** Iter 20's prompt mis-named the button:
+   the actual `extract_line_from_selection_button` lives in the
+   word-scope toolbar with testid `word-form-line-button`, and is
+   already covered end-to-end by
+   `test_word_form_line` in
+   `tests/browser/test_toolbar_word_actions.py` (line 360). Iter 21
+   pivoted to a deep review of the toolbar split family — see
+   `docs/review-notes/2026-05-06-toolbar-split-family.md` for the
+   distinct-operation analysis. Genuinely-new browser-test gaps from
+   that review (multi-word and cross-line topologies for
+   split-by-selection and extract-line) are queued under "Real
+   remaining gaps" below as items 4-6.
+4. **Cross-line `split-by-selection` click test** — select word 0 on
+   line 0 *and* word 0 on line 1, click
+   `line-split-by-selection-button`, assert `LINE_DELETE_CARD` delta
+   of `+2` (each affected line splits into a selected/unselected
+   pair). This is the test that distinguishes split-by-selection
+   from extract-line; existing iter-20 test only exercises the
+   single-line single-word degenerate path. Unblocked by the same
+   fixture iters 19/20 used.
+5. **Cross-line `extract-line-from-selection` ("form-line") click
+   test** — same selection as item 4, but click
+   `word-form-line-button` instead. Assert `LINE_DELETE_CARD` delta
+   of `+1` (one new line containing both selected words; residuals
+   stay in their original lines). Pairs with item 4 to prove the
+   per-affected-line vs single-output-line semantic distinction.
+6. **Multi-word same-line `split-by-selection` non-contiguous click
+   test** — select words 0 and 2 on a multi-word line (skip word 1),
+   click `line-split-by-selection-button`, assert `LINE_DELETE_CARD`
+   delta of `+1`. Selected partition is `[w_0, w_2]`; unselected is
+   `[w_1, w_3, ...]`. Proves the selected partition is not required
+   to be contiguous on the source line.
 
 ### Lower-priority / queued
 
@@ -91,13 +116,35 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ## Done Criteria
 
 - Gap 1 above closed with a dedicated click test.
-- Gaps 2-3 either landed (once fixtures / backend paths are
-  available) or formally deferred to a separate plan.
+- Gap 2 either landed (once backend / HF fixtures are available) or
+  formally deferred to a separate plan.
+- Gap 3 closed in iter 21 as duplicate of `test_word_form_line`; the
+  deep review at `docs/review-notes/2026-05-06-toolbar-split-family.md`
+  yielded items 4-6 as the real-coverage successors.
 - `make test-browser` continues to pass reliably with `pytest -n auto`.
 
 ---
 
 ## Previously Completed Next Steps
+
+### Toolbar Split Family Deep Review (Iter 21, Done)
+
+Iter 21 pre-flight on the queued
+`line-extract-from-selection-button` click test discovered the button
+was misnamed in the iter-20 hand-off: the actual
+`extract_line_from_selection_button` lives on the *word*-scope
+toolbar row with testid `word-form-line-button` and is already
+covered by `test_word_form_line` (an existing single-word `+1` line
+delta assertion). Per the iter-21 pivot guidance, iter 21 produced a
+deep review of the three split-family operations
+(`split_line_after_word`, `split_lines_into_selected_and_unselected_words`,
+`split_line_with_selected_words`) to confirm they are distinct
+operations with different selection contracts and different output
+topologies. Findings recorded at
+`docs/review-notes/2026-05-06-toolbar-split-family.md`. The review
+identified three new genuinely-distinct-coverage browser tests
+(items 4-6 in the priority list above) as the real successor work,
+which was the iter-21 product. No source mutations.
 
 ### Toolbar Line Scope — Split-By-Selection Button Coverage (Done)
 

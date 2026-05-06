@@ -250,3 +250,53 @@ def test_dialog_enter_in_path_input(browser_app_url: str, browser_page) -> None:
 
     path_label = page.locator(SOURCE_FOLDER_CURRENT_PATH_LABEL)
     expect(path_label).to_contain_text(home_dir, timeout=5_000)
+
+
+# ---------------------------------------------------------------------------
+# Negative path: Enter on nonexistent path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_enter_on_nonexistent_path_warns(
+    browser_app_url: str, browser_page
+) -> None:
+    """Enter on a missing path -> warning notify; current-path label unchanged.
+
+    Covers the negative branch of ``_open_typed_source_path`` where
+    ``not next_dir.exists() or not next_dir.is_dir()`` triggers
+    ``self._notify("Directory not found", "warning")`` (per the iter-39
+    keyboard-shortcuts coverage review).
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    path_label = page.locator(SOURCE_FOLDER_CURRENT_PATH_LABEL)
+    path_label.wait_for(state="visible", timeout=10_000)
+    initial_path = path_label.text_content() or ""
+
+    # Type a path that is exceedingly unlikely to exist on any host.
+    bogus_path = "/nonexistent_xyz_abc_123_pd_ocr_labeler_test"
+    path_input = page.locator(SOURCE_FOLDER_PATH_INPUT)
+    path_input.fill(bogus_path)
+    page.wait_for_timeout(100)
+    path_input.press("Enter")
+
+    # The "Directory not found" warning notification should surface.
+    warning = page.locator(
+        ".q-notification.bg-warning:has-text('Directory not found')"
+    ).first
+    warning.wait_for(state="visible", timeout=10_000)
+
+    # And the dialog's path label must NOT have changed to the bogus
+    # value (the negative branch returns before mutating state).
+    final_path = path_label.text_content() or ""
+    assert final_path == initial_path, (
+        f"path label changed from {initial_path!r} to {final_path!r} "
+        f"despite Directory not found warning"
+    )
+    assert bogus_path not in final_path
+
+    # No negative-type toast should have fired (this is a soft warning).
+    assert page.locator(".q-notification.bg-negative").count() == 0

@@ -130,6 +130,35 @@ queued by recent iterations. Items are ordered by leverage / ease.
    dispatch (`PageState.split_line_with_selected_words` →
    `_dispatch_line_op`) to find the divergence.
 
+9. **Production bug: GT-input Tab/Shift+Tab navigation is broken in
+   the browser.** Iter 40 attempted to add a Tab-navigation browser
+   test (the highest-leverage gap from iter-39's review) and
+   discovered the production code has no functional path:
+   `WordMatchGtEditing._focus_word_gt_input` calls
+   `input_element.focus()`, but NiceGUI's `ui.input` class does
+   **not define a `focus` method** (verified at the Python REPL).
+   The call would raise `AttributeError`, but it's wrapped in
+   `ui.timer(0, ..., once=True)` which swallows the exception
+   silently. Browser-side observation: pressing Tab in the first GT
+   input causes (a) native focus to move to the next focusable
+   element (a `word-checkbox`), (b) `_handle_word_gt_edit` to fire a
+   line-card rerender that wipes the activeElement, leaving
+   `document.activeElement === <body>`. The deferred focus call
+   never lands on the next GT input. The two existing unit tests
+   (`test_word_gt_keydown_routes_tab_and_shift_tab`,
+   `test_word_gt_keydown_ignores_non_tab` in
+   `tests/pd_ocr_labeler/views/projects/pages/test_word_match.py`)
+   monkeypatch `_handle_word_gt_tab_navigation` away, so they never
+   exercise the broken focus call. **Fix sketch:** replace
+   `input_element.focus()` with
+   `input_element.run_method("focus")` (NiceGUI's documented
+   client-side method invoker), or use `ui.run_javascript(...)` to
+   focus the element by ID. Once fixed, the Tab-navigation browser
+   test from iter-40 can be added: see
+   `docs/review-notes/2026-05-06-keyboard-shortcuts-coverage.md`
+   item 1 in the ranked follow-ups for the test sketch. **Out of
+   scope for overnight iters** (production-code change required).
+
 ### Lower-priority / queued
 
 - ~~**Tag-chip clear in dialog**~~ — **CLOSED in iter 23.** Pre-flight
@@ -231,13 +260,21 @@ queued by recent iterations. Items are ordered by leverage / ease.
   scope (dropdown-pick-apply changes chip suffix from "(Whole)" to
   "(Part)"), merge/split/delete, crop, refine, all 8 nudges, reset,
   apply, apply+refine.
-- Source folder dialog: 10 tests in
-  `tests/browser/test_source_folder_dialog.py`.
+- Source folder dialog: 11 tests in
+  `tests/browser/test_source_folder_dialog.py` (now includes
+  `test_dialog_enter_on_nonexistent_path_warns` as of iter 40 —
+  closes the negative branch in `_open_typed_source_path` where
+  `not next_dir.exists() or not next_dir.is_dir()` triggers a
+  `bg-warning` "Directory not found" toast and the current-path
+  label is not mutated).
 - Header / load controls: covered across `test_home_page.py`,
   `test_project_loading.py`, `test_browser_smoke.py`,
   `test_page_actions.py` (8 tests).
 - Keyboard shortcuts: 6 tests in
-  `tests/browser/test_keyboard_shortcuts.py`.
+  `tests/browser/test_keyboard_shortcuts.py`. Iter 39's keyboard-shortcut
+  coverage review queued a Tab/Shift+Tab GT-input browser test as the
+  highest-leverage gap; iter 40 attempted that and surfaced a real
+  production bug instead — see "Real remaining gaps" item 9.
 - Image tab controls: 11 tests in `tests/browser/test_image_tabs.py`
   (now includes `test_erase_pixels_button_enables_erase_mode` as of
   iter 35 — closes the previously-untested "Erase Pixels" toolbar

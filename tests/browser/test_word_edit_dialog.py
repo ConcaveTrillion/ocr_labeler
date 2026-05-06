@@ -533,6 +533,87 @@ def test_dialog_apply_style_via_dropdown(browser_app_url: str, browser_page) -> 
     page.locator(DIALOG_CLOSE).click()
 
 
+# ---------------------------------------------------------------------------
+# Apply Component via dropdown selection (drives ``dialog-component-select``
+# to pick a non-default component value, then verifies that exact component
+# ends up on the chip — symmetric mirror of
+# ``test_dialog_apply_style_via_dropdown``.  ``test_dialog_clear_component``
+# already opens the component select and picks "Footnote Marker", but only
+# asserts ``chip_count >= 1`` — it does not verify the chip *text* matches
+# the picked component, so a regression that wired the dropdown to the
+# wrong component value would still pass that test.  This test closes that
+# coverage gap.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_apply_component_via_dropdown(
+    browser_app_url: str, browser_page
+) -> None:
+    """Open component select → pick "Superscript" → Apply Component → chip text is "Superscript".
+
+    The default component preselected on dialog open is the first entry
+    of ``WordOperations.supported_components`` after
+    ``ALLOWED_COMPONENTS`` is sorted: ``"drop cap"`` (display
+    ``"Drop Cap"``).  Picking ``"Superscript"`` from the dropdown
+    verifies that:
+
+    1. Clicking the q-select wrapper (``DIALOG_COMPONENT_SELECT`` testid
+       lands on the wrapper, not the underlying menu) does open the
+       q-menu.
+    2. Selecting a q-item by visible text drives
+       ``_set_selected_component`` and updates
+       ``_selected_component_value``.
+    3. ``_apply_selected_component_from_dialog(enabled=True)`` then
+       routes through the underlying component-set path with the
+       *selected* value (not the default), and ``_render_tag_chips``
+       redraws a chip whose label matches.
+
+    Counterpart to ``test_dialog_apply_style_via_dropdown`` (style-side
+    of the same dropdown-drive pattern) and ``test_dialog_clear_component``
+    (which exercises the dropdown-open + clear-component button but not
+    the chip-text assertion).
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    dialog = page.locator(".q-dialog").last
+    chips_before = dialog.locator(DIALOG_TAG_CHIP).count()
+
+    # Drive the component-select dropdown to "Superscript" (a non-default
+    # value; default is "Drop Cap" because ``ALLOWED_COMPONENTS`` is
+    # sorted and "drop cap" sorts first).  The data-testid lands on the
+    # q-select wrapper; clicking it opens the q-menu, then we click the
+    # q-item with the matching display text.
+    dialog.locator(DIALOG_COMPONENT_SELECT).click()
+    page.get_by_role("option", name="Superscript").first.click()
+    page.wait_for_timeout(200)
+
+    # Apply the selected component.
+    page.locator(DIALOG_APPLY_COMPONENT).click()
+    page.wait_for_timeout(500)
+
+    # A new tag chip should appear whose label is "Superscript" — proving
+    # the dropdown selection (not the default) drove the apply.  Use
+    # ``to_have_count`` for auto-waiting against NiceGUI re-render timing.
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
+    expect(
+        dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Superscript")
+    ).to_have_count(1)
+
+    # Cleanup: click Clear Component (the existing affordance for
+    # component chips — symmetric counterpart to per-chip clear used in
+    # the style test) so subsequent tests on the same fixture session
+    # start clean.
+    page.locator(DIALOG_CLEAR_COMPONENT).click()
+    page.wait_for_timeout(500)
+
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before)
+
+    page.locator(DIALOG_CLOSE).click()
+
+
 # ===========================================================================
 # Commit 9 — Merge / Split / Delete  (Buttons 71-75)
 # ===========================================================================

@@ -9,9 +9,10 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 28, after landing the in-dialog
-Apply-Style dropdown-drive browser test that picks a non-default
-style value and verifies the resulting chip text matches).
+Last refreshed: 2026-05-06 (iter 29, after landing the symmetric
+in-dialog Apply-Component dropdown-drive browser test that picks a
+non-default component value ("Superscript") and verifies the
+resulting chip text matches).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -124,13 +125,24 @@ queued by recent iterations. Items are ordered by leverage / ease.
   drove the apply, not the default). Cleanup hovers the chip and
   clicks its embedded `word-edit-tag-clear-button` to remove the
   style, restoring baseline state.
-- **Apply-Component / Scope select wiring inside dialog** —
-  `dialog-component-select` is partially covered (clicked-to-open in
-  `test_dialog_clear_component`) but no test exercises a non-default
-  pick + Apply Component asserting the chip text matches.
+- ~~**Apply-Component select wiring inside dialog**~~ — **CLOSED in
+  iter 29.** New `test_dialog_apply_component_via_dropdown` in
+  `tests/browser/test_word_edit_dialog.py` clicks the
+  `dialog-component-select` q-select wrapper, picks "Superscript" (a
+  non-default value; the default preselected component is "Drop Cap"
+  since `WordOperations.supported_components` returns
+  `tuple(sorted(ALLOWED_COMPONENTS))`), clicks
+  `dialog-apply-component-button`, and asserts (a) chip-count went
+  from baseline+0 to baseline+1 via `expect(...).to_have_count(...)`
+  and (b) the chip text is "Superscript". Cleanup uses the
+  symmetric `dialog-clear-component-button` (the existing affordance
+  for component chips) to restore baseline state.
+- **Apply-Scope select wiring inside dialog** —
   `dialog-scope-select` has no dropdown-drive coverage at all; the
   scope value is only ever set indirectly via `_set_selected_style`'s
-  scope sync.
+  scope sync. Apply a style first, pick "Whole" or "Part" from the
+  scope dropdown, assert chip display now ends with "(Whole)" or
+  "(Part)" per `_word_display_tag_items` line 639.
 - **`test_load_button_prevents_multiple_clicks` flake** — known
   pre-existing flake; retry up to 3x in CI. Not a coverage gap, but
   worth fixing or marking `flaky` once we have time.

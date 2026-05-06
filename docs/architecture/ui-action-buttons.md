@@ -301,23 +301,23 @@ operation is not applicable at that scope.
 
 These are not buttons but have meaningful UI interactions.
 
-| # | Type | Location | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 94 | **Project dropdown** (`ui.select`) | Header | Select project to load | Yes |
-| 95 | **Show Paragraphs** checkbox | Image Tabs | Toggle paragraph overlay layer | Yes — toggled |
-| 96 | **Show Lines** checkbox | Image Tabs | Toggle line overlay layer | Visibility only |
-| 97 | **Show Words** checkbox | Image Tabs | Toggle word overlay layer | Visibility only |
-| 98 | **Selection Mode** radio | Image Tabs | Switch selection mode | Visibility only |
-| 99 | **Matches** tab | Text Tabs | Show word match view | Yes — click + active state |
-| 100 | **Ground Truth** tab | Text Tabs | Show GT text editor | Yes — click + content |
-| 101 | **OCR** tab | Text Tabs | Show OCR text editor | Yes — click + content |
-| 102 | **Filter toggle** (Unvalidated / Mismatched / All) | Word Match | Filter displayed lines | Yes — toggle through |
-| 103 | **Style dropdown** (`ui.select`) | Toolbar | Select style to apply | Partial |
-| 104 | **Scope dropdown** (`ui.select`) | Toolbar | Select scope (whole/part) | No |
-| 105 | **Component dropdown** (`ui.select`) | Toolbar | Select component to apply | Yes — in dialog |
-| 106 | **Word checkbox** | Word Match Renderer | Toggle word selection | Yes — checked |
-| 107 | **Line checkbox** | Word Match Renderer | Toggle line selection | No |
-| 108 | **GT text input** | Word Match Renderer | Edit per-word ground truth | No |
+| # | Type | Location | Description | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 94 | **Project dropdown** (`ui.select`) | Header | Select project to load | `project-select` | Yes |
+| 95 | **Show Paragraphs** checkbox | Image Tabs | Toggle paragraph overlay layer | — | Yes — toggled |
+| 96 | **Show Lines** checkbox | Image Tabs | Toggle line overlay layer | — | Visibility only |
+| 97 | **Show Words** checkbox | Image Tabs | Toggle word overlay layer | — | Visibility only |
+| 98 | **Selection Mode** radio | Image Tabs | Switch selection mode | — | Visibility only |
+| 99 | **Matches** tab | Text Tabs | Show word match view | — | Yes — click + active state |
+| 100 | **Ground Truth** tab | Text Tabs | Show GT text editor | — | Yes — click + content |
+| 101 | **OCR** tab | Text Tabs | Show OCR text editor | — | Yes — click + content |
+| 102 | **Filter toggle** (Unvalidated / Mismatched / All) | Word Match | Filter displayed lines | — | Yes — toggle through |
+| 103 | **Style dropdown** (`ui.select`) | Toolbar | Select style to apply | `apply-style-select` | Partial |
+| 104 | **Scope dropdown** (`ui.select`) | Toolbar | Select scope (whole/part) | `scope-select` | No |
+| 105 | **Component dropdown** (`ui.select`) | Toolbar | Select component to apply | `apply-component-select` | Yes — in dialog |
+| 106 | **Word checkbox** | Word Match Renderer | Toggle word selection | `word-checkbox` | Yes — checked |
+| 107 | **Line checkbox** | Word Match Renderer | Toggle line selection | — | No |
+| 108 | **GT text input** | Word Match Renderer | Edit per-word ground truth | — | No |
 
 ---
 

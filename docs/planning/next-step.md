@@ -25,6 +25,28 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Match Apply-Style/Component Selects (Done)
+
+The Word Match scope-action toolbar grid (Page / Paragraph / Line /
+Word rows) and the Apply-Style toolbar buttons were already fully
+backfilled in earlier commits, with all corresponding browser tests
+in `tests/browser/test_toolbar_*.py` and `tests/browser/test_word_match.py`
+already on `[data-testid="..."]` selectors.
+
+The two remaining `ui.select` widgets in the apply-style toolbar
+(`apply_style_select` and `apply_component_select`) now also carry
+`data-testid` props — `apply-style-select` and
+`apply-component-select` — to round out the contract for that toolbar
+section. The third select in the row (`apply_scope_select`) was
+already testid'd as `scope-select`. Architecture doc
+`docs/architecture/ui-action-buttons.md` section 7 now documents the
+testid for every load-bearing dropdown / select in the labeler UI
+(adding a `data-testid` column to the section-7 table). No browser /
+unit tests changed: the existing tests do not yet open these selects,
+and adding tests for select interaction is queued as a separate chunk
+under "Word edit dialog operations" / "Toolbar scope actions
+(line + word rows)" in the priority list.
+
 ### Stable data-testid Backfill — OCR Configuration Modal (Done)
 
 `OCRConfigModal` now exposes `data-testid` props on every load-bearing

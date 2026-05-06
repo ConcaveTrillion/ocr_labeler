@@ -458,6 +458,7 @@ class WordMatchToolbar:
                 "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
             )
             self.apply_style_select.on_value_change(self._on_style_value_change)
+            self.apply_style_select.props('data-testid="apply-style-select"')
 
             self.apply_scope_select = ui.select(
                 options={"": "--", "whole": "Whole", "part": "Part"},
@@ -503,6 +504,7 @@ class WordMatchToolbar:
                 "min-width: 138px; max-width: 162px; font-size: 0.72rem;"
             )
             self.apply_component_select.on_value_change(self._on_component_value_change)
+            self.apply_component_select.props('data-testid="apply-component-select"')
 
             self.apply_component_button = ui.button(
                 "Apply Component",

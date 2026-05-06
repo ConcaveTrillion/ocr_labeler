@@ -413,3 +413,39 @@ def test_line_form_paragraph(browser_app_url: str, browser_page) -> None:
 
     # Paragraph count should increase by 1 (back to original since merge was -1)
     expect(page.locator(PARA_EXPANDER)).to_have_count(paras_before)
+
+
+@pytest.mark.browser
+def test_line_split_after_word(browser_app_url: str, browser_page) -> None:
+    """Select one word, click Split-after-word: line count increases by 1.
+
+    The split-after-word handler enables when ``split_line_after_word_callback
+    is not None and exactly 1 word is selected``
+    (``word_match_toolbar.py`` ll. 824-828).  It dispatches to
+    ``page_state.split_line_after_word(line_index, word_index)`` which splits
+    the line into two new lines after the selected word and returns True on
+    success.  The browser-test-project page 1 fresh OCR materializes 7 lines
+    with multiple words each, so selecting word 0 lands inside a multi-word
+    line and the split completes successfully (verified manually: notification
+    reads "Split line 1 after word 1" and line count goes from 7 to 8).
+    Mirrors ``test_line_delete``'s line-count delta pattern, swapping the
+    ``-1`` invariant for ``+1``.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    # Count line cards before — need at least 1 multi-word line for the
+    # split to succeed.  Page 1 has 7 lines / 21 words via fresh OCR.
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    _select_word(page, 0)
+
+    split_btn = page.locator(LINE_SPLIT_AFTER_WORD)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Line count should increase by 1 (one line became two).
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)

@@ -164,6 +164,41 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ## Previously Completed Next Steps
 
+### Test-Pollution Flake Fix — `test_app_state.py` xdist Resolver Failures (Iter 26, Done)
+
+Iter 25's `make ci` run surfaced a deterministic 4-test failure cluster
+in `tests/pd_ocr_labeler/state/test_app_state.py` whenever the file was
+collected alongside the rest of the suite under xdist. The traceback
+pinpointed pytest's dotted-path resolver in
+`_pytest/monkeypatch.py:resolve` — `getattr(pd_ocr_labeler, 'state')`
+fails with `AttributeError: 'module' object at pd_ocr_labeler.state has
+no attribute 'state'` when monkeypatch tries to walk
+`"pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options"`.
+Iter 26 reproduced the failure twice under `make ci`, then sidestepped
+the resolver entirely by passing the imported `ModelSelectionOperations`
+class object to `monkeypatch.setattr` directly:
+
+```python
+monkeypatch.setattr(
+    ModelSelectionOperations, "discover_model_options", fake_discover_model_options
+)
+```
+
+The class object is the same one `app_state.py` imports, so monkeypatching
+its `discover_model_options` classmethod attribute is observable from both
+the test and production code. Root cause of why
+`pd_ocr_labeler.state` is missing as an attribute on `pd_ocr_labeler` in
+the failing worker remains unresolved (an earlier speculative
+`import pd_ocr_labeler.state.app_state` fix did not prevent the failure
+under `make ci`), but the dotted-path-free monkeypatch makes the
+question moot — a class-object monkeypatch doesn't need any package
+attribute to be set.
+
+Pure test-only fix. Two consecutive `make ci` runs after the change
+confirm the 4 tests are now stable; the only remaining `make ci` failure
+is the unrelated pre-existing
+`test_load_button_prevents_multiple_clicks` flake (passes on retry).
+
 ### OCRConfigModal — No-Edit Apply Round-Trip Smoke (Iter 25, Done)
 
 Iter-13 queued the Apply round-trip as out of scope because Apply

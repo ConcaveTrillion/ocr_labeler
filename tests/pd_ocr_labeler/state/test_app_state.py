@@ -11,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from pd_ocr_labeler.operations.ocr.model_selection_operations import OCRModelOption
+from pd_ocr_labeler.operations.ocr.model_selection_operations import (
+    ModelSelectionOperations,
+    OCRModelOption,
+)
 from pd_ocr_labeler.state.app_state import AppState
 
 
@@ -326,6 +329,18 @@ def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
 
     HF probe is mocked to be unreachable, so the picker falls through to the
     latest local fine-tuned model (the historical behaviour for this case).
+
+    Note: This and the three sibling ``test_*ocr_models*`` /
+    ``test_*hf_pinned_revision*`` tests below monkeypatch
+    ``ModelSelectionOperations.discover_model_options`` by passing the
+    imported class object rather than the dotted-string path
+    ``"pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options"``.
+    The dotted-string form was observed to fail intermittently under
+    ``make ci`` with xdist (``AttributeError: 'module' object at
+    pd_ocr_labeler.state has no attribute 'state'`` from pytest's
+    dotted-path resolver in ``_pytest/monkeypatch.py:resolve``). The class
+    object is the same one ``app_state.py`` imports, so monkeypatching its
+    ``discover_model_options`` attribute affects both views.
     """
 
     def fake_discover_model_options(*args, **kwargs):
@@ -355,7 +370,8 @@ def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -393,7 +409,8 @@ def test_set_selected_ocr_models_updates_detection_and_recognition(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -433,7 +450,8 @@ def test_set_hf_pinned_revision_triggers_refresh(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -466,7 +484,8 @@ def test_set_hf_pinned_revision_clears_when_empty_string(monkeypatch):
         return options, {k: o.label for k, o in options.items()}
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 

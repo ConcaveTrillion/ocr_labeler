@@ -9,8 +9,9 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 27, after landing the OCRConfigModal
-Apply-with-HF-revision-edit round-trip browser test).
+Last refreshed: 2026-05-06 (iter 28, after landing the in-dialog
+Apply-Style dropdown-drive browser test that picks a non-default
+style value and verifies the resulting chip text matches).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -110,13 +111,26 @@ queued by recent iterations. Items are ordered by leverage / ease.
   `tests/browser/test_word_edit_dialog.py` exercises the only
   affordance that exists: applies a default style, hovers the new
   chip, clicks its embedded clear icon, asserts chip count drops.
-- **Apply-Style / Apply-Component / Scope select wiring inside
-  dialog** — `dialog-style-select`, `dialog-scope-select`,
-  `dialog-component-select` are testid'd but no test opens them and
-  drives the dropdown end-to-end (only smoke + presence). Lower
-  priority because the renderer-side selects are already covered by
-  `test_apply_style_dropdown_select_then_apply` in
-  `test_word_match.py`.
+- ~~**Apply-Style select wiring inside dialog**~~ — **CLOSED in
+  iter 28.** New `test_dialog_apply_style_via_dropdown` in
+  `tests/browser/test_word_edit_dialog.py` clicks the
+  `dialog-style-select` q-select wrapper, picks "Italics" (a
+  non-default value; the default preselected style is "All Caps"
+  since `WordOperations.supported_styles` returns
+  `sorted(ALLOWED_TEXT_STYLE_LABELS - {"regular"})`), clicks
+  `dialog-apply-style-button`, and asserts (a) chip-count went from
+  baseline+0 to baseline+1 via `expect(...).to_have_count(...)` and
+  (b) the chip text is "Italics" (so the dropdown selection
+  drove the apply, not the default). Cleanup hovers the chip and
+  clicks its embedded `word-edit-tag-clear-button` to remove the
+  style, restoring baseline state.
+- **Apply-Component / Scope select wiring inside dialog** —
+  `dialog-component-select` is partially covered (clicked-to-open in
+  `test_dialog_clear_component`) but no test exercises a non-default
+  pick + Apply Component asserting the chip text matches.
+  `dialog-scope-select` has no dropdown-drive coverage at all; the
+  scope value is only ever set indirectly via `_set_selected_style`'s
+  scope sync.
 - **`test_load_button_prevents_multiple_clicks` flake** — known
   pre-existing flake; retry up to 3x in CI. Not a coverage gap, but
   worth fixing or marking `flaky` once we have time.
@@ -137,9 +151,10 @@ queued by recent iterations. Items are ordered by leverage / ease.
   `paragraph-expand-bboxes-button` click coverage as of iter 18).
 - Toolbar page scope: 8 tests in
   `tests/browser/test_toolbar_page_actions.py`.
-- Word edit dialog: 27 tests in `tests/browser/test_word_edit_dialog.py`
-  covering header, style, merge/split/delete, crop, refine, all 8
-  nudges, reset, apply, apply+refine.
+- Word edit dialog: 29 tests in `tests/browser/test_word_edit_dialog.py`
+  covering header, style (default-apply, dropdown-pick-apply, per-chip
+  clear), merge/split/delete, crop, refine, all 8 nudges, reset,
+  apply, apply+refine.
 - Source folder dialog: 10 tests in
   `tests/browser/test_source_folder_dialog.py`.
 - Header / load controls: covered across `test_home_page.py`,

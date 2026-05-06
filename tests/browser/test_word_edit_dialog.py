@@ -461,6 +461,78 @@ def test_dialog_clear_style_chip(browser_app_url: str, browser_page) -> None:
     page.locator(DIALOG_CLOSE).click()
 
 
+# ---------------------------------------------------------------------------
+# Apply Style via dropdown selection (drives ``dialog-style-select`` to
+# pick a non-default style value, then verifies that exact style ends up
+# on the chip — the symmetric pair of ``test_dialog_apply_style`` (which
+# only exercises the *default* preselected style) and the in-dialog
+# clear path covered by ``test_dialog_clear_style_chip``.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_apply_style_via_dropdown(browser_app_url: str, browser_page) -> None:
+    """Open style select → pick "Italics" → Apply Style → chip text is "Italics".
+
+    The default style preselected on dialog open is the first entry of
+    ``WordOperations.supported_styles`` after ``regular`` is filtered and
+    the remaining labels are ``sorted()``: ``"all caps"`` (display
+    ``"All Caps"``).  Picking ``"Italics"`` from the dropdown verifies
+    that:
+
+    1. Clicking the q-select wrapper (``DIALOG_STYLE_SELECT`` testid
+       lands on the wrapper, not the underlying menu) does open the
+       q-menu.
+    2. Selecting a q-item by visible text drives
+       ``_set_selected_style`` and updates ``_selected_style_value``.
+    3. ``_apply_selected_style_from_dialog`` then routes through
+       ``WordOperations.apply_style_to_word`` with the *selected* value
+       (not the default), and ``_render_tag_chips`` redraws a chip whose
+       label matches.
+
+    Counterpart to ``test_dialog_apply_style`` (default-style apply,
+    no dropdown drive) and ``test_dialog_clear_style_chip`` (clear-side
+    of the same chip life cycle).
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    dialog = page.locator(".q-dialog").last
+    chips_before = dialog.locator(DIALOG_TAG_CHIP).count()
+
+    # Drive the style-select dropdown to "Italics" (a non-default value).
+    # The data-testid lands on the q-select wrapper; clicking it opens the
+    # q-menu, then we click the q-item with the matching display text.
+    dialog.locator(DIALOG_STYLE_SELECT).click()
+    page.get_by_role("option", name="Italics").first.click()
+    page.wait_for_timeout(200)
+
+    # Apply the selected style.
+    page.locator(DIALOG_APPLY_STYLE).click()
+    page.wait_for_timeout(500)
+
+    # A new tag chip should appear whose label is "Italics" — proving the
+    # dropdown selection (not the default) drove the apply.  Use
+    # ``to_have_count`` for auto-waiting against NiceGUI re-render timing.
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
+    expect(dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics")).to_have_count(1)
+
+    # Cleanup: hover the new chip and click its clear icon to remove the
+    # style so subsequent tests on the same fixture session start clean.
+    italics_chip = dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics").first
+    italics_chip.hover()
+    page.wait_for_timeout(200)
+    clear_btn = italics_chip.locator(DIALOG_TAG_CLEAR_BUTTON).first
+    expect(clear_btn).to_be_visible(timeout=5_000)
+    clear_btn.click()
+    page.wait_for_timeout(500)
+
+    expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before)
+
+    page.locator(DIALOG_CLOSE).click()
+
+
 # ===========================================================================
 # Commit 9 — Merge / Split / Delete  (Buttons 71-75)
 # ===========================================================================

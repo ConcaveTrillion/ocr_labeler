@@ -16,6 +16,7 @@ from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 PARA_MERGE = '[data-testid="paragraph-merge-button"]'
 PARA_REFINE = '[data-testid="paragraph-refine-bboxes-button"]'
 PARA_EXPAND_REFINE = '[data-testid="paragraph-expand-refine-bboxes-button"]'
+PARA_EXPAND_BBOXES = '[data-testid="paragraph-expand-bboxes-button"]'
 PARA_SPLIT_AFTER_LINE = '[data-testid="paragraph-split-after-line-button"]'
 PARA_GT_TO_OCR = '[data-testid="paragraph-copy-gt-to-ocr-button"]'
 PARA_OCR_TO_GT = '[data-testid="paragraph-copy-ocr-to-gt-button"]'
@@ -32,6 +33,7 @@ ALL_PARA_BUTTONS = [
     PARA_MERGE,
     PARA_REFINE,
     PARA_EXPAND_REFINE,
+    PARA_EXPAND_BBOXES,
     PARA_SPLIT_AFTER_LINE,
     PARA_GT_TO_OCR,
     PARA_OCR_TO_GT,
@@ -119,6 +121,7 @@ def test_paragraph_scope_buttons_enabled_with_selection(
     for selector in [
         PARA_REFINE,
         PARA_EXPAND_REFINE,
+        PARA_EXPAND_BBOXES,
         PARA_GT_TO_OCR,
         PARA_OCR_TO_GT,
         PARA_VALIDATE,
@@ -143,6 +146,7 @@ def test_paragraph_scope_buttons_have_tooltips(
         (PARA_MERGE, "Merge selected paragraphs"),
         (PARA_REFINE, "Refine selected paragraphs"),
         (PARA_EXPAND_REFINE, "Expand then refine selected paragraphs"),
+        (PARA_EXPAND_BBOXES, "Expand selected paragraph bboxes"),
         (PARA_SPLIT_AFTER_LINE, "Split the containing paragraph"),
         (PARA_GT_TO_OCR, "Copy ground truth text to OCR"),
         (PARA_OCR_TO_GT, "Copy OCR text to ground truth"),
@@ -186,6 +190,25 @@ def test_paragraph_expand_refine(browser_app_url: str, browser_page) -> None:
 
     _select_paragraph(page, 0)
     page.locator(PARA_EXPAND_REFINE).click()
+    _wait_for_notification(page)
+
+
+@pytest.mark.browser
+def test_paragraph_expand_bboxes(browser_app_url: str, browser_page) -> None:
+    """Select paragraph, click Expand bboxes: success notification appears.
+
+    Pure-padding bbox expansion (no refine pass) at paragraph scope. Same
+    enable invariant as Refine / Expand+Refine: ``callback is not None and
+    >= 1 paragraph selected``. The handler reports a Quasar notification
+    on success or failure — either way a notification fires, which is
+    what we assert. Mirrors ``test_line_expand_bboxes``.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    _select_paragraph(page, 0)
+    page.locator(PARA_EXPAND_BBOXES).click()
     _wait_for_notification(page)
 
 

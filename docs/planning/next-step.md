@@ -9,7 +9,7 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 17, after coverage audit).
+Last refreshed: 2026-05-06 (iter 18, after closing prior gap 3).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -27,22 +27,14 @@ queued by recent iterations. Items are ordered by leverage / ease.
 2. **`line-split-by-selection-button` click test** — same situation;
    present in selectors / disabled / enabled / tooltip lists, no
    click test. Needs a subset of words selected within a line.
-3. **`paragraph-expand-bboxes-button` coverage** — symmetric to
-   iter-16's `line-expand-bboxes`. The button is rendered in
-   `word_match_toolbar.py:184-191` with testid
-   `paragraph-expand-bboxes-button` and wired through
-   `expand_paragraph_bboxes_callback`, but is NOT in the selectors
-   block, ALL_PARAGRAPH_BUTTONS, the enabled-with-selection list, or
-   the tooltip table in `tests/browser/test_toolbar_paragraph_actions.py`,
-   and has no click test. Pure additive chunk mirroring iter-16.
-4. **OCRConfigModal model-select full cancel-revert** — iter-15
+3. **OCRConfigModal model-select full cancel-revert** — iter-15
    queued this: at app start (no trainer outputs discovered) the
    detection / recognition selects expose only the `huggingface`
    key, so a value-cancel-revert assertion is impossible. Needs a
    trainer-output fixture providing >=2 selectable options before a
    real value-revert test (mirroring iter-14's HF revision test) can
    land.
-5. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
+4. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
    browser test for the Rescan Models button (`ocr-rescan-models-button`)
    or the Apply round-trip (`ocr-config-apply-button`). Rescan needs
    the backend model-scan path to be exercisable in the browser
@@ -77,9 +69,9 @@ queued by recent iterations. Items are ordered by leverage / ease.
 - Toolbar line scope: 14 tests in
   `tests/browser/test_toolbar_line_actions.py` (splits aside, see
   gap 1 / 2).
-- Toolbar paragraph scope: 12 tests in
-  `tests/browser/test_toolbar_paragraph_actions.py` (expand-bboxes
-  aside, see gap 3).
+- Toolbar paragraph scope: 13 tests in
+  `tests/browser/test_toolbar_paragraph_actions.py` (now includes
+  `paragraph-expand-bboxes-button` click coverage as of iter 18).
 - Toolbar page scope: 8 tests in
   `tests/browser/test_toolbar_page_actions.py`.
 - Word edit dialog: 27 tests in `tests/browser/test_word_edit_dialog.py`
@@ -97,14 +89,46 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ## Done Criteria
 
-- Gaps 1-3 above closed with dedicated click tests.
-- Gaps 4-5 either landed (once fixtures / backend paths are
+- Gaps 1-2 above closed with dedicated click tests.
+- Gaps 3-4 either landed (once fixtures / backend paths are
   available) or formally deferred to a separate plan.
 - `make test-browser` continues to pass reliably with `pytest -n auto`.
 
 ---
 
 ## Previously Completed Next Steps
+
+### Toolbar Paragraph Scope — Expand BBoxes Button Coverage (Done)
+
+`paragraph-expand-bboxes-button` (`open_in_full` icon) is the
+paragraph-scope toolbar button that pads the selected paragraph's
+bounding boxes without running a full refine pass. It is wired to
+`_handle_expand_bbox_selected_paragraphs` and shares the same enable
+invariant as Refine / Expand+Refine
+(`expand_paragraph_bboxes_callback is not None and >= 1 paragraph
+selected`), but had **zero** browser test coverage — it was missing
+from `ALL_PARA_BUTTONS` in
+`tests/browser/test_toolbar_paragraph_actions.py`, absent from the
+enabled-with-selection assertion list, missing from the tooltip
+table, and had no click test. Symmetric mirror of iter-16's
+line-scope chunk.
+
+This iteration:
+
+- Added `PARA_EXPAND_BBOXES` selector constant.
+- Added it to `ALL_PARA_BUTTONS` so
+  `test_paragraph_scope_buttons_disabled_without_selection` now covers it.
+- Added it to the enabled-with-selection assertion list in
+  `test_paragraph_scope_buttons_enabled_with_selection`.
+- Added a tooltip-row entry (`"Expand selected paragraph bboxes"`) to
+  `test_paragraph_scope_buttons_have_tooltips`.
+- Added a dedicated `test_paragraph_expand_bboxes` click test that
+  selects paragraph 0, clicks the button, and asserts a Quasar
+  notification fires (mirroring `test_paragraph_refine` /
+  `test_paragraph_expand_refine`).
+
+Pure additive — no source mutations. Full `make ci` green
+(909 passed).
 
 ### Toolbar Line Scope — Expand BBoxes Button Coverage (Done)
 

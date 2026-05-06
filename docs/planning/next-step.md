@@ -9,18 +9,18 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 43, after a concrete attempt at
-the long-deferred OCRConfigModal negative-path Apply browser test —
-see `docs/review-notes/2026-05-06-monkeypatch-wiring-attempt.md`).
-The negative-path Apply test is **infeasible without either an
+Last refreshed: 2026-05-06 (iter 44, after closing the HF-revision
+Cancel-revert *mechanism* unit-test gap surfaced in iter 33). The
+negative-path Apply test remains **infeasible without either an
 env-var production hook or restructuring the browser fixture to run
 in-process**; both options require human approval and are filed
-under "Blocked on human approval" below. Iter 33's other two queued
-candidates (atomic `apply_ocr_config` command, HF-revision
-Cancel-revert mechanism test) remain in scope; the iter-34 review
-also surfaces a track of pure test-infrastructure cleanup
-(centralizing duplicated `_select_word` / `_setup` /
-`_wait_for_notification` helpers into `tests/browser/helpers.py`).
+under "Blocked on human approval" below. Iter 33's remaining queued
+candidate (atomic `apply_ocr_config` command — production-code
+change, needs human approval) is filed under "Blocked on human
+approval"; the iter-34 review also surfaces a track of pure
+test-infrastructure cleanup (centralizing duplicated `_select_word`
+/ `_setup` / `_wait_for_notification` helpers into
+`tests/browser/helpers.py`).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -326,6 +326,55 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### OCRConfigModal — HF Revision Cancel-Revert Mechanism Unit Test (Iter 44, Done)
+
+Iter 14's browser test
+(`test_ocr_config_hf_revision_edit_reverts_on_cancel`) asserts the
+*result* of the Cancel/re-open revert: after typing a sentinel,
+clicking Cancel, and re-opening, the input value is back to the
+persisted value.  Iter 33's review queued a second test that pins
+the *mechanism*: the revert is driven by the next `_open` call, not
+by `_close`.  Restructuring the revert to fire on close (e.g.
+moving the reset into `_cancel`) would still pass the iter-14
+browser test but would silently break the user-facing contract that
+"your typed value persists in memory between Cancel and the very
+next manual modal-open".
+
+Iter 34 attempted this as a *browser* test and failed because
+Quasar removes child DOM on dialog close, so `input_value()`
+between Cancel and re-open times out.  Iter 43's review surfaced
+that *unit*-level (in-process) tests don't have that obstacle.
+
+Iter 44 added `tests/pd_ocr_labeler/views/header/test_ocr_config_modal.py`
+with 10 tests on `OCRConfigModal._open` / `_close`:
+
+- `TestOpenResetsHfRevisionInput` (2 tests): `_open` resets the HF
+  input from `app_state_model.hf_pinned_revision`, normalizing
+  `None` to empty string.
+- `TestCloseDoesNotResetHfInput` (2 tests): `_close` only closes
+  the dialog and does not mutate the HF input value or call any
+  app-state write paths.
+- `TestRevertSequenceIsOpenDriven` (1 test): full
+  open-dirty-close-reopen cycle, with an intermediate-state
+  assertion between close and reopen that the dirty value persists.
+  This is the load-bearing mechanism assertion.
+- `TestOpenWithoutHfInput` (1 test): `_open` tolerates
+  `_hf_revision_input is None` (defensive).
+- `test_open_propagates_various_persisted_revisions` (4 parametrized):
+  empty / version-string / commit-SHA / `None` persisted values
+  flow through `_open` correctly.
+
+Pattern bypasses `build()` (which needs a NiceGUI runtime) by
+constructing the modal directly and assigning `MagicMock()`
+stand-ins for `_dialog`, `_detection_model_select`,
+`_recognition_model_select`, `_hf_revision_input`.  Mirrors the
+established unit-test pattern from
+`tests/pd_ocr_labeler/views/header/test_project_load_controls.py`.
+Async tests work via the project's `asyncio_mode = "auto"` config.
+
+Pure additive — no source mutations.  Targeted file passes 10/10
+in 4.3 s.  Full `make ci` green on first try (940 passed, was 930).
 
 ### Save/Load Round-Trip — `italic` and Multi-Flag Combination (Iter 38, Done)
 

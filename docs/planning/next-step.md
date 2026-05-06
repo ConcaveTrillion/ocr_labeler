@@ -25,6 +25,34 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Edit Dialog Tag-Chip Area + Zoom Toggle (Done)
+
+The Word Edit Dialog tag-chip region's surrounding containers and the
+current-image zoom toggle now expose stable `data-testid` props:
+
+- `dialog-tag-chips-slot` — the always-present `ui.column()` slot
+  beneath the current-word image. Exists even when the active word
+  has no tags, so tests can `wait_for` / scope queries to it without
+  depending on chip presence.
+- `dialog-tag-chips-row` — the inner `ui.row()` rendered by
+  `_render_tag_chips()` only when at least one tag chip is present.
+  Useful for asserting the chips row materialized after an
+  apply-style / apply-component click.
+- `dialog-current-zoom-toggle` — the 1x/2x/5x/10x zoom selector for
+  the current-word interactive image (previously selectable only by
+  the visible label text "1x"/"2x"/etc.).
+
+Existing browser tests in `tests/browser/test_word_edit_dialog.py`
+that counted chips via the legacy `.word-edit-tag-chip` CSS-class
+selector (`test_dialog_apply_style`, `test_dialog_clear_component`)
+migrated to `[data-testid="word-edit-tag-chip"]`. New constants
+`DIALOG_TAG_CHIPS_SLOT`, `DIALOG_TAG_CHIPS_ROW`, `DIALOG_TAG_CHIP`,
+and `DIALOG_CURRENT_ZOOM_TOGGLE` added to the selectors block at the
+top of the file. Architecture doc
+`docs/architecture/ui-action-buttons.md` updated to document the new
+tag-chip-area and zoom-toggle testids alongside the existing chip
+clear button entry.
+
 ### Stable data-testid Backfill — Word Edit Dialog Selects, GT Input, and Nudge Buttons (Done)
 
 The Word Edit Dialog's three style/scope/component `ui.select` widgets,

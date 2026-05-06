@@ -805,7 +805,11 @@ class WordEditDialog:
             return
 
         with self._tag_chips_slot:
-            with ui.row().classes("items-center justify-start gap-1 full-width"):
+            with (
+                ui.row()
+                .classes("items-center justify-start gap-1 full-width")
+                .props('data-testid="dialog-tag-chips-row"')
+            ):
                 for item in current_tag_items:
                     with (
                         ui.row()
@@ -1433,7 +1437,10 @@ class WordEditDialog:
                         )
 
                         self._tag_chips_slot = (
-                            ui.column().classes("full-width").style("gap: 0;")
+                            ui.column()
+                            .classes("full-width")
+                            .style("gap: 0;")
+                            .props('data-testid="dialog-tag-chips-slot"')
                         )
 
                         self._render_current_interactive_image()
@@ -1446,7 +1453,7 @@ class WordEditDialog:
                             options={1: "1x", 2: "2x", 5: "5x", 10: "10x"},
                             value=2,
                             on_change=lambda event: self._set_current_zoom(event.value),
-                        ).props("dense")
+                        ).props('dense data-testid="dialog-current-zoom-toggle"')
                         ui.label(str(word_match.ocr_text or "[empty]")).classes(
                             "text-caption monospace"
                         )

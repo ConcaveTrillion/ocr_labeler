@@ -57,6 +57,14 @@ DIALOG_NUDGE_TOP_PLUS = '[data-testid="dialog-nudge-top-plus-button"]'
 DIALOG_NUDGE_BOTTOM_MINUS = '[data-testid="dialog-nudge-bottom-minus-button"]'
 DIALOG_NUDGE_BOTTOM_PLUS = '[data-testid="dialog-nudge-bottom-plus-button"]'
 
+# Dialog tag chip area
+DIALOG_TAG_CHIPS_SLOT = '[data-testid="dialog-tag-chips-slot"]'
+DIALOG_TAG_CHIPS_ROW = '[data-testid="dialog-tag-chips-row"]'
+DIALOG_TAG_CHIP = '[data-testid="word-edit-tag-chip"]'
+
+# Dialog zoom
+DIALOG_CURRENT_ZOOM_TOGGLE = '[data-testid="dialog-current-zoom-toggle"]'
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -300,14 +308,14 @@ def test_dialog_apply_style(browser_app_url: str, browser_page) -> None:
     _setup(page, browser_app_url)
     _open_dialog(page)
 
-    dialog_chips_before = page.locator(".word-edit-tag-chip").count()
+    dialog_chips_before = page.locator(DIALOG_TAG_CHIP).count()
 
     # Click Apply Style — a default style is preselected
     page.locator(DIALOG_APPLY_STYLE).click()
     page.wait_for_timeout(500)
 
     # A new tag chip should appear in the dialog
-    dialog_chips_after = page.locator(".word-edit-tag-chip").count()
+    dialog_chips_after = page.locator(DIALOG_TAG_CHIP).count()
     assert dialog_chips_after > dialog_chips_before
 
     # Close dialog and verify style indicator chip in main renderer
@@ -347,7 +355,7 @@ def test_dialog_clear_component(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(500)
 
     # Verify chip appeared
-    chip_count = page.locator(".word-edit-tag-chip").count()
+    chip_count = page.locator(DIALOG_TAG_CHIP).count()
     assert chip_count >= 1
 
     # Click Clear Component
@@ -355,7 +363,7 @@ def test_dialog_clear_component(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(500)
 
     # Component chip should be removed (count returns to before)
-    final_chip_count = page.locator(".word-edit-tag-chip").count()
+    final_chip_count = page.locator(DIALOG_TAG_CHIP).count()
     assert final_chip_count < chip_count
 
     # Close dialog

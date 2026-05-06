@@ -248,6 +248,15 @@ inner `<input>` element.
 | --- | --- | --- | --- | --- |
 | 70 | `close` | `_clear_word_tag` | `word-edit-tag-clear-button` | Yes — click + chip count |
 
+The chip clear button lives inside a chip row tagged
+`word-edit-tag-chip`. The surrounding tag-chip container exposes
+`dialog-tag-chips-slot` (the always-rendered column slot) and, when at
+least one chip is present, an inner row tagged `dialog-tag-chips-row`.
+Browser tests use `[data-testid="word-edit-tag-chip"]` to count chips
+in lieu of the legacy `.word-edit-tag-chip` CSS-class selector. The
+zoom toggle above the current word image carries
+`dialog-current-zoom-toggle`.
+
 ### Merge / Split / Delete Operations
 
 | # | Label / Icon | Tooltip | Handler | Browser-Tested |

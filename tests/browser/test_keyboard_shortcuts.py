@@ -130,6 +130,64 @@ def test_enter_in_gt_input_commits(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(500)
 
 
+@pytest.mark.browser
+def test_enter_in_gt_input_unchanged_value_no_error(
+    browser_app_url: str, browser_page
+) -> None:
+    """Negative-branch coverage symmetric to ``test_enter_in_gt_input_commits``.
+
+    Iter-39's keyboard-shortcut review (ranked follow-up #5) called out the
+    missing unchanged-value case for the dialog GT input Enter handler. The
+    success-path test covers "fill new value + Enter -> value persists"; this
+    test pins the invariant for "Enter without editing":
+
+    - The as-opened GT value is preserved (no spurious mutation).
+    - No ``bg-negative`` or ``bg-warning`` Quasar notification fires (the
+      handler chain ``_commit_word_gt_input_change -> _handle_word_gt_edit``
+      only emits warnings on a missing callback / failed callback / raised
+      exception; an unchanged-value commit must remain silent).
+
+    A regression that made the unchanged commit short-circuit *but* surfaced
+    a stray notification, or that mutated the input value via an unintended
+    rerender, would fail this test while passing the existing success-path
+    test.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    edit_btn = page.locator('[data-testid="edit-word-button"]').first
+    edit_btn.click()
+    page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
+
+    dialog = page.locator(".q-dialog").last
+    gt_input = dialog.get_by_label("GT")
+    expect(gt_input).to_be_visible()
+
+    # Capture the as-opened GT value (could be empty or non-empty depending
+    # on the fixture word). We assert the same value persists, so the test
+    # works regardless of which word the dialog opened on.
+    original_value = gt_input.input_value()
+
+    gt_input.focus()
+    page.wait_for_timeout(100)
+    gt_input.press("Enter")
+    page.wait_for_timeout(500)
+
+    # Invariant 1: input value unchanged.
+    expect(gt_input).to_have_value(original_value)
+
+    # Invariant 2: no negative or warning notification surfaced. The success
+    # path of _handle_word_gt_edit is silent — only the missing-callback,
+    # failed-callback, and exception paths emit notifications, and none of
+    # those should trigger on an unchanged-value commit.
+    assert page.locator(".q-notification.bg-negative").count() == 0
+    assert page.locator(".q-notification.bg-warning").count() == 0
+
+    # Clean up: close dialog without saving.
+    page.locator('[data-testid="dialog-close-button"]').click()
+    page.wait_for_timeout(500)
+
+
 # ---------------------------------------------------------------------------
 # Button 108: GT text input inline edit
 # ---------------------------------------------------------------------------

@@ -270,11 +270,19 @@ queued by recent iterations. Items are ordered by leverage / ease.
 - Header / load controls: covered across `test_home_page.py`,
   `test_project_loading.py`, `test_browser_smoke.py`,
   `test_page_actions.py` (8 tests).
-- Keyboard shortcuts: 6 tests in
-  `tests/browser/test_keyboard_shortcuts.py`. Iter 39's keyboard-shortcut
-  coverage review queued a Tab/Shift+Tab GT-input browser test as the
-  highest-leverage gap; iter 40 attempted that and surfaced a real
-  production bug instead — see "Real remaining gaps" item 9.
+- Keyboard shortcuts: 7 tests in
+  `tests/browser/test_keyboard_shortcuts.py` (now includes
+  `test_enter_in_gt_input_unchanged_value_no_error` as of iter 41 —
+  closes iter-39's ranked-followup #5 by pinning the unchanged-value
+  branch of the dialog GT input Enter handler:
+  `_commit_word_gt_input_change` -> `_handle_word_gt_edit` always
+  fires the callback (no short-circuit), but the success path is
+  silent and emits no notification, so the test asserts both (a) the
+  input value is unchanged and (b) no `bg-negative` /  `bg-warning`
+  notification surfaces). Iter 39's keyboard-shortcut coverage review
+  queued a Tab/Shift+Tab GT-input browser test as the highest-leverage
+  gap; iter 40 attempted that and surfaced a real production bug
+  instead — see "Real remaining gaps" item 9.
 - Image tab controls: 11 tests in `tests/browser/test_image_tabs.py`
   (now includes `test_erase_pixels_button_enables_erase_mode` as of
   iter 35 — closes the previously-untested "Erase Pixels" toolbar

@@ -260,6 +260,32 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ## Previously Completed Next Steps
 
+### Save/Load Round-Trip — `right_footnote` and Legacy `footnote` Migration (Iter 36, Done)
+
+The `TestWordAttributesRoundTrip` class in
+`tests/pd_ocr_labeler/operations/persistence/test_save_load_round_trip.py`
+covered the `validated` and `text_style_labels=["italics"]` paths, but
+left the four `_collect_word_attributes` style flags (`small_caps`,
+`blackletter`, `left_footnote`, `right_footnote`) and the documented
+legacy `"footnote"` → `right_footnote` migration in
+`_apply_word_attributes_to_page` without dedicated round-trip
+assertions. Iter 36 added two tests:
+
+- `test_right_footnote_label_round_trip` — mirrors the validated
+  round-trip but with `right_footnote`, exercising the
+  `_collect_word_attributes` → `_apply_word_attributes_to_page` save/load
+  path for the canonical key.
+- `test_legacy_footnote_key_migrates_to_right_footnote` — saves a
+  page, mutates the saved JSON envelope to inject the legacy single
+  `"footnote": True` flag (no left/right split), then loads and asserts
+  the loaded word carries `right_footnote` but not `left_footnote`.
+  This pins the migration in place: future regressions to the
+  `if not right_footnote and bool(attributes.get("footnote", False))`
+  fallback in `_apply_word_attributes_to_page` will fail this test.
+
+Both tests follow the existing fixture pattern (`project_dir` /
+`save_dir` from `tmp_path`) so xdist parallelism is safe.
+
 ### OCRConfigModal — Apply With HF Revision Edit Round-Trip (Iter 27, Done)
 
 Iter 25 closed the no-edit Apply path; iter 27 closes the

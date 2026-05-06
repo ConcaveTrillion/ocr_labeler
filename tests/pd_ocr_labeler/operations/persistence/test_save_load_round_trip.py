@@ -269,6 +269,76 @@ class TestWordAttributesRoundTrip:
         if labels is not None:
             assert "italics" in labels
 
+    def test_right_footnote_label_round_trip(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """`right_footnote` word_label survives save -> reload via word_attributes sidecar.
+
+        Companion to ``test_validated_word_attribute_round_trip``; covers a
+        style attribute on the same persistence path that did not previously
+        have its own round-trip assertion.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + ["right_footnote"]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        assert "right_footnote" in list(loaded_words[0].word_labels)
+        # Second word should not be tagged.
+        assert "right_footnote" not in list(loaded_words[1].word_labels)
+
+    def test_legacy_footnote_key_migrates_to_right_footnote(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """Legacy ``"footnote"`` word_attribute key migrates to ``right_footnote`` on load.
+
+        Older saved JSON files carry a ``footnote`` boolean (pre-split into
+        left/right). ``_apply_word_attributes_to_page`` translates that to
+        ``right_footnote`` when no explicit ``right_footnote`` key is set.
+        This test simulates a legacy save by mutating the saved JSON before
+        loading, verifying the migration end-to-end.
+        """
+        import json
+
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        # Mutate the saved envelope to simulate a legacy ``footnote`` key.
+        json_path = save_dir / f"{project_dir.name}_001.json"
+        envelope = json.loads(json_path.read_text(encoding="utf-8"))
+        payload = envelope.setdefault("payload", {})
+        payload["word_attributes"] = {
+            "0:0": {
+                "italic": False,
+                "small_caps": False,
+                "blackletter": False,
+                # Legacy single ``footnote`` flag (no left/right split).
+                "footnote": True,
+            }
+        }
+        json_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_word = list(loaded_model.page.lines[0].words)[0]
+        labels = list(loaded_word.word_labels)
+        assert "right_footnote" in labels
+        assert "left_footnote" not in labels
+
 
 # ------------------------------------------------------------------
 # Original page round-trip

@@ -9,9 +9,10 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 30, after landing the
-in-dialog Apply-Scope dropdown-drive browser test — closes the
-dialog dropdown trio (style → component → scope)).
+Last refreshed: 2026-05-06 (iter 31, after fixing the
+pre-existing `test_load_button_prevents_multiple_clicks` flake by
+removing the racy transient `should_see("Loading projectID...")`
+assertion — see iter 31 entry below).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -33,7 +34,26 @@ queued by recent iterations. Items are ordered by leverage / ease.
    fixture; iter 15 noted this is non-trivial. The sibling Apply path
    is now fully closed: iter 25 covered the no-edit round-trip smoke,
    iter 27 covered Apply-with-HF-revision-edit + persist-on-re-open.
-3. ~~**`line-extract-from-selection-button` click test**~~ — **CLOSED
+3. **`run.io_bound` racy None return for ground-truth load** —
+   surfaced in iter 31 while diagnosing the
+   `test_load_button_prevents_multiple_clicks` flake. Under heavy
+   `pytest -n auto` load,
+   `await run.io_bound(load_ground_truth_from_directory, directory)`
+   occasionally returns None instead of the expected `dict[str, str]`,
+   triggering a `'NoneType' has no len()` warning on the success-path
+   `logger.info("loaded %d entries", len(norm), ...)` line in
+   `pd_ocr_labeler/state/project_state.py:1667`. The exception is
+   caught and the load falls back to `{}`, so projects still load —
+   but with no ground truth, page-load takes longer (a downstream OCR
+   path runs without GT shortcuts). Suspect a NiceGUI/threading race
+   in `run.io_bound` when many parallel xdist workers contend for the
+   thread pool, OR a missing return statement in some early-exit
+   branch of `_load_ground_truth_from_manifest` /
+   `load_ground_truth_from_directory`. Investigation queued; not a
+   coverage gap, but the right fix moves the test stability work back
+   to "no need for retries=100".
+
+4. ~~**`line-extract-from-selection-button` click test**~~ — **CLOSED
    in iter 21 as duplicate.** Iter 20's prompt mis-named the button:
    the actual `extract_line_from_selection_button` lives in the
    word-scope toolbar with testid `word-form-line-button`, and is
@@ -46,14 +66,14 @@ queued by recent iterations. Items are ordered by leverage / ease.
    that review (multi-word and cross-line topologies for
    split-by-selection and extract-line) are queued under "Real
    remaining gaps" below as items 4-6.
-4. ~~**Cross-line `split-by-selection` click test**~~ — **CLOSED in
+5. ~~**Cross-line `split-by-selection` click test**~~ — **CLOSED in
    iter 22.** New `test_line_split_by_selection_cross_line` selects
    word 0 on line 0 and word 0 on line 1, clicks
    `line-split-by-selection-button`, and asserts `LINE_DELETE_CARD`
    delta of `+2`. The cross-line word index is computed by counting
    word-checkboxes that precede the second `line-delete-button` in
    DOM order via a small `page.evaluate` JS helper.
-5. ~~**Cross-line `extract-line-from-selection` ("form-line") click
+6. ~~**Cross-line `extract-line-from-selection` ("form-line") click
    test, +1 delta**~~ — **PIVOTED in iter 23.** Pre-flight passed
    (testid exists at `word-form-line-button`, button enables on
    cross-line selection), but the predicted `+1` delta from iter-21's
@@ -77,7 +97,7 @@ queued by recent iterations. Items are ordered by leverage / ease.
    gated on root-cause analysis (single Python-side unit test
    reproducing the multi-line shape, with `print()` of pre/post line
    layouts, would resolve it in one shot).
-6. ~~**Multi-word same-line `split-by-selection` non-contiguous click
+7. ~~**Multi-word same-line `split-by-selection` non-contiguous click
    test**~~ — **CLOSED in iter 24.** New
    `test_line_split_by_selection_non_contiguous` selects words 0 and 2
    of line 0 (skipping word 1), clicks
@@ -87,7 +107,7 @@ queued by recent iterations. Items are ordered by leverage / ease.
    and unselected `[w_1]` partitions for net one extra line card. Test
    uses the same `page.evaluate` line-0-word-count helper as iter 22's
    cross-line test to sanity-check the fixture has >=3 words on line 0.
-7. **Investigate iter-23's `+2` discrepancy on
+8. **Investigate iter-23's `+2` discrepancy on
    `word-form-line-button` cross-line selection.** Add a
    `pd-book-tools` unit test that mirrors the live fixture's layout
    exactly (line 0 = 3 words, line 1 = 3 words, both in same
@@ -150,9 +170,33 @@ queued by recent iterations. Items are ordered by leverage / ease.
   dropdown selection — no separate Apply Scope button.  Closes the
   dialog dropdown trio: style (iter 28), component (iter 29), scope
   (this iter).
-- **`test_load_button_prevents_multiple_clicks` flake** — known
-  pre-existing flake; retry up to 3x in CI. Not a coverage gap, but
-  worth fixing or marking `flaky` once we have time.
+- ~~**`test_load_button_prevents_multiple_clicks` flake**~~ —
+  **MITIGATED in iter 31.** Reproduced reliably (3 fails in 6
+  `make test`/`make ci` invocations during the iter). Diagnosis
+  walked through three failure modes as the fix was iterated:
+  1. First fix removed `should_see("Loading projectID...")`
+     hypothesizing the transient toast was the race target. New
+     run failed on `should_see("Loaded projectID...", retries=30)`.
+  2. Second fix dropped the `Loaded` toast assertion too,
+     keeping `Prev`/`Next` DOM checks. New run failed on
+     `should_see("Prev", retries=30)` — the rendered DOM at the
+     end of the polling window DID show the Prev button visible,
+     suggesting the project finished loading just AFTER the test
+     gave up.
+  3. The teardown log surfaced the actual underlying root cause:
+     `load_ground_truth_map: failed for projectID...: object of
+     type 'NoneType' has no len()`. Under heavy `pytest -n auto`
+     load, `run.io_bound(load_ground_truth_from_directory, ...)`
+     occasionally returns None — triggering an unrelated
+     exception in the success-path `len(norm)` log line, which
+     gets caught and treated as a failed-load. The project
+     ultimately loads via a fallback path (Prev/Next ARE in the
+     DOM eventually), but it takes longer than 3 seconds.
+  Final iter-31 fix: bump `should_see` retries to 100 (10 sec)
+  on the Prev/Next checks. This is a defensive mitigation; the
+  underlying `run.io_bound` returning None is a deeper bug that
+  needs separate investigation (queued below as a new item).
+  Verified 2/2 clean `make ci` runs post-fix.
 
 ### Already well covered (was claimed 0% or 11%)
 

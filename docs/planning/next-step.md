@@ -260,6 +260,31 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ## Previously Completed Next Steps
 
+### Save/Load Round-Trip — `small_caps`, `blackletter`, `left_footnote` (Iter 37, Done)
+
+Iter 36 closed the `right_footnote` and legacy-`footnote`-migration
+gaps but left the three remaining `_collect_word_attributes` style
+flags without dedicated round-trip assertions. Iter 37 closes that
+remaining symmetric gap by adding three tests in the same class
+(`TestWordAttributesRoundTrip` in
+`tests/pd_ocr_labeler/operations/persistence/test_save_load_round_trip.py`):
+
+- `test_left_footnote_label_round_trip` — mirror of the iter-36
+  `right_footnote` test for the left-side footnote flag. Also asserts
+  `right_footnote` does not leak in on the same word, guarding against
+  the two flags being conflated by future refactors.
+- `test_small_caps_label_round_trip` — round-trip of `"small_caps"`
+  through `_collect_word_attributes` JSON key → `word_labels`.
+- `test_blackletter_label_round_trip` — round-trip of `"blackletter"`
+  through the same path; closes the last untested member of the
+  italic / small_caps / blackletter / left_footnote / right_footnote /
+  validated set.
+
+All three reuse the iter-36 fixture pattern (`project_dir` /
+`save_dir` from `tmp_path`) so xdist parallelism stays safe. The
+existing test file uses non-parametrized methods, so iter-37
+mirrored that style instead of introducing `@pytest.mark.parametrize`.
+
 ### Save/Load Round-Trip — `right_footnote` and Legacy `footnote` Migration (Iter 36, Done)
 
 The `TestWordAttributesRoundTrip` class in

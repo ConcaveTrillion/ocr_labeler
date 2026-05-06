@@ -296,6 +296,87 @@ class TestWordAttributesRoundTrip:
         # Second word should not be tagged.
         assert "right_footnote" not in list(loaded_words[1].word_labels)
 
+    def test_left_footnote_label_round_trip(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """`left_footnote` word_label survives save -> reload via word_attributes sidecar.
+
+        Mirror of ``test_right_footnote_label_round_trip`` for the left-side
+        footnote flag. Both flags share the same persistence machinery in
+        ``_collect_word_attributes`` / ``_apply_word_attributes_to_page``;
+        this guards against asymmetric breakage between the two.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + ["left_footnote"]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        assert "left_footnote" in list(loaded_words[0].word_labels)
+        # Second word should not be tagged; right_footnote should not leak in.
+        assert "left_footnote" not in list(loaded_words[1].word_labels)
+        assert "right_footnote" not in list(loaded_words[0].word_labels)
+
+    def test_small_caps_label_round_trip(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """`small_caps` word_label survives save -> reload via word_attributes sidecar.
+
+        Companion to the footnote round-trip tests; ``small_caps`` flows
+        through the same ``_collect_word_attributes`` JSON key
+        (``"small_caps": true``) and is restored to ``word_labels`` on load.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + ["small_caps"]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        assert "small_caps" in list(loaded_words[0].word_labels)
+        assert "small_caps" not in list(loaded_words[1].word_labels)
+
+    def test_blackletter_label_round_trip(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """`blackletter` word_label survives save -> reload via word_attributes sidecar.
+
+        Closes the last untested style flag in the
+        italic / small_caps / blackletter / left_footnote / right_footnote /
+        validated set produced by ``_collect_word_attributes``.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + ["blackletter"]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        assert "blackletter" in list(loaded_words[0].word_labels)
+        assert "blackletter" not in list(loaded_words[1].word_labels)
+
     def test_legacy_footnote_key_migrates_to_right_footnote(
         self, project_dir: Path, save_dir: Path
     ) -> None:

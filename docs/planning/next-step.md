@@ -25,6 +25,32 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### OCR Configuration Modal — First Browser Tests (Done)
+
+The OCR Configuration modal had a full `data-testid` contract since
+`eb2a41f` but zero browser regression coverage. A new test file
+`tests/browser/test_ocr_config_modal.py` adds three smoke tests using
+the existing testid selectors:
+
+- `test_ocr_config_trigger_button_present` — asserts the `tune` icon
+  trigger is visible in the header at app start (no project loaded
+  required, since the modal is built alongside other always-mounted
+  ProjectLoadControls children).
+- `test_ocr_config_modal_opens_on_trigger_click` — clicks the trigger
+  and asserts the load-bearing dialog children (`ocr-config-cancel`,
+  `ocr-config-apply`, `ocr-rescan-models`, `ocr-hf-revision-input`)
+  become visible.
+- `test_ocr_config_cancel_closes_modal` — clicks Cancel and asserts
+  the same dialog children become hidden.
+
+Visibility assertions use the q-dialog's testid'd descendants (the
+Cancel / Apply buttons rendered inside the dialog body) rather than
+the dialog wrapper itself, mirroring the pattern from
+`tests/browser/test_source_folder_dialog.py`. Out of scope for this
+chunk and queued for follow-up: Rescan Models (needs backend
+model-scan path), Apply (needs HF / local model availability + state
+mutation), and editing the HF revision input or model selects.
+
 ### Stable data-testid Backfill — Word Match Renderer Paragraph Label Button (Done)
 
 The paragraph label button rendered next to the chevron expander in

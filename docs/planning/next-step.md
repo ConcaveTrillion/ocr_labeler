@@ -9,16 +9,18 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 34, after a deep review of the
-browser-test selection helpers — see
-`docs/review-notes/2026-05-06-browser-test-selection-helpers.md`).
-Iter 33's queued top-3 (atomic `apply_ocr_config` command,
-negative-path Apply browser test, HF-revision Cancel-revert
-mechanism test) are still the next coverage candidates; the iter-34
-review surfaces a fourth, lower-stakes track of pure
-test-infrastructure cleanup (centralizing the duplicated
-per-file `_select_word` / `_setup` / `_wait_for_notification`
-helpers into `tests/browser/helpers.py`).
+Last refreshed: 2026-05-06 (iter 43, after a concrete attempt at
+the long-deferred OCRConfigModal negative-path Apply browser test —
+see `docs/review-notes/2026-05-06-monkeypatch-wiring-attempt.md`).
+The negative-path Apply test is **infeasible without either an
+env-var production hook or restructuring the browser fixture to run
+in-process**; both options require human approval and are filed
+under "Blocked on human approval" below. Iter 33's other two queued
+candidates (atomic `apply_ocr_config` command, HF-revision
+Cancel-revert mechanism test) remain in scope; the iter-34 review
+also surfaces a track of pure test-infrastructure cleanup
+(centralizing duplicated `_select_word` / `_setup` /
+`_wait_for_notification` helpers into `tests/browser/helpers.py`).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -289,7 +291,27 @@ queued by recent iterations. Items are ordered by leverage / ease.
   button by asserting clicking it surfaces the
   "Erase mode enabled: drag a rectangle to erase pixels" info
   notification and produces no `bg-negative` notification).
-- OCRConfigModal: 7 tests in `tests/browser/test_ocr_config_modal.py`.
+- OCRConfigModal: 8 tests in `tests/browser/test_ocr_config_modal.py`.
+
+### Blocked on human approval
+
+- **OCRConfigModal negative-path Apply browser test** — iter 43
+  attempted the long-deferred (7 iterations now) test that exercises
+  the False branch of `_apply_selection`. **Infeasible** under the
+  overnight constraint of "no production-code changes". The browser
+  fixture (`tests/browser/conftest.py:42-126`) starts NiceGUI as a
+  separate `subprocess.Popen` invocation, so in-process pytest
+  monkeypatching cannot reach the subprocess's `AppStateViewModel`
+  class. Three other approaches (driving the select to an out-of-
+  options value, pre-corrupting `selected_ocr_*_model_key` via
+  config seeding, adding an HTTP test endpoint) all dead-ended for
+  reasons documented in
+  `docs/review-notes/2026-05-06-monkeypatch-wiring-attempt.md`.
+  Two viable paths require human approval: (a) a small env-var
+  production hook (`PD_OCR_LABELER_TEST_FORCE_APPLY_FAILURE=1`)
+  threaded into the browser fixture, or (b) a new in-process
+  modal-unit-test fixture pattern that bypasses the browser
+  entirely. **Removed from the rolling top-3 candidate queue.**
 
 ## Done Criteria
 

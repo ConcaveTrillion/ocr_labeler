@@ -377,6 +377,86 @@ class TestWordAttributesRoundTrip:
         assert "blackletter" in list(loaded_words[0].word_labels)
         assert "blackletter" not in list(loaded_words[1].word_labels)
 
+    def test_italic_label_round_trip(self, project_dir: Path, save_dir: Path) -> None:
+        """`italic` word_label survives save -> reload via word_attributes sidecar.
+
+        Distinct from ``test_style_labels_round_trip`` above: that test
+        exercises the parallel ``text_style_labels`` system (plural
+        ``"italics"`` key on ``Word.text_style_labels``), while this one
+        exercises the ``_collect_word_attributes`` JSON ``"italic"`` key
+        sourced from / restored to ``word_labels``. The two systems share
+        no state — see ``WORD_LABEL_ITALIC = "italic"`` in
+        ``pd_ocr_labeler.constants`` and the per-flag branches in
+        ``_collect_word_attributes`` / ``_apply_word_attributes_to_page``.
+        Closes the last untested round-trip in the italic / small_caps /
+        blackletter / left_footnote / right_footnote / validated set.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + ["italic"]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        assert "italic" in list(loaded_words[0].word_labels)
+        assert "italic" not in list(loaded_words[1].word_labels)
+
+    def test_multiple_style_flags_round_trip_together(
+        self, project_dir: Path, save_dir: Path
+    ) -> None:
+        """Multiple style flags set on one word all survive a save -> reload.
+
+        Guards against ordering / discard interactions in
+        ``_apply_word_attributes_to_page``: each per-flag block follows an
+        ``else: labels_set.discard(...)`` arm, so a regression that
+        accidentally clears earlier-applied flags (e.g. by reordering or
+        sharing a single shared ``labels_set`` across two passes) would
+        leave the saved word with only the last-applied flag. By tagging
+        word 0 with three independent flags (italic + small_caps +
+        right_footnote) — drawn from disjoint per-flag branches in
+        ``_collect_word_attributes`` — and asserting all three reappear,
+        this test pins the multi-flag persistence contract.
+        """
+        page = _make_page()
+        page.image_path = str(project_dir / "001.png")
+
+        w = list(page.lines[0].words)[0]
+        w.word_labels = list(w.word_labels) + [
+            "italic",
+            "small_caps",
+            "right_footnote",
+        ]
+
+        ops = PageOperations()
+        model = PageModel(page=page, page_source="ocr", index=0)
+        ops.save_page(model, project_dir, save_directory=save_dir)
+
+        loaded_model, _ = ops.load_page_model(
+            page_number=1, project_root=project_dir, save_directory=save_dir
+        )
+        loaded_words = list(loaded_model.page.lines[0].words)
+        loaded_labels = list(loaded_words[0].word_labels)
+        # All three flags must survive together.
+        assert "italic" in loaded_labels
+        assert "small_caps" in loaded_labels
+        assert "right_footnote" in loaded_labels
+        # Untouched flags must not leak in.
+        assert "blackletter" not in loaded_labels
+        assert "left_footnote" not in loaded_labels
+        assert "validated" not in loaded_labels
+        # The companion word must remain untouched on every flag.
+        other_labels = list(loaded_words[1].word_labels)
+        assert "italic" not in other_labels
+        assert "small_caps" not in other_labels
+        assert "right_footnote" not in other_labels
+
     def test_legacy_footnote_key_migrates_to_right_footnote(
         self, project_dir: Path, save_dir: Path
     ) -> None:

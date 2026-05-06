@@ -260,6 +260,41 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ## Previously Completed Next Steps
 
+### Save/Load Round-Trip — `italic` and Multi-Flag Combination (Iter 38, Done)
+
+Iters 36-37 closed the per-flag round-trip gaps for five of the six
+style flags produced by ``_collect_word_attributes``
+(``right_footnote``, legacy-``footnote`` migration, ``left_footnote``,
+``small_caps``, ``blackletter``, plus the existing ``validated`` test).
+Iter 38 closes the last remaining single-flag gap and adds a
+multi-flag combination test:
+
+- `test_italic_label_round_trip` — exercises the
+  ``_collect_word_attributes`` ``"italic"`` JSON key sourced from /
+  restored to ``word_labels`` (``WORD_LABEL_ITALIC = "italic"`` in
+  ``pd_ocr_labeler.constants``). Distinct from the existing
+  ``test_style_labels_round_trip``, which exercises the parallel
+  ``text_style_labels`` system (plural ``"italics"`` key on
+  ``Word.text_style_labels``); the two systems share no state.
+- `test_multiple_style_flags_round_trip_together` — sets three
+  independent flags on word 0 (``italic`` + ``small_caps`` +
+  ``right_footnote``) and asserts all three reappear after save -> reload.
+  Guards against ordering / discard interactions in
+  ``_apply_word_attributes_to_page`` (each per-flag block has an
+  ``else: labels_set.discard(...)`` arm — a regression that
+  accidentally clears earlier-applied flags would leave only the
+  last-applied flag). Also asserts untouched flags do not leak in and
+  the companion word stays clean on every flag.
+
+Both tests reuse the iter-36 fixture pattern (``project_dir`` /
+``save_dir`` from ``tmp_path``) so xdist parallelism stays safe. Pure
+additive — no source mutations. Targeted file passes 19/19 in 4.5 s
+(was 17). Full `make ci` green on first try (928 passed, was 926).
+The italic-flag pre-flight confirmed the per-flag JSON key (``italic``,
+not ``italics``), and the apply path adds back ``WORD_LABEL_ITALIC =
+"italic"`` to ``word_labels`` — symmetric round-trip with the iter-36/37
+test pattern.
+
 ### Save/Load Round-Trip — `small_caps`, `blackletter`, `left_footnote` (Iter 37, Done)
 
 Iter 36 closed the `right_footnote` and legacy-`footnote`-migration

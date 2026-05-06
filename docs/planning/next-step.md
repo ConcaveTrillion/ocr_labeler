@@ -25,6 +25,31 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Match Renderer Tag-Chip Row (Done)
+
+The renderer's per-word tag chip area in `word_match_renderer.py`
+(`_create_ocr_text_cell`, ~lines 1005-1051) now exposes a stable
+`data-testid` on the wrapping `ui.row()` that materializes only when
+at least one chip is present:
+
+- `word-tag-chips-row` — the outer row container, mirroring the
+  dialog-side `dialog-tag-chips-row` contract added in the prior
+  iteration. Useful for asserting that the chip-row materialized
+  immediately after a toolbar Apply Style / Apply Component click
+  (no view switch needed) and for scoping chip-count assertions to
+  one specific word's row.
+
+A new browser regression test
+`tests/browser/test_word_match.py::test_word_tag_chips_row_materializes_with_chip`
+asserts the chip-row container appears with the chip nested inside
+it. Two new selector constants `WORD_TAG_CHIPS_ROW` and
+`WORD_TAG_CHIP` were added to the selectors block at the top of
+`tests/browser/test_word_match.py`. Architecture doc
+`docs/architecture/ui-action-buttons.md` updated with a paragraph
+beneath the per-word Tag Chip Clear Buttons table to record the new
+testid alongside the existing `word-tag-chip` and
+`word-tag-clear-button` entries.
+
 ### Stable data-testid Backfill — Word Edit Dialog Tag-Chip Area + Zoom Toggle (Done)
 
 The Word Edit Dialog tag-chip region's surrounding containers and the

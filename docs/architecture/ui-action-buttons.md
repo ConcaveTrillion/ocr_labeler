@@ -215,6 +215,12 @@ operation is not applicable at that scope.
 | --- | --- | --- | --- | --- |
 | 64 | `close` | `_clear_word_tag` | `word-tag-clear-button` | No |
 
+The renderer's per-word tag chips are wrapped in a `ui.row()` that
+materializes only when at least one chip is present, tagged
+`word-tag-chips-row`. Individual chips inside it carry
+`word-tag-chip`. This mirrors the dialog-side `dialog-tag-chips-row`
+contract used by the word edit dialog.
+
 ---
 
 ## 6. Word Edit Dialog

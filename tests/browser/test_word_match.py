@@ -14,6 +14,8 @@ from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 # ---------------------------------------------------------------------------
 
 WORD_VALIDATE_BUTTON = '[data-testid="word-validate-button"]'
+WORD_TAG_CHIPS_ROW = '[data-testid="word-tag-chips-row"]'
+WORD_TAG_CHIP = '[data-testid="word-tag-chip"]'
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +328,36 @@ def test_apply_style_shows_tag_chip_immediately(
     chip = page.locator('[data-testid="word-tag-chip"]').first
     expect(chip).to_be_visible(timeout=5_000)
     expect(chip).to_contain_text("Italics")
+
+
+@pytest.mark.browser
+def test_word_tag_chips_row_materializes_with_chip(
+    browser_app_url: str, browser_page
+) -> None:
+    """Apply style; verify the chip-row container materializes and scopes the chip."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Initially no chips and no chip-row container.
+    expect(page.locator(WORD_TAG_CHIP)).to_have_count(0)
+    expect(page.locator(WORD_TAG_CHIPS_ROW)).to_have_count(0)
+
+    # Select the first word and apply Italics via the toolbar.
+    _select_first_word(page)
+    page.get_by_label("Style").click()
+    page.get_by_role("option", name="Italics").first.click()
+    page.wait_for_timeout(300)
+    apply_button = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_button).to_be_enabled()
+    apply_button.click()
+    page.wait_for_timeout(1000)
+
+    # Chip-row container should now exist and contain at least one chip.
+    chip_row = page.locator(WORD_TAG_CHIPS_ROW).first
+    expect(chip_row).to_be_visible(timeout=5_000)
+    chip_in_row = chip_row.locator(WORD_TAG_CHIP).first
+    expect(chip_in_row).to_be_visible()
+    expect(chip_in_row).to_contain_text("Italics")
 
 
 # ---------------------------------------------------------------------------

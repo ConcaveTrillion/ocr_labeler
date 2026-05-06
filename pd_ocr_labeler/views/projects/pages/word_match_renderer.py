@@ -1004,7 +1004,12 @@ class WordMatchRenderer:
 
         tag_items = self._view._word_display_tag_items(word_match)
         if tag_items:
-            with ui.row().classes("items-center gap-1").style("flex-wrap: wrap;"):
+            with (
+                ui.row()
+                .classes("items-center gap-1")
+                .style("flex-wrap: wrap;")
+                .props('data-testid="word-tag-chips-row"')
+            ):
                 for item in tag_items:
                     with (
                         ui.row()

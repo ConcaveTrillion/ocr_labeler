@@ -65,6 +65,11 @@ DIALOG_TAG_CHIP = '[data-testid="word-edit-tag-chip"]'
 # Dialog zoom
 DIALOG_CURRENT_ZOOM_TOGGLE = '[data-testid="dialog-current-zoom-toggle"]'
 
+# Dialog Previous / Current / Next preview columns
+DIALOG_PREVIOUS_PREVIEW_COLUMN = '[data-testid="dialog-previous-preview-column"]'
+DIALOG_CURRENT_PREVIEW_COLUMN = '[data-testid="dialog-current-preview-column"]'
+DIALOG_NEXT_PREVIEW_COLUMN = '[data-testid="dialog-next-preview-column"]'
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -784,5 +789,41 @@ def test_dialog_apply_and_refine_nudges(browser_app_url: str, browser_page) -> N
     # After apply, pending label resets
     pending_after = page.locator("text=/Pending/").first.text_content() or ""
     assert "L:0" in pending_after
+
+    page.locator(DIALOG_CLOSE).click()
+
+
+# ---------------------------------------------------------------------------
+# Preview columns (Previous / Current / Next)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_dialog_preview_columns_present(browser_app_url: str, browser_page) -> None:
+    """Previous, Current, and Next preview columns are addressable by testid."""
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_dialog(page)
+
+    dialog = page.locator(".q-dialog").last
+    expect(dialog).to_be_visible()
+
+    # All three preview-column wrappers should be present and visible.
+    previous_col = dialog.locator(DIALOG_PREVIOUS_PREVIEW_COLUMN)
+    current_col = dialog.locator(DIALOG_CURRENT_PREVIEW_COLUMN)
+    next_col = dialog.locator(DIALOG_NEXT_PREVIEW_COLUMN)
+
+    expect(previous_col).to_be_visible()
+    expect(current_col).to_be_visible()
+    expect(next_col).to_be_visible()
+
+    # Each column carries the matching caption label.
+    expect(previous_col.locator("text=Previous")).to_be_visible()
+    expect(current_col.locator("text=Current")).to_be_visible()
+    expect(next_col.locator("text=Next")).to_be_visible()
+
+    # The Current column must contain the GT input (sanity-check that the
+    # right wrapper is tagged, not just any column).
+    expect(current_col.locator(DIALOG_GT_INPUT)).to_be_visible()
 
     page.locator(DIALOG_CLOSE).click()

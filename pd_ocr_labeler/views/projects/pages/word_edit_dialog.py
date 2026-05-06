@@ -688,7 +688,13 @@ class WordEditDialog:
         preview_word_index: int,
         preview_word_match: Any,
     ) -> None:
-        with ui.column().classes("items-center").style("min-width: 10rem; gap: 2px;"):
+        testid = f"dialog-{title.lower()}-preview-column"
+        with (
+            ui.column()
+            .classes("items-center")
+            .style("min-width: 10rem; gap: 2px;")
+            .props(f'data-testid="{testid}"')
+        ):
             ui.label(title).classes("text-caption")
             if preview_word_match is None:
                 ui.label("No word").classes("text-grey-6 text-caption")
@@ -1425,6 +1431,7 @@ class WordEditDialog:
                         ui.column()
                         .classes("items-center")
                         .style("min-width: 10rem; gap: 2px;")
+                        .props('data-testid="dialog-current-preview-column"')
                     ):
                         ui.label("Current").classes("text-caption")
                         self._current_image_slot = ui.column().classes("items-center")

@@ -25,6 +25,38 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Edit Dialog Preview Columns (Done)
+
+The three side-by-side preview columns at the top of the Word Edit
+Dialog (Previous / Current / Next word) now expose stable
+`data-testid` props on their wrapping `ui.column()` containers:
+
+- `dialog-previous-preview-column` — wraps the Previous-word preview
+  (rendered by `_render_word_preview`); always present, displays
+  "No word" caption when the active word is the first in its line.
+- `dialog-current-preview-column` — wraps the Current-word interactive
+  image, GT input, zoom toggle, OCR text label, and tag-chip slot.
+  Useful for scoping queries that should target the active word's
+  controls without matching the Previous / Next columns.
+- `dialog-next-preview-column` — wraps the Next-word preview (also via
+  `_render_word_preview`); behaves symmetrically with the Previous
+  column.
+
+The shared `_render_word_preview` helper now derives its testid from
+the title (`dialog-{title.lower()}-preview-column`), so both Previous
+and Next columns get tagged from the same call site. A new browser
+regression test
+`tests/browser/test_word_edit_dialog.py::test_dialog_preview_columns_present`
+asserts all three column wrappers materialize with their expected
+caption labels and that the Current column scopes to the GT input
+(sanity-check that the right wrapper is tagged). New selector
+constants `DIALOG_PREVIOUS_PREVIEW_COLUMN`,
+`DIALOG_CURRENT_PREVIEW_COLUMN`, and `DIALOG_NEXT_PREVIEW_COLUMN`
+added to the selectors block at the top of the file. Architecture doc
+`docs/architecture/ui-action-buttons.md` updated with a paragraph
+beneath the existing tag-chip / zoom-toggle prose to record the new
+preview-column testids.
+
 ### Stable data-testid Backfill — Word Match Renderer Tag-Chip Row (Done)
 
 The renderer's per-word tag chip area in `word_match_renderer.py`

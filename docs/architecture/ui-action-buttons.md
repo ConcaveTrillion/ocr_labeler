@@ -263,6 +263,14 @@ in lieu of the legacy `.word-edit-tag-chip` CSS-class selector. The
 zoom toggle above the current word image carries
 `dialog-current-zoom-toggle`.
 
+The three side-by-side preview columns at the top of the dialog
+(Previous / Current / Next word) carry stable `data-testid` props on
+their wrapping `ui.column()` containers:
+`dialog-previous-preview-column`, `dialog-current-preview-column`, and
+`dialog-next-preview-column`. The "Current" column always renders, while
+the Previous / Next columns render with a "No word" placeholder caption
+when the active word is the first / last in its line.
+
 ### Merge / Split / Delete Operations
 
 | # | Label / Icon | Tooltip | Handler | Browser-Tested |

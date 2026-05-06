@@ -449,3 +449,44 @@ def test_line_split_after_word(browser_app_url: str, browser_page) -> None:
 
     # Line count should increase by 1 (one line became two).
     expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection(browser_app_url: str, browser_page) -> None:
+    """Select one word, click Split-by-selection: line count increases by 1.
+
+    The split-by-selection handler enables when
+    ``split_lines_into_selected_unselected_callback is not None and
+    >= 1 word selected`` (``word_match_toolbar.py`` ll. 842-846).  It
+    dispatches to
+    ``page_state.split_lines_into_selected_and_unselected_words(keys)``
+    which partitions each affected line into a "selected words" line and
+    an "unselected words" line.  With word 0 selected on a multi-word
+    line, this means the first word becomes its own line and the
+    remaining words stay together — net +1 line (verified by
+    ``pd-book-tools`` unit test
+    ``TestSplitLinesIntoSelectedAndUnselected::test_split_with_valid_selection``
+    on a six-word page: ``[a]`` + ``[b, c]`` from ``[a, b, c]``).
+    The browser-test-project page 1 fresh OCR materializes 7 lines with
+    multiple words each, matching iter-19's split-after-word fixture, so
+    selecting word 0 reliably produces a +1 line delta.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    # Page 1 has 7 lines / 21 words via fresh OCR — line 0 is multi-word
+    # so partitioning into selected (word 0) and unselected (rest)
+    # yields 2 lines.
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    _select_word(page, 0)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Line count should increase by 1 (one line became two).
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)

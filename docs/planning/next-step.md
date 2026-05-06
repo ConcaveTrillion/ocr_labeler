@@ -9,7 +9,7 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 19, after closing prior gap 1).
+Last refreshed: 2026-05-06 (iter 20, after closing prior gap 1).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -18,27 +18,28 @@ queued by recent iterations. Items are ordered by leverage / ease.
 
 ### Real remaining gaps
 
-1. **`line-split-by-selection-button` click test** — present in
-   selectors / disabled / enabled / tooltip lists, no click test.
-   Needs a subset of words selected within a line; the handler
-   (`_handle_split_lines_into_selected_unselected_words`) splits the
-   line into two new lines based on which words are selected vs not.
-   Pattern from iter-19's split-after-word test: select a single word
-   (or a contiguous subset) on page 1, click button, assert
-   `LINE_DELETE_CARD` count increases by 1.
-2. **OCRConfigModal model-select full cancel-revert** — iter-15
+1. **OCRConfigModal model-select full cancel-revert** — iter-15
    queued this: at app start (no trainer outputs discovered) the
    detection / recognition selects expose only the `huggingface`
    key, so a value-cancel-revert assertion is impossible. Needs a
    trainer-output fixture providing >=2 selectable options before a
    real value-revert test (mirroring iter-14's HF revision test) can
    land.
-3. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
+2. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
    browser test for the Rescan Models button (`ocr-rescan-models-button`)
    or the Apply round-trip (`ocr-config-apply-button`). Rescan needs
    the backend model-scan path to be exercisable in the browser
    fixture; Apply needs HF / local model availability plus state
    mutation assertions.
+3. **`line-extract-from-selection-button` click test** — the
+   word-scope toolbar exposes `extract_line_from_selection_button`
+   wired to `split_line_with_selected_words_callback` (enables when
+   `>= 1 word selected`). Sister button to split-by-selection that
+   currently has no click test. Pattern: select word(s) on page 1,
+   click button, assert `LINE_DELETE_CARD` delta. Behavior for a
+   single-word selection on a multi-word line: extracts the selected
+   word(s) into a new line, leaves the unselected portion intact —
+   net +1 line (mirrors split-by-selection).
 
 ### Lower-priority / queued
 
@@ -65,11 +66,10 @@ queued by recent iterations. Items are ordered by leverage / ease.
   OCR->GT, Validate, Delete, expander, label-button toggle).
 - Toolbar word scope: 15 tests in
   `tests/browser/test_toolbar_word_actions.py`.
-- Toolbar line scope: 15 tests in
+- Toolbar line scope: 16 tests in
   `tests/browser/test_toolbar_line_actions.py` (now includes
-  `line-split-after-word-button` click coverage as of iter 19;
-  `line-split-by-selection-button` click test still pending — see
-  gap 1).
+  `line-split-after-word-button` click coverage as of iter 19 and
+  `line-split-by-selection-button` click coverage as of iter 20).
 - Toolbar paragraph scope: 13 tests in
   `tests/browser/test_toolbar_paragraph_actions.py` (now includes
   `paragraph-expand-bboxes-button` click coverage as of iter 18).
@@ -98,6 +98,32 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### Toolbar Line Scope — Split-By-Selection Button Coverage (Done)
+
+`line-split-by-selection-button` (`call_split` icon) is the line-scope
+toolbar button that splits each affected line into "selected words"
+and "unselected words" lines.  It is wired to
+`_handle_split_lines_into_selected_unselected_words` and enables when
+`split_lines_into_selected_unselected_callback is not None and >= 1
+word selected` (`word_match_toolbar.py` ll. 842-846).  Selectors /
+disabled / enabled / tooltip coverage was already in place from
+earlier iterations, but no dedicated click test existed.
+
+This iteration:
+
+- Added a `test_line_split_by_selection` click test that switches to
+  All Lines, captures the line count, selects word 0, clicks the
+  button, waits for the success Quasar notification, and asserts the
+  line count increased by 1 (one line became two — selected word 0
+  becomes its own line, the rest remains).  Mirrors iter-19's
+  `test_line_split_after_word` exactly, swapping the button selector
+  and refreshing the doctring with the relevant pd-book-tools
+  unit-test reference (`TestSplitLinesIntoSelectedAndUnselected::test_split_with_valid_selection`
+  on a six-word page proves `[a]` + `[b, c]` from `[a, b, c]`).
+
+Pure additive — no source mutations.  Full `make ci` green
+(911 passed).
 
 ### Toolbar Line Scope — Split-After-Word Button Coverage (Done)
 

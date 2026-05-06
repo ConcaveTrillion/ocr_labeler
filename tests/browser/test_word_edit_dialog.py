@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -69,6 +71,9 @@ DIALOG_CURRENT_ZOOM_TOGGLE = '[data-testid="dialog-current-zoom-toggle"]'
 DIALOG_PREVIOUS_PREVIEW_COLUMN = '[data-testid="dialog-previous-preview-column"]'
 DIALOG_CURRENT_PREVIEW_COLUMN = '[data-testid="dialog-current-preview-column"]'
 DIALOG_NEXT_PREVIEW_COLUMN = '[data-testid="dialog-next-preview-column"]'
+
+# Dialog header label ("Edit Line N, Word M")
+DIALOG_HEADER_LABEL = '[data-testid="dialog-header-label"]'
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +195,9 @@ def test_dialog_opens_on_edit_button_click(browser_app_url: str, browser_page) -
     expect(dialog).to_be_visible()
 
     # Dialog should show the "Edit Line N, Word M" heading
-    expect(dialog.locator("text=/Edit Line \\d+, Word \\d+/")).to_be_visible()
+    header = dialog.locator(DIALOG_HEADER_LABEL)
+    expect(header).to_be_visible()
+    expect(header).to_have_text(re.compile(r"Edit Line \d+, Word \d+"))
 
     # GT input should be present
     gt_input = dialog.locator(DIALOG_GT_INPUT)

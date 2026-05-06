@@ -25,6 +25,29 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Word Edit Dialog Header Label (Done)
+
+The Word Edit Dialog's header text label ("Edit Line N, Word M") at
+the top of the dialog now exposes a stable `data-testid` so browser
+tests can assert the dialog opened on the intended word without
+scraping visible text via a regex match over the whole dialog body:
+
+- `dialog-header-label` — the `ui.label()` rendered at the top of the
+  dialog card. Useful for asserting the dialog opened on the
+  correct line/word indices, e.g. by reading the label text and
+  parsing the indices, or by `to_have_text(re.compile(r"..."))`.
+
+Existing browser test
+`tests/browser/test_word_edit_dialog.py::test_dialog_opens_on_edit_button_click`
+migrated from a `dialog.locator("text=/Edit Line \d+, Word \d+/")`
+regex against arbitrary dialog text to a scoped
+`dialog.locator(DIALOG_HEADER_LABEL).to_have_text(re.compile(...))`
+assertion. New selector constant `DIALOG_HEADER_LABEL` added to the
+selectors block at the top of the file. Architecture doc
+`docs/architecture/ui-action-buttons.md` updated with a paragraph
+beneath the existing Dialog Header table to record the new label
+testid alongside the existing check / close icon-button entries.
+
 ### Stable data-testid Backfill — Word Edit Dialog Preview Columns (Done)
 
 The three side-by-side preview columns at the top of the Word Edit

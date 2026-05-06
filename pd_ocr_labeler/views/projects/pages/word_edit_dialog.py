@@ -1407,7 +1407,7 @@ class WordEditDialog:
             with ui.row().classes("items-center justify-between full-width"):
                 ui.label(f"Edit Line {line_index + 1}, Word {word_index + 1}").classes(
                     "text-subtitle1"
-                )
+                ).props('data-testid="dialog-header-label"')
                 with ui.row().classes("items-center gap-1"):
                     ui.button(icon="check", on_click=self._apply_and_close).props(
                         'flat round dense color=green-7 data-testid="dialog-apply-close-button"'

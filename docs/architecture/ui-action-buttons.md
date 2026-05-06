@@ -234,6 +234,11 @@ contract used by the word edit dialog.
 | 65 | `check` ✓ | "Apply and close" | `_apply_and_close` | No |
 | 66 | `close` | "Close without saving" | `dialog.close` | No |
 
+The dialog's header text label ("Edit Line N, Word M") carries
+`dialog-header-label` so browser tests can assert the dialog opened on
+the expected line/word indices without scraping visible text via a
+regex over the whole dialog body.
+
 ### Style / Component Controls (in dialog)
 
 | # | Label | Handler | `data-testid` | Browser-Tested |

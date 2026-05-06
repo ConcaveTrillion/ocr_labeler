@@ -9,8 +9,8 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 24, after landing the non-contiguous
-within-line split-by-selection click test).
+Last refreshed: 2026-05-06 (iter 25, after landing the OCRConfigModal
+no-edit Apply round-trip smoke test).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -26,12 +26,12 @@ queued by recent iterations. Items are ordered by leverage / ease.
    trainer-output fixture providing >=2 selectable options before a
    real value-revert test (mirroring iter-14's HF revision test) can
    land.
-2. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
-   browser test for the Rescan Models button (`ocr-rescan-models-button`)
-   or the Apply round-trip (`ocr-config-apply-button`). Rescan needs
-   the backend model-scan path to be exercisable in the browser
-   fixture; Apply needs HF / local model availability plus state
-   mutation assertions.
+2. **OCRConfigModal Rescan Models** — iter-13 queued. No browser test
+   for the Rescan Models button (`ocr-rescan-models-button`) yet.
+   Needs the backend model-scan path to be exercisable in the browser
+   fixture; iter 15 noted this is non-trivial. The sibling Apply path
+   was partially closed in iter 25 (no-edit round-trip smoke);
+   editing values and asserting persisted state is still queued.
 3. ~~**`line-extract-from-selection-button` click test**~~ — **CLOSED
    in iter 21 as duplicate.** Iter 20's prompt mis-named the button:
    the actual `extract_line_from_selection_button` lives in the
@@ -148,7 +148,7 @@ queued by recent iterations. Items are ordered by leverage / ease.
 - Keyboard shortcuts: 6 tests in
   `tests/browser/test_keyboard_shortcuts.py`.
 - Image tab controls: 10 tests in `tests/browser/test_image_tabs.py`.
-- OCRConfigModal: 5 tests in `tests/browser/test_ocr_config_modal.py`.
+- OCRConfigModal: 6 tests in `tests/browser/test_ocr_config_modal.py`.
 
 ## Done Criteria
 
@@ -163,6 +163,50 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### OCRConfigModal — No-Edit Apply Round-Trip Smoke (Iter 25, Done)
+
+Iter-13 queued the Apply round-trip as out of scope because Apply
+"requires HF / local model availability + state mutation". A
+pre-flight audit revealed the *no-edit* Apply path is in fact safe
+to exercise without any of that:
+
+- The HF-revision setter is gated by `new_revision != previous_revision`,
+  so a no-edit Apply skips it entirely (no rescan, no HF probe).
+- `command_set_selected_ocr_models` ultimately calls
+  `AppState.set_selected_ocr_models`, which only validates the keys
+  exist in `available_ocr_models` and updates state — no model
+  download, no backend probe.
+- On success, the handler emits a *positive* "OCR models updated"
+  notification, not a negative one — so we can assert "no
+  `bg-negative` notification" without false positives.
+
+This iteration:
+
+- Added `test_ocr_config_apply_with_no_edits_closes_without_error` to
+  `tests/browser/test_ocr_config_modal.py`. The test opens the modal,
+  clicks the Apply button (`ocr-config-apply-button`) without
+  changing any values, and asserts (a) the dialog's Cancel/Apply
+  controls become hidden (modal closed) and (b) no
+  `.q-notification.bg-negative` is present in the DOM (the failure
+  path emits `"Failed to apply OCR models"` with `negative` type).
+- Updated the file's module docstring's "out of scope" list to
+  reflect that no-edit Apply is now covered; full Apply with edited
+  values remains out of scope.
+
+Pure additive — no source mutations. Targeted file passes in 12.3s
+(6 tests); full `make ci` green on retry (915 passed). The first run
+surfaced an xdist-pollution flake on
+`tests/pd_ocr_labeler/state/test_app_state.py` (4 tests fail when
+the `state.app_state` submodule attribute hasn't been registered on
+`pd_ocr_labeler.state` by an earlier worker import — the
+`monkeypatch.setattr("pd_ocr_labeler.state.app_state...")` calls
+fail with `AttributeError: 'module' object at pd_ocr_labeler.state
+has no attribute 'state'`); the failure does not reproduce when the
+file is run standalone, even with `-n auto`. This is a pre-existing
+latent flake category, distinct from but reminiscent of the known
+`test_load_button_prevents_multiple_clicks` flake. Worth queueing
+as a fix once we have time.
 
 ### Toolbar Line Scope — Non-Contiguous Within-Line Split-By-Selection Coverage (Iter 24, Done)
 

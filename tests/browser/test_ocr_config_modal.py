@@ -7,7 +7,8 @@ via testid selectors.
 
 Out of scope (queued for follow-up iterations):
 - Rescan Models (requires backend model-scan path).
-- Apply (requires HF / local model availability + state mutation).
+- Apply with edited values (requires HF / local model availability +
+  state mutation). The no-edit Apply lifecycle is covered below.
 - Editing the HF revision input or model selects.
 """
 
@@ -97,6 +98,47 @@ def test_ocr_config_cancel_closes_modal(browser_app_url: str, browser_page) -> N
     expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)
     expect(page.locator(OCR_CONFIG_APPLY)).not_to_be_visible()
     expect(page.locator(OCR_RESCAN_MODELS)).not_to_be_visible()
+
+
+@pytest.mark.browser
+def test_ocr_config_apply_with_no_edits_closes_without_error(
+    browser_app_url: str, browser_page
+) -> None:
+    """Open modal -> click Apply (no edits) -> modal closes, no error notification.
+
+    Apply with no edits is a pure UI lifecycle smoke. The modal's
+    ``_apply_selection`` handler:
+
+      * Skips the HF revision setter when ``new_revision == previous_revision``
+        (both empty on a fresh app start, so no rescan is triggered).
+      * Calls ``command_set_selected_ocr_models`` with the as-opened detection
+        and recognition keys, which hit ``set_selected_ocr_models`` in
+        ``app_state.py``. That path only validates the keys are in
+        ``available_ocr_models`` and updates state — no HF probe, no model
+        download, no rescan. With the default ``huggingface`` registration
+        always present, the call succeeds and the modal closes.
+
+    On success the handler emits a *positive* "OCR models updated"
+    notification, not a negative one. We assert:
+
+      * The modal's footer controls are no longer visible.
+      * No ``bg-negative`` Quasar notification appeared (the failure path
+        emits ``"Failed to apply OCR models"`` with ``negative`` type).
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_modal(page)
+
+    page.locator(OCR_CONFIG_APPLY).click()
+
+    # Modal should close — same invariant as the Cancel test.
+    expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)
+    expect(page.locator(OCR_CONFIG_APPLY)).not_to_be_visible()
+
+    # No negative notification should have been emitted. Quasar renders
+    # ``ui.notify(type="negative")`` with a ``bg-negative`` class on the
+    # notification node; the success path uses ``bg-positive``.
+    assert page.locator(".q-notification.bg-negative").count() == 0
 
 
 @pytest.mark.browser

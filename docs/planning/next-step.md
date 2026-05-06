@@ -9,8 +9,8 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 25, after landing the OCRConfigModal
-no-edit Apply round-trip smoke test).
+Last refreshed: 2026-05-06 (iter 27, after landing the OCRConfigModal
+Apply-with-HF-revision-edit round-trip browser test).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
 top-level scope buckets are now substantially covered. What remains
@@ -30,8 +30,8 @@ queued by recent iterations. Items are ordered by leverage / ease.
    for the Rescan Models button (`ocr-rescan-models-button`) yet.
    Needs the backend model-scan path to be exercisable in the browser
    fixture; iter 15 noted this is non-trivial. The sibling Apply path
-   was partially closed in iter 25 (no-edit round-trip smoke);
-   editing values and asserting persisted state is still queued.
+   is now fully closed: iter 25 covered the no-edit round-trip smoke,
+   iter 27 covered Apply-with-HF-revision-edit + persist-on-re-open.
 3. ~~**`line-extract-from-selection-button` click test**~~ — **CLOSED
    in iter 21 as duplicate.** Iter 20's prompt mis-named the button:
    the actual `extract_line_from_selection_button` lives in the
@@ -148,7 +148,7 @@ queued by recent iterations. Items are ordered by leverage / ease.
 - Keyboard shortcuts: 6 tests in
   `tests/browser/test_keyboard_shortcuts.py`.
 - Image tab controls: 10 tests in `tests/browser/test_image_tabs.py`.
-- OCRConfigModal: 6 tests in `tests/browser/test_ocr_config_modal.py`.
+- OCRConfigModal: 7 tests in `tests/browser/test_ocr_config_modal.py`.
 
 ## Done Criteria
 
@@ -163,6 +163,56 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### OCRConfigModal — Apply With HF Revision Edit Round-Trip (Iter 27, Done)
+
+Iter 25 closed the no-edit Apply path; iter 27 closes the
+edited-value Apply path for the HF revision input. Pre-flight audit
+confirmed the path is safe to exercise in the browser fixture without
+network or trainer-output dependencies:
+
+- `_apply_selection` on a non-empty new revision calls
+  `command_set_hf_pinned_revision` →
+  `AppState.set_hf_pinned_revision` → `refresh_ocr_models(notify=True)`.
+- `discover_model_options(hf_pinned_revision=...)` calls
+  `fetch_hf_last_modified(revision=...)` for the pinned option, but
+  the probe is wrapped in a try/except that returns `None` on any
+  failure (network, ImportError, missing metadata) and never raises.
+  The 5 s timeout bounds the wait; default Playwright timeout is 30 s,
+  so a real probe failure (the sentinel revision does not exist on HF)
+  does not crash or stall the test.
+- The subsequent `command_set_selected_ocr_models` on the as-opened
+  detection/recognition keys is a no-op semantically (still
+  `huggingface`/`huggingface`) and succeeds at the state-mutation
+  layer, closing the dialog on success.
+- The `_open` handler reads
+  `self.app_state_model.hf_pinned_revision or ""` on every open, so
+  re-opening after Apply echoes the persisted value back into the
+  input.
+
+This iteration:
+
+- Added `test_ocr_config_hf_revision_edit_persists_through_apply` to
+  `tests/browser/test_ocr_config_modal.py`. Mirrors iter 14's
+  `test_ocr_config_hf_revision_edit_reverts_on_cancel` in setup,
+  swapping Cancel for Apply: opens modal, fills HF input with a
+  sentinel `"test-revision-apply-sentinel"`, clicks Apply, asserts the
+  Apply button hides (modal closed) within 15 s, re-opens the modal,
+  asserts the input value equals the sentinel.
+- Bumped `to_be_visible` timeout for the Apply close to 15 s (vs. the
+  default 30 s already covers the upper bound; the explicit 15 s gives
+  a clear "this should be quick" signal documenting the worst-case 5 s
+  HF probe + UI tear-down).
+- Updated the file's module docstring's "out of scope" list to reflect
+  that Apply with HF-revision edits is now covered (only Apply with
+  edited model-select values remains queued, blocked on a
+  trainer-output fixture).
+
+Pure additive — no source mutations. Targeted file passes in 14.7 s
+(7 tests). Full `make ci` green on the second run; the first surfaced
+the pre-existing
+`test_dialog_merge_prev` flake which passed in isolation, mirroring
+the known `test_load_button_prevents_multiple_clicks` flake.
 
 ### Test-Pollution Flake Fix — `test_app_state.py` xdist Resolver Failures (Iter 26, Done)
 

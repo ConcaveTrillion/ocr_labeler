@@ -7,9 +7,9 @@ via testid selectors.
 
 Out of scope (queued for follow-up iterations):
 - Rescan Models (requires backend model-scan path).
-- Apply with edited values (requires HF / local model availability +
-  state mutation). The no-edit Apply lifecycle is covered below.
-- Editing the HF revision input or model selects.
+- Apply with edited model-select values (requires trainer-output fixtures).
+  The no-edit Apply lifecycle and the Apply-with-HF-revision-edit round-trip
+  are covered below.
 """
 
 from __future__ import annotations
@@ -175,6 +175,58 @@ def test_ocr_config_hf_revision_edit_reverts_on_cancel(
     # Re-open and verify the sentinel did NOT persist.
     _open_modal(page)
     expect(revision_input).to_have_value(initial_value)
+
+
+@pytest.mark.browser
+def test_ocr_config_hf_revision_edit_persists_through_apply(
+    browser_app_url: str, browser_page
+) -> None:
+    """Typing into the HF revision input then pressing Apply must persist.
+
+    Counterpart to ``test_ocr_config_hf_revision_edit_reverts_on_cancel``.
+    The Apply path goes through ``_apply_selection`` which:
+
+      * Compares ``new_revision`` against ``previous_revision`` and, on a
+        change, calls ``command_set_hf_pinned_revision`` -> ``set_hf_pinned_revision``
+        -> ``refresh_ocr_models(notify=True)``. The HF probe inside
+        ``discover_model_options`` is wrapped in a try/except that returns
+        ``None`` on any failure (including network unreachability) and never
+        raises, so a sentinel revision string that does not exist on HF still
+        succeeds at the state-mutation layer; the probe just records
+        ``hf_last_modified=None`` for the pinned option.
+      * Then calls ``command_set_selected_ocr_models`` with the as-opened
+        detection/recognition keys (no edit), which is a no-op on the
+        ``huggingface`` defaults always-present at app start.
+      * On success closes the dialog.
+
+    The ``_open`` handler reads ``app_state_model.hf_pinned_revision or ""``
+    on every open (see ``ocr_config_modal.py:129-133``), so after Apply +
+    re-open the input should echo back the sentinel value. We pick a sentinel
+    formatted like a real revision (looks valid, but is namespaced under a
+    ``test-`` prefix to avoid colliding with anything published) so the HF
+    probe's failure mode is the expected ``returns None`` path rather than a
+    rejected-format error.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_modal(page)
+
+    revision_input = page.locator(OCR_HF_REVISION_INPUT)
+    initial_value = revision_input.input_value()
+
+    sentinel = "test-revision-apply-sentinel"
+    assert sentinel != initial_value
+    revision_input.fill(sentinel)
+    expect(revision_input).to_have_value(sentinel)
+
+    # Apply the change. The HF probe inside discover_model_options has a 5s
+    # timeout but never raises; the modal closes on success.
+    page.locator(OCR_CONFIG_APPLY).click()
+    expect(page.locator(OCR_CONFIG_APPLY)).not_to_be_visible(timeout=15_000)
+
+    # Re-open the modal; the input should reflect the persisted sentinel.
+    _open_modal(page)
+    expect(revision_input).to_have_value(sentinel)
 
 
 @pytest.mark.browser

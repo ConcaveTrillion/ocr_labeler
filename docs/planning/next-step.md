@@ -28,12 +28,17 @@ queued by recent iterations. Items are ordered by leverage / ease.
    trainer-output fixture providing >=2 selectable options before a
    real value-revert test (mirroring iter-14's HF revision test) can
    land.
-2. **OCRConfigModal Rescan Models** — iter-13 queued. No browser test
-   for the Rescan Models button (`ocr-rescan-models-button`) yet.
-   Needs the backend model-scan path to be exercisable in the browser
-   fixture; iter 15 noted this is non-trivial. The sibling Apply path
-   is now fully closed: iter 25 covered the no-edit round-trip smoke,
-   iter 27 covered Apply-with-HF-revision-edit + persist-on-re-open.
+2. ~~**OCRConfigModal Rescan Models**~~ — **CLOSED in iter 32.**
+   `test_ocr_config_rescan_models_does_not_error` in
+   `tests/browser/test_ocr_config_modal.py` clicks the
+   `ocr-rescan-models-button` and asserts no `bg-negative` notification
+   fires and the modal stays open. Pre-flight confirmed safety: the
+   handler delegates to `command_refresh_ocr_models` which wraps
+   everything in try/except (returns False on failure) and the HF
+   probe inside `discover_model_options` swallows network errors and
+   never raises. In the test fixture (empty trainer-output dir, only
+   `huggingface` registered) the rescan re-discovers the same baseline
+   — effectively a no-op refresh.
 3. **`run.io_bound` racy None return for ground-truth load** —
    surfaced in iter 31 while diagnosing the
    `test_load_button_prevents_multiple_clicks` flake. Under heavy

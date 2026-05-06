@@ -6,10 +6,9 @@ the smallest possible smoke tests that exercise the open/close cycle
 via testid selectors.
 
 Out of scope (queued for follow-up iterations):
-- Rescan Models (requires backend model-scan path).
 - Apply with edited model-select values (requires trainer-output fixtures).
-  The no-edit Apply lifecycle and the Apply-with-HF-revision-edit round-trip
-  are covered below.
+  The no-edit Apply lifecycle, the Apply-with-HF-revision-edit round-trip,
+  and the Rescan-Models smoke are covered below.
 """
 
 from __future__ import annotations
@@ -287,3 +286,56 @@ def test_ocr_config_model_selects_open_menu_and_survive_cancel(
     _open_modal(page)
     expect(page.locator(OCR_DETECTION_SELECT)).to_be_visible()
     expect(page.locator(OCR_RECOGNITION_SELECT)).to_be_visible()
+
+
+@pytest.mark.browser
+def test_ocr_config_rescan_models_does_not_error(
+    browser_app_url: str, browser_page
+) -> None:
+    """Click Rescan Models -> no negative notification, modal stays open.
+
+    The Rescan handler (``ocr_config_modal.py:144-177``) calls
+    ``command_refresh_ocr_models`` and then either notifies positive
+    ("OCR model list refreshed") on success or negative ("Failed to
+    refresh OCR model list") on failure. The viewmodel layer wraps the
+    underlying ``app_state.refresh_ocr_models`` in a try/except and
+    returns a boolean (see ``app_state_view_model.py:249-256``); the
+    state layer's ``refresh_ocr_models`` re-runs ``discover_model_options``
+    whose HF probe is wrapped in try/except returning ``None`` on any
+    failure (network unreachability, missing model, etc.) and never
+    raises.
+
+    In the test fixture the trainer-output directory is empty and the
+    only registered option is ``huggingface``, so a rescan effectively
+    re-discovers the same baseline. We assert:
+
+      * No ``bg-negative`` Quasar notification appeared (the failure
+        handler emits ``"Failed to refresh OCR model list"`` with type
+        ``negative``).
+      * The modal remains open after the rescan (Rescan should not
+        close the dialog — that's a property of the Apply path only).
+        We verify by checking that the Cancel button is still visible.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_modal(page)
+
+    page.locator(OCR_RESCAN_MODELS).click()
+
+    # Modal stays open after Rescan — Cancel should still be visible.
+    # We give the rescan a brief grace period in case it briefly causes
+    # a re-render, but it shouldn't actually hide the dialog. The HF
+    # probe inside ``discover_model_options`` has a 5s timeout but
+    # never raises; if it ever did, the viewmodel would return False
+    # and we'd see a negative notification (asserted below).
+    expect(page.locator(OCR_CONFIG_CANCEL)).to_be_visible(timeout=15_000)
+    expect(page.locator(OCR_CONFIG_APPLY)).to_be_visible()
+    expect(page.locator(OCR_RESCAN_MODELS)).to_be_visible()
+
+    # No negative notification should have been emitted.
+    assert page.locator(".q-notification.bg-negative").count() == 0
+
+    # Close cleanly via Cancel so the test leaves the page in a known
+    # state (matches the lifecycle the cancel test asserts).
+    page.locator(OCR_CONFIG_CANCEL).click()
+    expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)

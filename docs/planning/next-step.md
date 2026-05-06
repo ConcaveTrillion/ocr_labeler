@@ -25,6 +25,20 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### OCR Configuration Modal — HF Revision Cancel-Revert Browser Test (Done)
+
+Follow-up to the iter-13 OCRConfigModal smoke tests: a fourth test
+`test_ocr_config_hf_revision_edit_reverts_on_cancel` covers the
+form-state preservation contract guaranteed by `_open` in
+`ocr_config_modal.py:129-133`, which unconditionally resets the HF
+revision input value to `app_state_model.hf_pinned_revision or ""` on
+every open. The test types a sentinel into the input, presses Cancel,
+re-opens the modal, and asserts the input reverted to its as-opened
+baseline (`input_value()` snapshot). Same fixture / helper / file as
+the iter-13 tests; pure additive coverage, no source mutations. Out of
+scope and queued: editing the detection / recognition selects, Rescan
+Models flow, full Apply round-trip with HF probe.
+
 ### OCR Configuration Modal — First Browser Tests (Done)
 
 The OCR Configuration modal had a full `data-testid` contract since

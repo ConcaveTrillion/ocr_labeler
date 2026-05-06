@@ -97,3 +97,39 @@ def test_ocr_config_cancel_closes_modal(browser_app_url: str, browser_page) -> N
     expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)
     expect(page.locator(OCR_CONFIG_APPLY)).not_to_be_visible()
     expect(page.locator(OCR_RESCAN_MODELS)).not_to_be_visible()
+
+
+@pytest.mark.browser
+def test_ocr_config_hf_revision_edit_reverts_on_cancel(
+    browser_app_url: str, browser_page
+) -> None:
+    """Typing into the HF revision input then pressing Cancel must NOT persist.
+
+    The modal's ``_open`` handler unconditionally resets the input value to
+    ``app_state_model.hf_pinned_revision or ""`` (see
+    ``ocr_config_modal.py:129-133``), so re-opening after Cancel should
+    restore whatever the input held when the modal was first opened. This
+    test asserts that contract from the browser side end-to-end.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _open_modal(page)
+
+    # Capture the as-opened value (typically empty on a fresh app start, but
+    # we don't hard-code that — whatever's there is the baseline we expect to
+    # revert to).
+    revision_input = page.locator(OCR_HF_REVISION_INPUT)
+    initial_value = revision_input.input_value()
+
+    # Type a value that is unlikely to coincide with the baseline.
+    sentinel = "test-revision-cancel-sentinel"
+    revision_input.fill(sentinel)
+    expect(revision_input).to_have_value(sentinel)
+
+    # Cancel the dialog.
+    page.locator(OCR_CONFIG_CANCEL).click()
+    expect(page.locator(OCR_CONFIG_CANCEL)).not_to_be_visible(timeout=10_000)
+
+    # Re-open and verify the sentinel did NOT persist.
+    _open_modal(page)
+    expect(revision_input).to_have_value(initial_value)

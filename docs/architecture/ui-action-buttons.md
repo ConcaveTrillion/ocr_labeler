@@ -91,12 +91,14 @@ The trigger is rendered alongside the project load controls
 
 **Source:** `pd_ocr_labeler/views/projects/pages/page_actions.py`
 
-| # | Label | Handler | Tooltip | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 14 | **Reload OCR** | `_on_reload_ocr` | — | Visibility only |
-| 15 | **Save Page** | `_on_save_page` | — | Yes — click + notification |
-| 16 | **Load Page** | `_on_load_page` | — | Visibility only |
-| 17 | **Rematch GT** | `_on_rematch_gt` | "Re-run ground truth matching from source text, replacing any per-word GT edits" | No |
+| # | Label | `data-testid` | Handler | Tooltip | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 14 | **Reload OCR** | `reload-ocr-button` | `_on_reload_ocr` | — | Yes — click + reload |
+| 14a | **Reload OCR (Edited)** | `reload-ocr-edited-button` | `_on_reload_ocr_edited` | "Run OCR on the current edited image (after erase ops)" | No |
+| 15 | **Save Page** | `save-page-button` | `_on_save_page` | — | Yes — click + notification |
+| 15a | **Save Project** | `save-project-button` | `_on_save_project` | "Save all loaded pages in this project" | No |
+| 16 | **Load Page** | `load-page-button` | `_on_load_page` | — | Yes — click + reload |
+| 17 | **Rematch GT** | `rematch-gt-button` | `_on_rematch_gt` | "Re-run ground truth matching from source text, replacing any per-word GT edits" | Yes — click + revert |
 
 ---
 

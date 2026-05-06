@@ -25,6 +25,20 @@ using the 14-commit phased plan in
 
 ## Previously Completed Next Steps
 
+### Stable data-testid Backfill — Page Actions (Done)
+
+`PageActions` buttons now carry `data-testid` props for stable
+selection from Playwright tests and the
+`pd-ocr-labeler-driver` agent: `reload-ocr-button`,
+`reload-ocr-edited-button`, `save-page-button`,
+`save-project-button`, `load-page-button`, `rematch-gt-button`.
+Browser tests in `tests/browser/test_page_actions.py` migrated from
+accessible-name selectors to testid selectors. Architecture-doc
+button table in `docs/architecture/ui-action-buttons.md` updated to
+record each new testid alongside the label. Navigation controls
+(`Prev` / `Next` / `Go To:`) and other load-bearing controls remain
+on the testid backfill backlog for follow-up iterations.
+
 ### Session Restore (Done)
 
 `SessionStateOperations` saves project path and page index on every

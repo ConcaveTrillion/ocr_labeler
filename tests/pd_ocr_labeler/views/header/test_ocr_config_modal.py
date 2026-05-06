@@ -332,6 +332,146 @@ class TestApplySelectionGuards:
         modal._dialog.close.assert_not_called()
 
 
+class TestRescanModelsSuccessPath:
+    """``_rescan_models`` happy path: refresh succeeds, options re-sync, modal stays open.
+
+    Pins the load-bearing behaviors of the Rescan Models button:
+      1. ``command_refresh_ocr_models`` is invoked exactly once.
+      2. Both select widgets' ``.options`` are re-read from app state and
+         ``.update()`` is called on each (so the NiceGUI client re-renders).
+      3. A positive notification fires.
+      4. The dialog is NOT closed — the user typically rescans then picks a
+         new model and only closes via Apply or Cancel.
+    """
+
+    async def test_rescan_success_refreshes_options_and_notifies(self, monkeypatch):
+        app_state = Mock()
+        app_state.command_refresh_ocr_models = Mock(return_value=True)
+        app_state.ocr_detection_model_options = {"huggingface": "Hugging Face"}
+        app_state.ocr_recognition_model_options = {"huggingface": "Hugging Face"}
+        app_state.selected_ocr_detection_model_key = "huggingface"
+        app_state.selected_ocr_recognition_model_key = "huggingface"
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+
+        # Currently-selected values are still valid in the refreshed options.
+        modal._detection_model_select.value = "huggingface"
+        modal._recognition_model_select.value = "huggingface"
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._rescan_models()
+
+        app_state.command_refresh_ocr_models.assert_called_once_with()
+        # Options re-bound from app state.
+        assert modal._detection_model_select.options == {"huggingface": "Hugging Face"}
+        assert modal._recognition_model_select.options == {
+            "huggingface": "Hugging Face"
+        }
+        # Both selects redrawn.
+        modal._detection_model_select.update.assert_called_once_with()
+        modal._recognition_model_select.update.assert_called_once_with()
+        # Positive notification only.
+        notify_mock.assert_called_once_with("OCR model list refreshed", "positive")
+        # Modal stays open.
+        modal._dialog.close.assert_not_called()
+
+
+class TestRescanModelsFailurePath:
+    """``_rescan_models`` failure path: refresh returns False, negative notification.
+
+    The select widgets are still re-synced from app state even on failure
+    (because the app-state model may have been partially updated), but the
+    user-facing notification is negative and the dialog stays open.
+    """
+
+    async def test_rescan_failure_emits_negative_notification(self, monkeypatch):
+        app_state = Mock()
+        app_state.command_refresh_ocr_models = Mock(return_value=False)
+        app_state.ocr_detection_model_options = {"huggingface": "Hugging Face"}
+        app_state.ocr_recognition_model_options = {"huggingface": "Hugging Face"}
+        app_state.selected_ocr_detection_model_key = "huggingface"
+        app_state.selected_ocr_recognition_model_key = "huggingface"
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+
+        modal._detection_model_select.value = "huggingface"
+        modal._recognition_model_select.value = "huggingface"
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._rescan_models()
+
+        app_state.command_refresh_ocr_models.assert_called_once_with()
+        notify_mock.assert_called_once_with(
+            "Failed to refresh OCR model list", "negative"
+        )
+        modal._dialog.close.assert_not_called()
+
+
+class TestRescanModelsOptionDisappearance:
+    """When a previously-selected option vanishes after rescan, fall back to
+    the app-state's currently-selected key rather than leaving a dangling value.
+
+    This pins the recovery behavior of the
+    ``if value not in options: value = selected_key`` guards on lines 153-159
+    and 165-171.  Without this fallback the select widget would briefly show
+    a value that's no longer in its options list, causing NiceGUI to render
+    a blank/inconsistent select.
+    """
+
+    async def test_rescan_recovers_when_selected_value_disappears(self, monkeypatch):
+        app_state = Mock()
+        app_state.command_refresh_ocr_models = Mock(return_value=True)
+        # After rescan, "old-model" is no longer offered.  App state has
+        # already been updated to a fallback selection.
+        app_state.ocr_detection_model_options = {"huggingface": "Hugging Face"}
+        app_state.ocr_recognition_model_options = {"huggingface": "Hugging Face"}
+        app_state.selected_ocr_detection_model_key = "huggingface"
+        app_state.selected_ocr_recognition_model_key = "huggingface"
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+
+        # User had previously picked a model that's now gone.
+        modal._detection_model_select.value = "old-detection-model"
+        modal._recognition_model_select.value = "old-recognition-model"
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        await modal._rescan_models()
+
+        # Both selects fall back to the app-state's selected key.
+        assert modal._detection_model_select.value == "huggingface"
+        assert modal._recognition_model_select.value == "huggingface"
+        notify_mock.assert_called_once_with("OCR model list refreshed", "positive")
+
+
+class TestRescanModelsWithoutBuiltSelects:
+    """Defensive: ``_rescan_models`` tolerates unbuilt select widgets.
+
+    If the modal hasn't been built yet (or has been partially torn down),
+    the select widget attributes can be ``None``.  The handler must skip
+    the option-resync block without raising and still emit the appropriate
+    notification.
+    """
+
+    async def test_rescan_skips_resync_when_selects_are_none(self, monkeypatch):
+        app_state = Mock()
+        app_state.command_refresh_ocr_models = Mock(return_value=True)
+        modal = _build_modal_with_mock_widgets(app_state_model=app_state)
+        modal._detection_model_select = None
+        modal._recognition_model_select = None
+
+        notify_mock = MagicMock()
+        monkeypatch.setattr(modal, "_notify", notify_mock)
+
+        # Must not raise.
+        await modal._rescan_models()
+
+        app_state.command_refresh_ocr_models.assert_called_once_with()
+        notify_mock.assert_called_once_with("OCR model list refreshed", "positive")
+
+
 class TestApplySelectionPartialCommit:
     """Characterize the partial-commit failure documented in iter-33 review.
 

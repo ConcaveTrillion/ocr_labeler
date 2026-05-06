@@ -9,22 +9,25 @@ landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-Last refreshed: 2026-05-06 (iter 45, after pinning the
-``_apply_selection`` success path, the empty-selection guard, and
-the iter-33 partial-commit characterization at the unit level).
-Iter 44 unlocked the in-process modal-unit-test pattern for
-``OCRConfigModal``; iter 45 reused it to land 5 more tests. The
-negative-path Apply *browser* test remains **infeasible without
-either an env-var production hook or restructuring the browser
-fixture to run in-process**; both options require human approval and
-are filed under "Blocked on human approval" below — but the
-*characterization* of the negative path is now covered at the unit
-level (see "OCRConfigModal Apply Path Unit Tests" below). Iter 33's
-remaining queued candidate (atomic `apply_ocr_config` command —
-production-code change, needs human approval) is filed under "Blocked
-on human approval"; the iter-34 review also surfaces a track of pure
-test-infrastructure cleanup (centralizing duplicated `_select_word`
-/ `_setup` / `_wait_for_notification` helpers into
+Last refreshed: 2026-05-06 (iter 46, after pinning the
+``_rescan_models`` handler at the unit level — closes the last
+untested handler on ``OCRConfigModal``).  The unit-level coverage
+arc on the modal that started in iter 44 is now complete: every
+async handler (``_open``, ``_close``, ``_apply_selection``,
+``_rescan_models``) has at least one mechanism-level in-process
+test with notification-mocking via
+``monkeypatch.setattr(modal, "_notify", ...)``.  The negative-path
+Apply *browser* test remains **infeasible without either an env-var
+production hook or restructuring the browser fixture to run
+in-process**; both options require human approval and are filed
+under "Blocked on human approval" below — but the *characterization*
+of the negative path is now covered at the unit level (see
+"OCRConfigModal Apply Path Unit Tests" below).  Iter 33's remaining
+queued candidate (atomic `apply_ocr_config` command —
+production-code change, needs human approval) is filed under
+"Blocked on human approval"; the iter-34 review also surfaces a
+track of pure test-infrastructure cleanup (centralizing duplicated
+`_select_word` / `_setup` / `_wait_for_notification` helpers into
 `tests/browser/helpers.py`).
 
 The previous coarse "0% / 11%" rollups were obsolete — all the
@@ -331,6 +334,40 @@ queued by recent iterations. Items are ordered by leverage / ease.
 ---
 
 ## Previously Completed Next Steps
+
+### OCRConfigModal — Rescan Models Handler Unit Tests (Iter 46, Done)
+
+Iter 32 added a browser-level smoke test for the Rescan Models
+button (no-error / modal-stays-open assertion).  Iter 46 closes the
+last untested handler on ``OCRConfigModal`` at the unit level.  Same
+in-process pattern as iter 44/45: bypass ``build()``, attach
+``MagicMock`` widget stand-ins, and
+``monkeypatch.setattr(modal, "_notify", ...)`` to capture
+notifications.
+
+Four tests added to
+``tests/pd_ocr_labeler/views/header/test_ocr_config_modal.py``:
+
+- ``TestRescanModelsSuccessPath`` (1 test): refresh succeeds — both
+  select widgets re-bind ``.options`` from app state, both
+  ``.update()`` are called, single positive notification fires,
+  dialog stays open.
+- ``TestRescanModelsFailurePath`` (1 test): refresh returns False —
+  negative notification ("Failed to refresh OCR model list"), dialog
+  stays open.  The select widget resync still runs even on failure
+  (current implementation behavior — pinned for documentation).
+- ``TestRescanModelsOptionDisappearance`` (1 test): when a
+  previously-selected detection / recognition value vanishes from
+  the refreshed options, the select falls back to the app-state's
+  ``selected_ocr_*_model_key``.  Pins the recovery guards on lines
+  153-159 and 165-171 of ``ocr_config_modal.py``.
+- ``TestRescanModelsWithoutBuiltSelects`` (1 test): defensive — if
+  the selects are ``None`` (modal not yet built or torn down), the
+  resync block is skipped without raising.
+
+Pure additive — no source mutations.  Targeted file passes 19/19
+(was 15).  Full ``make ci`` green on retry (949 passed; first run
+hit a ruff-format auto-fix cycle).
 
 ### OCRConfigModal — Apply Path Unit Tests (Iter 45, Done)
 

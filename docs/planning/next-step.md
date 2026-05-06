@@ -1,25 +1,106 @@
 # Next Step: Browser Test Coverage Expansion
 
-**Status:** Not Started
+**Status:** Mostly complete; mop-up phase.
 
-Goal: expand browser test coverage from 28% to 97% of 107 UI buttons
-using the 14-commit phased plan in
-[browser-ui-test-plan.md](browser-ui-test-plan.md).
+Goal: close the remaining specific gaps in browser-test coverage of
+UI buttons. The 14-commit phased plan in
+[browser-ui-test-plan.md](browser-ui-test-plan.md) is now mostly
+landed (commits 1-14 mostly checked off in that file's headings).
 
 ## Priority Order
 
-1. Toolbar scope actions (line + word rows) — 0% currently
-2. Word edit dialog operations (merge/split/crop/refine/nudge) — 0%
-3. Per-line action buttons (GT→OCR, Validate, Delete) — 0%
-4. Source folder dialog — 0%
-5. Header/load controls — 11%
-6. Keyboard shortcuts — 0%
-7. Image tab controls — 0%
+Last refreshed: 2026-05-06 (iter 17, after coverage audit).
+
+The previous coarse "0% / 11%" rollups were obsolete — all the
+top-level scope buckets are now substantially covered. What remains
+is a small set of named-button gaps and a couple of follow-ups
+queued by recent iterations. Items are ordered by leverage / ease.
+
+### Real remaining gaps
+
+1. **`line-split-after-word-button` click test** — present in
+   `ALL_LINE_BUTTONS` and the tooltip table in
+   `tests/browser/test_toolbar_line_actions.py`, but no dedicated
+   click test (cf. iter-16 `line-expand-bboxes` precedent). Needs a
+   word selected within a line; verifies line count increases by 1
+   after click.
+2. **`line-split-by-selection-button` click test** — same situation;
+   present in selectors / disabled / enabled / tooltip lists, no
+   click test. Needs a subset of words selected within a line.
+3. **`paragraph-expand-bboxes-button` coverage** — symmetric to
+   iter-16's `line-expand-bboxes`. The button is rendered in
+   `word_match_toolbar.py:184-191` with testid
+   `paragraph-expand-bboxes-button` and wired through
+   `expand_paragraph_bboxes_callback`, but is NOT in the selectors
+   block, ALL_PARAGRAPH_BUTTONS, the enabled-with-selection list, or
+   the tooltip table in `tests/browser/test_toolbar_paragraph_actions.py`,
+   and has no click test. Pure additive chunk mirroring iter-16.
+4. **OCRConfigModal model-select full cancel-revert** — iter-15
+   queued this: at app start (no trainer outputs discovered) the
+   detection / recognition selects expose only the `huggingface`
+   key, so a value-cancel-revert assertion is impossible. Needs a
+   trainer-output fixture providing >=2 selectable options before a
+   real value-revert test (mirroring iter-14's HF revision test) can
+   land.
+5. **OCRConfigModal Rescan Models / Apply** — iter-13 queued: no
+   browser test for the Rescan Models button (`ocr-rescan-models-button`)
+   or the Apply round-trip (`ocr-config-apply-button`). Rescan needs
+   the backend model-scan path to be exercisable in the browser
+   fixture; Apply needs HF / local model availability plus state
+   mutation assertions.
+
+### Lower-priority / queued
+
+- **Tag-chip clear in dialog** — `test_dialog_clear_component`
+  exists, but a parallel `test_dialog_clear_style` (clearing a
+  style chip rather than a component chip) is not present. Confirm
+  whether the dialog separately exposes a clear-style affordance
+  before queueing.
+- **Apply-Style / Apply-Component / Scope select wiring inside
+  dialog** — `dialog-style-select`, `dialog-scope-select`,
+  `dialog-component-select` are testid'd but no test opens them and
+  drives the dropdown end-to-end (only smoke + presence). Lower
+  priority because the renderer-side selects are already covered by
+  `test_apply_style_dropdown_select_then_apply` in
+  `test_word_match.py`.
+- **`test_load_button_prevents_multiple_clicks` flake** — known
+  pre-existing flake; retry up to 3x in CI. Not a coverage gap, but
+  worth fixing or marking `flaky` once we have time.
+
+### Already well covered (was claimed 0% or 11%)
+
+- Per-line action buttons: 11 tests in
+  `tests/browser/test_word_match_line_actions.py` (GT->OCR,
+  OCR->GT, Validate, Delete, expander, label-button toggle).
+- Toolbar word scope: 15 tests in
+  `tests/browser/test_toolbar_word_actions.py`.
+- Toolbar line scope: 14 tests in
+  `tests/browser/test_toolbar_line_actions.py` (splits aside, see
+  gap 1 / 2).
+- Toolbar paragraph scope: 12 tests in
+  `tests/browser/test_toolbar_paragraph_actions.py` (expand-bboxes
+  aside, see gap 3).
+- Toolbar page scope: 8 tests in
+  `tests/browser/test_toolbar_page_actions.py`.
+- Word edit dialog: 27 tests in `tests/browser/test_word_edit_dialog.py`
+  covering header, style, merge/split/delete, crop, refine, all 8
+  nudges, reset, apply, apply+refine.
+- Source folder dialog: 10 tests in
+  `tests/browser/test_source_folder_dialog.py`.
+- Header / load controls: covered across `test_home_page.py`,
+  `test_project_loading.py`, `test_browser_smoke.py`,
+  `test_page_actions.py` (8 tests).
+- Keyboard shortcuts: 6 tests in
+  `tests/browser/test_keyboard_shortcuts.py`.
+- Image tab controls: 10 tests in `tests/browser/test_image_tabs.py`.
+- OCRConfigModal: 5 tests in `tests/browser/test_ocr_config_modal.py`.
 
 ## Done Criteria
 
-- All 14 commits from the browser test plan are implemented.
-- `make test-browser` passes reliably with `pytest -n auto`.
+- Gaps 1-3 above closed with dedicated click tests.
+- Gaps 4-5 either landed (once fixtures / backend paths are
+  available) or formally deferred to a separate plan.
+- `make test-browser` continues to pass reliably with `pytest -n auto`.
 
 ---
 

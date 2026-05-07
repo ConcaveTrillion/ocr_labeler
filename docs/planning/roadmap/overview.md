@@ -18,6 +18,16 @@ Status: forward roadmap snapshot (updated 2026-04-22).
 - Disconnect flush + optional cache prewarm
 - Derived word/line cache strategy and debounced GT updates
 - Distribution strategy and packaging variants
+- **Dev-local-aware `upgrade-deps`** — refuse-with-message when the venv
+  has editable sibling pd-* checkouts (detected via `uv pip show
+  pd-book-tools`, `.venv/.pd-dev-local` marker, or `PD_DEV_LOCAL=1`),
+  add `upgrade-deps-local` sibling that re-applies editable installs
+  after `uv sync`. Workspace-wide standard, spec at
+  [`docs/dev-local-upgrade-flow.md`](../../dev-local-upgrade-flow.md).
+  Applicable but deferred — legacy NiceGUI labeler is being phased out
+  in favor of `pd-ocr-labeler-spa`; land the fix when the workspace
+  rollout reaches this repo, not blocked on SPA cutover since the legacy
+  labeler still receives dep updates during migration.
 - **Mac / Apple Silicon (MPS) support** — test and validate OCR inference on Apple Silicon via PyTorch MPS backend;
   ensure device selection (CUDA > MPS > CPU) works correctly in the labeler's OCR page operations
 - **Glyph-level annotations (passthrough only)** — preserve `Word.glyph_annotations`

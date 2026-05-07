@@ -76,7 +76,7 @@ def test_page_has_word_ground_truth_false_when_no_gt():
 
 def test_page_has_word_ground_truth_false_for_empty_page():
     """Helper returns False for a page with no items."""
-    page = Page(items=[], width=100, height=100, page_index=0)
+    page = Page(blocks=[], width=100, height=100, page_index=0)
     assert PageState._page_has_word_ground_truth(page) is False
 
 
@@ -285,7 +285,7 @@ def test_page_has_word_ground_truth_true_with_partial_gt():
     w2 = _word("world", 20, gt_text="")
     line = _line([w1, w2], 0)
     para = _paragraph([line], 0)
-    page = Page(items=[para], width=100, height=100, page_index=0)
+    page = Page(blocks=[para], width=100, height=100, page_index=0)
     assert PageState._page_has_word_ground_truth(page) is True
 
 

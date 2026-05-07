@@ -61,7 +61,7 @@ def _make_page(*, gt_words: bool = False, page_index: int = 0) -> Page:
     w2 = _word("world", 50, gt_text="World" if gt_words else "")
     line = _line([w1, w2], y=0)
     para = _paragraph([line], y=0)
-    return Page(items=[para], width=200, height=100, page_index=page_index)
+    return Page(blocks=[para], width=200, height=100, page_index=page_index)
 
 
 def _create_dummy_image(path: Path) -> None:
@@ -197,7 +197,7 @@ class TestBasicRoundTrip:
         line1 = _line([w1, w2], y=0)
         line2 = _line([w3], y=30)
         para = _paragraph([line1, line2], y=0)
-        page = Page(items=[para], width=200, height=100, page_index=0)
+        page = Page(blocks=[para], width=200, height=100, page_index=0)
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()
@@ -544,7 +544,7 @@ class TestEdgeCases:
     """Edge-case save/load round-trip scenarios."""
 
     def test_empty_page_round_trip(self, project_dir: Path, save_dir: Path) -> None:
-        page = Page(items=[], width=100, height=50, page_index=0)
+        page = Page(blocks=[], width=100, height=50, page_index=0)
         page.image_path = str(project_dir / "001.png")
 
         ops = PageOperations()

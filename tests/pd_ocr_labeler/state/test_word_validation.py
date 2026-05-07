@@ -55,7 +55,7 @@ def _paragraph(lines: list[Block], y: int) -> Block:
 
 
 def _make_page(paragraphs: list[Block]) -> Page:
-    return Page(items=paragraphs, width=100, height=100, page_index=0)
+    return Page(blocks=paragraphs, width=100, height=100, page_index=0)
 
 
 # ---------------------------------------------------------------------------

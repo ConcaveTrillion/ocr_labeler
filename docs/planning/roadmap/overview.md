@@ -30,6 +30,30 @@ Status: forward roadmap snapshot (updated 2026-04-22).
   labeler still receives dep updates during migration.
 - **Mac / Apple Silicon (MPS) support** — test and validate OCR inference on Apple Silicon via PyTorch MPS backend;
   ensure device selection (CUDA > MPS > CPU) works correctly in the labeler's OCR page operations
+- **Local-mode port auto-select fallback + stable bookmarks + in-UI URL
+  display** — converging shared dev-UX behavior across all local pd-*
+  web apps (sibling items: `pd-prep-for-pgdp` commit `b23b913`,
+  `pd-ocr-labeler-spa` commit `b956275`). Triggered by a real
+  stale-port collision (21h-old orphan blocking startup). Proposed
+  behavior, **local mode only**:
+  1. **Auto-select fallback.** Try persisted-last-port first, then
+     default port, then `port=0` (kernel picks a free port). If user
+     passes `--port N` explicitly, fail loud on collision (no fallback).
+  2. **Stable bookmarks.** Persist the last successfully-bound port in
+     a small state file so the user's browser bookmark survives across
+     restarts in the common case.
+  3. **URL visible in the running UI.** Local-mode users may close the
+     console window. The NiceGUI UI itself must surface the current URL
+     somewhere persistent (footer, header, "About" panel, or
+     copy-to-clipboard widget). Belt-and-suspenders: console print +
+     in-UI display.
+
+  Acceptance:
+  - Tests: default-port-free; default-port-taken-fallback-succeeds;
+    explicit-port-collision-fails-loud;
+    persisted-port-reused-on-next-start;
+    persisted-port-taken-falls-through.
+  - In-UI URL-visible assertion (browser/Playwright).
 - **Glyph-level annotations (passthrough only)** — preserve `Word.glyph_annotations`
   (ligatures, long-s positions, swash flag) through save/load without dropping or mutating.
   Scope is intentionally minimal: **no UI**, no editing affordances. Rationale: the rich

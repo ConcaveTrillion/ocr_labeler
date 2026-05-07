@@ -27,3 +27,8 @@ logs/
 
 # local data
 local-data**
+
+# Claude Code session state — agent memory canonical home is
+# /workspaces/ocr-container/.claude/agent-memory/, not per-repo. If you
+# see a .claude/ tree here, it is leakage; clean it up.
+.claude/

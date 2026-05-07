@@ -52,15 +52,15 @@ mixin and has its own copy of the dedup logic.
 
 ## Lifecycle of `_notified_error_keys`
 
-| Owner                    | Created in `__init__` | Cleared anywhere | Effective lifetime                  |
-|--------------------------|-----------------------|------------------|--------------------------------------|
-| `OCRConfigModal`         | Yes (header)          | No               | Entire NiceGUI session              |
-| `ProjectLoadControls`    | Yes (header)          | No               | Entire NiceGUI session              |
-| `ProjectNavigationControls` | Yes               | No               | Per `ProjectView` (rebuilt on switch)|
-| `ProjectView`            | Yes                   | No               | Per project switch (see main_view)  |
-| `PageActions`            | Yes                   | No               | Per `ProjectView` lifetime          |
-| `ImageTabs`              | Yes                   | No               | Per `ProjectView` lifetime          |
-| `WordMatchView`          | Yes (own copy)        | No               | Per `ProjectView` lifetime          |
+| Owner                       | Created in `__init__` | Cleared anywhere | Effective lifetime                    |
+|-----------------------------|-----------------------|------------------|---------------------------------------|
+| `OCRConfigModal`            | Yes (header)          | No               | Entire NiceGUI session                |
+| `ProjectLoadControls`       | Yes (header)          | No               | Entire NiceGUI session                |
+| `ProjectNavigationControls` | Yes                   | No               | Per `ProjectView` (rebuilt on switch) |
+| `ProjectView`               | Yes                   | No               | Per project switch (see main_view)    |
+| `PageActions`               | Yes                   | No               | Per `ProjectView` lifetime            |
+| `ImageTabs`                 | Yes                   | No               | Per `ProjectView` lifetime            |
+| `WordMatchView`             | Yes (own copy)        | No               | Per `ProjectView` lifetime            |
 
 `LabelerView._handle_state_change` rebuilds `ProjectView` only when
 `project_root` changes (`pd_ocr_labeler/views/main_view.py:126-135`),
@@ -101,17 +101,17 @@ worth flagging:
 
 ## Test coverage matrix
 
-| Behavior under test                                    | Asserted? | Where                              |
-|-------------------------------------------------------|-----------|-------------------------------------|
-| `_notify` forwards to `vm.queue_notification`         | Indirect  | iter 44/45/46 unit tests via stub  |
-| `_notify` falls back to `ui.notify` when vm is None   | No        | —                                   |
-| `_notify_once` emits the first time                   | No (direct)| —                                   |
-| `_notify_once` suppresses the second time             | **No**    | —                                   |
-| `_notify_once` is per-instance (two views isolated)   | **No**    | —                                   |
-| `_notify_once` survives navigation within a project   | **No**    | —                                   |
-| `_notify_once` resets across project switch           | **No**    | —                                   |
-| `_safe_notify_once` parity with `_notify_once`        | **No**    | —                                   |
-| Notification queue drains on `LabelerView` timer      | Indirect  | `tests/.../test_app_url_loading.py` exercises queue contents|
+| Behavior under test                                 | Asserted?   | Where                                                        |
+|-----------------------------------------------------|-------------|--------------------------------------------------------------|
+| `_notify` forwards to `vm.queue_notification`       | Indirect    | iter 44/45/46 unit tests via stub                            |
+| `_notify` falls back to `ui.notify` when vm is None | No          | —                                                            |
+| `_notify_once` emits the first time                 | No (direct) | —                                                            |
+| `_notify_once` suppresses the second time           | **No**      | —                                                            |
+| `_notify_once` is per-instance (two views isolated) | **No**      | —                                                            |
+| `_notify_once` survives navigation within a project | **No**      | —                                                            |
+| `_notify_once` resets across project switch         | **No**      | —                                                            |
+| `_safe_notify_once` parity with `_notify_once`      | **No**      | —                                                            |
+| Notification queue drains on `LabelerView` timer    | Indirect    | `tests/.../test_app_url_loading.py` exercises queue contents |
 
 `grep -rn "_notify_once\|_safe_notify_once\|notified_error_keys" tests/`
 returns no hits.

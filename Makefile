@@ -83,7 +83,7 @@ setup: ## Set up dev environment (sync deps + Playwright + pre-commit + auto-swa
 	@echo "🌐 Installing Playwright Chromium browser and system dependencies..."
 	uv run playwright install --with-deps chromium
 	@echo "🪝 Setting up pre-commit hooks..."
-	uv run pre-commit install
+	@[ -f .git/hooks/pre-commit ] || uv run pre-commit install
 	$(_maybe_install_cuda_torch)
 	@$(MAKE) --no-print-directory prefetch-models
 	@echo "✅ Setup complete!"

@@ -13,6 +13,7 @@ removes the false impression that these are available APIs.
 `operations/__init__.py`, giving the false impression it is a supported API.
 
 **Additional problems in this file:**
+
 - `async def` methods that contain no `await` — they block the event loop
 - Duplicates `_reorganize_page_if_available` from `page_operations.py` (using
   `getattr` instead of a `Protocol`)
@@ -33,6 +34,7 @@ notifications in the application go through `AppState.queue_notification()` /
 `pop_notification()` drain in the view, or directly via `ui.notify`.
 
 **Additional problems:**
+
 - `info` method omits `type=` arg, inconsistent with other severity methods
 - `error` and `warning` methods log at the corresponding log level for every
   display notification — would make every user-facing warning an `ERROR` log
@@ -45,7 +47,7 @@ notifications in the application go through `AppState.queue_notification()` /
 
 ## D3 — `NavigationOperations.schedule_navigation`
 
-**File:** `pd_ocr_labeler/operations/ocr/navigation_operations.py` ~lines 153–180  
+**File:** `pd_ocr_labeler/operations/ocr/navigation_operations.py` ~lines 153–180
 **Status:** Never called in the application. Only exercised in its own unit test.
 The application uses only the four pure-computation methods
 (`next_page`, `prev_page`, `goto_page_number`, `goto_page_index`).
@@ -72,7 +74,7 @@ placeholder for planned work, add a docstring explaining what belongs here.
 
 ## D5 — `word_operations.py` re-exported constants
 
-**File:** `pd_ocr_labeler/operations/ocr/word_operations.py` ~lines 16–17  
+**File:** `pd_ocr_labeler/operations/ocr/word_operations.py` ~lines 16–17
 **Status:** `STYLE_LABEL_BY_ATTR` and `WORD_COMPONENT_BY_ATTR` are defined as
 module-level names but have zero callers outside this file.
 
@@ -82,7 +84,7 @@ module-level names but have zero callers outside this file.
 
 ## D6 — `ProjectStateViewModel.can_navigate_override`
 
-**File:** `pd_ocr_labeler/viewmodels/project/project_state_view_model.py` ~line 36  
+**File:** `pd_ocr_labeler/viewmodels/project/project_state_view_model.py` ~line 36
 **Status:** Declared as `can_navigate_override: bool = False` and referenced in
 `_update_navigation_properties`. Never set to `True` anywhere in the codebase.
 
@@ -93,7 +95,7 @@ that reads it.
 
 ## D7 — Query methods prefixed `command_` on `MainViewModel` and `ProjectStateViewModel`
 
-**Files:** `viewmodels/main_view_model.py`, `viewmodels/project/project_state_view_model.py`  
+**Files:** `viewmodels/main_view_model.py`, `viewmodels/project/project_state_view_model.py`
 **Status:** `command_get_project_display_name`, `command_get_navigation_status`,
 `command_get_page_display_info` are pure read-only queries with a `command_`
 prefix. None appear to be called from any view. They also violate Command-Query
@@ -105,7 +107,7 @@ Separation naming convention.
 
 ## D8 — `TextTabsModel.__setattr__` commented-out override
 
-**File:** `pd_ocr_labeler/views/projects/pages/text_tabs.py` ~lines 46–56  
+**File:** `pd_ocr_labeler/views/projects/pages/text_tabs.py` ~lines 46–56
 **Status:** Commented-out method body that was intended to propagate model
 changes back to `PageState`. The comment is dead and the approach was abandoned.
 
@@ -115,7 +117,7 @@ changes back to `PageState`. The comment is dead and the approach was abandoned.
 
 ## D9 — `AppState.__post_init__` marked `# pragma: no cover`
 
-**File:** `pd_ocr_labeler/state/app_state.py` ~line 127  
+**File:** `pd_ocr_labeler/state/app_state.py` ~line 127
 **Status:** `# pragma: no cover - simple initialization` is applied to one of the
 most important methods in the class (populates `available_projects`,
 `project_keys`, and initial model selection).
@@ -126,7 +128,7 @@ most important methods in the class (populates `available_projects`,
 
 ## D10 — `view_helpers.py:_notified_error_keys` lazy init pattern
 
-**File:** `pd_ocr_labeler/views/shared/view_helpers.py` ~line 23  
+**File:** `pd_ocr_labeler/views/shared/view_helpers.py` ~line 23
 **Status:** `_notified_error_keys: set[str]` is declared as a class-level
 annotation with no default, relying on `_ensure_notified_keys()` for lazy init.
 The lazy init only exists because `NotificationMixin` has no `__init__`. The

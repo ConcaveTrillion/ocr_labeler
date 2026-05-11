@@ -7,7 +7,7 @@
 The following files are too large to maintain and should be split.
 
 | File | Lines | Suggested split |
-|---|---|---|
+| --- | --- | --- |
 | `state/page_state.py` | ~2,650 | Dispatch helpers + structural ops; text cache; overlay management; validation snapshot |
 | `state/project_state.py` | ~1,764 | Page load lifecycle; GT management; navigation; export |
 | `operations/ocr/page_operations.py` | ~1,800 | `predictor_operations.py`; `page_io_operations.py`; `provenance_operations.py` |
@@ -23,7 +23,7 @@ Views and viewmodels directly access private attributes of other layers.
 All of these should be replaced with public properties or methods.
 
 | Location | Violation |
-|---|---|
+| --- | --- |
 | `views/projects/pages/content.py:26` | `page_state_view_model._page_state` |
 | `views/projects/pages/image_tabs.py` (8+ sites) | `getattr(page_state_view_model, "_page_state", None)` |
 | `views/projects/pages/page_view.py:30,113,380,432` | `project_view_model._project_state` |
@@ -47,6 +47,7 @@ the relevant viewmodels. Views should never reach through `_` attributes.
 to domain-layer methods. `PageStateViewModel` exists but `TextTabs` does not use it.
 
 The constructor (~300 lines) should be broken into:
+
 - `_build_word_callbacks()`
 - `_build_line_callbacks()`
 - `_build_paragraph_callbacks()`
@@ -92,6 +93,7 @@ coordination reactive via direct bindings.
 ### Image extension set defined in four places
 
 `{".png", ".jpg", ".jpeg"}` appears as a literal in:
+
 - `operations/persistence/project_operations.py`
 - `operations/persistence/project_discovery_operations.py`
 - `operations/ocr/page_operations.py`
@@ -103,7 +105,7 @@ and use it.
 ### Other duplications
 
 | Duplicated item | Locations |
-|---|---|
+| --- | --- |
 | `_reorganize_page_if_available` | `ocr_service.py` (getattr) and `page_operations.py` (Protocol) |
 | `_is_envelope` / `is_user_page_envelope` | `doctr_export.py` private fn vs `models` public fn |
 | `_resolve_workspace_save_directory` | Both `ProjectState` and `PageState` thin wrappers |
@@ -120,6 +122,7 @@ and use it.
 **File:** `operations/ocr/page_operations.py:_store_saved_provenance` ~lines 1592–1603
 
 Every page save stores the same provenance dict in three places:
+
 1. `page_model.saved_provenance`
 2. `_saved_provenance_by_page_id[id(page_model)]`
 3. `setattr(page_obj, PAGE_SAVED_PROVENANCE_ATTR, ...)`
@@ -136,7 +139,7 @@ replaced by a `WeakKeyDictionary`.
 Several items belong in a different layer:
 
 | Item | Current location | Should be in |
-|---|---|---|
+| --- | --- | --- |
 | `get_page_source_text` returning UI display strings | `operations/ocr/text_operations.py` | ViewModel or view |
 | `schedule_navigation` orchestrating callbacks | `operations/ocr/navigation_operations.py` | ViewModel |
 | `reload_ground_truth_into_project` accepting `AppState` | `operations/persistence/project_operations.py` | State layer |
@@ -191,6 +194,7 @@ save/load with the `UserPageEnvelope` schema, bbox refinement, image loading,
 provenance tracking, and cached image cleanup.
 
 Suggested split:
+
 - `predictor_operations.py` — predictor lifecycle, HF weight resolution
 - `page_io_operations.py` — save, load, envelope handling, cache image management
 - `provenance_operations.py` — all provenance assembly, resolution, and storage

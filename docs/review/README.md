@@ -6,7 +6,7 @@ covering all ~50 source files. Intended as a working brief for iterative fixes.
 ## Documents
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | [bugs.md](bugs.md) | Crash bugs, correctness bugs, memory leaks — with file:line citations |
 | [dead-code.md](dead-code.md) | Unused classes, methods, and constants ready to delete |
 | [architecture.md](architecture.md) | Structural / layering issues, god classes, duplication |

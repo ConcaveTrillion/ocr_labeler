@@ -26,16 +26,14 @@ logger = logging.getLogger(__name__)
 
 @binding.bindable_dataclass
 class TextTabsModel:
-    """Holds references to the text editor data from page state. Don't directly bind to page state, bindable properties avoid tight coupling with state management classes."""
+    """Holds references to the text editor data from page state. Don't directly bind to page state, bindable properties avoid tight coupling with state management classes."""  # noqa: E501
 
     _page_state: PageState | None = None
     gt_text: str = ""  # Ground Truth text
     ocr_text: str = ""  # OCR text
 
     def __init__(self, page_state: PageState | None = None):
-        logger.debug(
-            "Initializing TextTabsModel with page_state: %s", page_state is not None
-        )
+        logger.debug("Initializing TextTabsModel with page_state: %s", page_state is not None)
         self._page_state = page_state
         if self._page_state:
             logger.debug("Registering page state change listener")
@@ -43,17 +41,7 @@ class TextTabsModel:
             logger.debug("Registered page state change listener")
         self.update()
 
-    # Only propagate one-way from PageState to model
-    #
-    # def __setattr__(self, name: str, value):
-    #     """Intercept attribute changes to propagate to PageState."""
-    #     super().__setattr__(name, value)
-    #     if name == "gt_text" and self._page_state:
-    #         logger.debug("Propagating GT text change to PageState: '%s...'", value[:50])
-    #         self._page_state.current_gt_text = value
-    #     elif name == "ocr_text" and self._page_state:
-    #         logger.debug("Propagating OCR text change to PageState: '%s...'", value[:50])
-    #         self._page_state.current_ocr_text = value
+    # Only propagate one-way from PageState to model (see update() below)
 
     def update(self):
         """Sync model from PageState."""
@@ -78,10 +66,7 @@ class TextTabsModel:
             hasattr(self, "_on_state_change_callback"),
             getattr(self, "_on_state_change_callback", None) is not None,
         )
-        if (
-            hasattr(self, "_on_state_change_callback")
-            and self._on_state_change_callback
-        ):
+        if hasattr(self, "_on_state_change_callback") and self._on_state_change_callback:
             logger.debug("Calling TextTabs state change callback")
             self._on_state_change_callback()
         else:
@@ -221,17 +206,13 @@ class TextTabs:
         merge_word_right_callback = _make_page_callback(
             page_state, "merge_word_right", "Merge word right"
         )
-        split_word_callback = _make_page_callback(
-            page_state, "split_word", "Split word"
-        )
+        split_word_callback = _make_page_callback(page_state, "split_word", "Split word")
         split_word_vertical_closest_line_callback = _make_page_callback(
             page_state,
             "split_word_vertically_and_assign_to_closest_line",
             "Split word vertical closest-line",
         )
-        rebox_word_callback = _make_page_callback(
-            page_state, "rebox_word", "Rebox word"
-        )
+        rebox_word_callback = _make_page_callback(page_state, "rebox_word", "Rebox word")
         add_word_callback = _make_page_callback(page_state, "add_word", "Add word")
         nudge_word_bbox_callback = _make_page_callback(
             page_state, "nudge_word_bbox", "Nudge word bbox"
@@ -318,24 +299,16 @@ class TextTabs:
         if set_word_attributes_callback is not None:
 
             def apply_word_style_callback(style: str):
-                return self.word_match_view.word_operations.apply_style_to_selection(
-                    style
-                )
+                return self.word_match_view.word_operations.apply_style_to_selection(style)
 
         apply_word_style_scope_callback = None
         if page_state and hasattr(page_state, "notify"):
 
             def apply_word_style_scope_callback(scope: str):
-                return self.word_match_view.word_operations.apply_scope_to_selection(
-                    scope
-                )
+                return self.word_match_view.word_operations.apply_scope_to_selection(scope)
 
         notify_callback = None
-        if (
-            page_state
-            and hasattr(page_state, "_project_state")
-            and page_state._project_state
-        ):
+        if page_state and hasattr(page_state, "_project_state") and page_state._project_state:
 
             def notify_callback(message: str, type_: str = "info") -> None:
                 page_state._project_state.queue_notification(message, type_)
@@ -380,9 +353,7 @@ class TextTabs:
             original_image_source_provider=original_image_source_provider,
         )
         self.word_match_view.apply_word_style_callback = apply_word_style_callback
-        self.word_match_view.apply_word_style_scope_callback = (
-            apply_word_style_scope_callback
-        )
+        self.word_match_view.apply_word_style_scope_callback = apply_word_style_scope_callback
         self.container = None
         self._last_word_match_page_key = None
 
@@ -397,27 +368,26 @@ class TextTabs:
             self.page_state.on_word_style_change.subscribe(self._on_word_style_changed)
 
         if self.page_state and hasattr(self.page_state, "on_word_validation_change"):
-            self.page_state.on_word_validation_change.subscribe(
-                self._on_word_validation_changed
-            )
+            self.page_state.on_word_validation_change.subscribe(self._on_word_validation_changed)
 
         if self.page_state and hasattr(self.page_state, "on_word_bbox_change"):
             self.page_state.on_word_bbox_change.subscribe(self._on_word_bbox_changed)
 
         if self.page_state and hasattr(self.page_state, "on_line_ground_truth_copied"):
-            self.page_state.on_line_ground_truth_copied.subscribe(
-                self._on_line_ground_truth_copied
-            )
+            self.page_state.on_line_ground_truth_copied.subscribe(self._on_line_ground_truth_copied)
 
         project_state = (
             self.page_state._project_state
             if self.page_state and hasattr(self.page_state, "_project_state")
             else None
         )
-        if project_state and project_state.on_change is not None:
-            if self._on_project_state_changed not in project_state.on_change:
-                logger.debug("Registering ProjectState change listener")
-                project_state.on_change.append(self._on_project_state_changed)
+        if (
+            project_state
+            and project_state.on_change is not None
+            and self._on_project_state_changed not in project_state.on_change
+        ):
+            logger.debug("Registering ProjectState change listener")
+            project_state.on_change.append(self._on_project_state_changed)
 
     def _unregister_state_listeners(self) -> None:
         """Remove listeners to prevent stale callbacks after UI teardown."""
@@ -433,9 +403,7 @@ class TextTabs:
 
         if self.page_state and hasattr(self.page_state, "on_word_style_change"):
             with contextlib.suppress(Exception):
-                self.page_state.on_word_style_change.unsubscribe(
-                    self._on_word_style_changed
-                )
+                self.page_state.on_word_style_change.unsubscribe(self._on_word_style_changed)
 
         if self.page_state and hasattr(self.page_state, "on_word_validation_change"):
             with contextlib.suppress(Exception):
@@ -445,9 +413,7 @@ class TextTabs:
 
         if self.page_state and hasattr(self.page_state, "on_word_bbox_change"):
             with contextlib.suppress(Exception):
-                self.page_state.on_word_bbox_change.unsubscribe(
-                    self._on_word_bbox_changed
-                )
+                self.page_state.on_word_bbox_change.unsubscribe(self._on_word_bbox_changed)
 
         if self.page_state and hasattr(self.page_state, "on_line_ground_truth_copied"):
             with contextlib.suppress(Exception):
@@ -540,9 +506,7 @@ class TextTabs:
                     logger.debug("Building word match view")
                     self.word_match_view.build()
                 # Ground Truth panel
-                with ui.tab_panel("Ground Truth").classes(
-                    "full-width full-height column"
-                ):
+                with ui.tab_panel("Ground Truth").classes("full-width full-height column"):
                     logger.debug("Building ground truth panel")
                     with ui.column().classes("full-width full-height"):
                         self.gt_text = ui.codemirror("", language="plaintext").classes(
@@ -871,9 +835,7 @@ class TextTabs:
             paragraph_fingerprint_builder = hashlib.sha1()
             for paragraph in paragraphs:
                 paragraph_lines = getattr(paragraph, "lines", [])
-                paragraph_payload = (
-                    f"{getattr(paragraph, 'text', '')}\x1f{len(paragraph_lines)}"
-                )
+                paragraph_payload = f"{getattr(paragraph, 'text', '')}\x1f{len(paragraph_lines)}"
                 paragraph_fingerprint_builder.update(
                     paragraph_payload.encode("utf-8", errors="ignore")
                 )
@@ -900,18 +862,12 @@ class TextTabs:
                     f"{len(words)}\x1f{len(unmatched_gt_words)}\x1f"
                     f"{words_payload}"
                 )
-                fingerprint_builder.update(
-                    line_payload.encode("utf-8", errors="ignore")
-                )
+                fingerprint_builder.update(line_payload.encode("utf-8", errors="ignore"))
 
             line_count = len(lines)
-            first_line_text = (
-                str(getattr(lines[0], "text", "")) if line_count > 0 else ""
-            )
+            first_line_text = str(getattr(lines[0], "text", "")) if line_count > 0 else ""
             last_line_text = (
-                str(getattr(lines[-1], "text", ""))
-                if line_count > 1
-                else first_line_text
+                str(getattr(lines[-1], "text", "")) if line_count > 1 else first_line_text
             )
             return (
                 getattr(page, "name", None),
@@ -950,14 +906,14 @@ class TextTabs:
             paragraph_fingerprint,
         )
 
-    def _word_bbox_signature(self, word: "Word") -> str:
+    def _word_bbox_signature(self, word: Word) -> str:
         """Return a stable bbox signature for dedupe checks."""
         sig = word.bbox_signature
         if sig is None:
             return ""
         return f"{sig[0]:.6f}:{sig[1]:.6f}:{sig[2]:.6f}:{sig[3]:.6f}:{int(sig[4])}"
 
-    def _word_style_signature(self, word: "Word") -> str:
+    def _word_style_signature(self, word: Word) -> str:
         """Return stable style signature for dedupe checks."""
         italic = word.read_style_attribute("italic", aliases=("is_italic",))
         small_caps = word.read_style_attribute(
@@ -976,4 +932,4 @@ class TextTabs:
             "right_footnote",
             aliases=("is_right_footnote",),
         )
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}"  # noqa: E501

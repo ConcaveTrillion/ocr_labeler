@@ -47,7 +47,7 @@ class TestLoadGroundTruthFromDirectory:
         ops = ProjectOperations()
         result = ops.load_ground_truth_from_directory(tmp_path)
         # The normalized map may contain multiple key variants
-        assert any("001" in k for k in result.keys())
+        assert any("001" in k for k in result)
         assert any(result[k] == "hello world" for k in result if "001" in k)
 
     def test_returns_empty_when_no_files(self, tmp_path):

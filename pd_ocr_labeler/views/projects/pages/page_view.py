@@ -89,9 +89,7 @@ class PageView:  # pragma: no cover - UI wrapper file
         )
         self.page_actions.build()
 
-        self.content = ContentArea(
-            self.page_state_view_model, self.page_action_callbacks
-        )
+        self.content = ContentArea(self.page_state_view_model, self.page_action_callbacks)
         self.root = self.content.build()
         return self.root
 
@@ -112,9 +110,12 @@ class PageView:  # pragma: no cover - UI wrapper file
         image_name = ""
         project_state = getattr(self.project_view_model, "_project_state", None)
         project = getattr(project_state, "project", None)
-        if project is not None and hasattr(project, "image_paths"):
-            if 0 <= current_index < len(project.image_paths):
-                image_name = project.image_paths[current_index].name
+        if (
+            project is not None
+            and hasattr(project, "image_paths")
+            and 0 <= current_index < len(project.image_paths)
+        ):
+            image_name = project.image_paths[current_index].name
 
         page = None
         if not loading and project_state is not None and project is not None:
@@ -135,20 +136,24 @@ class PageView:  # pragma: no cover - UI wrapper file
             page is not None,
         )
 
-        if self.content and self.content.root:
-            if self.content.splitter and self.content.page_spinner:
-                if busy:
-                    self.content.page_spinner.classes(add="hidden")
-                    logger.debug("Busy overlay active; leaving content visible")
-                elif loading:
-                    self.content.splitter.classes(add="hidden")
-                    self.content.page_spinner.classes(remove="hidden")
-                    logger.debug("Showing page spinner, hiding content splitter")
-                else:
-                    self.content.splitter.classes(remove="hidden")
-                    self.content.page_spinner.classes(add="hidden")
-                    logger.debug("Showing content splitter, hiding page spinner")
-                    self._show_images()
+        if (
+            self.content
+            and self.content.root
+            and self.content.splitter
+            and self.content.page_spinner
+        ):
+            if busy:
+                self.content.page_spinner.classes(add="hidden")
+                logger.debug("Busy overlay active; leaving content visible")
+            elif loading:
+                self.content.splitter.classes(add="hidden")
+                self.content.page_spinner.classes(remove="hidden")
+                logger.debug("Showing page spinner, hiding content splitter")
+            else:
+                self.content.splitter.classes(remove="hidden")
+                self.content.page_spinner.classes(add="hidden")
+                logger.debug("Showing content splitter, hiding page spinner")
+                self._show_images()
 
     def prepare_navigation_transition(self, busy: bool):
         """Prepare page content for navigation transitions."""
@@ -208,9 +213,7 @@ class PageView:  # pragma: no cover - UI wrapper file
     @contextlib.asynccontextmanager
     async def _action_context(self, message: str, show_spinner: bool = False):
         """Context manager to show notifications and busy overlay during actions."""
-        logger.debug(
-            "PageView action context: %s (show_spinner=%s)", message, show_spinner
-        )
+        logger.debug("PageView action context: %s (show_spinner=%s)", message, show_spinner)
         old_spinner = getattr(self, "_show_busy_spinner", False)
         if show_spinner:
             self._show_busy_spinner = True
@@ -247,7 +250,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.warning("Failed to save page")
                     self._notify("Failed to save page", "negative")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Save failed: %s", exc)
                 self._notify(f"Save failed: {exc}", "negative")
 
@@ -274,7 +277,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.info("Project save: %s", result.summary)
                     self._notify(result.summary, "info")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Save project failed: %s", exc)
                 self._notify(f"Save project failed: {exc}", "negative")
 
@@ -298,7 +301,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.warning("No saved page found for current page")
                     self._notify("No saved page found for current page", "warning")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Load failed: %s", exc)
                 self._notify(f"Load failed: {exc}", "negative")
 
@@ -311,9 +314,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Refine bboxes blocked - currently loading")
             return
 
-        async with self._action_context(
-            "Refining bounding boxes...", show_spinner=True
-        ):
+        async with self._action_context("Refining bounding boxes...", show_spinner=True):
             logger.debug("Starting async bbox refinement for current page")
             await asyncio.sleep(0.1)
             try:
@@ -324,7 +325,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.warning("Failed to refine bboxes")
                     self._notify("Failed to refine bounding boxes", "negative")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Bbox refinement failed: %s", exc)
                 self._notify(f"Bbox refinement failed: {exc}", "negative")
 
@@ -352,10 +353,8 @@ class PageView:  # pragma: no cover - UI wrapper file
                     )
                 else:
                     logger.warning("Failed to expand and refine bboxes")
-                    self._notify(
-                        "Failed to expand and refine bounding boxes", "negative"
-                    )
-            except Exception as exc:  # noqa: BLE001
+                    self._notify("Failed to expand and refine bounding boxes", "negative")
+            except Exception as exc:
                 logger.error("Bbox expand & refine failed: %s", exc)
                 self._notify(f"Bbox expand & refine failed: {exc}", "negative")
 
@@ -368,17 +367,13 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Reload OCR blocked - currently loading")
             return
 
-        async with self._action_context(
-            "Reloading page with OCR...", show_spinner=True
-        ):
+        async with self._action_context("Reloading page with OCR...", show_spinner=True):
             logger.debug("Starting async OCR reload for current page")
             await asyncio.sleep(0.1)
             try:
                 success = self.project_view_model.command_reload_page_with_ocr()
                 if success:
-                    project_state = getattr(
-                        self.project_view_model, "_project_state", None
-                    )
+                    project_state = getattr(self.project_view_model, "_project_state", None)
                     current_page = None
                     if project_state is not None:
                         project = getattr(project_state, "project", None)
@@ -405,7 +400,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.warning("Failed to reload OCR")
                     self._notify("Failed to reload OCR", "negative")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("OCR reload failed: %s", exc)
                 self._notify(f"OCR reload failed: {exc}", "negative")
 
@@ -418,9 +413,7 @@ class PageView:  # pragma: no cover - UI wrapper file
             logger.debug("Reload OCR (edited image) blocked - currently loading")
             return
 
-        async with self._action_context(
-            "Reloading OCR from edited image...", show_spinner=True
-        ):
+        async with self._action_context("Reloading OCR from edited image...", show_spinner=True):
             logger.debug("Starting async OCR reload from edited image")
             await asyncio.sleep(0.1)
             try:
@@ -428,9 +421,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                     use_edited_image=True
                 )
                 if success:
-                    project_state = getattr(
-                        self.project_view_model, "_project_state", None
-                    )
+                    project_state = getattr(self.project_view_model, "_project_state", None)
                     current_page = None
                     if project_state is not None:
                         project = getattr(project_state, "project", None)
@@ -456,7 +447,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                 else:
                     logger.warning("Failed to reload OCR from edited image")
                     self._notify("Failed to reload OCR from edited image", "negative")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("OCR reload from edited image failed: %s", exc)
                 self._notify(f"OCR reload from edited image failed: {exc}", "negative")
 
@@ -481,9 +472,7 @@ class PageView:  # pragma: no cover - UI wrapper file
                     self._notify("Ground truth re-matched from source text", "positive")
                 else:
                     logger.warning("Failed to rematch ground truth")
-                    self._notify(
-                        "No ground truth text available for this page", "warning"
-                    )
-            except Exception as exc:  # noqa: BLE001
+                    self._notify("No ground truth text available for this page", "warning")
+            except Exception as exc:
                 logger.error("GT rematch failed: %s", exc)
                 self._notify(f"GT rematch failed: {exc}", "negative")

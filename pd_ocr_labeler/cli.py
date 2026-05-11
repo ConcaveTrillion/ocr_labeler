@@ -27,9 +27,7 @@ def parse_args(argv: list[str] | None = None):
         default=None,
         help="Root directory whose immediate subdirectories are treated as selectable projects",
     )
-    p.add_argument(
-        "--host", default="127.0.0.1", help="Host/interface to bind the web server"
-    )
+    p.add_argument("--host", default="127.0.0.1", help="Host/interface to bind the web server")
     p.add_argument("--port", type=int, default=8080, help="Port for the web server")
     p.add_argument(
         "--font-name",
@@ -52,12 +50,12 @@ def parse_args(argv: list[str] | None = None):
         "-v",
         action="count",
         default=0,
-        help="Increase logging verbosity (-v: DEBUG app logs, -vv: DEBUG + pd-book-tools, -vvv: DEBUG all dependencies; default: INFO)",
+        help="Increase logging verbosity (-v: DEBUG app logs, -vv: DEBUG + pd-book-tools, -vvv: DEBUG all dependencies; default: INFO)",  # noqa: E501
     )
     p.add_argument(
         "--page-timing",
         action="store_true",
-        help="Enable isolated page-load timing logs on the CLI (logger: pd_ocr_labeler.page_timing)",
+        help="Enable isolated page-load timing logs on the CLI (logger: pd_ocr_labeler.page_timing)",  # noqa: E501
     )
     return p.parse_args(argv)
 
@@ -75,10 +73,7 @@ def get_logging_configuration(verbose: int, page_timing: bool = False) -> dict:
     # records into session log files.
     handler_names: list[str] = ["null"]
 
-    if verbose >= 1:
-        app_level = "DEBUG"
-    else:
-        app_level = "INFO"
+    app_level = "DEBUG" if verbose >= 1 else "INFO"
 
     # Important dependency gets debug at -vv and above.
     important_dependency_level = "DEBUG" if verbose >= 2 else "WARNING"
@@ -196,10 +191,7 @@ def main(argv: list[str] | None = None):  # pragma: no cover (thin wrapper)
     )
 
     # Keep uvicorn/nicegui quiet unless -vvv enables dependency debug logs.
-    if args.verbose >= 3:
-        uvicorn_logging_level = "debug"
-    else:
-        uvicorn_logging_level = "warning"
+    uvicorn_logging_level = "debug" if args.verbose >= 3 else "warning"
     logger.info(
         "Starting UI on %s:%s for project %s (projects root: %s), uvicorn log level %s",
         args.host,

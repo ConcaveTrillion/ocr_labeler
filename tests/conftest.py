@@ -1,5 +1,6 @@
 """Pytest configuration for NiceGUI testing fixtures."""
 
+import contextlib
 import logging
 
 import pytest
@@ -59,9 +60,7 @@ def isolate_captured_logs(caplog):
         if handler in initial_root_handlers:
             continue
         root_logger.removeHandler(handler)
-        try:
+        with contextlib.suppress(Exception):
             handler.close()
-        except Exception:
-            pass
 
     caplog.clear()

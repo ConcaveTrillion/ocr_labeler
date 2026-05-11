@@ -12,9 +12,7 @@ from ..shared.view_helpers import NotificationMixin
 logger = logging.getLogger(__name__)
 
 
-class ProjectNavigationControls(
-    NotificationMixin
-):  # pragma: no cover - UI wrapper file
+class ProjectNavigationControls(NotificationMixin):  # pragma: no cover - UI wrapper file
     """Project-level page navigation and page metadata controls."""
 
     def __init__(
@@ -37,7 +35,7 @@ class ProjectNavigationControls(
 
     def build(self) -> ui.element:
         logger.debug("Building ProjectNavigationControls UI")
-        with ui.column().classes("gap-2") as container:
+        with ui.column().classes("gap-2") as container:  # noqa: SIM117  # NiceGUI nested with-contexts cannot be merged
             with ui.row().classes("items-center gap-2"):
                 self.prev_button = ui.button("Prev", on_click=self._on_prev)
                 self.prev_button.props('data-testid="nav-prev-button"')
@@ -115,19 +113,13 @@ class ProjectNavigationControls(
         aligned with the view model.
         """
         if getattr(self, "prev_button", None) is not None:
-            self.prev_button.set_enabled(
-                not bool(getattr(self.viewmodel, "prev_disabled", False))
-            )
+            self.prev_button.set_enabled(not bool(getattr(self.viewmodel, "prev_disabled", False)))
             self.prev_button.update()
         if getattr(self, "next_button", None) is not None:
-            self.next_button.set_enabled(
-                not bool(getattr(self.viewmodel, "next_disabled", False))
-            )
+            self.next_button.set_enabled(not bool(getattr(self.viewmodel, "next_disabled", False)))
             self.next_button.update()
         if getattr(self, "goto_button", None) is not None:
-            self.goto_button.set_enabled(
-                not bool(getattr(self.viewmodel, "goto_disabled", False))
-            )
+            self.goto_button.set_enabled(not bool(getattr(self.viewmodel, "goto_disabled", False)))
             self.goto_button.update()
         if self.page_input is not None:
             self.page_input.set_enabled(

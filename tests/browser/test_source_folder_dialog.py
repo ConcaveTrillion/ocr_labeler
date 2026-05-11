@@ -36,9 +36,7 @@ def _setup(page: Page, url: str) -> None:
 def _open_dialog(page: Page) -> None:
     """Open the source folder dialog via the testid'd folder button."""
     page.locator(SOURCE_FOLDER_BUTTON).click()
-    page.get_by_text("Source Projects Folder").first.wait_for(
-        state="visible", timeout=10_000
-    )
+    page.get_by_text("Source Projects Folder").first.wait_for(state="visible", timeout=10_000)
 
 
 # ---------------------------------------------------------------------------
@@ -206,9 +204,7 @@ def test_dialog_cancel(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_dialog_apply(
-    browser_app_url: str, browser_page, browser_test_fixtures_dir
-) -> None:
+def test_dialog_apply(browser_app_url: str, browser_page, browser_test_fixtures_dir) -> None:
     """Navigate to fixtures folder -> Apply -> dialog hidden; project dropdown updated."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -258,9 +254,7 @@ def test_dialog_enter_in_path_input(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_dialog_enter_on_nonexistent_path_warns(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_enter_on_nonexistent_path_warns(browser_app_url: str, browser_page) -> None:
     """Enter on a missing path -> warning notify; current-path label unchanged.
 
     Covers the negative branch of ``_open_typed_source_path`` where
@@ -284,9 +278,7 @@ def test_dialog_enter_on_nonexistent_path_warns(
     path_input.press("Enter")
 
     # The "Directory not found" warning notification should surface.
-    warning = page.locator(
-        ".q-notification.bg-warning:has-text('Directory not found')"
-    ).first
+    warning = page.locator(".q-notification.bg-warning:has-text('Directory not found')").first
     warning.wait_for(state="visible", timeout=10_000)
 
     # And the dialog's path label must NOT have changed to the bogus

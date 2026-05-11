@@ -30,9 +30,7 @@ def compute_image_hash(np_img: np.ndarray | None) -> str:
         shape_data = repr(contiguous.shape).encode("utf-8")
         dtype_data = str(contiguous.dtype).encode("utf-8")
         image_data = memoryview(contiguous).tobytes()
-        return hashlib.md5(
-            shape_data + b"|" + dtype_data + b"|" + image_data
-        ).hexdigest()
+        return hashlib.md5(shape_data + b"|" + dtype_data + b"|" + image_data).hexdigest()
     except Exception:
         import time
 
@@ -134,9 +132,7 @@ def cache_image_to_disk(
             else:
                 new_height = _MAX_CACHED_DIMENSION
                 new_width = max(1, int(width * _MAX_CACHED_DIMENSION / height))
-            np_img = cv2.resize(
-                np_img, (new_width, new_height), interpolation=cv2.INTER_AREA
-            )
+            np_img = cv2.resize(np_img, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
         img_hash = compute_image_hash(np_img)
         safe_page_index = max(-1, int(page_index))
@@ -144,7 +140,7 @@ def cache_image_to_disk(
         safe_image_type = (image_type or "image").strip() or "image"
         page_number = max(1, safe_page_index + 1)
         normalized_extension = normalize_cache_extension(image_extension)
-        file_name = f"{safe_project_id}_{page_number:03d}_{safe_image_type}_{img_hash}{normalized_extension}"
+        file_name = f"{safe_project_id}_{page_number:03d}_{safe_image_type}_{img_hash}{normalized_extension}"  # noqa: E501
         output_path = cache_dir / file_name
 
         if not output_path.exists():

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: T201  # fixture generator script uses print for progress output
 """One-time script to generate browser test fixtures.
 
 This script creates a sample project with pre-saved OCR page JSON files
@@ -41,9 +42,7 @@ SOURCE_PROJECT_ID = "projectID629292e7559a8"
 SOURCE_IMAGES_DIR = DATA_ROOT / "source-pgdp-data" / "output" / SOURCE_PROJECT_ID
 LABELED_OCR_DIR = DATA_ROOT / "labeled-ocr"
 # Fallback source in tests/test-data
-FALLBACK_SOURCE = (
-    REPO_ROOT / "tests" / "test-data" / "pgdp-projects" / SOURCE_PROJECT_ID
-)
+FALLBACK_SOURCE = REPO_ROOT / "tests" / "test-data" / "pgdp-projects" / SOURCE_PROJECT_ID
 
 # Selected pages: source_filename -> (dest_page_number, labeled_ocr_0based_index)
 # Labeled-ocr uses 0-based index: _0 = 001.png, _3 = 004.png, _21 = 022.png
@@ -62,9 +61,7 @@ def resolve_source_dir() -> Path:
         return SOURCE_IMAGES_DIR
     if FALLBACK_SOURCE.exists():
         return FALLBACK_SOURCE
-    print(
-        f"ERROR: No source images found at:\n  {SOURCE_IMAGES_DIR}\n  {FALLBACK_SOURCE}"
-    )
+    print(f"ERROR: No source images found at:\n  {SOURCE_IMAGES_DIR}\n  {FALLBACK_SOURCE}")
     sys.exit(1)
 
 
@@ -178,9 +175,7 @@ def generate_synthetic_fixtures(ground_truth: dict[str, str]) -> None:
                         "block_category": "LINE",
                         "bounding_box": {
                             "top_left": line_words[0]["bounding_box"]["top_left"],
-                            "bottom_right": line_words[-1]["bounding_box"][
-                                "bottom_right"
-                            ],
+                            "bottom_right": line_words[-1]["bounding_box"]["bottom_right"],
                         },
                         "block_labels": None,
                         "items": line_words,
@@ -206,9 +201,7 @@ def generate_synthetic_fixtures(ground_truth: dict[str, str]) -> None:
                             "block_category": "PARAGRAPH",
                             "bounding_box": {
                                 "top_left": line_blocks[0]["bounding_box"]["top_left"],
-                                "bottom_right": line_blocks[-1]["bounding_box"][
-                                    "bottom_right"
-                                ],
+                                "bottom_right": line_blocks[-1]["bounding_box"]["bottom_right"],
                             },
                             "block_labels": None,
                             "items": line_blocks,

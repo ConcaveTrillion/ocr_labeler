@@ -102,13 +102,9 @@ class TestTextOperations:
             (5, 3, False, True),  # Different index, no force
         ],
     )
-    def test_should_update_text_cache(
-        self, current_index, cached_index, force, expected
-    ):
+    def test_should_update_text_cache(self, current_index, cached_index, force, expected):
         """Test cache update decision logic."""
-        result = TextOperations.should_update_text_cache(
-            current_index, cached_index, force
-        )
+        result = TextOperations.should_update_text_cache(current_index, cached_index, force)
         assert result is expected
 
     @pytest.mark.parametrize(

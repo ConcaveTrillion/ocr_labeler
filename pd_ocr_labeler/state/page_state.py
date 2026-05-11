@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from nicegui import Event
 from numpy import copy as np_copy
@@ -84,7 +85,7 @@ class WordBboxChangedEvent:
     word_index: int
 
 
-class _GroundTruthRematchSkipped(Exception):
+class _GroundTruthRematchSkippedError(Exception):
     """Raised when GT rematch cannot proceed (no GT text or missing methods)."""
 
 
@@ -100,19 +101,15 @@ class PageState:
 
     page_ops: PageOperations = field(default_factory=PageOperations)
     on_change: list[Callable[[], None]] | None = field(default_factory=list)
-    on_word_ground_truth_change: Event[WordGroundTruthChangedEvent] = field(
-        default_factory=Event
-    )
+    on_word_ground_truth_change: Event[WordGroundTruthChangedEvent] = field(default_factory=Event)
     on_word_style_change: Event[WordStyleChangedEvent] = field(default_factory=Event)
-    on_word_validation_change: Event[WordValidationChangedEvent] = field(
-        default_factory=Event
-    )
+    on_word_validation_change: Event[WordValidationChangedEvent] = field(default_factory=Event)
     on_word_bbox_change: Event[WordBboxChangedEvent] = field(default_factory=Event)
 
     # Reference to project for accessing pages (set by ProjectState)
     _project: Project | None = field(default=None, init=False)
     _project_root: Path | None = field(default=None, init=False)
-    _project_state: "ProjectState" | None = field(
+    _project_state: ProjectState | None = field(
         default=None, init=False
     )  # Reference to parent ProjectState
     current_page: Page | None = field(default=None, init=False)
@@ -151,7 +148,7 @@ class PageState:
     def _emit_word_style_changed(self, event: WordStyleChangedEvent) -> None:
         """Notify listeners of a targeted word-style mutation."""
         logger.debug(
-            "[word_style_event] emitted page=%s line=%s word=%s italic=%s small_caps=%s blackletter=%s",
+            "[word_style_event] emitted page=%s line=%s word=%s italic=%s small_caps=%s blackletter=%s",  # noqa: E501
             event.page_index,
             event.line_index,
             event.word_index,
@@ -204,13 +201,9 @@ class PageState:
         )
         self.on_word_bbox_change.emit(event)
 
-    def _resolve_workspace_save_directory(
-        self, save_directory: str | Path | None
-    ) -> str:
+    def _resolve_workspace_save_directory(self, save_directory: str | Path | None) -> str:
         """Resolve save directory using user-local defaults and explicit overrides."""
-        return PersistencePathsOperations.resolve_workspace_save_directory(
-            save_directory
-        )
+        return PersistencePathsOperations.resolve_workspace_save_directory(save_directory)
 
     def _on_project_state_change(self):
         """Handle project state changes to sync page index."""
@@ -237,8 +230,7 @@ class PageState:
                 return
 
             has_loading_placeholder = (
-                self._cached_ocr_text == "Loading..."
-                or self._cached_gt_text == "Loading..."
+                self._cached_ocr_text == "Loading..." or self._cached_gt_text == "Loading..."
             )
             page_is_loaded = (
                 0 <= self._current_page_index < len(self._project.pages)
@@ -252,7 +244,7 @@ class PageState:
                 )
                 self._update_text_cache(force=True)
 
-    def notify_on_completion(func):
+    def notify_on_completion(func):  # noqa: N805  # nested decorator, first arg is the decorated function
         """Decorator to call self.notify() after method completion."""
 
         @wraps(func)
@@ -265,7 +257,7 @@ class PageState:
 
     @notify_on_completion
     def set_project_context(
-        self, project: Project, project_root: Path, project_state: "ProjectState"
+        self, project: Project, project_root: Path, project_state: ProjectState
     ):
         """Set the project context for page operations."""
         self._project = project
@@ -281,9 +273,7 @@ class PageState:
             logger.warning("PageState.get_page_model: no project state set")
             return None
 
-        logger.debug(
-            "PageState.get_page_model: index=%s, force_ocr=%s", index, force_ocr
-        )
+        logger.debug("PageState.get_page_model: index=%s, force_ocr=%s", index, force_ocr)
 
         # Delegate to ProjectState for page loading
         page_model = self._project_state.ensure_page_model(index, force_ocr=force_ocr)
@@ -298,9 +288,7 @@ class PageState:
         # If loaded from OCR and no original stored yet, store a copy
         page_source = page_model.page_source if page_model is not None else None
         if page_source is None:
-            page_source = (
-                str(getattr(page, "page_source", "")) if page is not None else ""
-            )
+            page_source = str(getattr(page, "page_source", "")) if page is not None else ""
 
         if (
             page is not None
@@ -550,9 +538,7 @@ class PageState:
         try:
             lines = list(getattr(page, "lines", []) or [])
             if line_index < 0 or line_index >= len(lines):
-                logger.warning(
-                    "toggle_word_validated: invalid line_index=%s", line_index
-                )
+                logger.warning("toggle_word_validated: invalid line_index=%s", line_index)
                 return False
 
             words = list(getattr(lines[line_index], "words", []) or [])
@@ -625,9 +611,7 @@ class PageState:
             any_change = False
             for line_index, word_index in keys:
                 if line_index < 0 or line_index >= line_count:
-                    logger.warning(
-                        "set_words_validated: invalid line_index=%s", line_index
-                    )
+                    logger.warning("set_words_validated: invalid line_index=%s", line_index)
                     continue
                 words = list(getattr(lines[line_index], "words", []) or [])
                 resolved_word_index = self._resolve_word_position(words, word_index)
@@ -703,9 +687,7 @@ class PageState:
         if page_index == self._current_page_index and self.current_page is not None:
             page_model = self.current_page_model
             if page_model is None or page_model.page is not self.current_page:
-                current_source = (
-                    str(getattr(self.current_page, "page_source", "ocr")) or "ocr"
-                )
+                current_source = str(getattr(self.current_page, "page_source", "ocr")) or "ocr"
                 page_model = PageModel(
                     page=self.current_page,
                     page_source=current_source,
@@ -744,15 +726,12 @@ class PageState:
             project_root=self._project_root,
             save_directory=resolved_save_directory,
             project_id=project_id,
-            source_lib=self._project.source_lib
-            if self._project
-            else "doctr-pd-labeled",
+            source_lib=self._project.source_lib if self._project else "doctr-pd-labeled",
             original_page=self.original_page,
         )
 
-        if success:
-            if update_page_source and self._project_state:
-                self._project_state.set_page_source(page_index, "filesystem")
+        if success and update_page_source and self._project_state:
+            self._project_state.set_page_source(page_index, "filesystem")
 
         return success
 
@@ -840,9 +819,7 @@ class PageState:
             logger.error("Page index %s out of range for project pages", page_index)
             return False
 
-    def find_ground_truth_text(
-        self, page_name: str, ground_truth_map: dict
-    ) -> str | None:
+    def find_ground_truth_text(self, page_name: str, ground_truth_map: dict) -> str | None:
         """Find ground truth text for a page from the ground truth mapping.
 
         Args:
@@ -876,9 +853,7 @@ class PageState:
         ]
 
         project_image_paths = getattr(self._project, "image_paths", None)
-        if isinstance(project_image_paths, list) and 0 <= page_index < len(
-            project_image_paths
-        ):
+        if isinstance(project_image_paths, list) and 0 <= page_index < len(project_image_paths):
             image_path = project_image_paths[page_index]
             gt_candidates.append(image_path)
             gt_candidates.append(getattr(image_path, "name", None))
@@ -1012,9 +987,7 @@ class PageState:
             return None
 
     @notify_on_completion
-    def reload_page_with_ocr(
-        self, page_index: int, use_edited_image: bool = False
-    ) -> None:
+    def reload_page_with_ocr(self, page_index: int, use_edited_image: bool = False) -> None:
         """Reload a specific page with OCR processing.
 
         Args:
@@ -1048,9 +1021,7 @@ class PageState:
                 # Invalidate cache since page content changed
                 self._invalidate_text_cache()
         else:
-            logger.warning(
-                "PageState.reload_page_with_ocr: page_index %s out of range", page_index
-            )
+            logger.warning("PageState.reload_page_with_ocr: page_index %s out of range", page_index)
 
     def _reload_page_with_ocr_from_current_image(self, page_index: int) -> None:
         """Rerun OCR on current in-memory page image (post-edit pixels)."""
@@ -1077,7 +1048,7 @@ class PageState:
         image = getattr(current_page, "cv2_numpy_page_image", None)
         if image is None or getattr(image, "shape", None) is None:
             logger.warning(
-                "PageState._reload_page_with_ocr_from_current_image: missing current page image; falling back to original-image reload"
+                "PageState._reload_page_with_ocr_from_current_image: missing current page image; falling back to original-image reload"  # noqa: E501
             )
             self.reload_page_with_ocr(page_index, use_edited_image=False)
             return
@@ -1096,9 +1067,7 @@ class PageState:
             )
             page_obj: Page = doc.pages[0]
         except Exception:
-            logger.exception(
-                "PageState._reload_page_with_ocr_from_current_image: OCR parse failed"
-            )
+            logger.exception("PageState._reload_page_with_ocr_from_current_image: OCR parse failed")
             return
 
         page_obj.image_path = str(image_path)  # type: ignore[attr-defined]
@@ -1114,9 +1083,7 @@ class PageState:
             )
 
         ground_truth_map = getattr(self._project, "ground_truth_map", {}) or {}
-        gt_text = self._project_state.find_ground_truth_text(
-            source_identifier, ground_truth_map
-        )
+        gt_text = self._project_state.find_ground_truth_text(source_identifier, ground_truth_map)
         if gt_text:
             with contextlib.suppress(Exception):
                 page_obj.add_ground_truth(gt_text)
@@ -1277,12 +1244,8 @@ class PageState:
                     word_index_arg = args[1] if len(args) >= 2 else None
                     self._finalize_word_bbox_edit(
                         page,
-                        line_index=(
-                            line_index_arg if isinstance(line_index_arg, int) else None
-                        ),
-                        word_index=(
-                            word_index_arg if isinstance(word_index_arg, int) else None
-                        ),
+                        line_index=(line_index_arg if isinstance(line_index_arg, int) else None),
+                        word_index=(word_index_arg if isinstance(word_index_arg, int) else None),
                     )
                 else:
                     self._finalize_bbox_edit(page)
@@ -1378,9 +1341,7 @@ class PageState:
         line = lines[line_index]
         line_ground_truth_snapshot = None
         if _rematch_line_ground_truth:
-            line_ground_truth_snapshot = str(
-                getattr(line, "ground_truth_text", "") or ""
-            )
+            line_ground_truth_snapshot = str(getattr(line, "ground_truth_text", "") or "")
 
         gt_snapshot = self._snapshot_word_gt_by_id(page)
 
@@ -1424,7 +1385,7 @@ class PageState:
 
         try:
             if hasattr(line, "unmatched_ground_truth_words"):
-                setattr(line, "unmatched_ground_truth_words", [])
+                line.unmatched_ground_truth_words = []
 
             for word in list(getattr(line, "words", []) or []):
                 with contextlib.suppress(Exception):
@@ -1507,9 +1468,7 @@ class PageState:
             result = getattr(words[word_index], word_op_name)(*args, **kwargs)
             if result:
                 if _finalize == "structural":
-                    self._finalize_structural_edit(
-                        page, operation_label, gt_snapshot=gt_snapshot
-                    )
+                    self._finalize_structural_edit(page, operation_label, gt_snapshot=gt_snapshot)
                 elif _finalize == "word_bbox":
                     self._finalize_word_bbox_edit(page)
                 else:
@@ -1882,10 +1841,10 @@ class PageState:
             logger.warning("erase_pixels_rect: empty page image")
             return False
 
-        left = max(0, min(width, int(round(min(x1, x2)))))
-        right = max(0, min(width, int(round(max(x1, x2)))))
-        top = max(0, min(height, int(round(min(y1, y2)))))
-        bottom = max(0, min(height, int(round(max(y1, y2)))))
+        left = max(0, min(width, round(min(x1, x2))))
+        right = max(0, min(width, round(max(x1, x2))))
+        top = max(0, min(height, round(min(y1, y2))))
+        bottom = max(0, min(height, round(max(y1, y2))))
 
         if right <= left or bottom <= top:
             logger.debug(
@@ -2017,9 +1976,7 @@ class PageState:
         Returns:
             bool: True if refine succeeded, False otherwise.
         """
-        return self._dispatch_bbox_op(
-            "refine_paragraphs", "paragraph refine", paragraph_indices
-        )
+        return self._dispatch_bbox_op("refine_paragraphs", "paragraph refine", paragraph_indices)
 
     def expand_then_refine_lines(
         self,
@@ -2169,10 +2126,7 @@ class PageState:
 
         # Get OCR text from page
         ocr_text = getattr(page, "text", "") or ""
-        if isinstance(ocr_text, str):
-            ocr_text = ocr_text if ocr_text.strip() else ""
-        else:
-            ocr_text = ""
+        ocr_text = (ocr_text if ocr_text.strip() else "") if isinstance(ocr_text, str) else ""
 
         # Get ground truth text from state mapping
         gt_text = self._resolve_ground_truth_text(
@@ -2181,10 +2135,7 @@ class PageState:
             page_index=page_index,
         )
 
-        if isinstance(gt_text, str):
-            gt_text = gt_text if gt_text.strip() else ""
-        else:
-            gt_text = ""
+        gt_text = (gt_text if gt_text.strip() else "") if isinstance(gt_text, str) else ""
 
         return ocr_text, gt_text
 
@@ -2252,7 +2203,7 @@ class PageState:
         """Re-apply page-level ground truth mapping after structural edits.
 
         Raises:
-            _GroundTruthRematchSkipped: when GT text is unavailable or the
+            _GroundTruthRematchSkippedError: when GT text is unavailable or the
                 page type lacks the required GT methods.
         """
         gt_text = self._resolve_ground_truth_text(
@@ -2261,12 +2212,12 @@ class PageState:
             page_index=self._current_page_index,
         )
         if not gt_text:
-            raise _GroundTruthRematchSkipped("no GT text available")
+            raise _GroundTruthRematchSkippedError("no GT text available")
 
         remove_ground_truth = getattr(page, "remove_ground_truth", None)
         add_ground_truth = getattr(page, "add_ground_truth", None)
         if not callable(remove_ground_truth) or not callable(add_ground_truth):
-            raise _GroundTruthRematchSkipped(
+            raise _GroundTruthRematchSkippedError(
                 f"page type {type(page).__name__} lacks GT methods"
             )
 
@@ -2296,10 +2247,8 @@ class PageState:
         if rematch_ground_truth:
             try:
                 self._rematch_page_ground_truth(page, operation)
-            except _GroundTruthRematchSkipped:
-                logger.debug(
-                    "Skipping GT rematch after %s (no GT available)", operation
-                )
+            except _GroundTruthRematchSkippedError:
+                logger.debug("Skipping GT rematch after %s (no GT available)", operation)
             except Exception:
                 logger.exception("Failed to re-match ground truth after %s", operation)
         else:
@@ -2334,9 +2283,7 @@ class PageState:
         try:
             for li, line in enumerate(getattr(page, "lines", []) or []):
                 for wi, word in enumerate(getattr(line, "words", []) or []):
-                    snapshot[(li, wi)] = str(
-                        getattr(word, "ground_truth_text", "") or ""
-                    )
+                    snapshot[(li, wi)] = str(getattr(word, "ground_truth_text", "") or "")
         except Exception:
             logger.debug("Error snapshotting word GT", exc_info=True)
         return snapshot
@@ -2353,9 +2300,7 @@ class PageState:
         try:
             for line in getattr(page, "lines", []) or []:
                 for word in getattr(line, "words", []) or []:
-                    snapshot[id(word)] = str(
-                        getattr(word, "ground_truth_text", "") or ""
-                    )
+                    snapshot[id(word)] = str(getattr(word, "ground_truth_text", "") or "")
         except Exception:
             logger.debug("Error snapshotting word GT by id", exc_info=True)
         return snapshot
@@ -2406,9 +2351,7 @@ class PageState:
                             labels_set.discard("validated")
                             word.word_labels = list(labels_set)
         except Exception:
-            logger.debug(
-                "Error clearing validation for changed GT words", exc_info=True
-            )
+            logger.debug("Error clearing validation for changed GT words", exc_info=True)
 
     @notify_on_completion
     def rematch_ground_truth(self) -> bool:
@@ -2431,7 +2374,7 @@ class PageState:
 
         try:
             self._rematch_page_ground_truth(page, "explicit rematch")
-        except _GroundTruthRematchSkipped:
+        except _GroundTruthRematchSkippedError:
             return False
 
         # Clear validation only for words whose GT actually changed
@@ -2563,11 +2506,7 @@ class PageState:
 
             # Force downstream image URL cache-busting for this edit cycle.
             with contextlib.suppress(Exception):
-                setattr(
-                    page,
-                    "_pd_ocr_labeler_overlay_refresh_nonce",
-                    self._next_overlay_refresh_nonce(),
-                )
+                page._pd_ocr_labeler_overlay_refresh_nonce = self._next_overlay_refresh_nonce()
 
         if not eager:
             # Defer regeneration: the viewmodel's async pipeline will detect
@@ -2590,10 +2529,7 @@ class PageState:
 
     def _has_loading_placeholder(self) -> bool:
         """Check whether cached texts are currently in loading-placeholder state."""
-        return (
-            self._cached_ocr_text == "Loading..."
-            or self._cached_gt_text == "Loading..."
-        )
+        return self._cached_ocr_text == "Loading..." or self._cached_gt_text == "Loading..."
 
     def _is_current_page_loaded(self) -> bool:
         """Return True if current page index points to a materialized page in project cache."""
@@ -2611,16 +2547,12 @@ class PageState:
                 0 <= self._current_page_index < len(self._project.pages)
                 and self._project.pages[self._current_page_index] is not None
             ):
-                logger.debug(
-                    "Updating text cache for page index %s", self._current_page_index
-                )
+                logger.debug("Updating text cache for page index %s", self._current_page_index)
                 self._cached_ocr_text, self._cached_gt_text = self.get_page_texts(
                     self._current_page_index
                 )
                 self._cached_page_index = self._current_page_index
-                logger.debug(
-                    "Updated text cache for page index %s", self._current_page_index
-                )
+                logger.debug("Updated text cache for page index %s", self._current_page_index)
             else:
                 logger.debug(
                     "Page at index %s not loaded; cannot update text cache",

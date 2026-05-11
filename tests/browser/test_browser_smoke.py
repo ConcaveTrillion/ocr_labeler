@@ -74,8 +74,7 @@ def app_url(projects_root: Path):
             if process.poll() is not None:
                 startup_output = process.stdout.read() if process.stdout else ""
                 raise RuntimeError(
-                    "App process exited before becoming ready. Output:\n"
-                    f"{startup_output}"
+                    f"App process exited before becoming ready. Output:\n{startup_output}"
                 )
             try:
                 with urlopen(url, timeout=1):
@@ -103,11 +102,10 @@ def browser_page():
     try:
         try:
             browser = playwright.chromium.launch(headless=True)
-        except Exception:  # pragma: no cover - environment dependent
+        except Exception as exc:  # pragma: no cover - environment dependent
             raise RuntimeError(
-                "Playwright Chromium is required but could not be launched. "
-                "Run: make install"
-            )
+                "Playwright Chromium is required but could not be launched. Run: make install"
+            ) from exc
 
         context = browser.new_context()
         context.set_default_navigation_timeout(60_000)

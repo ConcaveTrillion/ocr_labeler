@@ -81,9 +81,7 @@ class TestOCRService:
 
             # Mock the Document.from_image_ocr_via_doctr to raise exception
             with patch("pd_book_tools.ocr.document.Document") as mock_document:
-                mock_document.from_image_ocr_via_doctr.side_effect = Exception(
-                    "OCR failed"
-                )
+                mock_document.from_image_ocr_via_doctr.side_effect = Exception("OCR failed")
 
                 result = await service.process_page(temp_image)
 
@@ -134,9 +132,7 @@ class TestOCRService:
         image_paths = [Path("/tmp/image1.png"), Path("/tmp/image2.png")]
 
         # Mock process_page to return different results
-        with patch.object(
-            service, "process_page", new_callable=AsyncMock
-        ) as mock_process_page:
+        with patch.object(service, "process_page", new_callable=AsyncMock) as mock_process_page:
             mock_process_page.side_effect = [
                 MagicMock(),
                 None,

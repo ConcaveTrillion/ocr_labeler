@@ -128,9 +128,7 @@ def test_reload_ocr_button_click(browser_app_url: str, browser_page) -> None:
     _wait_for_notification(page)
 
     # Wait for page to re-render — edit-word-button reappears
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # OCR label still present with same text
     first_ocr_after = _get_first_ocr_label(page)
@@ -161,9 +159,7 @@ def test_load_page_button_click(browser_app_url: str, browser_page) -> None:
     _wait_for_notification(page)
 
     # Wait for page to re-render
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # GT input restored (should match saved value, same as before)
     gt_input_after = _get_first_gt_input(page)
@@ -192,9 +188,7 @@ def test_rematch_gt_button_click(browser_app_url: str, browser_page) -> None:
     _wait_for_notification(page)
 
     # Wait for page to re-render
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # GT input should no longer contain the sentinel value
     gt_input_after = _get_first_gt_input(page)

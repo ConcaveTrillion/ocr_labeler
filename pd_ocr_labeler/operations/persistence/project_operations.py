@@ -68,9 +68,7 @@ class ProjectOperations:
 
         # Get directory contents
         images = [
-            p
-            for p in directory.iterdir()
-            if p.is_file() and p.suffix.lower() in image_extensions
+            p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in image_extensions
         ]
 
         # Return sorted by name for consistent ordering
@@ -103,7 +101,7 @@ class ProjectOperations:
         directory: Path,
         images: list[Path],
         ground_truth_map: dict[str, str] | None = None,
-    ) -> "Project":
+    ) -> Project:
         """Create a Project object from directory and image paths.
 
         This method handles all the project creation logic including:
@@ -164,7 +162,7 @@ class ProjectOperations:
                 logger.error("Project metadata not found: %s", project_json_path)
                 return None
 
-            with open(project_json_path, "r", encoding="utf-8") as f:
+            with open(project_json_path, encoding="utf-8") as f:
                 metadata = json.load(f)
 
             # Validate metadata structure using Project model
@@ -177,9 +175,7 @@ class ProjectOperations:
                 logger.warning("Invalid project metadata structure: %s", e)
                 # Continue anyway, as we don't want to break existing projects
 
-            logger.info(
-                "Loaded project metadata for: %s", metadata.get("project_id", "unknown")
-            )
+            logger.info("Loaded project metadata for: %s", metadata.get("project_id", "unknown"))
             return metadata
 
         except Exception:
@@ -213,9 +209,7 @@ class ProjectOperations:
             # escape the backup_directory.
             backup_name = Path(backup_name).name
             if not backup_name:
-                raise ValueError(
-                    "backup_name must be a non-empty single path component"
-                )
+                raise ValueError("backup_name must be a non-empty single path component")
 
             backup_dir = (
                 Path(backup_directory)
@@ -286,9 +280,7 @@ class ProjectOperations:
                 continue
 
             text_value: str | None = (
-                value
-                if isinstance(value, str)
-                else (str(value) if value is not None else None)
+                value if isinstance(value, str) else (str(value) if value is not None else None)
             )
             if text_value is None:
                 continue
@@ -318,9 +310,7 @@ class ProjectOperations:
         project_root = getattr(state, "project_root", None)
 
         if project is None or project_root is None:
-            logger.debug(
-                "reload_ground_truth_into_project: missing project or project_root"
-            )
+            logger.debug("reload_ground_truth_into_project: missing project or project_root")
             return
 
         new_map = cls.load_ground_truth_from_directory(Path(project_root))
@@ -384,9 +374,7 @@ class ProjectOperations:
             raw_data = json.loads(pages_json.read_text(encoding="utf-8"))
             if isinstance(raw_data, dict):
                 norm = cls._normalize_ground_truth_entries(raw_data)
-                logger.info(
-                    "Loaded %d ground truth entries from %s", len(norm), pages_json
-                )
+                logger.info("Loaded %d ground truth entries from %s", len(norm), pages_json)
                 return norm
             logger.warning("pages.json root is not an object (dict): %s", pages_json)
         except Exception as exc:
@@ -454,15 +442,11 @@ class ProjectOperations:
             try:
                 source_data = json.loads(source_path.read_text(encoding="utf-8"))
             except Exception as exc:
-                logger.warning(
-                    "Failed to read manifest source %s: %s", source_path, exc
-                )
+                logger.warning("Failed to read manifest source %s: %s", source_path, exc)
                 continue
 
             if not isinstance(source_data, dict):
-                logger.warning(
-                    "Manifest source %s is not a JSON object; skipping", source_path
-                )
+                logger.warning("Manifest source %s is not a JSON object; skipping", source_path)
                 continue
 
             # If offset > 0, remap numeric keys before normalizing

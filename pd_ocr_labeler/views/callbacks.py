@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
 
 from nicegui import events
 
 PageActionEvent = events.ClickEventArguments | None
 PageActionCallback = Callable[[PageActionEvent], Awaitable[None]]
 ProjectNavigateCallback = Callable[[PageActionEvent], Awaitable[None]]
-ProjectGotoCallback = Callable[
-    [object, events.GenericEventArguments | None], Awaitable[None]
-]
+ProjectGotoCallback = Callable[[object, events.GenericEventArguments | None], Awaitable[None]]
 
 
 @dataclass

@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import logging
 import os
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 from urllib.parse import urlparse
 
 from nicegui import app as nicegui_app
@@ -67,13 +67,11 @@ class NiceGuiLabeler:
         self.project_root = Path(project_root) if project_root else None
         self.projects_root = Path(projects_root) if projects_root else None
         self.monospace_font_name = monospace_font_name
-        self.monospace_font_path = (
-            Path(monospace_font_path) if monospace_font_path else None
-        )
+        self.monospace_font_path = Path(monospace_font_path) if monospace_font_path else None
         self.enable_session_logging = enable_session_logging
 
         logger.debug(
-            "Initializing NiceGuiLabeler with project_root=%s, projects_root=%s, monospace_font_name=%s, monospace_font_path=%s",
+            "Initializing NiceGuiLabeler with project_root=%s, projects_root=%s, monospace_font_name=%s, monospace_font_path=%s",  # noqa: E501
             self.project_root,
             self.projects_root,
             self.monospace_font_name,
@@ -90,9 +88,7 @@ class NiceGuiLabeler:
         else:
             self.logs_dir = None
 
-        self.word_image_cache_dir = (
-            PersistencePathsOperations.get_page_image_cache_root()
-        )
+        self.word_image_cache_dir = PersistencePathsOperations.get_page_image_cache_root()
         self.word_image_cache_dir.mkdir(parents=True, exist_ok=True)
         self._word_cache_static_registered = False
 
@@ -123,9 +119,7 @@ class NiceGuiLabeler:
         """
         # Generate unique session ID with timestamp
         session_timestamp = datetime.now()
-        session_id = session_timestamp.strftime("%Y%m%d_%H%M%S_%f")[
-            :20
-        ]  # Include microseconds
+        session_id = session_timestamp.strftime("%Y%m%d_%H%M%S_%f")[:20]  # Include microseconds
 
         if not self.enable_session_logging or self.logs_dir is None:
             logger.debug("Session logging disabled for session %s", session_id)
@@ -161,9 +155,7 @@ class NiceGuiLabeler:
 
         return file_handler, session_id
 
-    def _cleanup_session_logging(
-        self, file_handler: logging.FileHandler | None, session_id: str
-    ):
+    def _cleanup_session_logging(self, file_handler: logging.FileHandler | None, session_id: str):
         """Clean up session-specific logging handler.
 
         Args:
@@ -302,18 +294,14 @@ class NiceGuiLabeler:
                 ui.timer(0.05, start_url_initialization)
             elif auto_load_cli_project and self.project_root:
                 # Auto-load CLI project if valid
-                if ProjectDiscoveryOperations.validate_project_directory(
-                    self.project_root
-                ):
+                if ProjectDiscoveryOperations.validate_project_directory(self.project_root):
                     logger.info("Auto-loading CLI project: %s", self.project_root)
                     background_tasks.create(state.load_project(self.project_root))
             elif auto_load_cli_project and not self.project_root:
                 # No CLI project — try to restore the last session transparently.
                 self._try_restore_session(state)
 
-            logger.info(
-                "%s tab session initialized successfully: %s", log_label, session_id
-            )
+            logger.info("%s tab session initialized successfully: %s", log_label, session_id)
 
             # Set up cleanup on disconnect
             def on_disconnect():
@@ -350,9 +338,7 @@ class NiceGuiLabeler:
                 )
 
         except Exception:
-            logger.exception(
-                "Error during %s tab session initialization", log_label.lower()
-            )
+            logger.exception("Error during %s tab session initialization", log_label.lower())
             self._cleanup_session_logging(session_handler, session_id)
             raise
 
@@ -378,7 +364,7 @@ class NiceGuiLabeler:
             )
 
         @ui.page("/")
-        def root_index():  # noqa: D401
+        def root_index():
             """Root index page - shows project selection or auto-loads CLI project."""
             request_path = self._get_request_path()
             project_id, page_id = resolve_project_route_from_path(request_path)
@@ -391,7 +377,7 @@ class NiceGuiLabeler:
             )
 
         @ui.page("/project/{project_id}")
-        def project_index(project_id: str):  # noqa: D401
+        def project_index(project_id: str):
             """Project-specific page - loads the given project at page 0."""
             self._create_session(
                 page_title=f"OCR Labeler - {project_id}",
@@ -400,7 +386,7 @@ class NiceGuiLabeler:
             )
 
         @ui.page("/project/{project_id}/page/{page_id}")
-        def project_page_index(project_id: str, page_id: str):  # noqa: D401
+        def project_page_index(project_id: str, page_id: str):
             """Project + page page - loads the given project at the specified page."""
             self._create_session(
                 page_title=f"OCR Labeler - {project_id} (Page {page_id})",
@@ -420,21 +406,17 @@ class NiceGuiLabeler:
         if not callable(add_static_files):
             add_static_files = getattr(ui, "add_static_files", None)
         if not callable(add_static_files):
-            logger.warning(
-                "NiceGUI static-file API unavailable; word cache route not registered"
-            )
+            logger.warning("NiceGUI static-file API unavailable; word cache route not registered")
             return
 
         try:
             add_static_files("/_word_image_cache", str(self.word_image_cache_dir))
             self._word_cache_static_registered = True
-            logger.info(
-                "Registered word image cache static route at /_word_image_cache"
-            )
+            logger.info("Registered word image cache static route at /_word_image_cache")
         except Exception:
             logger.exception("Failed to register word image cache static route")
 
-    def _try_restore_session(self, state: "AppState") -> None:
+    def _try_restore_session(self, state: AppState) -> None:
         """Restore the last session transparently when no CLI project is set.
 
         Reads the persisted session snapshot and, if the saved project
@@ -459,14 +441,10 @@ class NiceGuiLabeler:
                 saved.last_page_index,
             )
             background_tasks.create(
-                state.load_project(
-                    project_path, initial_page_index=saved.last_page_index
-                )
+                state.load_project(project_path, initial_page_index=saved.last_page_index)
             )
         except Exception:
-            logger.debug(
-                "_try_restore_session: unexpected error; skipping", exc_info=True
-            )
+            logger.debug("_try_restore_session: unexpected error; skipping", exc_info=True)
 
     def _get_request_path(self) -> str | None:
         """Safely retrieve the current request path from NiceGUI context."""
@@ -485,9 +463,7 @@ class NiceGuiLabeler:
             if headers is not None:
                 for header_name in ("x-original-uri", "x-forwarded-uri"):
                     forwarded_path = headers.get(header_name)
-                    if isinstance(forwarded_path, str) and forwarded_path.startswith(
-                        "/"
-                    ):
+                    if isinstance(forwarded_path, str) and forwarded_path.startswith("/"):
                         return forwarded_path
 
                 # NiceGUI reconnect can hit '/' while Referer still has '/project/...'
@@ -501,9 +477,7 @@ class NiceGuiLabeler:
             if isinstance(path, str):
                 return path
         except Exception:
-            logger.debug(
-                "Failed to read request path from NiceGUI context", exc_info=True
-            )
+            logger.debug("Failed to read request path from NiceGUI context", exc_info=True)
         return None
 
     def _notify_safe(self, message: str, type: str = "info") -> None:
@@ -542,9 +516,7 @@ class NiceGuiLabeler:
         notify = notify_fn or self._notify_safe
 
         try:
-            logger.info(
-                "Initializing from URL: project_id=%s, page_id=%s", project_id, page_id
-            )
+            logger.info("Initializing from URL: project_id=%s, page_id=%s", project_id, page_id)
 
             # Find the project directory
             project_path = await run.io_bound(
@@ -576,7 +548,7 @@ class NiceGuiLabeler:
                 page_id_parse_error = True
 
             logger.info(
-                "URL init page selection: page_id=%s, requested_page_number=%s, requested_page_index=%s, parse_error=%s",
+                "URL init page selection: page_id=%s, requested_page_number=%s, requested_page_index=%s, parse_error=%s",  # noqa: E501
                 page_id,
                 requested_page_number,
                 requested_page_index,
@@ -585,19 +557,13 @@ class NiceGuiLabeler:
 
             project_key = project_path.resolve().name
             already_loaded = False
-            if (
-                state.current_project_key == project_key
-                and project_key in state.projects
-            ):
+            if state.current_project_key == project_key and project_key in state.projects:
                 existing_project_state = state.projects[project_key]
-                existing_project_root = getattr(
-                    existing_project_state, "project_root", None
-                )
+                existing_project_root = getattr(existing_project_state, "project_root", None)
                 if existing_project_root is not None:
                     try:
                         already_loaded = (
-                            Path(existing_project_root).resolve()
-                            == project_path.resolve()
+                            Path(existing_project_root).resolve() == project_path.resolve()
                         )
                     except Exception:
                         already_loaded = False
@@ -633,9 +599,7 @@ class NiceGuiLabeler:
                 project_state = state.projects[state.current_project_key]
                 # Ensure project state has some pages before attempting navigation
                 if project_state.project and project_state.project.pages:
-                    if not (
-                        0 <= requested_page_index < len(project_state.project.pages)
-                    ):
+                    if not (0 <= requested_page_index < len(project_state.project.pages)):
                         logger.warning(
                             "Page '%s' not found in project '%s'",
                             page_id,
@@ -648,13 +612,11 @@ class NiceGuiLabeler:
                             project_state.goto_page_index(requested_page_index)
                         else:
                             logger.info(
-                                "URL init: already at requested page index %s; skipping redundant navigation",
+                                "URL init: already at requested page index %s; skipping redundant navigation",  # noqa: E501
                                 requested_page_index,
                             )
                 else:
-                    logger.warning(
-                        "Project '%s' loaded but contains no pages", project_id
-                    )
+                    logger.warning("Project '%s' loaded but contains no pages", project_id)
                     notify(f"Page not found: {page_id}", "warning")
 
             # Update browser URL to reflect the resolved state
@@ -694,9 +656,7 @@ class NiceGuiLabeler:
             )
         except TypeError:
             # Older NiceGUI versions may not accept forwarded kwargs
-            logger.warning(
-                "Falling back to basic ui.run call due to TypeError with kwargs"
-            )
+            logger.warning("Falling back to basic ui.run call due to TypeError with kwargs")
             ui.run(host=host, port=port, reload=False, show=False)
 
     def _prepare_font_css(self) -> str:  # pragma: no cover (UI side effect)
@@ -766,6 +726,6 @@ class NiceGuiLabeler:
             """
             logger.debug("Font CSS prepared with font-family: %s", font_family)
             return css
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("Font CSS preparation failed", exc_info=True)
             return ""

@@ -22,9 +22,7 @@ class LineMatch:
     word_matches: list[WordMatch]
     paragraph_index: int | None = None
     page_image: object | None = None  # Reference to page image for cropping
-    line_object: object | None = (
-        None  # Reference to the original line Block object for bbox access
-    )
+    line_object: object | None = None  # Reference to the original line Block object for bbox access
 
     def __eq__(self, other: object) -> bool:
         """Custom equality that handles numpy arrays properly.
@@ -61,39 +59,27 @@ class LineMatch:
     @property
     def exact_match_count(self) -> int:
         """Count of exactly matching words."""
-        return sum(
-            1 for wm in self.word_matches if wm.match_status == MatchStatus.EXACT
-        )
+        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.EXACT)
 
     @property
     def fuzzy_match_count(self) -> int:
         """Count of fuzzy matching words."""
-        return sum(
-            1 for wm in self.word_matches if wm.match_status == MatchStatus.FUZZY
-        )
+        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.FUZZY)
 
     @property
     def mismatch_count(self) -> int:
         """Count of mismatched words."""
-        return sum(
-            1 for wm in self.word_matches if wm.match_status == MatchStatus.MISMATCH
-        )
+        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.MISMATCH)
 
     @property
     def unmatched_gt_count(self) -> int:
         """Count of unmatched ground truth words."""
-        return sum(
-            1 for wm in self.word_matches if wm.match_status == MatchStatus.UNMATCHED_GT
-        )
+        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.UNMATCHED_GT)
 
     @property
     def unmatched_ocr_count(self) -> int:
         """Count of unmatched OCR words."""
-        return sum(
-            1
-            for wm in self.word_matches
-            if wm.match_status == MatchStatus.UNMATCHED_OCR
-        )
+        return sum(1 for wm in self.word_matches if wm.match_status == MatchStatus.UNMATCHED_OCR)
 
     @property
     def validated_word_count(self) -> int:
@@ -108,9 +94,7 @@ class LineMatch:
     @property
     def is_fully_validated(self) -> bool:
         """Return True if all words in this line are validated."""
-        return bool(self.word_matches) and all(
-            wm.is_validated for wm in self.word_matches
-        )
+        return bool(self.word_matches) and all(wm.is_validated for wm in self.word_matches)
 
     @property
     def overall_match_status(self) -> MatchStatus:

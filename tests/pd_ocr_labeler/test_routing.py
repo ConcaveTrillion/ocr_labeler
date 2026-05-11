@@ -65,9 +65,7 @@ class TestResolveProjectPath:
 
     def test_resolve_nonexistent_returns_none(self, tmp_path: Path):
         """Should return None when project doesn't exist anywhere."""
-        result = resolve_project_path(
-            "nonexistent_project_xyz", base_projects_root=tmp_path
-        )
+        result = resolve_project_path("nonexistent_project_xyz", base_projects_root=tmp_path)
         assert result is None
 
     def test_resolve_relative_to_cwd(self, tmp_path: Path, monkeypatch):
@@ -124,9 +122,7 @@ class TestResolveProjectPath:
         assert result is not None
         assert result.resolve() == project_dir.resolve()
 
-    def test_resolve_available_projects_preferred_over_cwd(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_resolve_available_projects_preferred_over_cwd(self, tmp_path: Path, monkeypatch):
         """available_projects should be checked before CWD."""
         # Create project in both CWD and available_projects with different paths
         cwd_dir = tmp_path / "cwd_root"
@@ -145,9 +141,7 @@ class TestResolveProjectPath:
         assert result is not None
         assert result.resolve() == other_dir.resolve()
 
-    def test_resolve_base_projects_root_preferred_over_cwd(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_resolve_base_projects_root_preferred_over_cwd(self, tmp_path: Path, monkeypatch):
         """base_projects_root should be preferred over CWD when both contain the same project id."""
         cwd_root = tmp_path / "cwd_root"
         cwd_root.mkdir()
@@ -179,9 +173,7 @@ class TestSyncUrlToState:
 
         sync_url_to_state(state)
 
-        mock_ui.navigate.history.replace.assert_called_once_with(
-            "/project/test_project/page/4"
-        )
+        mock_ui.navigate.history.replace.assert_called_once_with("/project/test_project/page/4")
 
     @patch("pd_ocr_labeler.routing.ui")
     def test_sync_with_project_page_zero(self, mock_ui):
@@ -215,9 +207,7 @@ class TestSyncUrlToState:
 
         sync_url_to_state(state)
 
-        mock_ui.navigate.history.replace.assert_called_once_with(
-            "/project/orphan/page/1"
-        )
+        mock_ui.navigate.history.replace.assert_called_once_with("/project/orphan/page/1")
 
     @patch("pd_ocr_labeler.routing.ui")
     def test_sync_handles_exception_gracefully(self, mock_ui):
@@ -240,9 +230,7 @@ class TestSyncUrlFromProjectState:
         project_root = Path("/some/path/my_project")
         sync_url_from_project_state(project_root, 5)
 
-        mock_ui.navigate.history.replace.assert_called_once_with(
-            "/project/my_project/page/6"
-        )
+        mock_ui.navigate.history.replace.assert_called_once_with("/project/my_project/page/6")
 
     @patch("pd_ocr_labeler.routing.ui")
     def test_sync_with_none_root_does_nothing(self, mock_ui):
@@ -257,9 +245,7 @@ class TestSyncUrlFromProjectState:
         project_root = Path("/home/user/projects/proj1")
         sync_url_from_project_state(project_root, 0)
 
-        mock_ui.navigate.history.replace.assert_called_once_with(
-            "/project/proj1/page/1"
-        )
+        mock_ui.navigate.history.replace.assert_called_once_with("/project/proj1/page/1")
 
     @patch("pd_ocr_labeler.routing.ui")
     def test_sync_handles_exception_gracefully(self, mock_ui):

@@ -6,11 +6,11 @@ consistent button appearance without duplicating class/prop strings.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class ButtonVariant(str, Enum):
+class ButtonVariant(StrEnum):
     """Supported shared button style variants."""
 
     DEFAULT = "default"

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from nicegui import ui
 
@@ -88,9 +89,7 @@ class WordMatchToolbar:
         # Expand Bboxes | Split After | Split Select | Word Select | To Paragraph |
         # GT->OCR | OCR->GT | Validate | Unvalidate | Delete
         with (
-            ui.grid(
-                columns="auto auto auto auto auto auto auto auto auto auto auto auto auto auto"
-            )
+            ui.grid(columns="auto auto auto auto auto auto auto auto auto auto auto auto auto auto")
             .classes("items-center justify-items-center w-auto pl-2")
             .style("display: inline-grid; column-gap: 2px; row-gap: 2px")
         ):
@@ -102,9 +101,7 @@ class WordMatchToolbar:
                     icon="auto_fix_high",
                     on_click=self._on_refine_bboxes,
                 ).tooltip("Refine all bounding boxes on this page")
-                self.refine_bboxes_button.props(
-                    'data-testid="page-refine-bboxes-button"'
-                )
+                self.refine_bboxes_button.props('data-testid="page-refine-bboxes-button"')
                 style_word_icon_button(self.refine_bboxes_button)
             else:
                 ui.element("div")
@@ -128,18 +125,14 @@ class WordMatchToolbar:
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_page_gt_to_ocr,
             ).tooltip("Copy all ground truth text to OCR on this page")
-            self.copy_gt_to_ocr_page_button.props(
-                'data-testid="page-copy-gt-to-ocr-button"'
-            )
+            self.copy_gt_to_ocr_page_button.props('data-testid="page-copy-gt-to-ocr-button"')
             self.copy_gt_to_ocr_page_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_page_button)
             self.copy_ocr_to_gt_page_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_page_ocr_to_gt,
             ).tooltip("Copy all OCR text to ground truth on this page")
-            self.copy_ocr_to_gt_page_button.props(
-                'data-testid="page-copy-ocr-to-gt-button"'
-            )
+            self.copy_ocr_to_gt_page_button.props('data-testid="page-copy-ocr-to-gt-button"')
             style_word_icon_button(self.copy_ocr_to_gt_page_button)
             self.validate_page_button = ui.button(
                 icon="check_circle",
@@ -156,9 +149,7 @@ class WordMatchToolbar:
             ui.element("div")  # no Delete for page
 
             # Paragraph row
-            ui.label("Paragraph").classes(
-                "text-sm font-semibold justify-self-start pr-1"
-            )
+            ui.label("Paragraph").classes("text-sm font-semibold justify-self-start pr-1")
             self.merge_paragraphs_button = ui.button(
                 icon="call_merge",
                 on_click=self._view.actions._handle_merge_selected_paragraphs,
@@ -169,9 +160,7 @@ class WordMatchToolbar:
                 icon="auto_fix_high",
                 on_click=self._view.actions._handle_refine_selected_paragraphs,
             ).tooltip("Refine selected paragraphs")
-            self.refine_paragraphs_button.props(
-                'data-testid="paragraph-refine-bboxes-button"'
-            )
+            self.refine_paragraphs_button.props('data-testid="paragraph-refine-bboxes-button"')
             style_word_icon_button(self.refine_paragraphs_button)
             self.expand_then_refine_paragraphs_button = ui.button(
                 icon="zoom_out_map",
@@ -192,9 +181,7 @@ class WordMatchToolbar:
             self.split_paragraph_after_line_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_paragraph_after_selected_line,
-            ).tooltip(
-                "Split the containing paragraph immediately after the selected line"
-            )
+            ).tooltip("Split the containing paragraph immediately after the selected line")
             self.split_paragraph_after_line_button.props(
                 'data-testid="paragraph-split-after-line-button"'
             )
@@ -223,26 +210,20 @@ class WordMatchToolbar:
                 icon="check_circle",
                 on_click=self._handle_validate_selected_paragraphs,
             ).tooltip("Validate all words in selected paragraphs")
-            self.validate_paragraphs_button.props(
-                'data-testid="paragraph-validate-button"'
-            )
+            self.validate_paragraphs_button.props('data-testid="paragraph-validate-button"')
             style_word_icon_button(self.validate_paragraphs_button)
             self.unvalidate_paragraphs_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_paragraphs,
             ).tooltip("Unvalidate all words in selected paragraphs")
-            self.unvalidate_paragraphs_button.props(
-                'data-testid="paragraph-unvalidate-button"'
-            )
+            self.unvalidate_paragraphs_button.props('data-testid="paragraph-unvalidate-button"')
             style_word_icon_button(self.unvalidate_paragraphs_button)
             self.delete_paragraphs_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_paragraphs,
             ).tooltip("Delete selected paragraphs")
             self.delete_paragraphs_button.props('data-testid="paragraph-delete-button"')
-            style_word_icon_button(
-                self.delete_paragraphs_button, variant=ButtonVariant.DELETE
-            )
+            style_word_icon_button(self.delete_paragraphs_button, variant=ButtonVariant.DELETE)
 
             # Line row
             ui.label("Line").classes("text-sm font-semibold justify-self-start pr-1")
@@ -270,17 +251,13 @@ class WordMatchToolbar:
                 icon="open_in_full",
                 on_click=self._view.actions._handle_expand_bbox_selected_lines,
             ).tooltip("Expand selected line bboxes")
-            self.expand_line_bboxes_button.props(
-                'data-testid="line-expand-bboxes-button"'
-            )
+            self.expand_line_bboxes_button.props('data-testid="line-expand-bboxes-button"')
             style_word_icon_button(self.expand_line_bboxes_button)
             self.split_line_after_word_button = ui.button(
                 icon="call_split",
                 on_click=self._view.actions._handle_split_line_after_selected_word,
             ).tooltip("Split the selected line immediately after the selected word")
-            self.split_line_after_word_button.props(
-                'data-testid="line-split-after-word-button"'
-            )
+            self.split_line_after_word_button.props('data-testid="line-split-after-word-button"')
             style_word_icon_button(self.split_line_after_word_button)
             self.split_line_by_selection_button = ui.button(
                 icon="vertical_split",
@@ -320,26 +297,20 @@ class WordMatchToolbar:
                 icon="check_circle",
                 on_click=self._handle_validate_selected_lines,
             ).tooltip("Validate all words in selected lines")
-            self.validate_lines_button.props(
-                'data-testid="line-validate-toolbar-button"'
-            )
+            self.validate_lines_button.props('data-testid="line-validate-toolbar-button"')
             style_word_icon_button(self.validate_lines_button)
             self.unvalidate_lines_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_lines,
             ).tooltip("Unvalidate all words in selected lines")
-            self.unvalidate_lines_button.props(
-                'data-testid="line-unvalidate-toolbar-button"'
-            )
+            self.unvalidate_lines_button.props('data-testid="line-unvalidate-toolbar-button"')
             style_word_icon_button(self.unvalidate_lines_button)
             self.delete_lines_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_lines,
             ).tooltip("Delete selected lines")
             self.delete_lines_button.props('data-testid="line-delete-toolbar-button"')
-            style_word_icon_button(
-                self.delete_lines_button, variant=ButtonVariant.DELETE
-            )
+            style_word_icon_button(self.delete_lines_button, variant=ButtonVariant.DELETE)
 
             # Word row
             ui.label("Word").classes("text-sm font-semibold justify-self-start pr-1")
@@ -367,9 +338,7 @@ class WordMatchToolbar:
                 icon="open_in_full",
                 on_click=self._view.actions._handle_expand_bbox_selected_words,
             ).tooltip("Expand selected word bboxes")
-            self.expand_word_bboxes_button.props(
-                'data-testid="word-expand-bboxes-button"'
-            )
+            self.expand_word_bboxes_button.props('data-testid="word-expand-bboxes-button"')
             style_word_icon_button(self.expand_word_bboxes_button)
             ui.element("div")  # no Split After for word
             ui.element("div")  # no Split Select for word
@@ -377,16 +346,12 @@ class WordMatchToolbar:
                 icon="short_text",
                 on_click=self._view.actions._handle_split_line_by_selected_words,
             ).tooltip("Form one new line from selected words")
-            self.extract_line_from_selection_button.props(
-                'data-testid="word-form-line-button"'
-            )
+            self.extract_line_from_selection_button.props('data-testid="word-form-line-button"')
             style_word_icon_button(self.extract_line_from_selection_button)
             self.group_selected_words_into_paragraph_button = ui.button(
                 icon="format_paragraph",
                 on_click=self._view.actions._handle_group_selected_words_into_new_paragraph,
-            ).tooltip(
-                "Select words to form a new paragraph (one new line per source line)"
-            )
+            ).tooltip("Select words to form a new paragraph (one new line per source line)")
             self.group_selected_words_into_paragraph_button.props(
                 'data-testid="word-form-paragraph-button"'
             )
@@ -395,54 +360,40 @@ class WordMatchToolbar:
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_words_gt_to_ocr,
             ).tooltip("Copy ground truth text to OCR for selected words")
-            self.copy_gt_to_ocr_words_button.props(
-                'data-testid="word-copy-gt-to-ocr-button"'
-            )
+            self.copy_gt_to_ocr_words_button.props('data-testid="word-copy-gt-to-ocr-button"')
             self.copy_gt_to_ocr_words_button.classes("copy-icon-flip")
             style_word_icon_button(self.copy_gt_to_ocr_words_button)
             self.copy_ocr_to_gt_words_button = ui.button(
                 icon="content_copy",
                 on_click=self._view.actions._handle_copy_selected_words_ocr_to_gt,
             ).tooltip("Copy OCR text to ground truth for selected words")
-            self.copy_ocr_to_gt_words_button.props(
-                'data-testid="word-copy-ocr-to-gt-button"'
-            )
+            self.copy_ocr_to_gt_words_button.props('data-testid="word-copy-ocr-to-gt-button"')
             style_word_icon_button(self.copy_ocr_to_gt_words_button)
             self.validate_words_button = ui.button(
                 icon="check_circle",
                 on_click=self._handle_validate_selected_words,
             ).tooltip("Validate selected words")
-            self.validate_words_button.props(
-                'data-testid="word-validate-toolbar-button"'
-            )
+            self.validate_words_button.props('data-testid="word-validate-toolbar-button"')
             style_word_icon_button(self.validate_words_button)
             self.unvalidate_words_button = ui.button(
                 icon="unpublished",
                 on_click=self._handle_unvalidate_selected_words,
             ).tooltip("Unvalidate selected words")
-            self.unvalidate_words_button.props(
-                'data-testid="word-unvalidate-toolbar-button"'
-            )
+            self.unvalidate_words_button.props('data-testid="word-unvalidate-toolbar-button"')
             style_word_icon_button(self.unvalidate_words_button)
             self.delete_words_button = ui.button(
                 icon="delete",
                 on_click=self._view.actions._handle_delete_selected_words,
             ).tooltip("Delete selected words")
             self.delete_words_button.props('data-testid="word-delete-button"')
-            style_word_icon_button(
-                self.delete_words_button, variant=ButtonVariant.DELETE
-            )
+            style_word_icon_button(self.delete_words_button, variant=ButtonVariant.DELETE)
 
         self._build_apply_style_toolbar()
         self._build_add_word_toolbar()
 
     def _build_apply_style_toolbar(self) -> None:
         """Build a dedicated immediate-apply style toolbar for selected words."""
-        with (
-            ui.row()
-            .classes("items-end gap-2 pl-2 pt-2 flex-wrap")
-            .style("max-width: 100%;")
-        ):
+        with ui.row().classes("items-end gap-2 pl-2 pt-2 flex-wrap").style("max-width: 100%;"):
             style_options = {
                 style_label: self._display_label(style_label)
                 for style_label in self._view.word_operations.supported_styles
@@ -454,9 +405,7 @@ class WordMatchToolbar:
                 label="Style",
             ).props("dense outlined options-dense")
             self.apply_style_select.classes("text-caption")
-            self.apply_style_select.style(
-                "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
-            )
+            self.apply_style_select.style("min-width: 122px; max-width: 140px; font-size: 0.72rem;")
             self.apply_style_select.on_value_change(self._on_style_value_change)
             self.apply_style_select.props('data-testid="apply-style-select"')
 
@@ -466,9 +415,7 @@ class WordMatchToolbar:
                 label="Scope",
             ).props("dense outlined options-dense")
             self.apply_scope_select.classes("text-caption")
-            self.apply_scope_select.style(
-                "min-width: 96px; max-width: 108px; font-size: 0.72rem;"
-            )
+            self.apply_scope_select.style("min-width: 96px; max-width: 108px; font-size: 0.72rem;")
             self.apply_scope_select.on_value_change(
                 lambda event: (
                     self._apply_scope(str(event.value))
@@ -484,8 +431,7 @@ class WordMatchToolbar:
             ).props("dense no-caps size=sm")
             style_word_text_button(self.apply_style_button, compact=True)
             self.apply_style_button.style(
-                "min-width: 80px; padding-left: 6px; padding-right: 6px; "
-                "font-size: 0.72rem;"
+                "min-width: 80px; padding-left: 6px; padding-right: 6px; font-size: 0.72rem;"
             )
             self.apply_style_button.props('data-testid="apply-style-button"')
 
@@ -512,8 +458,7 @@ class WordMatchToolbar:
             ).props("dense no-caps size=sm")
             style_word_text_button(self.apply_component_button, compact=True)
             self.apply_component_button.style(
-                "min-width: 98px; padding-left: 6px; padding-right: 6px; "
-                "font-size: 0.72rem;"
+                "min-width: 98px; padding-left: 6px; padding-right: 6px; font-size: 0.72rem;"
             )
             self.apply_component_button.props('data-testid="apply-component-button"')
 
@@ -523,8 +468,7 @@ class WordMatchToolbar:
             ).props("dense no-caps size=sm outline")
             style_word_text_button(self.clear_component_button, compact=True)
             self.clear_component_button.style(
-                "min-width: 102px; padding-left: 6px; padding-right: 6px; "
-                "font-size: 0.72rem;"
+                "min-width: 102px; padding-left: 6px; padding-right: 6px; font-size: 0.72rem;"
             )
             self.clear_component_button.props('data-testid="clear-component-button"')
 
@@ -536,18 +480,12 @@ class WordMatchToolbar:
         """Build a toolbar row with add-word action."""
         if self._view.add_word_callback is None:
             return
-        with (
-            ui.row()
-            .classes("items-center gap-2 pl-2 pt-1 flex-wrap")
-            .style("max-width: 100%;")
-        ):
+        with ui.row().classes("items-center gap-2 pl-2 pt-1 flex-wrap").style("max-width: 100%;"):
             self.add_word_button = ui.button(
                 "Add Word",
                 icon="add_box",
                 on_click=self._view.bbox.handle_start_add_word,
-            ).tooltip(
-                "Draw a bounding box on the image to insert a new word into the nearest line"
-            )
+            ).tooltip("Draw a bounding box on the image to insert a new word into the nearest line")
             self.add_word_button.props('data-testid="word-add-button"')
             style_word_text_button(self.add_word_button)
 
@@ -609,9 +547,7 @@ class WordMatchToolbar:
     # Validation handlers
     # ------------------------------------------------------------------
 
-    def _collect_word_keys_for_lines(
-        self, line_indices: list[int]
-    ) -> list[tuple[int, int]]:
+    def _collect_word_keys_for_lines(self, line_indices: list[int]) -> list[tuple[int, int]]:
         """Return (line_index, word_index) pairs for all words in given lines."""
         line_set = set(line_indices)
         keys: list[tuple[int, int]] = []
@@ -623,9 +559,7 @@ class WordMatchToolbar:
                         keys.append((lm.line_index, wi))
         return keys
 
-    def _set_validation_for_keys(
-        self, keys: list[tuple[int, int]], *, validate: bool
-    ) -> None:
+    def _set_validation_for_keys(self, keys: list[tuple[int, int]], *, validate: bool) -> None:
         """Toggle validation for a list of (line_index, word_index) pairs.
 
         Snapshots each word's current state *before* calling the callback so
@@ -651,10 +585,7 @@ class WordMatchToolbar:
         targets: list[tuple[int, int]] = []
         toggled_lines: set[int] = set()
         for line_idx, word_idx, was_validated in snapshot:
-            if validate and not was_validated:
-                targets.append((line_idx, word_idx))
-                toggled_lines.add(line_idx)
-            elif not validate and was_validated:
+            if (validate and not was_validated) or (not validate and was_validated):
                 targets.append((line_idx, word_idx))
                 toggled_lines.add(line_idx)
 
@@ -674,17 +605,14 @@ class WordMatchToolbar:
         # no longer visible.  ``deselect_lines`` discards each line's words
         # and any paragraphs that are no longer fully line-selected.
         hidden_lines = {
-            line_idx
-            for line_idx in toggled_lines
-            if self._is_line_hidden_by_filter(line_idx)
+            line_idx for line_idx in toggled_lines if self._is_line_hidden_by_filter(line_idx)
         }
         selection_changed = self._view.selection.deselect_lines(hidden_lines)
         # When a filter is active, lines may need to appear or disappear.
         # If any toggled line has no card ref it was hidden and needs to appear,
         # so fall back to a full rebuild.  Otherwise hide/rerender per-line.
         needs_rebuild = any(
-            line_idx not in self._view.renderer._line_card_refs
-            for line_idx in toggled_lines
+            line_idx not in self._view.renderer._line_card_refs for line_idx in toggled_lines
         )
         if needs_rebuild:
             self._view.renderer.update_lines_display()
@@ -757,14 +685,12 @@ class WordMatchToolbar:
 
         if self.delete_lines_button is not None:
             self.delete_lines_button.enabled = (
-                self._view.delete_lines_callback is not None
-                and len(selected_lines) >= 1
+                self._view.delete_lines_callback is not None and len(selected_lines) >= 1
             )
 
         if self.refine_lines_button is not None:
             self.refine_lines_button.enabled = (
-                self._view.refine_lines_callback is not None
-                and len(selected_lines) >= 1
+                self._view.refine_lines_callback is not None and len(selected_lines) >= 1
             )
 
         if self.expand_then_refine_lines_button is not None:
@@ -775,8 +701,7 @@ class WordMatchToolbar:
 
         if self.expand_line_bboxes_button is not None:
             self.expand_line_bboxes_button.enabled = (
-                self._view.expand_line_bboxes_callback is not None
-                and len(selected_lines) >= 1
+                self._view.expand_line_bboxes_callback is not None and len(selected_lines) >= 1
             )
 
         if self.merge_paragraphs_button is not None:
@@ -901,14 +826,12 @@ class WordMatchToolbar:
 
         if self.copy_gt_to_ocr_lines_button is not None:
             self.copy_gt_to_ocr_lines_button.enabled = (
-                self._view.copy_gt_to_ocr_callback is not None
-                and len(selected_lines) >= 1
+                self._view.copy_gt_to_ocr_callback is not None and len(selected_lines) >= 1
             )
 
         if self.copy_ocr_to_gt_lines_button is not None:
             self.copy_ocr_to_gt_lines_button.enabled = (
-                self._view.copy_ocr_to_gt_callback is not None
-                and len(selected_lines) >= 1
+                self._view.copy_ocr_to_gt_callback is not None and len(selected_lines) >= 1
             )
 
         if self.copy_gt_to_ocr_words_button is not None:
@@ -943,9 +866,7 @@ class WordMatchToolbar:
             or self._view.set_words_validated_callback is not None
         )
         has_any_lines = len(self._view._get_all_line_indices()) > 0
-        has_selected_paragraphs = (
-            len(self._view.selection.selected_paragraph_indices) > 0
-        )
+        has_selected_paragraphs = len(self._view.selection.selected_paragraph_indices) > 0
         has_selected_lines = len(selected_lines) > 0
 
         for btn in (self.validate_page_button, self.unvalidate_page_button):

@@ -19,11 +19,7 @@ class PersistencePathsOperations:
 
         if system_name == "Linux":
             config_home = os.getenv("XDG_CONFIG_HOME")
-            base_dir = (
-                Path(config_home).expanduser()
-                if config_home
-                else Path.home() / ".config"
-            )
+            base_dir = Path(config_home).expanduser() if config_home else Path.home() / ".config"
         elif system_name == "Darwin":
             base_dir = Path.home() / "Library" / "Application Support"
         elif system_name == "Windows":
@@ -42,9 +38,7 @@ class PersistencePathsOperations:
         if system_name == "Linux":
             data_home = os.getenv("XDG_DATA_HOME")
             base_dir = (
-                Path(data_home).expanduser()
-                if data_home
-                else Path.home() / ".local" / "share"
+                Path(data_home).expanduser() if data_home else Path.home() / ".local" / "share"
             )
         elif system_name == "Darwin":
             base_dir = Path.home() / "Library" / "Application Support"
@@ -63,18 +57,12 @@ class PersistencePathsOperations:
 
         if system_name == "Linux":
             cache_home = os.getenv("XDG_CACHE_HOME")
-            base_dir = (
-                Path(cache_home).expanduser() if cache_home else Path.home() / ".cache"
-            )
+            base_dir = Path(cache_home).expanduser() if cache_home else Path.home() / ".cache"
         elif system_name == "Darwin":
             base_dir = Path.home() / "Library" / "Caches"
         elif system_name == "Windows":
             localappdata = os.getenv("LOCALAPPDATA")
-            base_dir = (
-                Path(localappdata)
-                if localappdata
-                else Path.home() / "AppData" / "Local"
-            )
+            base_dir = Path(localappdata) if localappdata else Path.home() / "AppData" / "Local"
         else:
             base_dir = Path.home() / ".cache"
 
@@ -88,9 +76,7 @@ class PersistencePathsOperations:
     @staticmethod
     def get_default_source_projects_root() -> Path:
         """Return default source projects root under app data root."""
-        return (
-            PersistencePathsOperations.get_data_root() / "source-pgdp-data" / "output"
-        )
+        return PersistencePathsOperations.get_data_root() / "source-pgdp-data" / "output"
 
     @staticmethod
     def get_default_state_root() -> Path:

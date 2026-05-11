@@ -486,9 +486,7 @@ def test_merge_word_left_preserves_in_memory_ground_truth_after_merge(monkeypatc
     monkeypatch.setattr(
         page_state,
         "_rematch_edited_line_ground_truth",
-        lambda line, snapshot, operation: rematch_calls.append(
-            (line, snapshot, operation)
-        ),
+        lambda line, snapshot, operation: rematch_calls.append((line, snapshot, operation)),
     )
 
     notified = []
@@ -547,9 +545,7 @@ def test_merge_word_right_preserves_in_memory_ground_truth_after_merge(monkeypat
     monkeypatch.setattr(
         page_state,
         "_rematch_edited_line_ground_truth",
-        lambda line, snapshot, operation: rematch_calls.append(
-            (line, snapshot, operation)
-        ),
+        lambda line, snapshot, operation: rematch_calls.append((line, snapshot, operation)),
     )
 
     notified = []
@@ -608,9 +604,7 @@ def test_split_word_reapplies_ground_truth_after_split(monkeypatch):
     monkeypatch.setattr(
         page_state,
         "_rematch_edited_line_ground_truth",
-        lambda line, snapshot, operation: rematch_calls.append(
-            (line, snapshot, operation)
-        ),
+        lambda line, snapshot, operation: rematch_calls.append((line, snapshot, operation)),
     )
 
     notified = []
@@ -821,7 +815,7 @@ def test_nudge_word_bbox_preserves_original_image_url_stability(monkeypatch):
             return True
 
     class PageModelStub:
-        cached_image_filenames = {"original": "preexisting.png"}
+        cached_image_filenames: dict = {"original": "preexisting.png"}  # noqa: RUF012  # test stub, ClassVar not needed
 
     page = PageStub()
     page_state.current_page = page
@@ -841,9 +835,7 @@ def test_nudge_word_bbox_preserves_original_image_url_stability(monkeypatch):
     assert nonce_after == nonce_before
     # Filename cache must be preserved so the fast image path does not
     # force a re-encode of the unchanged original.
-    assert page_state.current_page_model.cached_image_filenames == {
-        "original": "preexisting.png"
-    }
+    assert page_state.current_page_model.cached_image_filenames == {"original": "preexisting.png"}
     # Targeted event was emitted with correct identity.
     assert len(received_events) == 1
     assert received_events[0].line_index == 2
@@ -868,9 +860,7 @@ def test_refine_words_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    monkeypatch.setattr(
-        ps_module.BboxOperations, "refine_words", lambda self, p, keys: True
-    )
+    monkeypatch.setattr(ps_module.BboxOperations, "refine_words", lambda self, p, keys: True)
 
     result = page_state.refine_words([(0, 1)])
 
@@ -926,9 +916,7 @@ def test_refine_lines_refreshes_overlay_and_notifies(monkeypatch):
     notified = []
     page_state.on_change = [lambda: notified.append("changed")]
 
-    monkeypatch.setattr(
-        ps_module.BboxOperations, "refine_lines", lambda self, p, indices: True
-    )
+    monkeypatch.setattr(ps_module.BboxOperations, "refine_lines", lambda self, p, indices: True)
 
     result = page_state.refine_lines([0])
 
@@ -1035,7 +1023,7 @@ def test_update_word_attributes_notifies_on_success(monkeypatch):
     monkeypatch.setattr(
         line_ops_module.LineOperations,
         "update_word_attributes",
-        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (  # noqa: E501
             True
         ),
     )
@@ -1062,7 +1050,7 @@ def test_update_word_attributes_emits_typed_style_event_on_success(monkeypatch):
     monkeypatch.setattr(
         line_ops_module.LineOperations,
         "update_word_attributes",
-        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (
+        lambda _self, _page, _line, _word, _italic, _small_caps, _blackletter, _left_footnote, _right_footnote: (  # noqa: E501
             True
         ),
     )
@@ -1215,9 +1203,7 @@ def test_split_paragraph_with_selected_lines_preserves_per_word_ground_truth():
 
     assert page_state.split_paragraph_with_selected_lines([0, 2]) is True
 
-    gts_by_text = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts_by_text = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts_by_text == {
         "alpha": "custom-alpha",
         "beta": "custom-beta",
@@ -1375,9 +1361,7 @@ def test_split_line_after_word_preserves_per_word_ground_truth():
 
     assert page_state.split_line_after_word(0, 0) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "alpha": "custom-alpha",
         "beta": "custom-beta",
@@ -1394,9 +1378,7 @@ def test_split_line_with_selected_words_preserves_per_word_ground_truth():
 
     assert page_state.split_line_with_selected_words([(0, 1), (1, 1)]) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "alpha": "custom-alpha",
         "beta": "custom-beta",
@@ -1411,14 +1393,9 @@ def test_split_lines_into_selected_and_unselected_words_preserves_per_word_groun
     """Per-line split into selected/unselected word lines must preserve GT."""
     page_state, page = _make_multiword_page_state_with_custom_word_gt()
 
-    assert (
-        page_state.split_lines_into_selected_and_unselected_words([(0, 1), (1, 0)])
-        is True
-    )
+    assert page_state.split_lines_into_selected_and_unselected_words([(0, 1), (1, 0)]) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "alpha": "custom-alpha",
         "beta": "custom-beta",
@@ -1435,9 +1412,7 @@ def test_group_selected_words_into_new_paragraph_preserves_per_word_ground_truth
 
     assert page_state.group_selected_words_into_new_paragraph([(0, 0), (1, 2)]) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "alpha": "custom-alpha",
         "beta": "custom-beta",
@@ -1454,9 +1429,7 @@ def test_split_word_vertically_and_assign_to_closest_line_preserves_other_word_g
 
     # Split "beta" (line 0, word 1). The unaffected line 1 must retain its
     # custom per-word GT (page-wide rematch would clobber it).
-    assert (
-        page_state.split_word_vertically_and_assign_to_closest_line(0, 1, 0.5) is True
-    )
+    assert page_state.split_word_vertically_and_assign_to_closest_line(0, 1, 0.5) is True
 
     line2_gts = {word.text: word.ground_truth_text for word in page.lines[-1].words}
     assert line2_gts == {
@@ -1473,9 +1446,7 @@ def test_delete_words_preserves_per_word_ground_truth_on_surviving_words():
     # Delete the middle word from each line.
     assert page_state.delete_words([(0, 1), (1, 1)]) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "alpha": "custom-alpha",
         "gamma": "custom-gamma",
@@ -1490,9 +1461,7 @@ def test_delete_lines_preserves_per_word_ground_truth_on_surviving_lines():
 
     assert page_state.delete_lines([0]) is True
 
-    gts = {
-        word.text: word.ground_truth_text for line in page.lines for word in line.words
-    }
+    gts = {word.text: word.ground_truth_text for line in page.lines for word in line.words}
     assert gts == {
         "delta": "custom-delta",
         "epsilon": "custom-epsilon",
@@ -1570,9 +1539,7 @@ def test_split_line_with_selected_words_creates_one_new_line_from_selection():
         "ProjectStub",
         (),
         {
-            "ground_truth_map": {
-                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
-            },
+            "ground_truth_map": {"page_001.png": "alpha beta gamma\ndelta epsilon zeta"},
             "image_paths": [Path("/tmp/page_001.png")],
         },
     )()
@@ -1608,9 +1575,7 @@ def test_group_selected_words_into_new_paragraph_moves_selected_words():
         "ProjectStub",
         (),
         {
-            "ground_truth_map": {
-                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
-            },
+            "ground_truth_map": {"page_001.png": "alpha beta gamma\ndelta epsilon zeta"},
             "image_paths": [Path("/tmp/page_001.png")],
         },
     )()
@@ -1658,9 +1623,7 @@ def test_group_selected_words_into_new_paragraph_across_multiple_paragraphs():
         "ProjectStub",
         (),
         {
-            "ground_truth_map": {
-                "page_001.png": "alpha beta gamma\ndelta epsilon zeta"
-            },
+            "ground_truth_map": {"page_001.png": "alpha beta gamma\ndelta epsilon zeta"},
             "image_paths": [Path("/tmp/page_001.png")],
         },
     )()
@@ -1852,9 +1815,7 @@ def test_erase_pixels_rect_mutates_image_and_finalizes_bbox_edit():
     page_state.current_page = page
 
     finalized = {}
-    page_state._finalize_bbox_edit = lambda current_page: finalized.setdefault(
-        "page", current_page
-    )
+    page_state._finalize_bbox_edit = lambda current_page: finalized.setdefault("page", current_page)
 
     result = page_state.erase_pixels_rect(2.0, 3.0, 7.0, 8.0, fill_value=255)
 

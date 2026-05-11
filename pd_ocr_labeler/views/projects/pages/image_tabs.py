@@ -1,5 +1,6 @@
 import logging
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 from nicegui import events, ui
 
@@ -102,9 +103,7 @@ class ImageTabs(NotificationMixin):
         self._selected_line_boxes: list[tuple[float, float, float, float]] = []
         self._selected_paragraph_boxes: list[tuple[float, float, float, float]] = []
         self._viewport_layer_overlay_cache: str = ""
-        self._viewport_layer_overlay_cache_key: (
-            tuple[object, bool, bool, bool] | None
-        ) = None
+        self._viewport_layer_overlay_cache_key: tuple[object, bool, bool, bool] | None = None
         self._suspend_overlay_render: bool = False
         self._notified_error_keys: set[str] = set()
         # Register callback for direct image updates (bypasses data binding)
@@ -120,23 +119,17 @@ class ImageTabs(NotificationMixin):
                     ui.checkbox(
                         "Show Paragraphs",
                         value=self.visible_layers["paragraphs"],
-                        on_change=lambda e: self._set_layer_visibility(
-                            "paragraphs", bool(e.value)
-                        ),
+                        on_change=lambda e: self._set_layer_visibility("paragraphs", bool(e.value)),
                     )
                     ui.checkbox(
                         "Show Lines",
                         value=self.visible_layers["lines"],
-                        on_change=lambda e: self._set_layer_visibility(
-                            "lines", bool(e.value)
-                        ),
+                        on_change=lambda e: self._set_layer_visibility("lines", bool(e.value)),
                     )
                     ui.checkbox(
                         "Show Words",
                         value=self.visible_layers["words"],
-                        on_change=lambda e: self._set_layer_visibility(
-                            "words", bool(e.value)
-                        ),
+                        on_change=lambda e: self._set_layer_visibility("words", bool(e.value)),
                     )
 
                 with ui.row().classes("items-center gap-4"):
@@ -154,56 +147,55 @@ class ImageTabs(NotificationMixin):
                         "Erase Pixels",
                         on_click=lambda _event: self.enable_erase_mode(),
                     ).props("dense")
-                    erase_button.tooltip(
-                        "Drag a rectangle to erase pixels from the page image"
-                    )
+                    erase_button.tooltip("Drag a rectangle to erase pixels from the page image")
 
                 with ui.row().classes("items-center gap-2 text-xs text-gray-600"):
                     ui.label("Legend").classes("text-xs text-gray-500")
                     ui.badge("Paragraphs").style(
-                        "background: rgba(34,197,94,0.20); color: #166534; border: 1px solid rgba(22,163,74,0.65);"
+                        "background: rgba(34,197,94,0.20); color: #166534; border: 1px solid rgba(22,163,74,0.65);"  # noqa: E501
                     )
                     ui.badge("Lines").style(
-                        "background: rgba(236,72,153,0.20); color: #9d174d; border: 1px solid rgba(190,24,93,0.65);"
+                        "background: rgba(236,72,153,0.20); color: #9d174d; border: 1px solid rgba(190,24,93,0.65);"  # noqa: E501
                     )
                     ui.badge("Words").style(
-                        "background: rgba(59,130,246,0.18); color: #1e3a8a; border: 1px solid rgba(29,78,216,0.65);"
+                        "background: rgba(59,130,246,0.18); color: #1e3a8a; border: 1px solid rgba(29,78,216,0.65);"  # noqa: E501
                     )
 
-            with ui.column().classes(
-                "items-start justify-start full-width grow min-h-0 overflow-auto"
+            with (
+                ui.column().classes(
+                    "items-start justify-start full-width grow min-h-0 overflow-auto"
+                ),
+                ui.element("div").classes("relative inline-block ocr-drag-wrap"),
             ):
-                with ui.element("div").classes("relative inline-block ocr-drag-wrap"):
-                    img = (
-                        ui.interactive_image(
-                            events=["mousedown", "mouseup", "mouseleave"],
-                            on_mouse=self._handle_viewport_mouse,
-                            sanitize=False,
-                        )
-                        .classes("self-start ocr-viewport-img")
-                        .style("height: auto; width: auto; max-width: none;")
+                img = (
+                    ui.interactive_image(
+                        events=["mousedown", "mouseup", "mouseleave"],
+                        on_mouse=self._handle_viewport_mouse,
+                        sanitize=False,
                     )
-                    ui.element("div").classes(
-                        "ocr-drag-rect absolute pointer-events-none hidden z-30"
-                    ).style("border: 2px dashed #2563eb; background: transparent;")
-                    self.images["Viewport"] = img
+                    .classes("self-start ocr-viewport-img")
+                    .style("height: auto; width: auto; max-width: none;")
+                )
+                ui.element("div").classes(
+                    "ocr-drag-rect absolute pointer-events-none hidden z-30"
+                ).style("border: 2px dashed #2563eb; background: transparent;")
+                self.images["Viewport"] = img
 
-                    for event_name in (
-                        "mousedown",
-                        "mousemove",
-                        "mouseup",
-                        "mouseleave",
-                    ):
-                        img.on(event_name, js_handler=_DRAG_JS_HANDLER)
+                for event_name in (
+                    "mousedown",
+                    "mousemove",
+                    "mouseup",
+                    "mouseleave",
+                ):
+                    img.on(event_name, js_handler=_DRAG_JS_HANDLER)
 
-                    # If image sources were prepared before the viewport was built,
-                    # apply the current source immediately to avoid a blank first render.
-                    existing_source = str(
-                        getattr(self.page_state_view_model, "original_image_source", "")
-                        or ""
-                    )
-                    if existing_source:
-                        img.source = existing_source
+                # If image sources were prepared before the viewport was built,
+                # apply the current source immediately to avoid a blank first render.
+                existing_source = str(
+                    getattr(self.page_state_view_model, "original_image_source", "") or ""
+                )
+                if existing_source:
+                    img.source = existing_source
         self.container = col
         logger.debug("ImageTabs UI build complete with single viewport")
         return col
@@ -242,9 +234,7 @@ class ImageTabs(NotificationMixin):
         )
         self._handle_drag_mouse(target, event)
 
-    def _handle_drag_mouse(
-        self, tab_name: str, event: events.MouseEventArguments
-    ) -> None:
+    def _handle_drag_mouse(self, tab_name: str, event: events.MouseEventArguments) -> None:
         """Handle drag selection gestures on an interactive image tab."""
         if self._erase_mode:
             self._handle_erase_drag(event)
@@ -551,9 +541,7 @@ class ImageTabs(NotificationMixin):
             'stroke-width="2" stroke-dasharray="4 2" pointer-events="none" />'
         )
 
-    def _append_viewport_layer_overlays(
-        self, page: object, overlay_parts: list[str]
-    ) -> None:
+    def _append_viewport_layer_overlays(self, page: object, overlay_parts: list[str]) -> None:
         """Render passive layer overlays for unified viewport mode."""
         if self.visible_layers.get("paragraphs", False):
             scale_x, scale_y = self._get_display_scale(page, tab_name="Paragraphs")
@@ -567,7 +555,7 @@ class ImageTabs(NotificationMixin):
                     f'<rect x="{(x1 * scale_x):.2f}" y="{(y1 * scale_y):.2f}" '
                     f'width="{((x2 - x1) * scale_x):.2f}" '
                     f'height="{((y2 - y1) * scale_y):.2f}" fill="rgba(34,197,94,0.12)" '
-                    'stroke="rgba(22,163,74,0.70)" stroke-width="2" style="mix-blend-mode:multiply" pointer-events="none" />'
+                    'stroke="rgba(22,163,74,0.70)" stroke-width="2" style="mix-blend-mode:multiply" pointer-events="none" />'  # noqa: E501
                 )
 
         if self.visible_layers.get("lines", False):
@@ -581,7 +569,7 @@ class ImageTabs(NotificationMixin):
                     f'<rect x="{(x1 * scale_x):.2f}" y="{(y1 * scale_y):.2f}" '
                     f'width="{((x2 - x1) * scale_x):.2f}" '
                     f'height="{((y2 - y1) * scale_y):.2f}" fill="rgba(236,72,153,0.12)" '
-                    'stroke="rgba(236,72,153,0.70)" stroke-width="2" style="mix-blend-mode:multiply" pointer-events="none" />'
+                    'stroke="rgba(236,72,153,0.70)" stroke-width="2" style="mix-blend-mode:multiply" pointer-events="none" />'  # noqa: E501
                 )
 
         if self.visible_layers.get("words", False):
@@ -639,7 +627,7 @@ class ImageTabs(NotificationMixin):
                 overlay_parts.append(
                     f'<rect x="{x1:.2f}" y="{y1:.2f}" width="{(x2 - x1):.2f}" '
                     f'height="{(y2 - y1):.2f}" fill="rgba(34,197,94,0.20)" '
-                    'stroke="#166534" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'
+                    'stroke="#166534" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'  # noqa: E501
                 )
 
         if self.visible_layers.get("lines", False):
@@ -647,7 +635,7 @@ class ImageTabs(NotificationMixin):
                 overlay_parts.append(
                     f'<rect x="{x1:.2f}" y="{y1:.2f}" width="{(x2 - x1):.2f}" '
                     f'height="{(y2 - y1):.2f}" fill="rgba(236,72,153,0.20)" '
-                    'stroke="#be185d" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'
+                    'stroke="#be185d" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'  # noqa: E501
                 )
 
         if self.visible_layers.get("words", False):
@@ -655,7 +643,7 @@ class ImageTabs(NotificationMixin):
                 overlay_parts.append(
                     f'<rect x="{x1:.2f}" y="{y1:.2f}" width="{(x2 - x1):.2f}" '
                     f'height="{(y2 - y1):.2f}" fill="rgba(37,99,235,0.20)" '
-                    'stroke="#1d4ed8" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'
+                    'stroke="#1d4ed8" stroke-width="3" style="mix-blend-mode:multiply" pointer-events="none" />'  # noqa: E501
                 )
 
     def _clear_drag_overlay(self, tab_name: str = "Words") -> None:
@@ -834,10 +822,10 @@ class ImageTabs(NotificationMixin):
                 if width > 0 and height > 0 and hasattr(bbox, "scale"):
                     bbox = bbox.scale(width, height)
             return (
-                float(getattr(bbox, "minX")),
-                float(getattr(bbox, "minY")),
-                float(getattr(bbox, "maxX")),
-                float(getattr(bbox, "maxY")),
+                float(bbox.minX),
+                float(bbox.minY),
+                float(bbox.maxX),
+                float(bbox.maxY),
             )
         except Exception:
             return None
@@ -943,9 +931,7 @@ class ImageTabs(NotificationMixin):
         else:
             self._render_selection_overlay("Paragraphs")
 
-    def _get_display_scale(
-        self, page: object, tab_name: str = "Words"
-    ) -> tuple[float, float]:
+    def _get_display_scale(self, page: object, tab_name: str = "Words") -> tuple[float, float]:
         """Return scale from original image coordinates to encoded display coordinates."""
         source_image = self._get_source_image_for_tab(page, tab_name)
         if getattr(source_image, "shape", None) is None:
@@ -955,13 +941,9 @@ class ImageTabs(NotificationMixin):
         display_width, display_height = self._compute_encoded_dimensions(
             source_width, source_height
         )
-        return display_width / float(source_width), display_height / float(
-            source_height
-        )
+        return display_width / float(source_width), display_height / float(source_height)
 
-    def _compute_encoded_dimensions(
-        self, source_width: int, source_height: int
-    ) -> tuple[int, int]:
+    def _compute_encoded_dimensions(self, source_width: int, source_height: int) -> tuple[int, int]:
         """Mirror page image encoder resizing (integer math) for exact display size."""
         max_dimension = 1200
         if source_width > max_dimension or source_height > max_dimension:
@@ -1029,9 +1011,7 @@ class ImageTabs(NotificationMixin):
         """Return currently selected line indices derived from selected words."""
         return {line_index for line_index, _ in self._selected_word_indices}
 
-    def _word_keys_for_lines(
-        self, page: object, line_indices: set[int]
-    ) -> set[tuple[int, int]]:
+    def _word_keys_for_lines(self, page: object, line_indices: set[int]) -> set[tuple[int, int]]:
         """Expand selected line indices to all word keys in those lines."""
         selection: set[tuple[int, int]] = set()
         lines = self._get_page_lines(page)

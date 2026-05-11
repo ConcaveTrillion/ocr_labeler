@@ -45,21 +45,13 @@ def test_two_tabs_different_pages(browser_app_url: str, browser_context) -> None
 
     # Tab1 goes to page 1
     tab1 = context.new_page()
-    tab1.goto(
-        f"{base_url}/project/browser-test-project/page/1", wait_until="networkidle"
-    )
-    tab1.locator('[data-testid="nav-next-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    tab1.goto(f"{base_url}/project/browser-test-project/page/1", wait_until="networkidle")
+    tab1.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
 
     # Tab2 goes to page 3
     tab2 = context.new_page()
-    tab2.goto(
-        f"{base_url}/project/browser-test-project/page/3", wait_until="networkidle"
-    )
-    tab2.locator('[data-testid="nav-prev-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    tab2.goto(f"{base_url}/project/browser-test-project/page/3", wait_until="networkidle")
+    tab2.locator('[data-testid="nav-prev-button"]').wait_for(state="visible", timeout=60_000)
 
     # Verify tab1 is on page 1
     tab1_page_input = tab1.locator('[data-testid="nav-page-input"]')

@@ -72,9 +72,7 @@ def test_load_project_via_direct_url(browser_app_url: str, browser_page) -> None
     page.goto(url, wait_until="networkidle")
 
     # Wait for the project to load
-    page.locator('[data-testid="nav-next-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
 
 
 @pytest.mark.browser
@@ -85,9 +83,7 @@ def test_load_specific_page_via_url(browser_app_url: str, browser_page) -> None:
     page.goto(url, wait_until="networkidle")
 
     # Wait for the page to load
-    page.locator('[data-testid="nav-next-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
 
     # Verify we're on page 2
     page_input = page.locator('[data-testid="nav-page-input"]')

@@ -5,7 +5,7 @@ from .project_discovery_operations import ProjectDiscoveryOperations
 from .project_operations import ProjectOperations
 
 __all__ = [
-    "ProjectOperations",
-    "ProjectDiscoveryOperations",
     "PersistencePathsOperations",
+    "ProjectDiscoveryOperations",
+    "ProjectOperations",
 ]

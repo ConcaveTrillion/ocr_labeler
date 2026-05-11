@@ -16,9 +16,7 @@ class TestMultiTabIsolation:
         """Return the path to the test projects directory."""
         return Path(__file__).parent.parent / "test-data" / "pgdp-projects"
 
-    def test_multiple_app_state_instances_are_independent(
-        self, test_projects_root: Path
-    ):
+    def test_multiple_app_state_instances_are_independent(self, test_projects_root: Path):
         """Test that creating multiple AppState instances maintains independence."""
         # Simulate two browser tabs creating their own states
         state1 = AppState(base_projects_root=test_projects_root)
@@ -53,9 +51,7 @@ class TestMultiTabIsolation:
         assert state1.is_project_loading is True
         assert state2.is_project_loading is False
 
-    def test_app_creates_isolated_instances_per_route_call(
-        self, test_projects_root: Path
-    ):
+    def test_app_creates_isolated_instances_per_route_call(self, test_projects_root: Path):
         """Test that the app's route handler creates isolated instances.
 
         This simulates what happens when multiple browser tabs open the app.

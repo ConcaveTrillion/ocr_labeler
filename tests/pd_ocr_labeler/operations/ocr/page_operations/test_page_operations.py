@@ -117,7 +117,7 @@ class TestPageOperations:
         assert (output_dir / "test_project_001.json").exists()
 
         # Verify JSON content
-        with open(output_dir / "test_project_001.json", "r") as f:
+        with open(output_dir / "test_project_001.json") as f:
             json_data = json.load(f)
 
         assert json_data["schema"]["name"] == "pd_ocr_labeler.user_page"
@@ -148,8 +148,8 @@ class TestPageOperations:
             "page_index": 0,
             "items": [],
         }
-        page._pd_ocr_labeler_live_ocr_provenance = (
-            operations._build_live_ocr_provenance(source_lib="doctr-pd-labeled")
+        page._pd_ocr_labeler_live_ocr_provenance = operations._build_live_ocr_provenance(
+            source_lib="doctr-pd-labeled"
         )
         (temp_dir / "source.png").touch()
 
@@ -166,7 +166,7 @@ class TestPageOperations:
         assert success is True
 
         output_dir = temp_dir / "output"
-        with open(output_dir / "test_project_001.json", "r", encoding="utf-8") as f:
+        with open(output_dir / "test_project_001.json", encoding="utf-8") as f:
             json_data = json.load(f)
 
         models = json_data["provenance"]["ocr"]["models"]
@@ -333,9 +333,7 @@ class TestPageOperations:
         loaded_page = loaded_page_model.page
         assert loaded_page.page_index == 0
 
-    def test_update_cached_images_in_json_prunes_stale_page_cache_files(
-        self, operations, temp_dir
-    ):
+    def test_update_cached_images_in_json_prunes_stale_page_cache_files(self, operations, temp_dir):
         """Updating cached_images should remove older cache files for that page only."""
         project_root = temp_dir / "project"
         project_root.mkdir()
@@ -527,7 +525,7 @@ class TestPageOperations:
         )
         assert saved is True
 
-        with open(output_dir / "test_project_001.json", "r", encoding="utf-8") as f:
+        with open(output_dir / "test_project_001.json", encoding="utf-8") as f:
             saved_json = json.load(f)
 
         assert saved_json["provenance"]["ocr"]["models"] == []
@@ -676,9 +674,7 @@ class TestPageOperations:
         """Test bbox refinement when refine_bounding_boxes raises an exception."""
         # Create a mock page that raises an exception
         mock_page = MagicMock(spec=Page)
-        mock_page.refine_bounding_boxes = MagicMock(
-            side_effect=Exception("Refine failed")
-        )
+        mock_page.refine_bounding_boxes = MagicMock(side_effect=Exception("Refine failed"))
 
         # Call refine_all_bboxes
         result = operations.refine_all_bboxes(mock_page)
@@ -757,9 +753,7 @@ class TestPageOperations:
         # Create a mock page that raises an exception
         mock_word = MagicMock()
         mock_word.bounding_box = MagicMock()
-        mock_word.bounding_box.refine = MagicMock(
-            side_effect=Exception("Refine failed")
-        )
+        mock_word.bounding_box.refine = MagicMock(side_effect=Exception("Refine failed"))
 
         mock_block = MagicMock()
         mock_block.words = [mock_word]
@@ -831,9 +825,7 @@ class TestPageOperations:
         operations.page_parser.assert_called_once()
 
     @patch("pd_book_tools.ocr.doctr_support.get_default_doctr_predictor")
-    def test_reset_ocr_exception_handling(
-        self, mock_get_predictor, operations, temp_dir
-    ):
+    def test_reset_ocr_exception_handling(self, mock_get_predictor, operations, temp_dir):
         """Test OCR reset exception handling."""
         # Setup mock to raise exception
         mock_get_predictor.side_effect = Exception("OCR processing failed")

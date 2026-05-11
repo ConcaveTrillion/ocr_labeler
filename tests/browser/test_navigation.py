@@ -37,9 +37,7 @@ def test_prev_button_goes_back(browser_app_url: str, browser_page) -> None:
     page = browser_page
     url = browser_app_url.rstrip("/") + "/project/browser-test-project/page/2"
     page.goto(url, wait_until="networkidle")
-    page.locator('[data-testid="nav-prev-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    page.locator('[data-testid="nav-prev-button"]').wait_for(state="visible", timeout=60_000)
     wait_for_page_loaded(page)
 
     page.locator('[data-testid="nav-prev-button"]').click()
@@ -68,9 +66,7 @@ def test_next_disabled_on_last_page(browser_app_url: str, browser_page) -> None:
     page = browser_page
     url = browser_app_url.rstrip("/") + "/project/browser-test-project/page/3"
     page.goto(url, wait_until="networkidle")
-    page.locator('[data-testid="nav-next-button"]').wait_for(
-        state="visible", timeout=60_000
-    )
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
     wait_for_page_loaded(page)
 
     next_button = page.locator('[data-testid="nav-next-button"]')

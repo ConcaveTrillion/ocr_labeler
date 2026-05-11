@@ -4,6 +4,7 @@ This module removes local logs and rendered image cache files from both:
 1) Current OS-aware persistence roots, and
 2) Legacy workspace-local paths used by older setups.
 """
+# ruff: noqa: T201  # CLI module uses print for user-facing output
 
 from __future__ import annotations
 
@@ -97,9 +98,7 @@ def cleanup_image_cache(workspace_root: Path) -> CleanupResult:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Clean OCR Labeler local runtime state."
-    )
+    parser = argparse.ArgumentParser(description="Clean OCR Labeler local runtime state.")
     parser.add_argument(
         "--workspace-root",
         type=Path,
@@ -107,9 +106,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Workspace root used for legacy local-data/logs paths (default: current directory).",
     )
     parser.add_argument("--logs", action="store_true", help="Clean session log files.")
-    parser.add_argument(
-        "--cache", action="store_true", help="Clean rendered image cache."
-    )
+    parser.add_argument("--cache", action="store_true", help="Clean rendered image cache.")
     return parser
 
 
@@ -139,7 +136,7 @@ def main() -> int:
         _merge(overall, cache_result)
         print(
             "Image cache cleaned: files_removed="
-            f"{cache_result.files_removed}, dirs_removed={cache_result.dirs_removed}, failures={cache_result.failures}"
+            f"{cache_result.files_removed}, dirs_removed={cache_result.dirs_removed}, failures={cache_result.failures}"  # noqa: E501
         )
 
     if overall.failures > 0:

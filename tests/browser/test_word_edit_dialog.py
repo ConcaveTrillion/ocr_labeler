@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 
 import pytest
@@ -134,24 +135,18 @@ def _open_dialog_with_enabled_merge_action(
         # Make sure no leftover dialog from a prior iteration is still
         # displayed — clicking through it can lead Playwright to read the
         # wrong dialog's button state.
-        try:
+        with contextlib.suppress(Exception):
             page.locator(".q-dialog").first.wait_for(state="detached", timeout=2_000)
-        except Exception:
-            pass
 
         edit_buttons.nth(i).click()
         try:
-            page.get_by_text("Merge / Split").first.wait_for(
-                state="visible", timeout=5_000
-            )
+            page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=5_000)
         except Exception:
             # Click was likely dropped by the NiceGUI socket layer — try once
             # more on the same edit button before moving on.
             page.wait_for_timeout(300)
             edit_buttons.nth(i).click()
-            page.get_by_text("Merge / Split").first.wait_for(
-                state="visible", timeout=10_000
-            )
+            page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
 
         dialog = page.locator(".q-dialog").last
         action_button = dialog.locator(action_selector)
@@ -182,9 +177,7 @@ def _open_dialog_with_enabled_merge_action(
         except Exception:
             page.wait_for_timeout(400)
 
-    raise AssertionError(
-        f"No dialog candidate found with enabled action: {action_selector}"
-    )
+    raise AssertionError(f"No dialog candidate found with enabled action: {action_selector}")
 
 
 # ---------------------------------------------------------------------------
@@ -547,9 +540,7 @@ def test_dialog_apply_style_via_dropdown(browser_app_url: str, browser_page) -> 
 
 
 @pytest.mark.browser
-def test_dialog_apply_component_via_dropdown(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_apply_component_via_dropdown(browser_app_url: str, browser_page) -> None:
     """Open component select → pick "Superscript" → Apply Component → chip text is "Superscript".
 
     The default component preselected on dialog open is the first entry
@@ -598,9 +589,7 @@ def test_dialog_apply_component_via_dropdown(
     # the dropdown selection (not the default) drove the apply.  Use
     # ``to_have_count`` for auto-waiting against NiceGUI re-render timing.
     expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
-    expect(
-        dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Superscript")
-    ).to_have_count(1)
+    expect(dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Superscript")).to_have_count(1)
 
     # Cleanup: click Clear Component (the existing affordance for
     # component chips — symmetric counterpart to per-chip clear used in
@@ -696,9 +685,7 @@ def test_dialog_apply_scope_via_dropdown(browser_app_url: str, browser_page) -> 
     # chip after re-render — the prior locator handle may be stale since
     # ``_render_tag_chips`` re-creates the chips.
     expect(dialog.locator(DIALOG_TAG_CHIP)).to_have_count(chips_before + 1)
-    italics_chip_after = (
-        dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics").first
-    )
+    italics_chip_after = dialog.locator(DIALOG_TAG_CHIP).filter(has_text="Italics").first
     expect(italics_chip_after).to_contain_text("(Part)")
     # And specifically *not* "(Whole)" any more — proves the scope
     # actually changed rather than a duplicate chip being added.
@@ -731,9 +718,7 @@ def test_dialog_apply_scope_via_dropdown(browser_app_url: str, browser_page) -> 
 
 
 @pytest.mark.browser
-def test_dialog_merge_split_delete_buttons_present(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_merge_split_delete_buttons_present(browser_app_url: str, browser_page) -> None:
     """All 5 merge/split/delete buttons visible in the dialog."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -747,9 +732,7 @@ def test_dialog_merge_split_delete_buttons_present(
 
 
 @pytest.mark.browser
-def test_dialog_merge_prev_disabled_on_first_word(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_merge_prev_disabled_on_first_word(browser_app_url: str, browser_page) -> None:
     """Merge Prev button is present; disabled state depends on word position."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -760,9 +743,7 @@ def test_dialog_merge_prev_disabled_on_first_word(
 
 
 @pytest.mark.browser
-def test_dialog_merge_next_disabled_on_last_word(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_merge_next_disabled_on_last_word(browser_app_url: str, browser_page) -> None:
     """Merge Next button is present; disabled state depends on word position."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -772,9 +753,7 @@ def test_dialog_merge_next_disabled_on_last_word(
 
 
 @pytest.mark.browser
-def test_dialog_split_buttons_disabled_without_marker(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_split_buttons_disabled_without_marker(browser_app_url: str, browser_page) -> None:
     """H split and V split buttons are present in the dialog."""
     page = browser_page
     _setup(page, browser_app_url)

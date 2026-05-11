@@ -79,9 +79,7 @@ class TestLineOperations:
         assert line1.words[0].text == "Hello"
         assert line1.words[1].text == "World"
 
-    def test_copy_ground_truth_to_ocr_no_ground_truth(
-        self, operations, mock_page_with_lines
-    ):
+    def test_copy_ground_truth_to_ocr_no_ground_truth(self, operations, mock_page_with_lines):
         """Copying ground truth when none exists returns False."""
         result = operations.copy_ground_truth_to_ocr(mock_page_with_lines, 1)
 
@@ -89,9 +87,7 @@ class TestLineOperations:
         line2 = mock_page_with_lines.lines[1]
         assert line2.words[0].text == "test"
 
-    def test_copy_ground_truth_to_ocr_invalid_line_index(
-        self, operations, mock_page_with_lines
-    ):
+    def test_copy_ground_truth_to_ocr_invalid_line_index(self, operations, mock_page_with_lines):
         """Copying ground truth with invalid line index returns False."""
         result = operations.copy_ground_truth_to_ocr(mock_page_with_lines, 5)
 
@@ -270,9 +266,7 @@ class TestLineOperations:
 
         assert result is False
 
-    def test_clear_ground_truth_for_line_success(
-        self, operations, mock_page_with_lines
-    ):
+    def test_clear_ground_truth_for_line_success(self, operations, mock_page_with_lines):
         """Successfully clears ground truth for a line."""
         result = operations.clear_ground_truth_for_line(mock_page_with_lines, 0)
 
@@ -281,9 +275,7 @@ class TestLineOperations:
         assert line1.words[0].ground_truth_text == ""
         assert line1.words[1].ground_truth_text == ""
 
-    def test_clear_ground_truth_for_line_invalid_index(
-        self, operations, mock_page_with_lines
-    ):
+    def test_clear_ground_truth_for_line_invalid_index(self, operations, mock_page_with_lines):
         """Clearing ground truth with invalid line index returns False."""
         result = operations.clear_ground_truth_for_line(mock_page_with_lines, 10)
 

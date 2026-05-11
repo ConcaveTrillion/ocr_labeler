@@ -193,12 +193,8 @@ def test_top_grid_copy_page_gt_to_ocr_uses_all_lines(monkeypatch):
 
     def copy_callback(line_index: int) -> bool:
         seen.setdefault("calls", []).append(line_index)
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         seen["paragraph_selection_during_callback"] = sorted(
             view.selection.selected_paragraph_indices
         )
@@ -299,12 +295,8 @@ def test_merge_uses_word_selection_when_no_line_checkboxes(monkeypatch):
 
     def merge_callback(indices: list[int]) -> bool:
         seen["indices"] = indices
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.merge_lines_callback = merge_callback
@@ -408,9 +400,7 @@ def test_set_selected_words_emits_selection_callback():
         )
     ]
     seen = {}
-    view.selection.set_selection_change_callback(
-        lambda selection: seen.setdefault("s", selection)
-    )
+    view.selection.set_selection_change_callback(lambda selection: seen.setdefault("s", selection))
 
     view.selection.set_selected_words({(0, 0)})
 
@@ -573,9 +563,7 @@ def test_merge_paragraphs_clears_selection_before_callback(monkeypatch):
 
     def merge_callback(indices: list[int]) -> bool:
         seen["indices"] = indices
-        seen["selection_during_callback"] = sorted(
-            view.selection.selected_paragraph_indices
-        )
+        seen["selection_during_callback"] = sorted(view.selection.selected_paragraph_indices)
         return True
 
     view.merge_paragraphs_callback = merge_callback
@@ -626,12 +614,8 @@ def test_split_paragraph_by_selected_lines_uses_selected_line_checkboxes(monkeyp
 
     def split_callback(indices: list[int]) -> bool:
         seen["indices"] = indices
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.split_paragraph_with_selected_lines_callback = split_callback
@@ -789,9 +773,7 @@ def test_delete_paragraphs_clears_selection_before_callback(monkeypatch):
 
     def delete_callback(indices: list[int]) -> bool:
         seen["indices"] = indices
-        seen["selection_during_callback"] = sorted(
-            view.selection.selected_paragraph_indices
-        )
+        seen["selection_during_callback"] = sorted(view.selection.selected_paragraph_indices)
         return True
 
     view.delete_paragraphs_callback = delete_callback
@@ -823,12 +805,8 @@ def test_delete_words_clears_selection_before_callback(monkeypatch):
 
     def delete_callback(word_keys: list[tuple[int, int]]) -> bool:
         seen["word_keys"] = word_keys
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.delete_words_callback = delete_callback
@@ -864,12 +842,8 @@ def test_merge_word_left_clears_selection_before_callback(monkeypatch):
 
     def merge_callback(line_index: int, word_index: int) -> bool:
         seen["args"] = (line_index, word_index)
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.merge_word_left_callback = merge_callback
@@ -924,12 +898,8 @@ def test_merge_word_right_clears_selection_before_callback(monkeypatch):
 
     def merge_callback(line_index: int, word_index: int) -> bool:
         seen["args"] = (line_index, word_index)
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.merge_word_right_callback = merge_callback
@@ -941,9 +911,7 @@ def test_merge_word_right_clears_selection_before_callback(monkeypatch):
 
 
 def test_merge_word_right_success_rerenders_target_line(monkeypatch):
-    view = WordMatchView(
-        merge_word_right_callback=lambda _line_index, _word_index: True
-    )
+    view = WordMatchView(merge_word_right_callback=lambda _line_index, _word_index: True)
     seen = {"refreshed": [], "rerendered": []}
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -1055,12 +1023,8 @@ def test_delete_single_word_clears_selection_before_callback(monkeypatch):
 
     def delete_callback(word_keys: list[tuple[int, int]]) -> bool:
         seen["word_keys"] = word_keys
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.delete_words_callback = delete_callback
@@ -1116,12 +1080,8 @@ def test_split_word_clears_selection_before_callback(monkeypatch):
 
     def split_callback(line_index: int, word_index: int, split_fraction: float) -> bool:
         seen["args"] = (line_index, word_index, split_fraction)
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.split_word_callback = split_callback
@@ -1133,9 +1093,7 @@ def test_split_word_clears_selection_before_callback(monkeypatch):
 
 
 def test_split_word_success_rerenders_target_line(monkeypatch):
-    view = WordMatchView(
-        split_word_callback=lambda _line_index, _word_index, _split_fraction: True
-    )
+    view = WordMatchView(split_word_callback=lambda _line_index, _word_index, _split_fraction: True)
     seen = {"refreshed": [], "rerendered": []}
     view._word_split_fractions[(3, 1)] = 0.4
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
@@ -1202,12 +1160,8 @@ def test_split_word_vertical_closest_line_clears_selection_before_callback(
 
     def split_callback(line_index: int, word_index: int, split_fraction: float) -> bool:
         seen["args"] = (line_index, word_index, split_fraction)
-        seen["line_selection_during_callback"] = sorted(
-            view.selection.selected_line_indices
-        )
-        seen["word_selection_during_callback"] = sorted(
-            view.selection.selected_word_indices
-        )
+        seen["line_selection_during_callback"] = sorted(view.selection.selected_line_indices)
+        seen["word_selection_during_callback"] = sorted(view.selection.selected_word_indices)
         return True
 
     view.split_word_vertical_closest_line_callback = split_callback
@@ -1281,8 +1235,8 @@ def test_handle_word_image_click_falls_back_to_generic_x_coordinate(monkeypatch)
     split_key = (1, 2)
     view._word_split_image_sizes[split_key] = (100.0, 20.0)
     view._word_split_button_refs[split_key] = SimpleNamespace(disabled=True)
-    view._line_word_match_by_ocr_index = lambda _line_index, _word_index: (
-        SimpleNamespace(ocr_text="alphabet")
+    view._line_word_match_by_ocr_index = lambda _line_index, _word_index: SimpleNamespace(
+        ocr_text="alphabet"
     )
     event = SimpleNamespace(x=25.0)
     handle_word_image_click(view, 1, 2, event)
@@ -1299,9 +1253,7 @@ def test_handle_word_image_mouse_routes_drag_events_to_box_erase_dialog():
     view._word_box_erase_mode_keys.add(split_key)
     view._active_word_edit_dialog = SimpleNamespace(
         _split_key=split_key,
-        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
-            (event_type, coords)
-        ),
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append((event_type, coords)),
     )
 
     handle_word_image_mouse(
@@ -1345,9 +1297,7 @@ def test_handle_word_image_mouse_clamps_box_erase_drag_to_image_edges():
     view._word_box_erase_mode_keys.add(split_key)
     view._active_word_edit_dialog = SimpleNamespace(
         _split_key=split_key,
-        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
-            (event_type, coords)
-        ),
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append((event_type, coords)),
     )
 
     handle_word_image_mouse(
@@ -1384,9 +1334,7 @@ def test_handle_word_image_mouse_ignores_non_left_mousedown_for_box_erase():
     view._word_box_erase_mode_keys.add(split_key)
     view._active_word_edit_dialog = SimpleNamespace(
         _split_key=split_key,
-        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
-            (event_type, coords)
-        ),
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append((event_type, coords)),
     )
 
     handle_word_image_mouse(
@@ -1408,9 +1356,7 @@ def test_handle_word_image_mouse_finalizes_drag_when_left_button_released_outsid
     view._word_box_erase_drag_start[split_key] = (8.0, 8.0)
     view._active_word_edit_dialog = SimpleNamespace(
         _split_key=split_key,
-        _handle_box_erase_drag_event=lambda event_type, coords: seen.append(
-            (event_type, coords)
-        ),
+        _handle_box_erase_drag_event=lambda event_type, coords: seen.append((event_type, coords)),
     )
 
     handle_word_image_mouse(
@@ -1664,9 +1610,7 @@ def test_start_rebox_word_sets_pending_and_requests_image_mode(monkeypatch):
     view = WordMatchView(rebox_word_callback=lambda *_args: True)
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
     view.bbox.set_rebox_request_callback(
-        lambda line_index, word_index: seen.setdefault(
-            "target", (line_index, word_index)
-        )
+        lambda line_index, word_index: seen.setdefault("target", (line_index, word_index))
     )
 
     view.actions._handle_start_rebox_word(2, 4)
@@ -1769,9 +1713,7 @@ def test_refine_selected_paragraphs_clears_selection_before_callback(monkeypatch
 
     def refine_paragraphs_callback(paragraph_indices: list[int]) -> bool:
         seen["paragraph_indices"] = paragraph_indices
-        seen["selection_during_callback"] = sorted(
-            view.selection.selected_paragraph_indices
-        )
+        seen["selection_during_callback"] = sorted(view.selection.selected_paragraph_indices)
         return True
 
     view = WordMatchView(refine_paragraphs_callback=refine_paragraphs_callback)
@@ -2096,9 +2038,7 @@ def test_word_gt_edit_invokes_callback(monkeypatch):
 def test_word_gt_edit_warns_on_failure(monkeypatch):
     seen = {}
 
-    view = WordMatchView(
-        edit_word_ground_truth_callback=lambda _line, _word, _text: False
-    )
+    view = WordMatchView(edit_word_ground_truth_callback=lambda _line, _word, _text: False)
 
     def notify(message: str, type_: str = "info"):
         seen["message"] = message
@@ -2150,9 +2090,7 @@ def test_word_attribute_edit_does_not_rerender_word_column(monkeypatch):
     monkeypatch.setattr(
         view.renderer,
         "rerender_word_column",
-        lambda *_args, **_kwargs: seen.__setitem__(
-            "rerendered", seen["rerendered"] + 1
-        ),
+        lambda *_args, **_kwargs: seen.__setitem__("rerendered", seen["rerendered"] + 1),
     )
     monkeypatch.setattr(
         view.gt_editing,
@@ -2180,13 +2118,11 @@ def test_toggle_word_attribute_uses_current_flags(monkeypatch):
         )
     )
     monkeypatch.setattr(view, "_safe_notify", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        view, "_line_word_match_by_ocr_index", lambda *_args: word_match
-    )
+    monkeypatch.setattr(view, "_line_word_match_by_ocr_index", lambda *_args: word_match)
     monkeypatch.setattr(
         view.gt_editing,
         "_handle_set_word_attributes",
-        lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
+        lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (  # noqa: E501
             seen.setdefault(
                 "args",
                 (
@@ -2941,7 +2877,7 @@ def test_apply_word_validation_change_does_not_rerender(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Toolbar: _collect_word_keys_for_lines
+# Toolbar: _collect_word_keys_for_lines  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -3053,7 +2989,7 @@ def test_validate_selected_words_after_line_select_uses_ocr_indices(monkeypatch)
 
 
 # ---------------------------------------------------------------------------
-# Toolbar: _set_validation_for_keys
+# Toolbar: _set_validation_for_keys  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -3457,9 +3393,7 @@ def test_compute_refine_preview_after_crop_right_normalized_bbox():
         is_normalized=True,
     )
     word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=bbox))
-    page_image = _build_page_image_with_glyph(
-        page_width=page_width, page_height=page_height
-    )
+    page_image = _build_page_image_with_glyph(page_width=page_width, page_height=page_height)
     line_match = SimpleNamespace(page_image=page_image)
 
     view._line_match_by_index = lambda _line_index: line_match
@@ -3514,9 +3448,7 @@ def test_word_dialog_erase_scales_normalized_bbox_to_page_pixels():
         Point(0.6, 0.4),
         is_normalized=True,
     )
-    line_word_match = SimpleNamespace(
-        word_object=SimpleNamespace(bounding_box=normalized_bbox)
-    )
+    line_word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=normalized_bbox))
 
     view = WordMatchView()
     view.erase_pixels_rect_callback = lambda x1, y1, x2, y2: (
@@ -3561,9 +3493,7 @@ def test_word_dialog_erase_drawn_box_maps_local_to_page_pixels():
         Point(110, 60),
         is_normalized=False,
     )
-    line_word_match = SimpleNamespace(
-        word_object=SimpleNamespace(bounding_box=word_bbox)
-    )
+    line_word_match = SimpleNamespace(word_object=SimpleNamespace(bounding_box=word_bbox))
 
     view = WordMatchView()
     view.erase_pixels_rect_callback = lambda x1, y1, x2, y2: (

@@ -6,6 +6,7 @@ that need a real browser context with pre-saved OCR data (no ML models needed).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import socket
@@ -106,8 +107,7 @@ def browser_app_url(browser_projects_root, tmp_path_factory) -> str:
             if process.poll() is not None:
                 startup_output = process.stdout.read() if process.stdout else ""
                 raise RuntimeError(
-                    "App process exited before becoming ready. Output:\n"
-                    f"{startup_output}"
+                    f"App process exited before becoming ready. Output:\n{startup_output}"
                 )
             try:
                 with urlopen(url, timeout=1):
@@ -151,19 +151,16 @@ def _browser_instance():
                     "--no-default-browser-check",
                 ],
             )
-        except Exception:
+        except Exception as exc:
             raise RuntimeError(
-                "Playwright Chromium is required but could not be launched. "
-                "Run: make install"
-            )
+                "Playwright Chromium is required but could not be launched. Run: make install"
+            ) from exc
         yield browser
-        try:
-            browser.close()
-        except RuntimeError:
+        with contextlib.suppress(RuntimeError):
             # Playwright sync API may fail if the event loop was already
             # torn down by pytest-asyncio at session end.  The process is
             # exiting anyway, so swallowing the error is safe.
-            pass
+            browser.close()
     finally:
         playwright.stop()
 

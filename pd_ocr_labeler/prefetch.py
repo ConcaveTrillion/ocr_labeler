@@ -4,6 +4,7 @@ Used by ``make prefetch-models`` and called automatically at the end of
 ``make setup`` / ``make install`` so the first-page OCR isn't a 150 MB
 surprise. Skippable with ``NO_PREFETCH=1``.
 """
+# ruff: noqa: T201  # CLI script uses print for user-facing progress output
 
 from __future__ import annotations
 
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             None,
             sidecars=OCR_MODEL_SIDECARS,
         )
-    except Exception as exc:  # noqa: BLE001 — best-effort prefetch
+    except Exception as exc:
         print(f"WARNING: OCR model prefetch failed: {exc}", file=sys.stderr)
         return 1
 
@@ -73,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         if repo:
             print(f"  layout source: {descriptor}", flush=True)
             prefetch_layout_files(repo, revision)
-    except Exception as exc:  # noqa: BLE001 — layout deps may be optional
+    except Exception as exc:
         print(f"WARNING: layout model prefetch failed: {exc}", file=sys.stderr)
         return 1
 

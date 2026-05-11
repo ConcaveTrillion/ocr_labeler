@@ -105,9 +105,7 @@ def _get_ocr_labels(page: Page):
 
 
 @pytest.mark.browser
-def test_line_scope_buttons_disabled_without_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_scope_buttons_disabled_without_selection(browser_app_url: str, browser_page) -> None:
     """All line-scope buttons are disabled when no line is selected."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -119,9 +117,7 @@ def test_line_scope_buttons_disabled_without_selection(
 
 
 @pytest.mark.browser
-def test_line_scope_buttons_enabled_with_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_scope_buttons_enabled_with_selection(browser_app_url: str, browser_page) -> None:
     """Selecting a line enables most line-scope buttons."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -147,9 +143,7 @@ def test_line_scope_buttons_enabled_with_selection(
 
 
 @pytest.mark.browser
-def test_line_merge_disabled_with_single_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_merge_disabled_with_single_selection(browser_app_url: str, browser_page) -> None:
     """Merge is disabled when only 1 line is selected (need 2+)."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -568,9 +562,7 @@ def test_line_split_by_selection_cross_line(browser_app_url: str, browser_page) 
 
 
 @pytest.mark.browser
-def test_line_split_by_selection_non_contiguous(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_split_by_selection_non_contiguous(browser_app_url: str, browser_page) -> None:
     """Non-contiguous same-line split-by-selection: line count increases by 1.
 
     Distinguishing-coverage test from the iter-21 review (item 3 in
@@ -629,8 +621,7 @@ def test_line_split_by_selection_non_contiguous(
         }"""
     )
     assert line_0_word_count >= 3, (
-        f"Expected line 0 to have >=3 words for non-contiguous selection; "
-        f"got {line_0_word_count}"
+        f"Expected line 0 to have >=3 words for non-contiguous selection; got {line_0_word_count}"
     )
 
     _select_word(page, 0)

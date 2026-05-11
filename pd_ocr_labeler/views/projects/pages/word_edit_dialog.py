@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from nicegui import events, ui
@@ -61,11 +62,11 @@ def render_word_split_marker(view: Any, split_key: tuple[int, int]) -> None:
                 hover_x, hover_y = hover_pos
             overlays.append(
                 f'<line x1="{hover_x:.2f}" y1="0" x2="{hover_x:.2f}" y2="{marker_height:.2f}" '
-                'stroke="rgba(37, 99, 235, 0.55)" stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'
+                'stroke="rgba(37, 99, 235, 0.55)" stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'  # noqa: E501
             )
             overlays.append(
                 f'<line x1="0" y1="{hover_y:.2f}" x2="{marker_width:.2f}" y2="{hover_y:.2f}" '
-                'stroke="rgba(37, 99, 235, 0.55)" stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'
+                'stroke="rgba(37, 99, 235, 0.55)" stroke-width="1" stroke-dasharray="4 3" pointer-events="none" />'  # noqa: E501
             )
 
         # Draw a transient erase rectangle while drag-box erase mode is active.
@@ -127,9 +128,7 @@ def handle_word_image_mouse(
     event_type = str(getattr(event, "type", "") or "")
 
     def _event_coords(*, clamp_outside: bool = False) -> tuple[float, float] | None:
-        image_width, image_height = view._word_split_image_sizes.get(
-            split_key, (0.0, 0.0)
-        )
+        image_width, image_height = view._word_split_image_sizes.get(split_key, (0.0, 0.0))
         previous = getattr(view, "_word_box_erase_drag_current", {}).get(split_key)
         raw_image_x = getattr(event, "image_x", None)
         raw_image_y = getattr(event, "image_y", None)
@@ -164,12 +163,7 @@ def handle_word_image_mouse(
             clamped_y = min(max(float(image_y), 1.0), max_y)
             return (clamped_x, clamped_y)
 
-        if (
-            image_x <= 0.0
-            or image_y <= 0.0
-            or image_x >= image_width
-            or image_y >= image_height
-        ):
+        if image_x <= 0.0 or image_y <= 0.0 or image_x >= image_width or image_y >= image_height:
             return None
         return (image_x, image_y)
 
@@ -388,7 +382,7 @@ class WordEditDialog:
 
         if not ordered_word_indices:
             ordered_word_indices = sorted(
-                idx for idx in indexed.keys() if isinstance(idx, int) and idx >= 0
+                idx for idx in indexed if isinstance(idx, int) and idx >= 0
             )
 
         current_pos = (
@@ -401,22 +395,14 @@ class WordEditDialog:
             has_next_word = current_pos < (len(ordered_word_indices) - 1)
         else:
             has_previous_word = any(
-                idx < split_word_index
-                for idx in indexed.keys()
-                if isinstance(idx, int) and idx >= 0
+                idx < split_word_index for idx in indexed if isinstance(idx, int) and idx >= 0
             )
             has_next_word = any(
-                idx > split_word_index
-                for idx in indexed.keys()
-                if isinstance(idx, int) and idx >= 0
+                idx > split_word_index for idx in indexed if isinstance(idx, int) and idx >= 0
             )
 
-        self._can_merge_previous = (
-            view.merge_word_left_callback is not None and has_previous_word
-        )
-        self._can_merge_next = (
-            view.merge_word_right_callback is not None and has_next_word
-        )
+        self._can_merge_previous = view.merge_word_left_callback is not None and has_previous_word
+        self._can_merge_next = view.merge_word_right_callback is not None and has_next_word
 
         # Style / scope / component options and current selection
         self._style_options: dict[str, str] = {
@@ -433,11 +419,9 @@ class WordEditDialog:
         }
         self._selected_style_value: str | None = next(iter(self._style_options), None)
         self._selected_scope_value: str = ""
-        self._selected_component_value: str | None = next(
-            iter(self._component_options), None
-        )
+        self._selected_component_value: str | None = next(iter(self._component_options), None)
 
-        # UI elements – populated in ``open()``
+        # UI elements - populated in ``open()``
         self._dialog: Any = None
         self._dialog_card: Any = None
         self._scope_select: Any = None
@@ -523,9 +507,7 @@ class WordEditDialog:
                     page_image,
                     line_index=self._line_index,
                     word_index=self._split_word_index,
-                    bbox_preview_deltas=(
-                        self._pending_bbox_deltas if use_pending_deltas else None
-                    ),
+                    bbox_preview_deltas=(self._pending_bbox_deltas if use_pending_deltas else None),
                 )
             except Exception:
                 preview_bbox = None
@@ -545,9 +527,7 @@ class WordEditDialog:
             if bool(getattr(bbox, "is_normalized", False)):
                 page_state = getattr(view, "_page_state", None)
                 page = getattr(page_state, "current_page", None) if page_state else None
-                page_image = (
-                    getattr(page, "cv2_numpy_page_image", None) if page else None
-                )
+                page_image = getattr(page, "cv2_numpy_page_image", None) if page else None
                 image_shape = getattr(page_image, "shape", None)
 
                 page_width = float(getattr(page, "width", 0.0) or 0.0)
@@ -648,9 +628,7 @@ class WordEditDialog:
             max(0.0, min(1.0, fx2)),
             max(0.0, min(1.0, fy2)),
         )
-        view._word_box_erase_preview_rects.setdefault(self._split_key, []).append(
-            preview_rect
-        )
+        view._word_box_erase_preview_rects.setdefault(self._split_key, []).append(preview_rect)
         self._refresh_open_dialog_content()
         render_word_split_marker(view, self._split_key)
         view._safe_notify("Staged erase area; click Apply to commit", type_="info")
@@ -675,9 +653,7 @@ class WordEditDialog:
         view._word_box_erase_preview_rects.pop(self._split_key, None)
         view.renderer.refresh_local_line_match_from_line_object(self._line_index)
         view.renderer.rerender_word_column(self._line_index, self._split_word_index)
-        view._safe_notify(
-            f"Applied {committed} staged erase region(s)", type_="positive"
-        )
+        view._safe_notify(f"Applied {committed} staged erase region(s)", type_="positive")
         return True
 
     # -- Word match helpers -------------------------------------------------
@@ -762,9 +738,7 @@ class WordEditDialog:
             )
         except Exception:
             slice_meta = None
-        base_image_width = float(
-            (slice_meta or {}).get("display_width", 120.0) or 120.0
-        )
+        base_image_width = float((slice_meta or {}).get("display_width", 120.0) or 120.0)
         rendered_image_width = base_image_width * max(0.5, float(zoom))
         return max(160.0, rendered_image_width + 24.0)
 
@@ -810,7 +784,7 @@ class WordEditDialog:
         if not current_tag_items:
             return
 
-        with self._tag_chips_slot:
+        with self._tag_chips_slot:  # noqa: SIM117  # NiceGUI chained context managers cannot be merged
             with (
                 ui.row()
                 .classes("items-center justify-start gap-1 full-width")
@@ -839,9 +813,7 @@ class WordEditDialog:
                                 )
                                 else None
                             ),
-                        ).props(
-                            'flat dense round size=xs data-testid="word-edit-tag-clear-button"'
-                        )
+                        ).props('flat dense round size=xs data-testid="word-edit-tag-clear-button"')
                         clear_button.classes("word-edit-tag-clear-button")
                         clear_button.style("min-width: 0; width: 14px; height: 14px;")
                         clear_button.visible = False
@@ -881,9 +853,7 @@ class WordEditDialog:
         if word_object is None:
             return ""
         try:
-            style_scopes = dict(
-                getattr(word_object, "text_style_label_scopes", {}) or {}
-            )
+            style_scopes = dict(getattr(word_object, "text_style_label_scopes", {}) or {})
         except Exception:
             return ""
         scope_value = style_scopes.get(str(style_value).strip().lower())
@@ -893,9 +863,7 @@ class WordEditDialog:
         return normalized if normalized in {"whole", "part"} else ""
 
     def _sync_scope_value_for_selected_style(self) -> None:
-        self._selected_scope_value = self._scope_value_for_style(
-            self._selected_style_value
-        )
+        self._selected_scope_value = self._scope_value_for_style(self._selected_style_value)
         if self._scope_select is not None:
             self._scope_select.value = self._selected_scope_value
 
@@ -908,9 +876,7 @@ class WordEditDialog:
 
     def _apply_selected_style_from_dialog(self) -> None:
         if self._split_word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word to apply style", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word to apply style", type_="warning")
             return
         if not self._selected_style_value:
             self._view._safe_notify("Select a style to apply", type_="warning")
@@ -1013,7 +979,7 @@ class WordEditDialog:
         )
         self._refresh_open_dialog_content()
 
-    def _stage_crop_to_marker(self, direction: str) -> None:  # noqa: C901
+    def _stage_crop_to_marker(self, direction: str) -> None:
         view = self._view
         split_key = self._split_key
         split_word_index = self._split_word_index
@@ -1078,12 +1044,7 @@ class WordEditDialog:
             bbox_height = float(getattr(bbox, "height", 0.0) or 0.0)
 
         image_width, image_height = image_size
-        if (
-            bbox_width <= 0.0
-            or bbox_height <= 0.0
-            or image_width <= 0.0
-            or image_height <= 0.0
-        ):
+        if bbox_width <= 0.0 or bbox_height <= 0.0 or image_width <= 0.0 or image_height <= 0.0:
             view._safe_notify(
                 "Cannot crop: invalid word bounding box",
                 type_="warning",
@@ -1186,7 +1147,7 @@ class WordEditDialog:
         split_x_fraction = view._word_split_fractions.get(self._split_key)
         split_y_fraction = view._word_split_y_fractions.get(self._split_key)
         split_y_px = view._word_split_marker_y.get(self._split_key)
-        image_width, image_height = view._word_split_image_sizes.get(
+        _, image_height = view._word_split_image_sizes.get(
             self._split_key,
             (0.0, 0.0),
         )
@@ -1203,10 +1164,7 @@ class WordEditDialog:
                 view._safe_notify("Marker is out of bounds", type_="warning")
                 return
             marker_x = x1 + (width * fx)
-            if direction == "left":
-                erase_rect = (x1, y1, marker_x, y2)
-            else:
-                erase_rect = (marker_x, y1, x2, y2)
+            erase_rect = (x1, y1, marker_x, y2) if direction == "left" else (marker_x, y1, x2, y2)
         elif direction in {"above", "below"}:
             if split_y_fraction is None:
                 if split_y_px is None or image_height <= 0.0:
@@ -1224,10 +1182,7 @@ class WordEditDialog:
                 return
 
             marker_y = y1 + (height * fy)
-            if direction == "above":
-                erase_rect = (x1, y1, x2, marker_y)
-            else:
-                erase_rect = (x1, marker_y, x2, y2)
+            erase_rect = (x1, y1, x2, marker_y) if direction == "above" else (x1, marker_y, x2, y2)
         else:
             view._safe_notify("Unsupported erase direction", type_="warning")
             return
@@ -1265,12 +1220,7 @@ class WordEditDialog:
             return
 
         left_delta, right_delta, top_delta, bottom_delta = self._pending_bbox_deltas
-        if (
-            left_delta == 0.0
-            and right_delta == 0.0
-            and top_delta == 0.0
-            and bottom_delta == 0.0
-        ):
+        if left_delta == 0.0 and right_delta == 0.0 and top_delta == 0.0 and bottom_delta == 0.0:
             view._safe_notify("No pending bbox edits to apply", type_="warning")
             return
 
@@ -1286,13 +1236,9 @@ class WordEditDialog:
             )
             if success:
                 self._pending_bbox_deltas = (0.0, 0.0, 0.0, 0.0)
-                view.renderer.refresh_local_line_match_from_line_object(
-                    self._line_index
-                )
+                view.renderer.refresh_local_line_match_from_line_object(self._line_index)
                 view._update_summary()
-                view.renderer.rerender_word_column(
-                    self._line_index, self._split_word_index
-                )
+                view.renderer.rerender_word_column(self._line_index, self._split_word_index)
                 self._refresh_open_dialog_content()
                 if refine_after:
                     view._safe_notify(
@@ -1369,20 +1315,16 @@ class WordEditDialog:
         # server-side element tree, which progressively slows the app.
         dialog = getattr(self, "_dialog", None)
         if dialog is not None:
-            try:
+            with contextlib.suppress(Exception):
                 dialog.clear()
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(Exception):
                 dialog.delete()
-            except Exception:
-                pass
             self._dialog = None
             self._dialog_card = None
 
     # -- Main dialog UI builder ---------------------------------------------
 
-    def open(self) -> None:  # noqa: C901
+    def open(self) -> None:
         """Build and display the dialog."""
         view = self._view
         line_index = self._line_index
@@ -1391,9 +1333,7 @@ class WordEditDialog:
         word_match = self._word_match
         split_key = self._split_key
 
-        dialog_host = (
-            view.container if view._has_active_ui_context(view.container) else None
-        )
+        dialog_host = view.container if view._has_active_ui_context(view.container) else None
         if dialog_host is not None:
             with dialog_host:
                 self._dialog = ui.dialog()
@@ -1436,12 +1376,8 @@ class WordEditDialog:
                         ui.label("Current").classes("text-caption")
                         self._current_image_slot = ui.column().classes("items-center")
 
-                        self._saved_image_ref = view._word_split_image_refs.get(
-                            split_key
-                        )
-                        self._saved_image_size = view._word_split_image_sizes.get(
-                            split_key
-                        )
+                        self._saved_image_ref = view._word_split_image_refs.get(split_key)
+                        self._saved_image_size = view._word_split_image_sizes.get(split_key)
 
                         self._tag_chips_slot = (
                             ui.column()
@@ -1524,13 +1460,9 @@ class WordEditDialog:
                         options=self._style_options,
                         value=self._selected_style_value,
                         label="Style",
-                    ).props(
-                        'dense outlined options-dense data-testid="dialog-style-select"'
-                    )
+                    ).props('dense outlined options-dense data-testid="dialog-style-select"')
                     style_select.classes("text-caption")
-                    style_select.style(
-                        "min-width: 122px; max-width: 140px; font-size: 0.72rem;"
-                    )
+                    style_select.style("min-width: 122px; max-width: 140px; font-size: 0.72rem;")
                     style_select.on_value_change(self._set_selected_style)
                     style_select.enabled = split_word_index >= 0
 
@@ -1538,17 +1470,13 @@ class WordEditDialog:
                         options=self._scope_options,
                         value=self._selected_scope_value,
                         label="Scope",
-                    ).props(
-                        'dense outlined options-dense data-testid="dialog-scope-select"'
-                    )
+                    ).props('dense outlined options-dense data-testid="dialog-scope-select"')
                     self._scope_select.classes("text-caption")
                     self._scope_select.style(
                         "min-width: 96px; max-width: 108px; font-size: 0.72rem;"
                     )
                     self._scope_select.on_value_change(
-                        lambda event: self._apply_scope_for_selected_style(
-                            str(event.value or "")
-                        )
+                        lambda event: self._apply_scope_for_selected_style(str(event.value or ""))
                     )
                     self._scope_select.enabled = split_word_index >= 0
 
@@ -1567,9 +1495,7 @@ class WordEditDialog:
                         options=self._component_options,
                         value=self._selected_component_value,
                         label="Component",
-                    ).props(
-                        'dense outlined options-dense data-testid="dialog-component-select"'
-                    )
+                    ).props('dense outlined options-dense data-testid="dialog-component-select"')
                     component_select.classes("text-caption")
                     component_select.style(
                         "min-width: 138px; max-width: 162px; font-size: 0.72rem;"
@@ -1578,32 +1504,24 @@ class WordEditDialog:
                     component_select.enabled = split_word_index >= 0
                     apply_component_button = ui.button(
                         "Apply Component",
-                        on_click=lambda: self._apply_selected_component_from_dialog(
-                            enabled=True
-                        ),
+                        on_click=lambda: self._apply_selected_component_from_dialog(enabled=True),
                     ).props("dense no-caps size=sm")
                     style_word_text_button(apply_component_button, compact=True)
                     apply_component_button.style(
                         "min-width: 98px; padding-left: 6px; padding-right: 6px; "
                         "font-size: 0.72rem;"
                     )
-                    apply_component_button.props(
-                        'data-testid="dialog-apply-component-button"'
-                    )
+                    apply_component_button.props('data-testid="dialog-apply-component-button"')
                     clear_component_button = ui.button(
                         "Clear Component",
-                        on_click=lambda: self._apply_selected_component_from_dialog(
-                            enabled=False
-                        ),
+                        on_click=lambda: self._apply_selected_component_from_dialog(enabled=False),
                     ).props("dense no-caps size=sm outline")
                     style_word_text_button(clear_component_button, compact=True)
                     clear_component_button.style(
                         "min-width: 102px; padding-left: 6px; padding-right: 6px; "
                         "font-size: 0.72rem;"
                     )
-                    clear_component_button.props(
-                        'data-testid="dialog-clear-component-button"'
-                    )
+                    clear_component_button.props('data-testid="dialog-clear-component-button"')
 
                 self._render_tag_chips()
 
@@ -1627,9 +1545,7 @@ class WordEditDialog:
                         "min-width: 96px; padding-left: 6px; padding-right: 6px;"
                     )
                     merge_previous_button.disabled = not self._can_merge_previous
-                    merge_previous_button.props(
-                        'data-testid="dialog-merge-prev-button"'
-                    )
+                    merge_previous_button.props('data-testid="dialog-merge-prev-button"')
 
                     merge_next_button = ui.button(
                         "Merge Next",
@@ -1686,7 +1602,7 @@ class WordEditDialog:
                             else None
                         ),
                     ).tooltip(
-                        "Split vertically at marker (V-split: horizontal line, assign to closest line)"
+                        "Split vertically at marker (V-split: horizontal line, assign to closest line)"  # noqa: E501
                     )
                     style_word_text_button(self._vertical_split_button, compact=True)
                     self._vertical_split_button.style(
@@ -1698,9 +1614,7 @@ class WordEditDialog:
                             split_word_index,
                         )
                     )
-                    self._vertical_split_button.props(
-                        'data-testid="dialog-split-v-button"'
-                    )
+                    self._vertical_split_button.props('data-testid="dialog-split-v-button"')
 
                     delete_button = ui.button(
                         icon="delete",
@@ -1729,17 +1643,13 @@ class WordEditDialog:
                             on_click=lambda _event: self._stage_crop_to_marker("above"),
                         ).tooltip("Stage removal above horizontal marker")
                         style_word_text_button(crop_above_button, compact=True)
-                        crop_above_button.props(
-                            'data-testid="dialog-crop-above-button"'
-                        )
+                        crop_above_button.props('data-testid="dialog-crop-above-button"')
                         crop_below_button = ui.button(
                             "Crop Below",
                             on_click=lambda _event: self._stage_crop_to_marker("below"),
                         ).tooltip("Stage removal below horizontal marker")
                         style_word_text_button(crop_below_button, compact=True)
-                        crop_below_button.props(
-                            'data-testid="dialog-crop-below-button"'
-                        )
+                        crop_below_button.props('data-testid="dialog-crop-below-button"')
                         crop_left_button = ui.button(
                             "Crop Left",
                             on_click=lambda _event: self._stage_crop_to_marker("left"),
@@ -1751,9 +1661,7 @@ class WordEditDialog:
                             on_click=lambda _event: self._stage_crop_to_marker("right"),
                         ).tooltip("Stage removal right of vertical marker")
                         style_word_text_button(crop_right_button, compact=True)
-                        crop_right_button.props(
-                            'data-testid="dialog-crop-right-button"'
-                        )
+                        crop_right_button.props('data-testid="dialog-crop-right-button"')
 
                     with ui.row().classes("items-center gap-2"):
                         erase_mode_active = split_key in view._word_box_erase_mode_keys
@@ -1768,30 +1676,21 @@ class WordEditDialog:
                         refine_preview_button = ui.button(
                             "Refine",
                             icon="auto_fix_high",
-                            on_click=lambda _event: self._stage_refine_preview(
-                                expand=False
-                            ),
+                            on_click=lambda _event: self._stage_refine_preview(expand=False),
                         ).tooltip("Preview refine (stage without applying)")
                         style_word_text_button(refine_preview_button, compact=True)
                         refine_preview_button.disabled = (
                             view.refine_words_callback is None or split_word_index < 0
                         )
-                        refine_preview_button.props(
-                            'data-testid="dialog-refine-preview-button"'
-                        )
+                        refine_preview_button.props('data-testid="dialog-refine-preview-button"')
                         expand_refine_preview_button = ui.button(
                             "Expand + Refine",
                             icon="unfold_more",
-                            on_click=lambda _event: self._stage_refine_preview(
-                                expand=True
-                            ),
+                            on_click=lambda _event: self._stage_refine_preview(expand=True),
                         ).tooltip("Preview expand then refine (stage without applying)")
-                        style_word_text_button(
-                            expand_refine_preview_button, compact=True
-                        )
+                        style_word_text_button(expand_refine_preview_button, compact=True)
                         expand_refine_preview_button.disabled = (
-                            view.expand_then_refine_words_callback is None
-                            or split_word_index < 0
+                            view.expand_then_refine_words_callback is None or split_word_index < 0
                         )
                         expand_refine_preview_button.props(
                             'data-testid="dialog-expand-refine-preview-button"'
@@ -1802,9 +1701,7 @@ class WordEditDialog:
                         ui.radio(
                             options={1: "1px", 5: "5px", 10: "10px"},
                             value=self._bbox_nudge_step_px,
-                            on_change=lambda event: self._set_bbox_nudge_step(
-                                event.value
-                            ),
+                            on_change=lambda event: self._set_bbox_nudge_step(event.value),
                         ).props("inline dense")
                     with ui.row().classes("items-center gap-1"):
                         ui.label("Left")
@@ -1818,9 +1715,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(left_minus_button, compact=True)
-                        left_minus_button.props(
-                            'data-testid="dialog-nudge-left-minus-button"'
-                        )
+                        left_minus_button.props('data-testid="dialog-nudge-left-minus-button"')
                         left_plus_button = ui.button(
                             "X+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1831,9 +1726,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(left_plus_button, compact=True)
-                        left_plus_button.props(
-                            'data-testid="dialog-nudge-left-plus-button"'
-                        )
+                        left_plus_button.props('data-testid="dialog-nudge-left-plus-button"')
 
                         ui.label("Right")
                         right_minus_button = ui.button(
@@ -1846,9 +1739,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(right_minus_button, compact=True)
-                        right_minus_button.props(
-                            'data-testid="dialog-nudge-right-minus-button"'
-                        )
+                        right_minus_button.props('data-testid="dialog-nudge-right-minus-button"')
                         right_plus_button = ui.button(
                             "X+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1859,9 +1750,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(right_plus_button, compact=True)
-                        right_plus_button.props(
-                            'data-testid="dialog-nudge-right-plus-button"'
-                        )
+                        right_plus_button.props('data-testid="dialog-nudge-right-plus-button"')
 
                     with ui.row().classes("items-center gap-1"):
                         ui.label("Top")
@@ -1875,9 +1764,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(top_minus_button, compact=True)
-                        top_minus_button.props(
-                            'data-testid="dialog-nudge-top-minus-button"'
-                        )
+                        top_minus_button.props('data-testid="dialog-nudge-top-minus-button"')
                         top_plus_button = ui.button(
                             "Y+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1888,9 +1775,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(top_plus_button, compact=True)
-                        top_plus_button.props(
-                            'data-testid="dialog-nudge-top-plus-button"'
-                        )
+                        top_plus_button.props('data-testid="dialog-nudge-top-plus-button"')
 
                         ui.label("Bottom")
                         bottom_minus_button = ui.button(
@@ -1903,9 +1788,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(bottom_minus_button, compact=True)
-                        bottom_minus_button.props(
-                            'data-testid="dialog-nudge-bottom-minus-button"'
-                        )
+                        bottom_minus_button.props('data-testid="dialog-nudge-bottom-minus-button"')
                         bottom_plus_button = ui.button(
                             "Y+",
                             on_click=lambda _event: self._accumulate_bbox_nudge(
@@ -1916,9 +1799,7 @@ class WordEditDialog:
                             ),
                         )
                         style_word_text_button(bottom_plus_button, compact=True)
-                        bottom_plus_button.props(
-                            'data-testid="dialog-nudge-bottom-plus-button"'
-                        )
+                        bottom_plus_button.props('data-testid="dialog-nudge-bottom-plus-button"')
 
                     with ui.row().classes("items-center gap-2"):
                         ui.label(
@@ -1949,14 +1830,10 @@ class WordEditDialog:
                             ),
                         ).tooltip("Apply pending bbox edits and refine")
                         style_word_text_button(apply_refine_button, compact=True)
-                        apply_refine_button.props(
-                            'data-testid="dialog-apply-refine-nudges-button"'
-                        )
+                        apply_refine_button.props('data-testid="dialog-apply-refine-nudges-button"')
 
         if split_word_index >= 0:
             view._word_split_button_refs[split_key] = self._split_button
-            view._word_vertical_split_button_refs[split_key] = (
-                self._vertical_split_button
-            )
+            view._word_vertical_split_button_refs[split_key] = self._vertical_split_button
         self._dialog.on("hide", lambda _event: self._cleanup())
         self._dialog.open()

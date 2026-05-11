@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -25,9 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Shared thread pool for image encoding to prevent thread pool exhaustion
 # Limit to 4 concurrent encoding operations to prevent overwhelming the system
-_image_encoding_executor = ThreadPoolExecutor(
-    max_workers=4, thread_name_prefix="img_encode"
-)
+_image_encoding_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_encode")
 
 # Short label inserted into cached filenames for each numpy image attribute.
 # Format: {project_id}_{page:03d}_{image_type}_{content_hash}{ext}
@@ -95,9 +94,7 @@ class PageStateViewModel(BaseViewModel):
         self._image_update_schedule_skip_count: int = 0
         self._image_update_emit_count: int = 0
         self._image_update_emit_skip_count: int = 0
-        self._word_image_cache_dir: Path = (
-            PersistencePathsOperations.get_page_image_cache_root()
-        )
+        self._word_image_cache_dir: Path = PersistencePathsOperations.get_page_image_cache_root()
         self._word_image_cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Accept None here and defer binding until a valid state is provided.
@@ -105,7 +102,7 @@ class PageStateViewModel(BaseViewModel):
         # before the ProjectState has been created/populated.
         if page_state is None:
             logger.debug(
-                "PageStateViewModel initialized without page_state; deferring binding until available"
+                "PageStateViewModel initialized without page_state; deferring binding until available"  # noqa: E501
             )
             return
 
@@ -171,10 +168,8 @@ class PageStateViewModel(BaseViewModel):
                 self._page_state.on_change.append(self._on_page_state_change)
             except Exception:
                 # Ensure on_change exists as a list; defensive
-                try:
+                with contextlib.suppress(Exception):
                     self._page_state.on_change = [self._on_page_state_change]
-                except Exception:
-                    pass
         self._sync_source_badge()
 
     @staticmethod
@@ -283,15 +278,9 @@ class PageStateViewModel(BaseViewModel):
             elif source == "loading":
                 self.current_page_source_text = "LOADING..."
             else:
-                self.current_page_source_text = _source_display_map.get(
-                    source, "RAW OCR"
-                )
-            self.current_page_source_tooltip = (
-                self._page_state.current_page_source_tooltip
-            )
-            self.current_page_ocr_models_text = (
-                self._page_state.current_page_ocr_models_summary
-            )
+                self.current_page_source_text = _source_display_map.get(source, "RAW OCR")
+            self.current_page_source_tooltip = self._page_state.current_page_source_tooltip
+            self.current_page_ocr_models_text = self._page_state.current_page_ocr_models_summary
         except Exception:
             logger.debug("Failed to sync source badge from PageState", exc_info=True)
             self.current_page_source_text = "(NO PAGE)"
@@ -324,7 +313,7 @@ class PageStateViewModel(BaseViewModel):
             self._image_update_schedule_skip_count += 1
             logger.debug("_schedule_image_update: update already in progress, skipping")
             logger.info(
-                "[_schedule_image_update] Skip in-progress and coalesce rerun (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+                "[_schedule_image_update] Skip in-progress and coalesce rerun (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",  # noqa: E501
                 self._image_update_schedule_count,
                 self._image_update_schedule_skip_count,
                 self._image_update_emit_count,
@@ -337,7 +326,7 @@ class PageStateViewModel(BaseViewModel):
             self._image_update_schedule_skip_count += 1
             logger.debug("_schedule_image_update: update already scheduled, skipping")
             logger.info(
-                "[_schedule_image_update] Skip already-scheduled (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+                "[_schedule_image_update] Skip already-scheduled (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",  # noqa: E501
                 self._image_update_schedule_count,
                 self._image_update_schedule_skip_count,
                 self._image_update_emit_count,
@@ -348,16 +337,14 @@ class PageStateViewModel(BaseViewModel):
         # Skip during navigation to prevent blocking the event loop while
         # OCR/page loading is in progress (prevents "connection lost" errors)
         if self._is_navigation_in_progress_and_unloaded():
-            logger.debug(
-                "_schedule_image_update: navigation in progress; deferring update"
-            )
+            logger.debug("_schedule_image_update: navigation in progress; deferring update")
             return
 
         pending_update = self._update_image_sources_async()
         self._update_scheduled = True
         self._image_update_schedule_count += 1
         logger.info(
-            "[_schedule_image_update] Queued update (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",
+            "[_schedule_image_update] Queued update (scheduled=%d, schedule_skips=%d, emitted=%d, emit_skips=%d)",  # noqa: E501
             self._image_update_schedule_count,
             self._image_update_schedule_skip_count,
             self._image_update_emit_count,
@@ -368,22 +355,16 @@ class PageStateViewModel(BaseViewModel):
             background_tasks.create(pending_update)
         except (AssertionError, RuntimeError):
             self._update_scheduled = False
-            try:
+            with contextlib.suppress(Exception):
                 pending_update.close()
-            except Exception:
-                pass
             # No event loop running (e.g., in test context) - use blocking fallback
             # This is safe because there's no websocket connection to timeout
-            logger.debug(
-                "_schedule_image_update: no usable event loop; using blocking fallback"
-            )
+            logger.debug("_schedule_image_update: no usable event loop; using blocking fallback")
             self._update_image_sources_blocking()
         except Exception:
             self._update_scheduled = False
-            try:
+            with contextlib.suppress(Exception):
                 pending_update.close()
-            except Exception:
-                pass
             # Other errors during async scheduling - skip to avoid blocking
             logger.warning(
                 "_schedule_image_update: failed to schedule async update; skipping",
@@ -407,9 +388,7 @@ class PageStateViewModel(BaseViewModel):
 
             # Avoid blocking the loop during navigation until the target page is loaded
             if self._is_navigation_in_progress_and_unloaded():
-                logger.debug(
-                    "_update_image_sources_async: navigation in progress; skipping update"
-                )
+                logger.debug("_update_image_sources_async: navigation in progress; skipping update")
                 return
 
             image_mappings = self._image_mappings()
@@ -421,9 +400,7 @@ class PageStateViewModel(BaseViewModel):
                 page_index = -1
             project_id = self._resolve_project_id_for_cache()
             project = self._resolve_project_for_cache()
-            image_extension = resolve_cache_image_extension(
-                current_page, project, page_index
-            )
+            image_extension = resolve_cache_image_extension(current_page, project, page_index)
 
             # Fast path: all images were cached in a previous session and the
             # files still exist on disk.  Skip refresh_page_images() entirely.
@@ -431,17 +408,13 @@ class PageStateViewModel(BaseViewModel):
             cached_filenames = normalize_cached_filenames(
                 getattr(current_page_model, "cached_image_filenames", None)
             )
-            expected_types = {
-                _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings
-            }
+            expected_types = {_IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings}
             cache_dir = self._word_image_cache_dir
             if (
                 cached_filenames
                 and expected_types.issubset(cached_filenames.keys())
                 and all(
-                    (cache_dir / fname).exists()
-                    for fname in cached_filenames.values()
-                    if fname
+                    (cache_dir / fname).exists() for fname in cached_filenames.values() if fname
                 )
             ):
                 logger.debug(
@@ -458,21 +431,16 @@ class PageStateViewModel(BaseViewModel):
                     encoded_results.append((prop_name, url))
                     if attr_name == "cv2_numpy_page_image":
                         original_image_source = url
-                encoded_results.append(
-                    ("word_view_original_image_source", original_image_source)
-                )
+                encoded_results.append(("word_view_original_image_source", original_image_source))
                 encoded_results.append(("word_view_image_page_index", page_index))
                 if current_page_model is not None:
-                    await self._persist_cached_images_async(
-                        current_page_model, project_id
-                    )
+                    await self._persist_cached_images_async(current_page_model, project_id)
                 self._apply_encoded_results(encoded_results, current_page)
                 return
 
             # Slow path: generate / cache images, then persist filenames.
             needs_refresh = any(
-                getattr(current_page, attr_name, None) is None
-                for _, attr_name in image_mappings
+                getattr(current_page, attr_name, None) is None for _, attr_name in image_mappings
             )
             if needs_refresh and hasattr(current_page, "refresh_page_images"):
                 try:
@@ -508,9 +476,7 @@ class PageStateViewModel(BaseViewModel):
                     original_image_source = source
                 if source:
                     # filename = last path component before the query string
-                    new_cached_filenames[image_type] = source.split("?")[0].rsplit(
-                        "/", 1
-                    )[-1]
+                    new_cached_filenames[image_type] = source.split("?")[0].rsplit("/", 1)[-1]
 
             if new_cached_filenames and current_page_model is not None:
                 current_page_model.cached_image_filenames = new_cached_filenames
@@ -520,9 +486,7 @@ class PageStateViewModel(BaseViewModel):
                 )
 
             # Word-view reuses the already-cached original image URL.
-            encoded_results.append(
-                ("word_view_original_image_source", original_image_source)
-            )
+            encoded_results.append(("word_view_original_image_source", original_image_source))
             encoded_results.append(("word_view_image_page_index", page_index))
 
             self._apply_encoded_results(encoded_results, current_page)
@@ -532,9 +496,7 @@ class PageStateViewModel(BaseViewModel):
                 threading.current_thread().name,
             )
         except Exception as e:
-            logger.error(
-                "[_update_image_sources_async] UNEXPECTED ERROR: %s", e, exc_info=True
-            )
+            logger.error("[_update_image_sources_async] UNEXPECTED ERROR: %s", e, exc_info=True)
             raise
         finally:
             self._update_scheduled = False
@@ -577,26 +539,20 @@ class PageStateViewModel(BaseViewModel):
                 page_index = -1
             project_id = self._resolve_project_id_for_cache()
             project = self._resolve_project_for_cache()
-            image_extension = resolve_cache_image_extension(
-                current_page, project, page_index
-            )
+            image_extension = resolve_cache_image_extension(current_page, project, page_index)
 
             # Fast path: use pre-cached files if available.
             current_page_model = self._get_current_page_model()
             cached_filenames = normalize_cached_filenames(
                 getattr(current_page_model, "cached_image_filenames", None)
             )
-            expected_types = {
-                _IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings
-            }
+            expected_types = {_IMAGE_TYPE_LABELS.get(attr, attr) for _, attr in image_mappings}
             cache_dir = self._word_image_cache_dir
             if (
                 cached_filenames
                 and expected_types.issubset(cached_filenames.keys())
                 and all(
-                    (cache_dir / fname).exists()
-                    for fname in cached_filenames.values()
-                    if fname
+                    (cache_dir / fname).exists() for fname in cached_filenames.values() if fname
                 )
             ):
                 encoded_results = []
@@ -608,9 +564,7 @@ class PageStateViewModel(BaseViewModel):
                     encoded_results.append((prop_name, url))
                     if attr_name == "cv2_numpy_page_image":
                         original_image_source = url
-                encoded_results.append(
-                    ("word_view_original_image_source", original_image_source)
-                )
+                encoded_results.append(("word_view_original_image_source", original_image_source))
                 encoded_results.append(("word_view_image_page_index", page_index))
                 if current_page_model is not None:
                     self._persist_cached_images_blocking(current_page_model, project_id)
@@ -619,8 +573,7 @@ class PageStateViewModel(BaseViewModel):
 
             # Slow path: generate images.
             needs_refresh = any(
-                getattr(current_page, attr_name, None) is None
-                for _, attr_name in image_mappings
+                getattr(current_page, attr_name, None) is None for _, attr_name in image_mappings
             )
             if needs_refresh and hasattr(current_page, "refresh_page_images"):
                 try:
@@ -651,9 +604,7 @@ class PageStateViewModel(BaseViewModel):
                 if attr_name == "cv2_numpy_page_image":
                     original_image_source = source
                 if source:
-                    new_cached_filenames[image_type] = source.split("?")[0].rsplit(
-                        "/", 1
-                    )[-1]
+                    new_cached_filenames[image_type] = source.split("?")[0].rsplit("/", 1)[-1]
 
             if new_cached_filenames and current_page_model is not None:
                 current_page_model.cached_image_filenames = new_cached_filenames
@@ -662,9 +613,7 @@ class PageStateViewModel(BaseViewModel):
                     project_id,
                 )
 
-            encoded_results.append(
-                ("word_view_original_image_source", original_image_source)
-            )
+            encoded_results.append(("word_view_original_image_source", original_image_source))
             encoded_results.append(("word_view_image_page_index", page_index))
 
             self._apply_encoded_results(encoded_results, current_page)
@@ -697,17 +646,11 @@ class PageStateViewModel(BaseViewModel):
         current_page = None
         try:
             maybe = getattr(self._page_state, "current_page", None)
-            if callable(maybe):
-                current_page = maybe()
-            else:
-                # attribute-style PageState.current_page
-                current_page = maybe
+            current_page = maybe() if callable(maybe) else maybe
         except Exception:
             # Defensive fallback
             try:
-                current_page = self._page_state and getattr(
-                    self._page_state, "current_page", None
-                )
+                current_page = self._page_state and getattr(self._page_state, "current_page", None)
             except Exception:
                 current_page = None
 
@@ -796,7 +739,7 @@ class PageStateViewModel(BaseViewModel):
                     return True
         except Exception:
             logger.debug(
-                "_is_navigation_in_progress_and_unloaded: inspection failed; treating as navigating",
+                "_is_navigation_in_progress_and_unloaded: inspection failed; treating as navigating",  # noqa: E501
                 exc_info=True,
             )
             return True
@@ -862,11 +805,9 @@ class PageStateViewModel(BaseViewModel):
             callback_signature = self._build_callback_signature(results)
             if callback_signature == self._last_image_callback_signature:
                 self._image_update_emit_skip_count += 1
-                logger.debug(
-                    "[_apply_encoded_results] Skipping callback; image payload unchanged"
-                )
+                logger.debug("[_apply_encoded_results] Skipping callback; image payload unchanged")
                 logger.info(
-                    "[_apply_encoded_results] Callback skipped (unchanged payload, emitted=%d, emit_skips=%d)",
+                    "[_apply_encoded_results] Callback skipped (unchanged payload, emitted=%d, emit_skips=%d)",  # noqa: E501
                     self._image_update_emit_count,
                     self._image_update_emit_skip_count,
                 )
@@ -883,7 +824,7 @@ class PageStateViewModel(BaseViewModel):
                 self._image_update_emit_count += 1
                 self._last_image_callback_signature = callback_signature
                 logger.info(
-                    "[_apply_encoded_results] Callback completed successfully (emitted=%d, emit_skips=%d)",
+                    "[_apply_encoded_results] Callback completed successfully (emitted=%d, emit_skips=%d)",  # noqa: E501
                     self._image_update_emit_count,
                     self._image_update_emit_skip_count,
                 )
@@ -896,7 +837,7 @@ class PageStateViewModel(BaseViewModel):
         else:
             # Fallback to data binding if no callback registered
             logger.warning(
-                "[_apply_encoded_results] No callback registered, using data binding (may cause issues)"
+                "[_apply_encoded_results] No callback registered, using data binding (may cause issues)"  # noqa: E501
             )
             for prop_name, new_value in results:
                 current_value = getattr(self, prop_name, "")
@@ -912,9 +853,7 @@ class PageStateViewModel(BaseViewModel):
                         )
                         raise
 
-        logger.info(
-            "[_apply_encoded_results] Exit - All %d updates applied", len(results)
-        )
+        logger.info("[_apply_encoded_results] Exit - All %d updates applied", len(results))
 
     def _build_callback_signature(self, results: list[tuple[str, str]]) -> tuple:
         """Build stable signature for callback payload deduplication."""
@@ -930,9 +869,7 @@ class PageStateViewModel(BaseViewModel):
         if not source.startswith("/_word_image_cache/"):
             return source
 
-        refresh_nonce = getattr(
-            current_page, "_pd_ocr_labeler_overlay_refresh_nonce", None
-        )
+        refresh_nonce = getattr(current_page, "_pd_ocr_labeler_overlay_refresh_nonce", None)
         if not refresh_nonce:
             return source
 
@@ -960,9 +897,7 @@ class PageStateViewModel(BaseViewModel):
         if project_id:
             return project_id
 
-        project_root = (
-            getattr(project_state, "project_root", None) if project_state else None
-        )
+        project_root = getattr(project_state, "project_root", None) if project_state else None
         try:
             root_name = str(getattr(project_root, "name", "") or "").strip()
             if root_name:

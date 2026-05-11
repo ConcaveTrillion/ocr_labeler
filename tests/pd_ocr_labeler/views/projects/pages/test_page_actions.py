@@ -140,9 +140,7 @@ class TestPageActions:
     def test_sync_control_states_applies_project_disabled_flag(self):
         project_viewmodel = Mock()
         project_viewmodel.is_controls_disabled = True
-        controls = PageActions(
-            project_viewmodel=project_viewmodel, page_viewmodel=Mock()
-        )
+        controls = PageActions(project_viewmodel=project_viewmodel, page_viewmodel=Mock())
 
         controls.reload_ocr_button = Mock()
         controls.save_button = Mock()

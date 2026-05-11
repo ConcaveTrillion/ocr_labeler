@@ -54,9 +54,7 @@ def _file_fingerprint(path: Path) -> tuple[bool, str | None]:
 
 REAL_HOME = _real_user_home()
 REAL_CONFIG_PATH = REAL_HOME / ".config" / "pd-ocr-labeler" / "config.yaml"
-REAL_SESSION_STATE_PATH = (
-    REAL_HOME / ".local" / "share" / "pd-ocr-labeler" / "session_state.json"
-)
+REAL_SESSION_STATE_PATH = REAL_HOME / ".local" / "share" / "pd-ocr-labeler" / "session_state.json"
 
 
 def test_config_write_does_not_leak_to_real_user_home(tmp_path):

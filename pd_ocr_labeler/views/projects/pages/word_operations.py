@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from pd_book_tools.ocr.label_normalization import (
     ALLOWED_COMPONENTS,
@@ -57,9 +58,7 @@ class SelectedWordOperationsProcessor:
 
     @property
     def supported_styles(self) -> tuple[str, ...]:
-        return tuple(
-            style for style in sorted(ALLOWED_TEXT_STYLE_LABELS) if style != "regular"
-        )
+        return tuple(style for style in sorted(ALLOWED_TEXT_STYLE_LABELS) if style != "regular")
 
     @property
     def supported_components(self) -> tuple[str, ...]:
@@ -95,12 +94,8 @@ class SelectedWordOperationsProcessor:
         updated_count = 0
         failed_count = 0
         for line_index, word_index in selection:
-            word_match = self._view._line_word_match_by_ocr_index(
-                line_index, word_index
-            )
-            word_object = (
-                getattr(word_match, "word_object", None) if word_match else None
-            )
+            word_match = self._view._line_word_match_by_ocr_index(line_index, word_index)
+            word_object = getattr(word_match, "word_object", None) if word_match else None
             if word_object is None:
                 failed_count += 1
                 continue
@@ -187,12 +182,8 @@ class SelectedWordOperationsProcessor:
         updated_count = 0
         failed_count = 0
         for line_index, word_index in selection:
-            word_match = self._view._line_word_match_by_ocr_index(
-                line_index, word_index
-            )
-            word_object = (
-                getattr(word_match, "word_object", None) if word_match else None
-            )
+            word_match = self._view._line_word_match_by_ocr_index(line_index, word_index)
+            word_object = getattr(word_match, "word_object", None) if word_match else None
             if word_object is None:
                 failed_count += 1
                 continue
@@ -226,7 +217,7 @@ class SelectedWordOperationsProcessor:
         return self._result_for(
             updated_count,
             failed_count,
-            success_message=f"Applied scope '{normalized_scope}' to existing styles on {updated_count} word(s)",
+            success_message=f"Applied scope '{normalized_scope}' to existing styles on {updated_count} word(s)",  # noqa: E501
             failure_message=(
                 f"Failed to apply scope '{normalized_scope}'; select word(s) with an existing style"
             ),
@@ -510,12 +501,8 @@ class SelectedWordOperationsProcessor:
         updated_count = 0
         failed_count = 0
         for line_index, word_index in selection:
-            word_match = self._view._line_word_match_by_ocr_index(
-                line_index, word_index
-            )
-            word_object = (
-                getattr(word_match, "word_object", None) if word_match else None
-            )
+            word_match = self._view._line_word_match_by_ocr_index(line_index, word_index)
+            word_object = getattr(word_match, "word_object", None) if word_match else None
             if word_object is None:
                 failed_count += 1
                 continue
@@ -542,7 +529,7 @@ class SelectedWordOperationsProcessor:
                     )
                 except Exception:
                     logger.exception(
-                        "Apply-component callback failed for line=%s word=%s component=%s enabled=%s",
+                        "Apply-component callback failed for line=%s word=%s component=%s enabled=%s",  # noqa: E501
                         line_index,
                         word_index,
                         normalized_component,

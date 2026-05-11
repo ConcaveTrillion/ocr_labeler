@@ -30,9 +30,7 @@ class WordMatch:
     match_status: MatchStatus
     fuzz_score: float | None = None
     word_index: int | None = None
-    word_object: object | None = (
-        None  # Reference to the original word object for image access
-    )
+    word_object: object | None = None  # Reference to the original word object for image access
     is_validated: bool = False
 
     def __eq__(self, other: object) -> bool:

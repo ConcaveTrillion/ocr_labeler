@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from nicegui import run
 
@@ -24,9 +24,7 @@ from .project_state import ProjectState
 logger = logging.getLogger(__name__)
 
 
-def _hf_descriptor(
-    option: OCRModelOption, *, role: str
-) -> HuggingFaceWeightsDescriptor | None:
+def _hf_descriptor(option: OCRModelOption, *, role: str) -> HuggingFaceWeightsDescriptor | None:
     """Return a Hugging Face descriptor for ``option`` and ``role``.
 
     Returns ``None`` for non-HF options or when the option is missing the
@@ -77,9 +75,7 @@ class AppState:
 
     # Reactive project selection data for UI bindings
     available_projects: dict[str, Path] = field(default_factory=dict)
-    project_keys: list[str] = field(
-        default_factory=list
-    )  # sorted keys for select options
+    project_keys: list[str] = field(default_factory=list)  # sorted keys for select options
     _selected_project_key: str | None = None  # currently selected project key
     _notification_queue: deque[tuple[str, str]] = field(
         default_factory=deque, init=False, repr=False
@@ -148,9 +144,7 @@ class AppState:
             if self.project_keys:
                 self.selected_project_key = self.project_keys[0]
         except Exception:
-            logger.exception(
-                "__post_init__: deriving initial project keys failed", exc_info=True
-            )
+            logger.exception("__post_init__: deriving initial project keys failed", exc_info=True)
 
     # --------------- Notification ---------------
     def notify(self):
@@ -161,19 +155,11 @@ class AppState:
             except Exception:
                 logger.exception("AppState.notify: listener callback failed")
 
-    def _apply_selected_ocr_model_to_project_state(
-        self, project_state: ProjectState
-    ) -> None:
+    def _apply_selected_ocr_model_to_project_state(self, project_state: ProjectState) -> None:
         """Apply currently selected OCR model to a project state's parser."""
-        detection_option = self.available_ocr_models.get(
-            self.selected_ocr_detection_model_key
-        )
-        recognition_option = self.available_ocr_models.get(
-            self.selected_ocr_recognition_model_key
-        )
-        default_option = self.available_ocr_models.get(
-            ModelSelectionOperations.DEFAULT_MODEL_KEY
-        )
+        detection_option = self.available_ocr_models.get(self.selected_ocr_detection_model_key)
+        recognition_option = self.available_ocr_models.get(self.selected_ocr_recognition_model_key)
+        default_option = self.available_ocr_models.get(ModelSelectionOperations.DEFAULT_MODEL_KEY)
 
         if detection_option is None:
             detection_option = default_option
@@ -202,10 +188,7 @@ class AppState:
 
     def _sync_legacy_selected_ocr_model_key(self) -> None:
         """Keep the legacy single model key in sync for backward compatibility."""
-        if (
-            self.selected_ocr_detection_model_key
-            == self.selected_ocr_recognition_model_key
-        ):
+        if self.selected_ocr_detection_model_key == self.selected_ocr_recognition_model_key:
             self.selected_ocr_model_key = self.selected_ocr_detection_model_key
             return
         self.selected_ocr_model_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
@@ -222,9 +205,7 @@ class AppState:
         default_key = ModelSelectionOperations.DEFAULT_MODEL_KEY
 
         det_present = self.selected_ocr_detection_model_key in self.available_ocr_models
-        reco_present = (
-            self.selected_ocr_recognition_model_key in self.available_ocr_models
-        )
+        reco_present = self.selected_ocr_recognition_model_key in self.available_ocr_models
 
         # Auto-pick when the current selection is missing OR is the
         # historical "default" stock fallback (so existing installs upgrade
@@ -256,13 +237,11 @@ class AppState:
 
         message_kind = {
             "hf-latest": (
-                f"Using latest published OCR model from "
-                f"{ModelSelectionOperations.HF_LATEST_KEY}",
+                f"Using latest published OCR model from {ModelSelectionOperations.HF_LATEST_KEY}",
                 "info",
             ),
             "hf-only": (
-                "Using published Hugging Face OCR model (no local fine-tuned "
-                "models found).",
+                "Using published Hugging Face OCR model (no local fine-tuned models found).",
                 "info",
             ),
             "local-newer-than-hf": (
@@ -314,9 +293,7 @@ class AppState:
         """Set active OCR model key and apply it to all project states."""
         return self.set_selected_ocr_models(model_key, model_key)
 
-    def set_selected_ocr_models(
-        self, detection_model_key: str, recognition_model_key: str
-    ) -> bool:
+    def set_selected_ocr_models(self, detection_model_key: str, recognition_model_key: str) -> bool:
         """Set active OCR detection/recognition model keys and apply globally."""
         if detection_model_key not in self.available_ocr_models:
             return False
@@ -381,9 +358,7 @@ class AppState:
 
             # Get or create project state
             if project_key not in self.projects:
-                self.projects[project_key] = ProjectState(
-                    notification_sink=self.queue_notification
-                )
+                self.projects[project_key] = ProjectState(notification_sink=self.queue_notification)
                 # Set up notifications for the new project state
                 self.projects[project_key].on_change.append(self.notify)
             else:
@@ -407,11 +382,9 @@ class AppState:
                     page_index=max(0, page_idx),
                 )
             except Exception:
-                logger.debug(
-                    "Failed to persist session state after project load", exc_info=True
-                )
+                logger.debug("Failed to persist session state after project load", exc_info=True)
         finally:
-            # Clear project-level loading state (page-level loading continues via navigation spinner logic)
+            # Clear project-level loading state (page-level loading continues via navigation spinner logic) # noqa: E501
             if manage_loading_state:
                 self.is_project_loading = False
                 self.notify()
@@ -453,9 +426,7 @@ class AppState:
             return self.projects[self.current_project_key]
         # Return a default empty project state if no current project
         if not hasattr(self, "_default_project_state"):
-            self._default_project_state = ProjectState(
-                notification_sink=self.queue_notification
-            )
+            self._default_project_state = ProjectState(notification_sink=self.queue_notification)
             self._default_project_state.on_change.append(self.notify)
             self._apply_selected_ocr_model_to_project_state(self._default_project_state)
         return self._default_project_state
@@ -469,22 +440,19 @@ class AppState:
         A "project" is any immediate subdirectory containing at least one image file
         (*.png|*.jpg|*.jpeg). If the root doesn't exist, returns an empty dict.
         """
-        return ProjectDiscoveryOperations.list_available_projects(
-            self.base_projects_root
-        )
+        return ProjectDiscoveryOperations.list_available_projects(self.base_projects_root)
 
     # --------------- Project Discovery (reactive helper) ---------------
     def refresh_projects(self):  # pragma: no cover - UI driven
         """Populate reactive project lists for UI bindings.
 
-        Updates available_projects, project_keys, and selected_project_key (if current root present).
+        Updates available_projects, project_keys, and selected_project_key
+        (if current root is present in the list).
         """
         try:
             # Re-scan for available projects
-            self.available_projects = (
-                ProjectDiscoveryOperations.list_available_projects(
-                    self.base_projects_root
-                )
+            self.available_projects = ProjectDiscoveryOperations.list_available_projects(
+                self.base_projects_root
             )
             projects = self.available_projects or {}
             logger.debug(
@@ -495,19 +463,12 @@ class AppState:
             self.project_keys = ProjectDiscoveryOperations.get_project_keys(projects)
 
             # Only assign a default if none chosen yet or existing choice no longer valid.
-            if (
-                not self.selected_project_key
-                or self.selected_project_key not in projects
-            ):
-                self.selected_project_key = (
-                    ProjectDiscoveryOperations.get_default_project_key(
-                        self.project_keys
-                    )
+            if not self.selected_project_key or self.selected_project_key not in projects:
+                self.selected_project_key = ProjectDiscoveryOperations.get_default_project_key(
+                    self.project_keys
                 )
         except Exception:  # pragma: no cover - defensive
-            logger.exception(
-                "refresh_projects: failed while preparing reactive project lists"
-            )
+            logger.exception("refresh_projects: failed while preparing reactive project lists")
             self.project_keys = []
             self.selected_project_key = None
         finally:
@@ -543,9 +504,7 @@ class AppState:
 
         path = self.available_projects.get(key)
         if not path:
-            logger.error(
-                "load_selected_project: selected project path missing for key %s", key
-            )
+            logger.error("load_selected_project: selected project path missing for key %s", key)
             return
 
         # The load_project method already handles loading state and notifications

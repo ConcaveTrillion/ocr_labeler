@@ -1,3 +1,4 @@
+# ruff: noqa: T201  # CLI script uses print for user-facing output
 """CLI entry point for DocTR training-data export.
 
 Usage examples::

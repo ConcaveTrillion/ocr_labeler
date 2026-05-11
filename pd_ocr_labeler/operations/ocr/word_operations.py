@@ -43,7 +43,7 @@ class WordOperations:
         if (
             word_object is not None
             and hasattr(word_object, "fuzz_score_against")
-            and callable(getattr(word_object, "fuzz_score_against"))
+            and callable(word_object.fuzz_score_against)
         ):
             try:
                 fuzz_score = word_object.fuzz_score_against(ground_truth_text)

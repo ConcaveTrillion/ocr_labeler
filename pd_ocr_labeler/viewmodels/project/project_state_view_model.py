@@ -82,7 +82,7 @@ class ProjectStateViewModel(BaseViewModel):
         object.__setattr__(self, "can_navigate_override", False)
         object.__setattr__(self, "is_action_busy", False)
 
-        # Don't call update() in __init__ for bindable dataclasses - let state change listeners handle it
+        # Don't call update() in __init__ for bindable dataclasses - let state change listeners handle it # noqa: E501
 
     def set_action_busy(self, is_busy: bool, message: str = ""):
         """Set or clear a manual busy state for long-running actions.
@@ -147,25 +147,17 @@ class ProjectStateViewModel(BaseViewModel):
                 logger.debug("Can navigate next: %s", self.can_navigate_next)
                 logger.debug("ProjectStateViewModel update complete")
         else:
-            logger.error(
-                "No project state available when updating ProjectStateViewModel!"
-            )
-            raise ValueError(
-                "No project state available when updating ProjectStateViewModel!"
-            )
+            logger.error("No project state available when updating ProjectStateViewModel!")
+            raise ValueError("No project state available when updating ProjectStateViewModel!")
 
     def _update_navigation_properties(self):
         """Update navigation-related computed properties."""
         self.can_navigate = self.page_total > 0 and not self.can_navigate_override
         self.can_navigate_prev = self.current_page_index > 0 and self.can_navigate
-        self.can_navigate_next = (
-            self.current_page_index < self.page_total - 1 and self.can_navigate
-        )
+        self.can_navigate_next = self.current_page_index < self.page_total - 1 and self.can_navigate
 
         # Update combined disabled state
-        app_loading = (
-            self._app_state_model.is_project_loading if self._app_state_model else False
-        )
+        app_loading = self._app_state_model.is_project_loading if self._app_state_model else False
         self.is_controls_disabled = app_loading or self.can_navigate_override
 
         # Derived disabled flags for direct UI binding convenience. These
@@ -186,9 +178,7 @@ class ProjectStateViewModel(BaseViewModel):
         try:
             self.notify_property_changed("project_state", True)
         except Exception:
-            logger.debug(
-                "Failed to notify property change for project_state", exc_info=True
-            )
+            logger.debug("Failed to notify property change for project_state", exc_info=True)
 
     def _on_app_state_change(self):
         """Listener for AppState changes; update computed properties."""
@@ -198,9 +188,7 @@ class ProjectStateViewModel(BaseViewModel):
         try:
             self.notify_property_changed("app_state", True)
         except Exception:
-            logger.debug(
-                "Failed to notify property change for app_state", exc_info=True
-            )
+            logger.debug("Failed to notify property change for app_state", exc_info=True)
 
     # Command methods for UI actions
 
@@ -219,9 +207,7 @@ class ProjectStateViewModel(BaseViewModel):
                 return False
 
             if not (0 <= page_index < self.page_total):
-                logger.warning(
-                    "Page index %s out of range [0, %s)", page_index, self.page_total
-                )
+                logger.warning("Page index %s out of range [0, %s)", page_index, self.page_total)
                 return False
 
             # Use the project's navigation method
@@ -415,9 +401,7 @@ class ProjectStateViewModel(BaseViewModel):
             if not self._project_state:
                 logger.error("No project state available for OCR reload")
                 return False
-            self._project_state.reload_current_page_with_ocr(
-                use_edited_image=use_edited_image
-            )
+            self._project_state.reload_current_page_with_ocr(use_edited_image=use_edited_image)
             return True
         except Exception:
             logger.exception("Error reloading page with OCR")

@@ -248,9 +248,7 @@ class TestApplySelectionSuccessPath:
         notify_mock.assert_called_once_with("OCR models updated", "positive")
         modal._dialog.close.assert_called_once_with()
 
-    async def test_apply_with_revision_edit_calls_pin_setter_then_models(
-        self, monkeypatch
-    ):
+    async def test_apply_with_revision_edit_calls_pin_setter_then_models(self, monkeypatch):
         app_state = Mock()
         app_state.hf_pinned_revision = "v1.0.0"
         app_state.command_set_selected_ocr_models = Mock(return_value=True)
@@ -302,9 +300,7 @@ class TestApplySelectionSuccessPath:
 class TestApplySelectionGuards:
     """``_apply_selection`` rejects empty selections without mutating state."""
 
-    async def test_apply_with_empty_detection_warns_and_keeps_dialog_open(
-        self, monkeypatch
-    ):
+    async def test_apply_with_empty_detection_warns_and_keeps_dialog_open(self, monkeypatch):
         app_state = Mock()
         app_state.hf_pinned_revision = ""
         app_state.command_set_selected_ocr_models = Mock(return_value=True)
@@ -365,9 +361,7 @@ class TestRescanModelsSuccessPath:
         app_state.command_refresh_ocr_models.assert_called_once_with()
         # Options re-bound from app state.
         assert modal._detection_model_select.options == {"huggingface": "Hugging Face"}
-        assert modal._recognition_model_select.options == {
-            "huggingface": "Hugging Face"
-        }
+        assert modal._recognition_model_select.options == {"huggingface": "Hugging Face"}
         # Both selects redrawn.
         modal._detection_model_select.update.assert_called_once_with()
         modal._recognition_model_select.update.assert_called_once_with()
@@ -403,9 +397,7 @@ class TestRescanModelsFailurePath:
         await modal._rescan_models()
 
         app_state.command_refresh_ocr_models.assert_called_once_with()
-        notify_mock.assert_called_once_with(
-            "Failed to refresh OCR model list", "negative"
-        )
+        notify_mock.assert_called_once_with("Failed to refresh OCR model list", "negative")
         modal._dialog.close.assert_not_called()
 
 
@@ -488,9 +480,7 @@ class TestApplySelectionPartialCommit:
     in lockstep with the production fix.
     """
 
-    async def test_models_failure_after_pin_commit_leaves_pin_committed(
-        self, monkeypatch
-    ):
+    async def test_models_failure_after_pin_commit_leaves_pin_committed(self, monkeypatch):
         app_state = Mock()
         app_state.hf_pinned_revision = "v1.0.0"
         app_state.command_set_hf_pinned_revision = Mock(return_value=True)

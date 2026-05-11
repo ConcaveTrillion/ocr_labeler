@@ -22,7 +22,7 @@ Ground-truth text and bounding boxes are resolved with **GT-first** semantics:
 ``word.ground_truth_text`` (falling back to ``word.text``) and
 ``word.ground_truth_bounding_box`` (falling back to ``word.bounding_box``).
 
-Pages are only exported when they pass a configurable validation predicate –
+Pages are only exported when they pass a configurable validation predicate -
 the default requires every word to have ``"validated"`` in its
 ``word_labels``.
 """
@@ -31,9 +31,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from cv2 import imread as cv2_imread
 from pd_book_tools.ocr.page import Page
@@ -85,9 +86,7 @@ class _MutableStats:
     words_skipped_no_text: int = 0
 
     def freeze(self) -> ExportStats:
-        return ExportStats(
-            **{k: getattr(self, k) for k in ExportStats.__dataclass_fields__}
-        )
+        return ExportStats(**{k: getattr(self, k) for k in ExportStats.__dataclass_fields__})
 
 
 @dataclass(frozen=True)
@@ -193,10 +192,7 @@ def page_always_valid(_page: Page) -> bool:
 
 def page_has_ground_truth(page: Page) -> bool:
     """True when at least one word has non-empty ground_truth_text."""
-    for word in page.words:
-        if getattr(word, "ground_truth_text", None):
-            return True
-    return False
+    return any(getattr(word, "ground_truth_text", None) for word in page.words)
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +408,7 @@ class DocTRExportOperations:
         )
 
     # ------------------------------------------------------------------
-    # Internal: orchestration
+    # Internal: orchestration  # noqa: ERA001
     # ------------------------------------------------------------------
 
     def _run_export(
@@ -500,9 +496,7 @@ class DocTRExportOperations:
 
             # --- Recognition (delegated to pd-book-tools) ---
             if recognition:
-                label_formatter = (
-                    _classification_label_formatter if classification else None
-                )
+                label_formatter = _classification_label_formatter if classification else None
                 page.generate_doctr_recognition_training_set(
                     output_path=self.output_dir,
                     prefix=page_prefix,
@@ -527,7 +521,7 @@ class DocTRExportOperations:
         are restored directly from the serialised page dict via
         ``Page.from_dict()``.
         """
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
 
         if not isinstance(data, dict):
@@ -577,7 +571,7 @@ class DocTRExportOperations:
             if candidate.exists():
                 return candidate
 
-        # Fallback: source_path / source.image_path
+        # Fallback: source_path / source.image_path  # noqa: ERA001
         source_path_str = None
         if _is_envelope(data):
             source = data.get("source", {})

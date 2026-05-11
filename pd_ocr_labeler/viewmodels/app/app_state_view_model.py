@@ -53,9 +53,7 @@ class AppStateViewModel(BaseViewModel):
             self.notify_property_changed(name, value)
 
     def __init__(self, app_state: AppState):
-        logger.debug(
-            "Initializing AppStateViewModel with app_state: %s", app_state is not None
-        )
+        logger.debug("Initializing AppStateViewModel with app_state: %s", app_state is not None)
 
         if app_state is not None and isinstance(app_state, AppState):
             self._app_state = app_state
@@ -63,12 +61,8 @@ class AppStateViewModel(BaseViewModel):
             self._app_state.on_change.append(self._on_app_state_change)
             logger.debug("Registered app state change listener")
         else:
-            logger.error(
-                "App state of type AppState not provided to AppStateViewModel!"
-            )
-            raise ValueError(
-                "App state of type AppState not provided to AppStateViewModel!"
-            )
+            logger.error("App state of type AppState not provided to AppStateViewModel!")
+            raise ValueError("App state of type AppState not provided to AppStateViewModel!")
 
         # Initialize base class
         super().__init__()
@@ -82,9 +76,7 @@ class AppStateViewModel(BaseViewModel):
             self.is_loading = self._app_state.is_loading
             self.is_project_loading = self._app_state.is_project_loading
             self.project_keys = (
-                self._app_state.project_keys.copy()
-                if self._app_state.project_keys
-                else []
+                self._app_state.project_keys.copy() if self._app_state.project_keys else []
             )
             self.selected_project_key = self._app_state.selected_project_key
             self.selected_project_path = (
@@ -96,15 +88,9 @@ class AppStateViewModel(BaseViewModel):
             self.is_project_loaded = bool(self._app_state.current_project_key)
             self.ocr_model_options = dict(self._app_state.ocr_model_options)
             self.selected_ocr_model_key = self._app_state.selected_ocr_model_key
-            self.ocr_detection_model_options = dict(
-                self._app_state.ocr_detection_model_options
-            )
-            self.ocr_recognition_model_options = dict(
-                self._app_state.ocr_recognition_model_options
-            )
-            self.selected_ocr_detection_model_key = (
-                self._app_state.selected_ocr_detection_model_key
-            )
+            self.ocr_detection_model_options = dict(self._app_state.ocr_detection_model_options)
+            self.ocr_recognition_model_options = dict(self._app_state.ocr_recognition_model_options)
+            self.selected_ocr_detection_model_key = self._app_state.selected_ocr_detection_model_key
             self.selected_ocr_recognition_model_key = (
                 self._app_state.selected_ocr_recognition_model_key
             )
@@ -162,9 +148,7 @@ class AppStateViewModel(BaseViewModel):
             if key in self._app_state.available_projects:
                 old_key = self.selected_project_key
                 self._app_state.selected_project_key = key
-                logger.debug(
-                    "Selected project key changed from '%s' to '%s'", old_key, key
-                )
+                logger.debug("Selected project key changed from '%s' to '%s'", old_key, key)
                 self._app_state.notify()
                 return True
             else:
@@ -189,9 +173,7 @@ class AppStateViewModel(BaseViewModel):
             try:
                 self._app_state.selected_project_key = self.selected_project_key
             except Exception:
-                logger.debug(
-                    "Failed to sync selected_project_key to AppState", exc_info=True
-                )
+                logger.debug("Failed to sync selected_project_key to AppState", exc_info=True)
 
             await self._app_state.load_selected_project()
             return True
@@ -219,9 +201,7 @@ class AppStateViewModel(BaseViewModel):
             logger.debug("Source projects root updated to %s", path)
             return True
         except Exception:
-            logger.exception(
-                "command_set_source_projects_root failed for path '%s'", path_str
-            )
+            logger.exception("command_set_source_projects_root failed for path '%s'", path_str)
             return False
 
     def command_get_project_display_name(self, key: str | None = None) -> str:

@@ -39,13 +39,7 @@ def resolve_project_route_from_path(path: str | None) -> tuple[str | None, str |
     if len(parts) == 3 and parts[1] == "project" and parts[2]:
         return unquote(parts[2]), "1"
 
-    if (
-        len(parts) == 5
-        and parts[1] == "project"
-        and parts[2]
-        and parts[3] == "page"
-        and parts[4]
-    ):
+    if len(parts) == 5 and parts[1] == "project" and parts[2] and parts[3] == "page" and parts[4]:
         return unquote(parts[2]), unquote(parts[4])
 
     return None, None
@@ -69,7 +63,7 @@ def build_project_url(project_key: str, page_index: int = 0) -> str:
     return f"/project/{project_key}/page/{page_number}"
 
 
-def sync_url_to_state(state: "AppState") -> None:
+def sync_url_to_state(state: AppState) -> None:
     """Update the browser URL to reflect the current project/page state.
 
     Uses ui.navigate.history.replace() to update the URL bar without
@@ -96,9 +90,7 @@ def sync_url_to_state(state: "AppState") -> None:
         logger.debug("Failed to sync browser URL", exc_info=True)
 
 
-def sync_url_from_project_state(
-    project_root: Path | None, current_page_index: int
-) -> None:
+def sync_url_from_project_state(project_root: Path | None, current_page_index: int) -> None:
     """Update browser URL from project state fields directly.
 
     This variant avoids needing a full AppState reference, making it

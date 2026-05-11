@@ -5,7 +5,7 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Top-Level
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `__init__.py` | 5/5 | Correct barrel export |
 | `constants.py` | 5/5 | Trivially small, correct |
 | `prefetch.py` | 4/5 | `logging.basicConfig` called inside `main()` — side effect if imported |
@@ -17,7 +17,7 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Models
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `models/__init__.py` | 5/5 | Correct barrel |
 | `models/line_match_model.py` | 4/5 | `overall_match_status` conflates UNMATCHED and MISMATCH; inconsistent `get_cropped_image` API vs `WordMatch` |
 | `models/word_match_model.py` | 4/5 | `word_object: object` loses type info; float/NaN hash edge case |
@@ -28,7 +28,7 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## State
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `state/__init__.py` | 5/5 | Correct barrel |
 | `state/app_state.py` | 2/5 | Three identical model option dicts; `_default_project_state` stored via `setattr` anti-pattern; `is_loading.setter` doesn't call `notify()`; `__post_init__` has `# pragma: no cover` |
 | `state/project_state.py` | 2/5 | Hardcoded dev path default; `ensure_page_model` is 430+ lines; multiple `.name` accesses without None guard; cross-access to `PageState` private methods |
@@ -37,14 +37,14 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Services
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `services/__init__.py` | 5/5 | Correct barrel |
 | `services/notification_service.py` | 1/5 | Entirely dead code; log-severity misuse; unimplemented TODO |
 
 ## Operations — OCR
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `operations/ocr/word_operations.py` | 4/5 | Dead re-export constants; fuzz score returns `0.0` when unavailable (ambiguous vs computed 0) |
 | `operations/ocr/image_cache_operations.py` | 4/5 | `max(-1, int(page_index))` lower bound is never useful; broad `object` type annotations |
 | `operations/ocr/bbox_operations.py` | 3/5 | Partial-apply bug on validation failure; `BboxOperations()` re-instantiated per dispatch |
@@ -58,7 +58,7 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Operations — Persistence
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `operations/persistence/session_state_operations.py` | 5/5 | Clean |
 | `operations/persistence/project_discovery_operations.py` | 3/5 | Hardcoded extension literal instead of `IMAGE_EXTS`; validation logic duplicated from `list_available_projects` |
 | `operations/persistence/config_operations.py` | 3/5 | Hand-rolled YAML parser breaks on values with colons; `CONFIG_PATH` global mutable class var |
@@ -68,14 +68,14 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Operations — Export
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `operations/export/cli.py` | 4/5 | Unconditional `return 0` even on export errors |
 | `operations/export/doctr_export.py` | 3/5 | Staleness check path mismatch (always wrong); `_prepare_page_gt_first` permanently mutates live page in GUI path |
 
 ## ViewModels
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `viewmodels/shared/base_viewmodel.py` | 3/5 | No teardown hook; manual pub-sub alongside NiceGUI binding |
 | `viewmodels/app/app_state_view_model.py` | 3/5 | `update()` sets 13 properties sequentially — each fires notification (13 partial-state events per change); no teardown |
 | `viewmodels/project/project_state_view_model.py` | 3/5 | Generic `"project_state"` event never matches `MainViewModel` listener; dead `can_navigate_override`; `_update_navigation_properties` called twice in `set_action_busy` |
@@ -86,7 +86,7 @@ Scale: 5 = clean and correct; 1 = significant defects requiring attention.
 ## Views
 
 | File | Rating | Primary issue |
-|---|---|---|
+| --- | --- | --- |
 | `views/shared/button_styles.py` | 4/5 | `active` flag is a no-op for `DEFAULT` variant |
 | `views/shared/view_helpers.py` | 4/5 | `_app_state_view_model: Any = None` class-level default loses type safety |
 | `views/callbacks.py` | 4/5 | `PageActionEvent` defined here and again in `page_view.py` |

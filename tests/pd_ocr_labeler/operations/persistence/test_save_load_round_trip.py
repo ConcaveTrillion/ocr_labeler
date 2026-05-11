@@ -72,11 +72,7 @@ def _create_dummy_image(path: Path) -> None:
 
     def _chunk(chunk_type: bytes, data: bytes) -> bytes:
         raw = chunk_type + data
-        return (
-            struct.pack(">I", len(data))
-            + raw
-            + struct.pack(">I", zlib.crc32(raw) & 0xFFFFFFFF)
-        )
+        return struct.pack(">I", len(data)) + raw + struct.pack(">I", zlib.crc32(raw) & 0xFFFFFFFF)
 
     sig = b"\x89PNG\r\n\x1a\n"
     ihdr = _chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
@@ -145,16 +141,14 @@ class TestBasicRoundTrip:
         )
         loaded_page = loaded_model.page
 
-        w = list(loaded_page.lines[0].words)[0]
+        w = next(iter(loaded_page.lines[0].words))
         bbox = w.bounding_box
         assert float(bbox.minX) == pytest.approx(0.0)
         assert float(bbox.minY) == pytest.approx(0.0)
         assert float(bbox.maxX) == pytest.approx(40.0)
         assert float(bbox.maxY) == pytest.approx(20.0)
 
-    def test_ground_truth_text_preserved(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_ground_truth_text_preserved(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page(gt_words=True)
         page.image_path = str(project_dir / "001.png")
 
@@ -187,9 +181,7 @@ class TestBasicRoundTrip:
         assert loaded_page.width == 200
         assert loaded_page.height == 100
 
-    def test_paragraph_structure_preserved(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_paragraph_structure_preserved(self, project_dir: Path, save_dir: Path) -> None:
         """Paragraph→line→word hierarchy survives round-trip."""
         w1 = _word("a", 0)
         w2 = _word("b", 50)
@@ -225,15 +217,13 @@ class TestBasicRoundTrip:
 class TestWordAttributesRoundTrip:
     """Verify word-level attributes survive save/load."""
 
-    def test_validated_word_attribute_round_trip(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_validated_word_attribute_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
         # Set validated via word_labels (the persistence mechanism)
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["validated"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "validated"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -252,7 +242,7 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
+        w = next(iter(page.lines[0].words))
         if hasattr(w, "text_style_labels"):
             w.text_style_labels = ["italics"]
             w.text_style_label_scopes = {"italics": "whole"}
@@ -264,14 +254,12 @@ class TestWordAttributesRoundTrip:
         loaded_model, _ = ops.load_page_model(
             page_number=1, project_root=project_dir, save_directory=save_dir
         )
-        loaded_w = list(loaded_model.page.lines[0].words)[0]
+        loaded_w = next(iter(loaded_model.page.lines[0].words))
         labels = getattr(loaded_w, "text_style_labels", None)
         if labels is not None:
             assert "italics" in labels
 
-    def test_right_footnote_label_round_trip(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_right_footnote_label_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         """`right_footnote` word_label survives save -> reload via word_attributes sidecar.
 
         Companion to ``test_validated_word_attribute_round_trip``; covers a
@@ -281,8 +269,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["right_footnote"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "right_footnote"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -296,9 +284,7 @@ class TestWordAttributesRoundTrip:
         # Second word should not be tagged.
         assert "right_footnote" not in list(loaded_words[1].word_labels)
 
-    def test_left_footnote_label_round_trip(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_left_footnote_label_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         """`left_footnote` word_label survives save -> reload via word_attributes sidecar.
 
         Mirror of ``test_right_footnote_label_round_trip`` for the left-side
@@ -309,8 +295,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["left_footnote"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "left_footnote"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -325,9 +311,7 @@ class TestWordAttributesRoundTrip:
         assert "left_footnote" not in list(loaded_words[1].word_labels)
         assert "right_footnote" not in list(loaded_words[0].word_labels)
 
-    def test_small_caps_label_round_trip(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_small_caps_label_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         """`small_caps` word_label survives save -> reload via word_attributes sidecar.
 
         Companion to the footnote round-trip tests; ``small_caps`` flows
@@ -337,8 +321,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["small_caps"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "small_caps"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -351,9 +335,7 @@ class TestWordAttributesRoundTrip:
         assert "small_caps" in list(loaded_words[0].word_labels)
         assert "small_caps" not in list(loaded_words[1].word_labels)
 
-    def test_blackletter_label_round_trip(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_blackletter_label_round_trip(self, project_dir: Path, save_dir: Path) -> None:
         """`blackletter` word_label survives save -> reload via word_attributes sidecar.
 
         Closes the last untested style flag in the
@@ -363,8 +345,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["blackletter"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "blackletter"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -394,8 +376,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + ["italic"]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "italic"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -427,12 +409,8 @@ class TestWordAttributesRoundTrip:
         page = _make_page()
         page.image_path = str(project_dir / "001.png")
 
-        w = list(page.lines[0].words)[0]
-        w.word_labels = list(w.word_labels) + [
-            "italic",
-            "small_caps",
-            "right_footnote",
-        ]
+        w = next(iter(page.lines[0].words))
+        w.word_labels = [*list(w.word_labels), "italic", "small_caps", "right_footnote"]
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
@@ -495,7 +473,7 @@ class TestWordAttributesRoundTrip:
         loaded_model, _ = ops.load_page_model(
             page_number=1, project_root=project_dir, save_directory=save_dir
         )
-        loaded_word = list(loaded_model.page.lines[0].words)[0]
+        loaded_word = next(iter(loaded_model.page.lines[0].words))
         labels = list(loaded_word.word_labels)
         assert "right_footnote" in labels
         assert "left_footnote" not in labels
@@ -509,9 +487,7 @@ class TestWordAttributesRoundTrip:
 class TestOriginalPageRoundTrip:
     """Verify original_page is saved and restored."""
 
-    def test_original_page_saved_and_loaded(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_original_page_saved_and_loaded(self, project_dir: Path, save_dir: Path) -> None:
         page = _make_page(gt_words=True)
         page.image_path = str(project_dir / "001.png")
 
@@ -520,11 +496,9 @@ class TestOriginalPageRoundTrip:
 
         ops = PageOperations()
         model = PageModel(page=page, page_source="ocr", index=0)
-        ops.save_page(
-            model, project_dir, save_directory=save_dir, original_page=original
-        )
+        ops.save_page(model, project_dir, save_directory=save_dir, original_page=original)
 
-        loaded_model, original_dict = ops.load_page_model(
+        _loaded_model, original_dict = ops.load_page_model(
             page_number=1, project_root=project_dir, save_directory=save_dir
         )
         assert original_dict is not None
@@ -559,18 +533,14 @@ class TestEdgeCases:
         assert loaded_model.page.width == 100
         assert loaded_model.page.height == 50
 
-    def test_load_nonexistent_returns_none(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_load_nonexistent_returns_none(self, project_dir: Path, save_dir: Path) -> None:
         ops = PageOperations()
         result = ops.load_page_model(
             page_number=99, project_root=project_dir, save_directory=save_dir
         )
         assert result is None
 
-    def test_multiple_pages_independent(
-        self, project_dir: Path, save_dir: Path
-    ) -> None:
+    def test_multiple_pages_independent(self, project_dir: Path, save_dir: Path) -> None:
         """Save two pages with different indices, load them independently."""
         ops = PageOperations()
 
@@ -592,12 +562,8 @@ class TestEdgeCases:
         ops.save_page(m1, project_dir, save_directory=save_dir)
         ops.save_page(m2, project_dir, save_directory=save_dir)
 
-        r1 = ops.load_page_model(
-            page_number=1, project_root=project_dir, save_directory=save_dir
-        )
-        r2 = ops.load_page_model(
-            page_number=2, project_root=project_dir, save_directory=save_dir
-        )
+        r1 = ops.load_page_model(page_number=1, project_root=project_dir, save_directory=save_dir)
+        r2 = ops.load_page_model(page_number=2, project_root=project_dir, save_directory=save_dir)
 
         assert r1 is not None
         assert r2 is not None
@@ -619,5 +585,5 @@ class TestEdgeCases:
         loaded_model, _ = ops.load_page_model(
             page_number=1, project_root=project_dir, save_directory=save_dir
         )
-        w = list(loaded_model.page.lines[0].words)[0]
+        w = next(iter(loaded_model.page.lines[0].words))
         assert w.ocr_confidence == pytest.approx(0.95)

@@ -66,9 +66,7 @@ def test_ocr_config_trigger_button_present(browser_app_url: str, browser_page) -
 
 
 @pytest.mark.browser
-def test_ocr_config_modal_opens_on_trigger_click(
-    browser_app_url: str, browser_page
-) -> None:
+def test_ocr_config_modal_opens_on_trigger_click(browser_app_url: str, browser_page) -> None:
     """Click trigger -> modal's load-bearing controls become visible."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -141,9 +139,7 @@ def test_ocr_config_apply_with_no_edits_closes_without_error(
 
 
 @pytest.mark.browser
-def test_ocr_config_hf_revision_edit_reverts_on_cancel(
-    browser_app_url: str, browser_page
-) -> None:
+def test_ocr_config_hf_revision_edit_reverts_on_cancel(browser_app_url: str, browser_page) -> None:
     """Typing into the HF revision input then pressing Cancel must NOT persist.
 
     The modal's ``_open`` handler unconditionally resets the input value to
@@ -289,9 +285,7 @@ def test_ocr_config_model_selects_open_menu_and_survive_cancel(
 
 
 @pytest.mark.browser
-def test_ocr_config_rescan_models_does_not_error(
-    browser_app_url: str, browser_page
-) -> None:
+def test_ocr_config_rescan_models_does_not_error(browser_app_url: str, browser_page) -> None:
     """Click Rescan Models -> no negative notification, modal stays open.
 
     The Rescan handler (``ocr_config_modal.py:144-177``) calls

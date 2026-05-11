@@ -107,9 +107,7 @@ def test_paragraph_scope_buttons_disabled_without_selection(
 
 
 @pytest.mark.browser
-def test_paragraph_scope_buttons_enabled_with_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_paragraph_scope_buttons_enabled_with_selection(browser_app_url: str, browser_page) -> None:
     """Selecting a paragraph enables most paragraph-scope buttons."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -135,9 +133,7 @@ def test_paragraph_scope_buttons_enabled_with_selection(
 
 
 @pytest.mark.browser
-def test_paragraph_scope_buttons_have_tooltips(
-    browser_app_url: str, browser_page
-) -> None:
+def test_paragraph_scope_buttons_have_tooltips(browser_app_url: str, browser_page) -> None:
     """Each paragraph-scope button has a descriptive tooltip on hover."""
     page = browser_page
     _setup(page, browser_app_url)

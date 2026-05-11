@@ -72,9 +72,7 @@ def test_paragraph_expander_present(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_paragraph_label_button_present_and_toggles(
-    browser_app_url: str, browser_page
-) -> None:
+def test_paragraph_label_button_present_and_toggles(browser_app_url: str, browser_page) -> None:
     """Paragraph label button materializes and toggles expand state on click.
 
     The label button is the wide clickable text rendered next to the
@@ -339,9 +337,7 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
 
     # After clicking Validate, every word in the line must be marked validated
     # (Quasar applies bg-green when color=green is set on the button).
-    expect(target_card().locator(f"{WORD_VALIDATE}.bg-green")).to_have_count(
-        target_word_count
-    )
+    expect(target_card().locator(f"{WORD_VALIDATE}.bg-green")).to_have_count(target_word_count)
 
     # And the line-validate button should now read "Unvalidate".
     expect(target_card().locator(LINE_VALIDATE)).to_contain_text("Unvalidate")
@@ -379,17 +375,13 @@ def test_line_delete(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_validated_line_removed_from_unvalidated_filter(
-    browser_app_url: str, browser_page
-) -> None:
+def test_validated_line_removed_from_unvalidated_filter(browser_app_url: str, browser_page) -> None:
     """After validating a line in 'Unvalidated Lines' view it should disappear."""
     page = browser_page
     _setup(page, browser_app_url)
 
     # Default filter is "Unvalidated Lines"
-    page.get_by_text("Unvalidated Lines").first.wait_for(
-        state="visible", timeout=10_000
-    )
+    page.get_by_text("Unvalidated Lines").first.wait_for(state="visible", timeout=10_000)
 
     # Count line cards before validation
     page.locator(LINE_VALIDATE).first.wait_for(state="visible", timeout=15_000)

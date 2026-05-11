@@ -47,12 +47,8 @@ class MainViewModel(BaseViewModel):
         self.project_state_view_model.update()
 
         # Set up listeners for child view model changes
-        self.app_state_view_model.add_property_changed_listener(
-            self._on_app_state_changed
-        )
-        self.project_state_view_model.add_property_changed_listener(
-            self._on_project_state_changed
-        )
+        self.app_state_view_model.add_property_changed_listener(self._on_app_state_changed)
+        self.project_state_view_model.add_property_changed_listener(self._on_project_state_changed)
 
         # Initial update of derived properties
         self._update_derived_properties()
@@ -75,16 +71,9 @@ class MainViewModel(BaseViewModel):
             "is_project_loading",
         ]:
             if self.app_state_view_model:
-                current_project_state = (
-                    self.app_state_view_model._app_state.project_state
-                )
-                if (
-                    current_project_state
-                    != self.project_state_view_model._project_state
-                ):
-                    logger.debug(
-                        "Project selection changed; repointing ProjectStateViewModel"
-                    )
+                current_project_state = self.app_state_view_model._app_state.project_state
+                if current_project_state != self.project_state_view_model._project_state:
+                    logger.debug("Project selection changed; repointing ProjectStateViewModel")
                     # Detach listener from old project state if present
                     try:
                         old_state = self.project_state_view_model._project_state
@@ -98,9 +87,7 @@ class MainViewModel(BaseViewModel):
                                 self.project_state_view_model._on_project_state_change
                             )
                     except Exception:
-                        logger.debug(
-                            "Failed detaching old project state listener", exc_info=True
-                        )
+                        logger.debug("Failed detaching old project state listener", exc_info=True)
 
                     # Repoint and attach listener to new project state
                     self.project_state_view_model._project_state = current_project_state
@@ -164,13 +151,8 @@ class MainViewModel(BaseViewModel):
                 old_show_project_view is not None
                 and old_show_project_view != self.show_project_view
             ):
-                self.notify_property_changed(
-                    "show_project_view", self.show_project_view
-                )
-            if (
-                old_show_placeholder is not None
-                and old_show_placeholder != self.show_placeholder
-            ):
+                self.notify_property_changed("show_project_view", self.show_project_view)
+            if old_show_placeholder is not None and old_show_placeholder != self.show_placeholder:
                 self.notify_property_changed("show_placeholder", self.show_placeholder)
 
             logger.debug(
@@ -229,9 +211,7 @@ class MainViewModel(BaseViewModel):
     def command_get_page_display_info(self, page_index: int | None = None) -> dict:
         """Delegate page display info to project state view model."""
         if self.project_state_view_model:
-            return self.project_state_view_model.command_get_page_display_info(
-                page_index
-            )
+            return self.project_state_view_model.command_get_page_display_info(page_index)
         return {}
 
     def command_get_navigation_status(self) -> dict:

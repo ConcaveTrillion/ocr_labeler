@@ -397,9 +397,7 @@ def test_image_tabs_apply_box_selection_on_paragraphs_invokes_callback():
 
     image_tabs = ImageTabs(
         _VmStub(),
-        on_paragraphs_selected=lambda selection: captured.setdefault(
-            "selection", selection
-        ),
+        on_paragraphs_selected=lambda selection: captured.setdefault("selection", selection),
     )
     image_tabs._drag_start = (0.0, 0.0)
     image_tabs._drag_current = (200.0, 22.0)
@@ -542,9 +540,7 @@ def test_image_tabs_word_rebox_drag_emits_source_bbox_and_disables_mode():
 
     image_tabs = ImageTabs(
         _VmStub(),
-        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault(
-            "bbox", (x1, y1, x2, y2)
-        ),
+        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault("bbox", (x1, y1, x2, y2)),
     )
     image_tabs.images = {
         "Words": _FakeInteractiveImage(),
@@ -653,14 +649,10 @@ def test_image_tabs_viewport_mouse_in_line_mode_selects_line_words():
     image_tabs._set_selection_mode("line")
 
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False)
     )
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mouseup", image_x=85.0, image_y=20.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mouseup", image_x=85.0, image_y=20.0, shift=False, ctrl=False)
     )
 
     assert captured["selection"] == {(0, 0), (0, 1)}
@@ -681,22 +673,16 @@ def test_image_tabs_viewport_mouse_in_paragraph_mode_selects_paragraphs():
 
     image_tabs = ImageTabs(
         _VmStub(),
-        on_paragraphs_selected=lambda selection: captured.setdefault(
-            "selection", selection
-        ),
+        on_paragraphs_selected=lambda selection: captured.setdefault("selection", selection),
     )
     image_tabs.images = {"Viewport": _FakeInteractiveImage()}
     image_tabs._set_selection_mode("paragraph")
 
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mousedown", image_x=0.0, image_y=0.0, shift=False, ctrl=False)
     )
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mouseup", image_x=200.0, image_y=22.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mouseup", image_x=200.0, image_y=22.0, shift=False, ctrl=False)
     )
 
     assert captured["selection"] == {0}
@@ -720,23 +706,17 @@ def test_image_tabs_word_rebox_mode_overrides_viewport_selection_mode():
 
     image_tabs = ImageTabs(
         _VmStub(),
-        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault(
-            "bbox", (x1, y1, x2, y2)
-        ),
+        on_word_rebox_drawn=lambda x1, y1, x2, y2: captured.setdefault("bbox", (x1, y1, x2, y2)),
     )
     image_tabs.images = {"Viewport": _FakeInteractiveImage()}
     image_tabs._set_selection_mode("paragraph")
     image_tabs.enable_word_rebox_mode()
 
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mousedown", image_x=10.0, image_y=15.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mousedown", image_x=10.0, image_y=15.0, shift=False, ctrl=False)
     )
     image_tabs._handle_viewport_mouse(
-        SimpleNamespace(
-            type="mouseup", image_x=30.0, image_y=35.0, shift=False, ctrl=False
-        )
+        SimpleNamespace(type="mouseup", image_x=30.0, image_y=35.0, shift=False, ctrl=False)
     )
 
     assert captured["bbox"] == (10.0, 15.0, 30.0, 35.0)

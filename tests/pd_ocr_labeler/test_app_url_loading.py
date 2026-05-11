@@ -186,8 +186,7 @@ async def test_initialize_from_url_missing_page_shows_not_found(
     )
 
     assert any(
-        message == "Page not found: 99" and level == "warning"
-        for message, level in notify_calls
+        message == "Page not found: 99" and level == "warning" for message, level in notify_calls
     )
 
 
@@ -214,9 +213,7 @@ async def test_initialize_from_url_reuses_already_loaded_project(
         project=SimpleNamespace(pages=[object(), object(), object()]),
         project_root=tmp_path,
         current_page_index=0,
-        goto_page_index=lambda index: setattr(
-            existing_project_state, "goto_index", index
-        ),
+        goto_page_index=lambda index: setattr(existing_project_state, "goto_index", index),
         goto_index=None,
     )
 

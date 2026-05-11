@@ -122,9 +122,7 @@ class WordMatchViewModel(BaseViewModel):
 
             # Only skip the line if there are neither OCR words nor unmatched GT words
             if not word_matches:
-                logger.debug(
-                    "No words or unmatched GT words found in line %s", line_idx
-                )
+                logger.debug("No words or unmatched GT words found in line %s", line_idx)
                 return None
 
             page_image = getattr(page, "cv2_numpy_page_image", None) if page else None
@@ -163,7 +161,7 @@ class WordMatchViewModel(BaseViewModel):
         return paragraph_lookup
 
     def _create_enhanced_word_matches(self, line: Block) -> list[WordMatch]:
-        """Create word matches including unmatched ground truth words inserted before the next match."""
+        """Create word matches including unmatched ground truth words inserted before the next match."""  # noqa: E501
 
         enhanced_matches = []
 
@@ -281,24 +279,14 @@ class WordMatchViewModel(BaseViewModel):
         self.fuzzy_matches_count = sum(lm.fuzzy_match_count for lm in self.line_matches)
         self.mismatches_count = sum(lm.mismatch_count for lm in self.line_matches)
         self.unmatched_gt_count = sum(lm.unmatched_gt_count for lm in self.line_matches)
-        self.unmatched_ocr_count = sum(
-            lm.unmatched_ocr_count for lm in self.line_matches
-        )
-        self.validated_words_count = sum(
-            lm.validated_word_count for lm in self.line_matches
-        )
+        self.unmatched_ocr_count = sum(lm.unmatched_ocr_count for lm in self.line_matches)
+        self.validated_words_count = sum(lm.validated_word_count for lm in self.line_matches)
 
         self.exact_percentage = (
-            (self.exact_matches_count / self.total_words * 100)
-            if self.total_words > 0
-            else 0.0
+            (self.exact_matches_count / self.total_words * 100) if self.total_words > 0 else 0.0
         )
         self.match_percentage = (
-            (
-                (self.exact_matches_count + self.fuzzy_matches_count)
-                / self.total_words
-                * 100
-            )
+            ((self.exact_matches_count + self.fuzzy_matches_count) / self.total_words * 100)
             if self.total_words > 0
             else 0.0
         )

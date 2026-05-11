@@ -1,8 +1,8 @@
 """Navigation operations for managing page navigation within projects."""
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +69,7 @@ class NavigationOperations:
             return NavigationResult(False, "Already at first page")
 
     @staticmethod
-    def goto_page_number(
-        page_number: int, max_pages: int
-    ) -> tuple[NavigationResult, int]:
+    def goto_page_number(page_number: int, max_pages: int) -> tuple[NavigationResult, int]:
         """Navigate to a specific page number (1-based).
 
         Args:
@@ -101,9 +99,7 @@ class NavigationOperations:
         return NavigationResult(True), target_index
 
     @staticmethod
-    def goto_page_index(
-        target_index: int, max_index: int
-    ) -> tuple[NavigationResult, int]:
+    def goto_page_index(target_index: int, max_index: int) -> tuple[NavigationResult, int]:
         """Jump to a page by zero-based index, clamping to valid range.
 
         Args:

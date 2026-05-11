@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from .word_edit_dialog import render_word_split_marker
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 class _SelectionSnapshot:
     """Captures and can restore line/word/paragraph selection state."""
 
-    __slots__ = ("_view", "lines", "words", "paragraphs")
+    __slots__ = ("_view", "lines", "paragraphs", "words")
 
     def __init__(self, view: WordMatchView) -> None:
         self._view = view
@@ -154,9 +155,7 @@ class WordMatchActions:
     # Paragraph-level copy actions
     # ------------------------------------------------------------------
 
-    def _handle_copy_selected_paragraphs_gt_to_ocr(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_copy_selected_paragraphs_gt_to_ocr(self, _event: ClickEvent = None) -> None:
         self._copy_lines(
             self._view._get_selected_paragraph_line_indices(),
             self._view.copy_gt_to_ocr_callback,
@@ -165,9 +164,7 @@ class WordMatchActions:
             no_text_message="No ground truth text found to copy",
         )
 
-    def _handle_copy_selected_paragraphs_ocr_to_gt(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_copy_selected_paragraphs_ocr_to_gt(self, _event: ClickEvent = None) -> None:
         self._copy_lines(
             self._view._get_selected_paragraph_line_indices(),
             self._view.copy_ocr_to_gt_callback,
@@ -256,9 +253,7 @@ class WordMatchActions:
 
         selected_indices = self._view._get_effective_selected_lines()
         if len(selected_indices) < 2:
-            self._view._safe_notify(
-                "Select at least two lines to merge", type_="warning"
-            )
+            self._view._safe_notify("Select at least two lines to merge", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -272,34 +267,24 @@ class WordMatchActions:
                 success,
             )
             if success:
-                self._view._safe_notify(
-                    f"Merged {len(selected_indices)} lines", type_="positive"
-                )
+                self._view._safe_notify(f"Merged {len(selected_indices)} lines", type_="positive")
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to merge selected lines", type_="warning"
-                )
+                self._view._safe_notify("Failed to merge selected lines", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error merging selected lines %s: %s", selected_indices, e)
-            self._view._safe_notify(
-                f"Error merging selected lines: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error merging selected lines: {e}", type_="negative")
 
     def _handle_merge_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Merge selected paragraphs into the first selected paragraph."""
         if self._view.merge_paragraphs_callback is None:
-            self._view._safe_notify(
-                "Merge paragraph function not available", type_="warning"
-            )
+            self._view._safe_notify("Merge paragraph function not available", type_="warning")
             return
 
         selected_indices = sorted(self._view.selection.selected_paragraph_indices)
         if len(selected_indices) < 2:
-            self._view._safe_notify(
-                "Select at least two paragraphs to merge", type_="warning"
-            )
+            self._view._safe_notify("Select at least two paragraphs to merge", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -318,9 +303,7 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to merge selected paragraphs", type_="warning"
-                )
+                self._view._safe_notify("Failed to merge selected paragraphs", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception(
@@ -336,16 +319,12 @@ class WordMatchActions:
     def _handle_delete_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Delete selected paragraphs from the current page."""
         if self._view.delete_paragraphs_callback is None:
-            self._view._safe_notify(
-                "Delete paragraph function not available", type_="warning"
-            )
+            self._view._safe_notify("Delete paragraph function not available", type_="warning")
             return
 
         selected_indices = sorted(self._view.selection.selected_paragraph_indices)
         if not selected_indices:
-            self._view._safe_notify(
-                "Select at least one paragraph to delete", type_="warning"
-            )
+            self._view._safe_notify("Select at least one paragraph to delete", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -386,16 +365,12 @@ class WordMatchActions:
     ) -> None:
         """Split the selected line's paragraph immediately after that line."""
         if self._view.split_paragraph_after_line_callback is None:
-            self._view._safe_notify(
-                "Split paragraph function not available", type_="warning"
-            )
+            self._view._safe_notify("Split paragraph function not available", type_="warning")
             return
 
         selected_line_indices = sorted(self._view.selection.selected_line_indices)
         if len(selected_line_indices) != 1:
-            self._view._safe_notify(
-                "Select exactly one line to split paragraph", type_="warning"
-            )
+            self._view._safe_notify("Select exactly one line to split paragraph", type_="warning")
             return
 
         selected_line_index = selected_line_indices[0]
@@ -403,9 +378,7 @@ class WordMatchActions:
         snapshot.clear()
         logger.info("Split requested after selected line: %s", selected_line_index)
         try:
-            success = self._view.split_paragraph_after_line_callback(
-                selected_line_index
-            )
+            success = self._view.split_paragraph_after_line_callback(selected_line_index)
             logger.info(
                 "Split paragraph-after-line callback completed: line=%s success=%s",
                 selected_line_index,
@@ -437,15 +410,13 @@ class WordMatchActions:
     ) -> None:
         """Move selected lines into a new paragraph."""
         logger.debug(
-            "[split_by_selection] handler.start selected_lines=%s selected_words=%s selected_paragraphs=%s",
+            "[split_by_selection] handler.start selected_lines=%s selected_words=%s selected_paragraphs=%s",  # noqa: E501
             sorted(self._view.selection.selected_line_indices),
             sorted(self._view.selection.selected_word_indices),
             sorted(self._view.selection.selected_paragraph_indices),
         )
         if self._view.split_paragraph_with_selected_lines_callback is None:
-            self._view._safe_notify(
-                "Split paragraph function not available", type_="warning"
-            )
+            self._view._safe_notify("Split paragraph function not available", type_="warning")
             return
 
         selected_line_indices = sorted(self._view.selection.selected_line_indices)
@@ -459,26 +430,20 @@ class WordMatchActions:
         snapshot = _SelectionSnapshot(self._view)
         snapshot.clear()
         logger.debug("[split_by_selection] handler.selection_cleared")
-        logger.info(
-            "[split_by_selection] handler.requested lines=%s", selected_line_indices
-        )
+        logger.info("[split_by_selection] handler.requested lines=%s", selected_line_indices)
         try:
             logger.debug(
                 "[split_by_selection] handler.callback_invoke lines=%s",
                 selected_line_indices,
             )
-            success = self._view.split_paragraph_with_selected_lines_callback(
-                selected_line_indices
-            )
+            success = self._view.split_paragraph_with_selected_lines_callback(selected_line_indices)
             logger.info(
                 "[split_by_selection] handler.callback_done lines=%s success=%s",
                 selected_line_indices,
                 success,
             )
             if success:
-                logger.debug(
-                    "[split_by_selection] handler.success awaiting_page_state_refresh"
-                )
+                logger.debug("[split_by_selection] handler.success awaiting_page_state_refresh")
                 self._view._safe_notify(
                     "Formed new paragraph from selected lines",
                     type_="positive",
@@ -507,9 +472,7 @@ class WordMatchActions:
     ) -> None:
         """Split the selected line immediately after one selected word."""
         if self._view.split_line_after_word_callback is None:
-            self._view._safe_notify(
-                "Split line function not available", type_="warning"
-            )
+            self._view._safe_notify("Split line function not available", type_="warning")
             return
 
         if len(self._view.selection.selected_word_indices) != 1:
@@ -561,9 +524,7 @@ class WordMatchActions:
 
         selected_indices = self._view._get_effective_selected_lines()
         if not selected_indices:
-            self._view._safe_notify(
-                "Select at least one line to delete", type_="warning"
-            )
+            self._view._safe_notify("Select at least one line to delete", type_="warning")
             return
 
         self._delete_lines(
@@ -575,16 +536,12 @@ class WordMatchActions:
     def _handle_delete_selected_words(self, _event: ClickEvent = None) -> None:
         """Delete selected words from the current page."""
         if self._view.delete_words_callback is None:
-            self._view._safe_notify(
-                "Delete word function not available", type_="warning"
-            )
+            self._view._safe_notify("Delete word function not available", type_="warning")
             return
 
         selected_words = sorted(self._view.selection.selected_word_indices)
         if not selected_words:
-            self._view._safe_notify(
-                "Select at least one word to delete", type_="warning"
-            )
+            self._view._safe_notify("Select at least one word to delete", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -604,9 +561,7 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to delete selected words", type_="warning"
-                )
+                self._view._safe_notify("Failed to delete selected words", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error deleting words %s: %s", selected_words, e)
@@ -615,15 +570,11 @@ class WordMatchActions:
     def _handle_merge_selected_words(self, _event: ClickEvent = None) -> None:
         """Merge selected contiguous words into one word on a single line."""
         if self._view.merge_word_right_callback is None:
-            self._view._safe_notify(
-                "Merge word function not available", type_="warning"
-            )
+            self._view._safe_notify("Merge word function not available", type_="warning")
             return
 
         if len(self._view.selection.selected_word_indices) < 2:
-            self._view._safe_notify(
-                "Select at least two words to merge", type_="warning"
-            )
+            self._view._safe_notify("Select at least two words to merge", type_="warning")
             return
 
         if not self._view._can_merge_selected_words():
@@ -645,9 +596,7 @@ class WordMatchActions:
         try:
             success = True
             for _ in range(merge_count):
-                if not self._view.merge_word_right_callback(
-                    line_index, base_word_index
-                ):
+                if not self._view.merge_word_right_callback(line_index, base_word_index):
                     success = False
                     break
 
@@ -658,15 +607,11 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to merge selected words", type_="warning"
-                )
+                self._view._safe_notify("Failed to merge selected words", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error merging selected words %s: %s", selected_words, e)
-            self._view._safe_notify(
-                f"Error merging selected words: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error merging selected words: {e}", type_="negative")
 
     # ------------------------------------------------------------------
     # Refine actions
@@ -675,16 +620,12 @@ class WordMatchActions:
     def _handle_refine_selected_words(self, _event: ClickEvent = None) -> None:
         """Refine selected word bounding boxes."""
         if self._view.refine_words_callback is None:
-            self._view._safe_notify(
-                "Refine word function not available", type_="warning"
-            )
+            self._view._safe_notify("Refine word function not available", type_="warning")
             return
 
         selected_words = sorted(self._view.selection.selected_word_indices)
         if not selected_words:
-            self._view._safe_notify(
-                "Select at least one word to refine", type_="warning"
-            )
+            self._view._safe_notify("Select at least one word to refine", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -698,9 +639,7 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to refine selected words", type_="warning"
-                )
+                self._view._safe_notify("Failed to refine selected words", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error refining words %s: %s", selected_words, e)
@@ -709,16 +648,12 @@ class WordMatchActions:
     def _handle_refine_selected_lines(self, _event: ClickEvent = None) -> None:
         """Refine selected lines."""
         if self._view.refine_lines_callback is None:
-            self._view._safe_notify(
-                "Refine line function not available", type_="warning"
-            )
+            self._view._safe_notify("Refine line function not available", type_="warning")
             return
 
         selected_lines = self._view._get_effective_selected_lines()
         if not selected_lines:
-            self._view._safe_notify(
-                "Select at least one line to refine", type_="warning"
-            )
+            self._view._safe_notify("Select at least one line to refine", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -732,9 +667,7 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to refine selected lines", type_="warning"
-                )
+                self._view._safe_notify("Failed to refine selected lines", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error refining lines %s: %s", selected_lines, e)
@@ -743,16 +676,12 @@ class WordMatchActions:
     def _handle_refine_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Refine selected paragraphs."""
         if self._view.refine_paragraphs_callback is None:
-            self._view._safe_notify(
-                "Refine paragraph function not available", type_="warning"
-            )
+            self._view._safe_notify("Refine paragraph function not available", type_="warning")
             return
 
         selected_paragraphs = sorted(self._view.selection.selected_paragraph_indices)
         if not selected_paragraphs:
-            self._view._safe_notify(
-                "Select at least one paragraph to refine", type_="warning"
-            )
+            self._view._safe_notify("Select at least one paragraph to refine", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -766,9 +695,7 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to refine selected paragraphs", type_="warning"
-                )
+                self._view._safe_notify("Failed to refine selected paragraphs", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception(
@@ -782,9 +709,7 @@ class WordMatchActions:
     # Expand-then-refine actions
     # ------------------------------------------------------------------
 
-    def _handle_expand_then_refine_selected_words(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_expand_then_refine_selected_words(self, _event: ClickEvent = None) -> None:
         """Expand then refine selected word bounding boxes."""
         if self._view.expand_then_refine_words_callback is None:
             self._view._safe_notify(
@@ -815,26 +740,18 @@ class WordMatchActions:
                 )
         except Exception as e:
             snapshot.restore()
-            logger.exception(
-                "Error expand-then-refining words %s: %s", selected_words, e
-            )
-            self._view._safe_notify(
-                f"Error expand-then-refining words: {e}", type_="negative"
-            )
+            logger.exception("Error expand-then-refining words %s: %s", selected_words, e)
+            self._view._safe_notify(f"Error expand-then-refining words: {e}", type_="negative")
 
     def _handle_expand_bbox_selected_words(self, _event: ClickEvent = None) -> None:
         """Expand selected word bounding boxes by uniform padding."""
         if self._view.expand_word_bboxes_callback is None:
-            self._view._safe_notify(
-                "Expand bbox function not available", type_="warning"
-            )
+            self._view._safe_notify("Expand bbox function not available", type_="warning")
             return
 
         selected_words = sorted(self._view.selection.selected_word_indices)
         if not selected_words:
-            self._view._safe_notify(
-                "Select at least one word to expand", type_="warning"
-            )
+            self._view._safe_notify("Select at least one word to expand", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -848,19 +765,13 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to expand selected word bboxes", type_="warning"
-                )
+                self._view._safe_notify("Failed to expand selected word bboxes", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error expanding word bboxes %s: %s", selected_words, e)
-            self._view._safe_notify(
-                f"Error expanding word bboxes: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error expanding word bboxes: {e}", type_="negative")
 
-    def _handle_expand_then_refine_selected_lines(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_expand_then_refine_selected_lines(self, _event: ClickEvent = None) -> None:
         """Expand then refine selected lines."""
         if self._view.expand_then_refine_lines_callback is None:
             self._view._safe_notify(
@@ -891,26 +802,18 @@ class WordMatchActions:
                 )
         except Exception as e:
             snapshot.restore()
-            logger.exception(
-                "Error expand-then-refining lines %s: %s", selected_lines, e
-            )
-            self._view._safe_notify(
-                f"Error expand-then-refining lines: {e}", type_="negative"
-            )
+            logger.exception("Error expand-then-refining lines %s: %s", selected_lines, e)
+            self._view._safe_notify(f"Error expand-then-refining lines: {e}", type_="negative")
 
     def _handle_expand_bbox_selected_lines(self, _event: ClickEvent = None) -> None:
         """Expand selected line bounding boxes by uniform padding."""
         if self._view.expand_line_bboxes_callback is None:
-            self._view._safe_notify(
-                "Expand line bboxes function not available", type_="warning"
-            )
+            self._view._safe_notify("Expand line bboxes function not available", type_="warning")
             return
 
         selected_lines = self._view._get_effective_selected_lines()
         if not selected_lines:
-            self._view._safe_notify(
-                "Select at least one line to expand", type_="warning"
-            )
+            self._view._safe_notify("Select at least one line to expand", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -924,19 +827,13 @@ class WordMatchActions:
                 )
             else:
                 snapshot.restore()
-                self._view._safe_notify(
-                    "Failed to expand selected line bboxes", type_="warning"
-                )
+                self._view._safe_notify("Failed to expand selected line bboxes", type_="warning")
         except Exception as e:
             snapshot.restore()
             logger.exception("Error expanding line bboxes %s: %s", selected_lines, e)
-            self._view._safe_notify(
-                f"Error expanding line bboxes: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error expanding line bboxes: {e}", type_="negative")
 
-    def _handle_expand_then_refine_selected_paragraphs(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_expand_then_refine_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Expand then refine selected paragraphs."""
         if self._view.expand_then_refine_paragraphs_callback is None:
             self._view._safe_notify(
@@ -954,9 +851,7 @@ class WordMatchActions:
         snapshot = _SelectionSnapshot(self._view)
         snapshot.clear()
         try:
-            success = self._view.expand_then_refine_paragraphs_callback(
-                selected_paragraphs
-            )
+            success = self._view.expand_then_refine_paragraphs_callback(selected_paragraphs)
             if success:
                 self._view._safe_notify(
                     f"Expanded then refined {len(selected_paragraphs)} paragraphs",
@@ -975,13 +870,9 @@ class WordMatchActions:
                 selected_paragraphs,
                 e,
             )
-            self._view._safe_notify(
-                f"Error expand-then-refining paragraphs: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error expand-then-refining paragraphs: {e}", type_="negative")
 
-    def _handle_expand_bbox_selected_paragraphs(
-        self, _event: ClickEvent = None
-    ) -> None:
+    def _handle_expand_bbox_selected_paragraphs(self, _event: ClickEvent = None) -> None:
         """Expand selected paragraph bounding boxes by uniform padding."""
         if self._view.expand_paragraph_bboxes_callback is None:
             self._view._safe_notify(
@@ -991,9 +882,7 @@ class WordMatchActions:
 
         selected_paragraphs = sorted(self._view.selection.selected_paragraph_indices)
         if not selected_paragraphs:
-            self._view._safe_notify(
-                "Select at least one paragraph to expand", type_="warning"
-            )
+            self._view._safe_notify("Select at least one paragraph to expand", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -1018,9 +907,7 @@ class WordMatchActions:
                 selected_paragraphs,
                 e,
             )
-            self._view._safe_notify(
-                f"Error expanding paragraph bboxes: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error expanding paragraph bboxes: {e}", type_="negative")
 
     # ------------------------------------------------------------------
     # Word-level split / group actions
@@ -1095,9 +982,7 @@ class WordMatchActions:
         snapshot.clear()
 
         try:
-            success = self._view.split_lines_into_selected_unselected_callback(
-                selected_words
-            )
+            success = self._view.split_lines_into_selected_unselected_callback(selected_words)
             if success:
                 self._view._safe_notify(
                     "Split line(s) into selected and unselected words",
@@ -1145,9 +1030,7 @@ class WordMatchActions:
         snapshot.clear()
 
         try:
-            success = self._view.group_selected_words_into_paragraph_callback(
-                selected_words
-            )
+            success = self._view.group_selected_words_into_paragraph_callback(selected_words)
             if success:
                 self._view._safe_notify(
                     "Grouped selected words into new paragraph",
@@ -1183,14 +1066,10 @@ class WordMatchActions:
     ) -> None:
         """Refine a single word bbox."""
         if self._view.refine_words_callback is None:
-            self._view._safe_notify(
-                "Refine word function not available", type_="warning"
-            )
+            self._view._safe_notify("Refine word function not available", type_="warning")
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word to refine", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word to refine", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -1239,24 +1118,17 @@ class WordMatchActions:
             )
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word to refine", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word to refine", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
         snapshot.clear()
         try:
-            success = self._view.expand_then_refine_words_callback(
-                [(line_index, word_index)]
-            )
+            success = self._view.expand_then_refine_words_callback([(line_index, word_index)])
             if success:
                 self._view.renderer.rerender_word_column(line_index, word_index)
                 self._view._safe_notify(
-                    (
-                        f"Expanded then refined word {word_index + 1} "
-                        f"on line {line_index + 1}"
-                    ),
+                    (f"Expanded then refined word {word_index + 1} on line {line_index + 1}"),
                     type_="positive",
                 )
             else:
@@ -1277,10 +1149,7 @@ class WordMatchActions:
                 e,
             )
             self._view._safe_notify(
-                (
-                    f"Error expanding/refining line {line_index + 1}, "
-                    f"word {word_index + 1}: {e}"
-                ),
+                (f"Error expanding/refining line {line_index + 1}, word {word_index + 1}: {e}"),
                 type_="negative",
             )
 
@@ -1292,9 +1161,7 @@ class WordMatchActions:
     ) -> None:
         """Delete a single word from a specific line."""
         if self._view.delete_words_callback is None:
-            self._view._safe_notify(
-                "Delete word function not available", type_="warning"
-            )
+            self._view._safe_notify("Delete word function not available", type_="warning")
             return
 
         word_key = (line_index, word_index)
@@ -1303,9 +1170,7 @@ class WordMatchActions:
         try:
             success = self._view.delete_words_callback([word_key])
             if success:
-                self._view.renderer.refresh_local_line_match_from_line_object(
-                    line_index
-                )
+                self._view.renderer.refresh_local_line_match_from_line_object(line_index)
                 self._view._update_summary()
                 self._view.renderer.rerender_line_card(line_index)
                 self._view._safe_notify(
@@ -1342,9 +1207,7 @@ class WordMatchActions:
     ) -> None:
         """Merge selected word into its left neighbor."""
         if self._view.merge_word_left_callback is None:
-            self._view._safe_notify(
-                "Merge word function not available", type_="warning"
-            )
+            self._view._safe_notify("Merge word function not available", type_="warning")
             return
         if word_index <= 0:
             self._view._safe_notify("No left word to merge into", type_="warning")
@@ -1355,9 +1218,7 @@ class WordMatchActions:
         try:
             success = self._view.merge_word_left_callback(line_index, word_index)
             if success:
-                self._view.renderer.refresh_local_line_match_from_line_object(
-                    line_index
-                )
+                self._view.renderer.refresh_local_line_match_from_line_object(line_index)
                 self._view._update_summary()
                 self._view.renderer.rerender_line_card(line_index)
                 self._view._safe_notify(
@@ -1394,9 +1255,7 @@ class WordMatchActions:
     ) -> None:
         """Merge selected word with its right neighbor."""
         if self._view.merge_word_right_callback is None:
-            self._view._safe_notify(
-                "Merge word function not available", type_="warning"
-            )
+            self._view._safe_notify("Merge word function not available", type_="warning")
             return
 
         snapshot = _SelectionSnapshot(self._view)
@@ -1404,9 +1263,7 @@ class WordMatchActions:
         try:
             success = self._view.merge_word_right_callback(line_index, word_index)
             if success:
-                self._view.renderer.refresh_local_line_match_from_line_object(
-                    line_index
-                )
+                self._view.renderer.refresh_local_line_match_from_line_object(line_index)
                 self._view._update_summary()
                 self._view.renderer.rerender_line_card(line_index)
                 self._view._safe_notify(
@@ -1447,9 +1304,7 @@ class WordMatchActions:
     ) -> bool:
         """Split the selected word at the current marker."""
         if self._view.split_word_callback is None:
-            self._view._safe_notify(
-                "Split word function not available", type_="warning"
-            )
+            self._view._safe_notify("Split word function not available", type_="warning")
             return False
         if word_index < 0:
             self._view._safe_notify("Select a valid OCR word to split", type_="warning")
@@ -1467,13 +1322,9 @@ class WordMatchActions:
         snapshot = _SelectionSnapshot(self._view)
         snapshot.clear()
         try:
-            success = self._view.split_word_callback(
-                line_index, word_index, split_fraction
-            )
+            success = self._view.split_word_callback(line_index, word_index, split_fraction)
             if success:
-                self._view.renderer.refresh_local_line_match_from_line_object(
-                    line_index
-                )
+                self._view.renderer.refresh_local_line_match_from_line_object(line_index)
                 self._view._update_summary()
                 self._view.renderer.rerender_line_card(line_index)
                 self._view._word_split_fractions.pop(split_key, None)
@@ -1561,9 +1412,7 @@ class WordMatchActions:
                 split_button = self._view._word_split_button_refs.get(split_key)
                 if split_button is not None:
                     split_button.disabled = True
-                vertical_split_button = self._view._word_vertical_split_button_refs.get(
-                    split_key
-                )
+                vertical_split_button = self._view._word_vertical_split_button_refs.get(split_key)
                 if vertical_split_button is not None:
                     vertical_split_button.disabled = True
                 self._view._safe_notify(

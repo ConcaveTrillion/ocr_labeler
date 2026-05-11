@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,9 +14,7 @@ from pd_ocr_labeler.operations.ocr.model_selection_operations import (
 )
 
 
-def _local_option(
-    key: str, det_path: Path, reco_path: Path, vocab: str = ""
-) -> OCRModelOption:
+def _local_option(key: str, det_path: Path, reco_path: Path, vocab: str = "") -> OCRModelOption:
     return OCRModelOption(
         key=key,
         label=key,
@@ -66,7 +64,7 @@ def _make_local_pair(tmp_path: Path, mtime: datetime) -> tuple[Path, Path]:
 
 class TestPickDefaultKeys:
     def test_returns_hf_when_no_local(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         options = {
             ModelSelectionOperations.HF_LATEST_KEY: _hf_option(
                 ModelSelectionOperations.HF_LATEST_KEY, last_modified=now
@@ -79,23 +77,21 @@ class TestPickDefaultKeys:
         assert reason == "hf-latest"
 
     def test_returns_hf_when_hf_newer_than_local(self, tmp_path):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         det_path, reco_path = _make_local_pair(tmp_path, now - timedelta(days=10))
         options = {
             ModelSelectionOperations.HF_LATEST_KEY: _hf_option(
                 ModelSelectionOperations.HF_LATEST_KEY, last_modified=now
             ),
-            "all/run-2026010100": _local_option(
-                "all/run-2026010100", det_path, reco_path
-            ),
+            "all/run-2026010100": _local_option("all/run-2026010100", det_path, reco_path),
             ModelSelectionOperations.DEFAULT_MODEL_KEY: _default_option(),
         }
-        det, reco, reason = ModelSelectionOperations.pick_default_keys(options)
+        det, _, reason = ModelSelectionOperations.pick_default_keys(options)
         assert det == ModelSelectionOperations.HF_LATEST_KEY
         assert reason == "hf-latest"
 
     def test_prefers_hf_when_equal_to_local(self, tmp_path):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         det_path, reco_path = _make_local_pair(tmp_path, now)
         options = {
             ModelSelectionOperations.HF_LATEST_KEY: _hf_option(
@@ -104,12 +100,12 @@ class TestPickDefaultKeys:
             "all/run-eq": _local_option("all/run-eq", det_path, reco_path),
             ModelSelectionOperations.DEFAULT_MODEL_KEY: _default_option(),
         }
-        det, reco, reason = ModelSelectionOperations.pick_default_keys(options)
+        det, _, reason = ModelSelectionOperations.pick_default_keys(options)
         assert det == ModelSelectionOperations.HF_LATEST_KEY
         assert reason == "hf-latest"
 
     def test_returns_local_when_local_strictly_newer(self, tmp_path):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         det_path, reco_path = _make_local_pair(tmp_path, now)
         options = {
             ModelSelectionOperations.HF_LATEST_KEY: _hf_option(
@@ -125,18 +121,16 @@ class TestPickDefaultKeys:
         assert reason == "local-newer-than-hf"
 
     def test_returns_local_when_hf_unreachable(self, tmp_path):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         det_path, reco_path = _make_local_pair(tmp_path, now)
         options = {
             ModelSelectionOperations.HF_LATEST_KEY: _hf_option(
                 ModelSelectionOperations.HF_LATEST_KEY, last_modified=None
             ),
-            "all/run-only-local": _local_option(
-                "all/run-only-local", det_path, reco_path
-            ),
+            "all/run-only-local": _local_option("all/run-only-local", det_path, reco_path),
             ModelSelectionOperations.DEFAULT_MODEL_KEY: _default_option(),
         }
-        det, reco, reason = ModelSelectionOperations.pick_default_keys(options)
+        det, _, reason = ModelSelectionOperations.pick_default_keys(options)
         assert det == "all/run-only-local"
         assert reason == "local-only-hf-unreachable"
 
@@ -159,9 +153,7 @@ class TestDiscoverModelOptions:
             ModelSelectionOperations,
             "fetch_hf_last_modified",
             classmethod(
-                lambda cls, *, revision=None, timeout=5.0: datetime(
-                    2026, 5, 1, tzinfo=timezone.utc
-                )
+                lambda cls, *, revision=None, timeout=5.0: datetime(2026, 5, 1, tzinfo=UTC)
             ),
         )
         monkeypatch.setattr(
@@ -176,7 +168,7 @@ class TestDiscoverModelOptions:
         assert ModelSelectionOperations.DEFAULT_MODEL_KEY in options
         assert options[ModelSelectionOperations.HF_LATEST_KEY].is_huggingface
         assert options[ModelSelectionOperations.HF_LATEST_KEY].hf_last_modified == (
-            datetime(2026, 5, 1, tzinfo=timezone.utc)
+            datetime(2026, 5, 1, tzinfo=UTC)
         )
         # Labels contain both
         assert "hugging face" in labels[ModelSelectionOperations.HF_LATEST_KEY].lower()
@@ -186,9 +178,7 @@ class TestDiscoverModelOptions:
             ModelSelectionOperations,
             "fetch_hf_last_modified",
             classmethod(
-                lambda cls, *, revision=None, timeout=5.0: datetime(
-                    2026, 5, 1, tzinfo=timezone.utc
-                )
+                lambda cls, *, revision=None, timeout=5.0: datetime(2026, 5, 1, tzinfo=UTC)
             ),
         )
         monkeypatch.setattr(
@@ -272,7 +262,7 @@ class TestDownloadHfWeights:
         monkeypatch.setattr(builtins, "__import__", fake_import)
         opt = _hf_option(
             ModelSelectionOperations.HF_LATEST_KEY,
-            last_modified=datetime.now(timezone.utc),
+            last_modified=datetime.now(UTC),
         )
         with pytest.raises(RuntimeError):
             ModelSelectionOperations.download_hf_weights(opt)
@@ -295,15 +285,14 @@ class TestDownloadHfWeights:
 
         downloaded: list[str] = []
 
-        class _FakeNotFound(Exception):
+        class _FakeNotFoundError(Exception):
             pass
 
         def fake_hf_hub_download(*, repo_id, filename, revision=None):
             downloaded.append(filename)
-            if filename.endswith(".arch"):
+            if filename.endswith(".arch") and filename.startswith("detection/"):
                 # Simulate sidecar absent for the detection role only.
-                if filename.startswith("detection/"):
-                    raise _FakeNotFound("no arch")
+                raise _FakeNotFoundError("no arch")
             if filename == "detection/x.pt":
                 return str(det_path)
             if filename == "recognition/x.pt":
@@ -317,13 +306,11 @@ class TestDownloadHfWeights:
                 return str(arch_path)
             if filename == "detection/x.vocab":
                 # Simulate detection .vocab missing.
-                raise _FakeNotFound("no vocab for detection")
+                raise _FakeNotFoundError("no vocab for detection")
             raise AssertionError(f"unexpected download: {filename}")
 
-        fake_hf_module = type(
-            "M", (), {"hf_hub_download": staticmethod(fake_hf_hub_download)}
-        )
-        fake_hf_utils = type("U", (), {"EntryNotFoundError": _FakeNotFound})
+        fake_hf_module = type("M", (), {"hf_hub_download": staticmethod(fake_hf_hub_download)})
+        fake_hf_utils = type("U", (), {"EntryNotFoundError": _FakeNotFoundError})
         import sys
 
         monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)

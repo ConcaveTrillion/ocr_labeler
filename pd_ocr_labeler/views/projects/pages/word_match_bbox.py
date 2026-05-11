@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from nicegui import events, ui
 
@@ -48,9 +49,7 @@ class WordMatchBbox:
         bbox_preview_deltas: tuple[float, float, float, float] | None = None,
     ):
         """Get client-side slice metadata for a word image from original page image."""
-        logger.debug(
-            "Getting word image for match with status %s", word_match.match_status.value
-        )
+        logger.debug("Getting word image for match with status %s", word_match.match_status.value)
         try:
             image_source = self._get_original_image_source()
             if not image_source:
@@ -67,9 +66,7 @@ class WordMatchBbox:
             line_match = None
             for lm in self._view.view_model.line_matches:
                 for wm in lm.word_matches:
-                    if (
-                        wm is word_match
-                    ):  # Use 'is' instead of 'in' to avoid __eq__ comparison
+                    if wm is word_match:  # Use 'is' instead of 'in' to avoid __eq__ comparison
                         line_match = lm
                         break
                 if line_match:
@@ -88,9 +85,7 @@ class WordMatchBbox:
                 bbox_preview_deltas=bbox_preview_deltas,
             )
             if preview_bbox is None:
-                logger.debug(
-                    "Preview bbox invalid for key=%s", (line_index, word_index)
-                )
+                logger.debug("Preview bbox invalid for key=%s", (line_index, word_index))
                 return None
 
             page_shape = getattr(page_image, "shape", None)
@@ -109,12 +104,10 @@ class WordMatchBbox:
             scale_y = float(encoded_height) / float(page_height)
 
             px1, py1, px2, py2 = preview_bbox
-            sx1 = max(0, min(int(math.floor(float(px1) * scale_x)), encoded_width - 1))
-            sy1 = max(0, min(int(math.floor(float(py1) * scale_y)), encoded_height - 1))
-            sx2 = max(sx1 + 1, min(int(math.ceil(float(px2) * scale_x)), encoded_width))
-            sy2 = max(
-                sy1 + 1, min(int(math.ceil(float(py2) * scale_y)), encoded_height)
-            )
+            sx1 = max(0, min(math.floor(float(px1) * scale_x), encoded_width - 1))
+            sy1 = max(0, min(math.floor(float(py1) * scale_y), encoded_height - 1))
+            sx2 = max(sx1 + 1, min(math.ceil(float(px2) * scale_x), encoded_width))
+            sy2 = max(sy1 + 1, min(math.ceil(float(py2) * scale_y), encoded_height))
 
             slice_width = max(1, sx2 - sx1)
             slice_height = max(1, sy2 - sy1)
@@ -137,8 +130,8 @@ class WordMatchBbox:
 
             return {
                 "slice_source": self._build_slice_placeholder_source(
-                    int(round(display_width)),
-                    int(round(display_height)),
+                    round(display_width),
+                    round(display_height),
                 ),
                 "display_width": float(display_width),
                 "display_height": float(display_height),
@@ -195,9 +188,7 @@ class WordMatchBbox:
             y2 = float(getattr(bbox, "maxY", 0.0) or 0.0)
 
         left_delta, right_delta, top_delta, bottom_delta = (
-            bbox_preview_deltas
-            if bbox_preview_deltas is not None
-            else (0.0, 0.0, 0.0, 0.0)
+            bbox_preview_deltas if bbox_preview_deltas is not None else (0.0, 0.0, 0.0, 0.0)
         )
         x1 -= float(left_delta)
         x2 += float(right_delta)
@@ -295,10 +286,10 @@ class WordMatchBbox:
             # be integers`` inside ``BoundingBox._extract_roi``, which would
             # otherwise be swallowed and surface as
             # "Could not compute refine preview".
-            eff_x1_i = max(0, min(int(round(eff_x1)), page_width - 1))
-            eff_y1_i = max(0, min(int(round(eff_y1)), page_height - 1))
-            eff_x2_i = max(eff_x1_i + 1, min(int(round(eff_x2)), page_width))
-            eff_y2_i = max(eff_y1_i + 1, min(int(round(eff_y2)), page_height))
+            eff_x1_i = max(0, min(round(eff_x1), page_width - 1))
+            eff_y1_i = max(0, min(round(eff_y1), page_height - 1))
+            eff_x2_i = max(eff_x1_i + 1, min(round(eff_x2), page_width))
+            eff_y2_i = max(eff_y1_i + 1, min(round(eff_y2), page_height))
             try:
                 eff_bbox = bbox_from_dict(
                     {
@@ -358,9 +349,7 @@ class WordMatchBbox:
         try:
             return str(provider() or "")
         except Exception:
-            logger.debug(
-                "Failed to resolve original image source provider", exc_info=True
-            )
+            logger.debug("Failed to resolve original image source provider", exc_info=True)
             return ""
 
     def compute_encoded_dimensions(
@@ -392,7 +381,7 @@ class WordMatchBbox:
         return (
             "data:image/svg+xml;utf8,"
             "<svg xmlns='http://www.w3.org/2000/svg' "
-            f"width='{safe_width}' height='{safe_height}' viewBox='0 0 {safe_width} {safe_height}'></svg>"
+            f"width='{safe_width}' height='{safe_height}' viewBox='0 0 {safe_width} {safe_height}'></svg>"  # noqa: E501
         )
 
     def ensure_word_slice_css_registered(self) -> None:
@@ -483,9 +472,7 @@ class WordMatchBbox:
     ) -> None:
         """Start rebox mode for a selected word."""
         if self._view.rebox_word_callback is None:
-            self._view._safe_notify(
-                "Rebox word function not available", type_="warning"
-            )
+            self._view._safe_notify("Rebox word function not available", type_="warning")
             return
         if word_index < 0:
             self._view._safe_notify("Select a valid OCR word to rebox", type_="warning")
@@ -508,9 +495,7 @@ class WordMatchBbox:
     def apply_rebox_bbox(self, x1: float, y1: float, x2: float, y2: float) -> None:
         """Apply a drawn bbox to the currently pending rebox word target."""
         if self._view.rebox_word_callback is None:
-            self._view._safe_notify(
-                "Rebox word function not available", type_="warning"
-            )
+            self._view._safe_notify("Rebox word function not available", type_="warning")
             return
 
         target_key = self._pending_rebox_word_key
@@ -611,9 +596,7 @@ class WordMatchBbox:
             self._view._safe_notify("Edit bbox function not available", type_="warning")
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word bbox to edit", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
             return
         key = (line_index, word_index)
         try:
@@ -627,9 +610,7 @@ class WordMatchBbox:
             self._view.renderer.rerender_word_column(line_index, word_index)
         except Exception as e:
             logger.exception("Error toggling bbox fine-tune controls for key=%s", key)
-            self._view._safe_notify(
-                f"Error opening fine-tune controls: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error opening fine-tune controls: {e}", type_="negative")
             raise
 
     def set_bbox_nudge_step(self, value: object) -> None:
@@ -673,9 +654,7 @@ class WordMatchBbox:
             self._view._safe_notify("Edit bbox function not available", type_="warning")
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word bbox to edit", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
             return
 
         key = (line_index, word_index)
@@ -704,9 +683,7 @@ class WordMatchBbox:
                 word_index,
                 e,
             )
-            self._view._safe_notify(
-                f"Error updating pending bbox edit: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error updating pending bbox edit: {e}", type_="negative")
             raise
 
     def reset_pending_single_word_bbox_nudge(
@@ -739,24 +716,15 @@ class WordMatchBbox:
             self._view._safe_notify("Edit bbox function not available", type_="warning")
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word bbox to edit", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
             return
 
         key = (line_index, word_index)
-        left_delta, right_delta, top_delta, bottom_delta = (
-            self._bbox_pending_deltas.get(
-                key,
-                (0.0, 0.0, 0.0, 0.0),
-            )
+        left_delta, right_delta, top_delta, bottom_delta = self._bbox_pending_deltas.get(
+            key,
+            (0.0, 0.0, 0.0, 0.0),
         )
-        if (
-            left_delta == 0.0
-            and right_delta == 0.0
-            and top_delta == 0.0
-            and bottom_delta == 0.0
-        ):
+        if left_delta == 0.0 and right_delta == 0.0 and top_delta == 0.0 and bottom_delta == 0.0:
             self._view._safe_notify("No pending bbox edits to apply", type_="warning")
             return
 
@@ -787,9 +755,7 @@ class WordMatchBbox:
                         type_="positive",
                     )
                 else:
-                    self._view._safe_notify(
-                        "Applied bbox fine-tune edits", type_="positive"
-                    )
+                    self._view._safe_notify("Applied bbox fine-tune edits", type_="positive")
             else:
                 self._view.selection.selected_line_indices = previous_line_selection
                 self._view.selection.selected_word_indices = previous_word_selection
@@ -826,9 +792,7 @@ class WordMatchBbox:
             self._view._safe_notify("Edit bbox function not available", type_="warning")
             return
         if word_index < 0:
-            self._view._safe_notify(
-                "Select a valid OCR word bbox to edit", type_="warning"
-            )
+            self._view._safe_notify("Select a valid OCR word bbox to edit", type_="warning")
             return
 
         split_key = (line_index, word_index)
@@ -843,13 +807,9 @@ class WordMatchBbox:
             )
             return
 
-        line_word_match = self._view._line_word_match_by_ocr_index(
-            line_index, word_index
-        )
+        line_word_match = self._view._line_word_match_by_ocr_index(line_index, word_index)
         if line_word_match is None:
-            self._view._safe_notify(
-                "Selected word is no longer available", type_="warning"
-            )
+            self._view._safe_notify("Selected word is no longer available", type_="warning")
             return
 
         bbox_width = 0.0
@@ -879,15 +839,8 @@ class WordMatchBbox:
             bbox_height = float(getattr(bbox, "height", 0.0) or 0.0)
 
         image_width, image_height = image_size
-        if (
-            bbox_width <= 0.0
-            or bbox_height <= 0.0
-            or image_width <= 0.0
-            or image_height <= 0.0
-        ):
-            self._view._safe_notify(
-                "Cannot crop: invalid word bounding box", type_="warning"
-            )
+        if bbox_width <= 0.0 or bbox_height <= 0.0 or image_width <= 0.0 or image_height <= 0.0:
+            self._view._safe_notify("Cannot crop: invalid word bounding box", type_="warning")
             return
 
         left_delta = 0.0
@@ -971,9 +924,7 @@ class WordMatchBbox:
                 False,
             )
             if success:
-                self._view.renderer.refresh_local_line_match_from_line_object(
-                    line_index
-                )
+                self._view.renderer.refresh_local_line_match_from_line_object(line_index)
                 self._view._update_summary()
                 self._view.renderer.rerender_line_card(line_index)
                 self._view.renderer.refresh_open_word_dialog_for(line_index, word_index)
@@ -1005,7 +956,7 @@ class WordMatchBbox:
     # Line image helper
     # ------------------------------------------------------------------
 
-    def get_line_image(self, line_match: "LineMatch") -> str | None:
+    def get_line_image(self, line_match: LineMatch) -> str | None:
         """Get cropped line image as base64 data URL.
 
         Args:

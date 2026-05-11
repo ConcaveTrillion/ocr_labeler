@@ -39,9 +39,7 @@ def load_project(page: Page, project_name: str, timeout: int = 60_000) -> None:
     loading_overlay.wait_for(state="hidden", timeout=timeout)
 
     # Wait for navigation controls to appear (indicates project loaded)
-    page.locator('[data-testid="nav-next-button"]').wait_for(
-        state="visible", timeout=timeout
-    )
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=timeout)
 
 
 def wait_for_page_loaded(page: Page, timeout: int = 60_000) -> None:

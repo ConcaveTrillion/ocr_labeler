@@ -195,9 +195,7 @@ class TestWordFilter:
             style_labels=frozenset(["italics"]),
             word_components=frozenset(["footnote marker"]),
         )
-        word = _make_word(
-            text_style_labels=["italics"], word_components=["footnote marker"]
-        )
+        word = _make_word(text_style_labels=["italics"], word_components=["footnote marker"])
         assert wf.matches(word) is True
 
     def test_combined_filter_partial_no_match(self):
@@ -288,7 +286,7 @@ class TestDocTRExportStandard:
         with open(det_labels_path) as f:
             det_labels = json.load(f)
         assert len(det_labels) == 1
-        entry = list(det_labels.values())[0]
+        entry = next(iter(det_labels.values()))
         assert entry["img_dimensions"] == [100, 100]
         assert len(entry["polygons"]) == 2
 
@@ -488,7 +486,7 @@ class TestDocTRExportClassification:
 
         with open(output_dir / "recognition" / "labels.json") as f:
             rec = json.load(f)
-        entry = list(rec.values())[0]
+        entry = next(iter(rec.values()))
         assert isinstance(entry, dict)
         assert entry["text"] == "italic_word"
         assert entry["labels"]["italics"] is True
@@ -624,7 +622,7 @@ class TestDocTRExportEdgeCases:
 
         with open(output_dir / "detection" / "labels.json") as f:
             det = json.load(f)
-        key = list(det.keys())[0]
+        key = next(iter(det.keys()))
         assert key.startswith("mybook_")
 
 
@@ -671,9 +669,7 @@ class TestCheckPageExportStatus:
         saved_json = tmp_path / "saved.json"
         saved_json.write_text("{}")
 
-        result = check_page_export_status(
-            tmp_path, "proj", 0, saved_json_path=saved_json
-        )
+        result = check_page_export_status(tmp_path, "proj", 0, saved_json_path=saved_json)
         assert result == ExportStatus.STALE
 
     def test_exported_when_saved_json_older(self, tmp_path):
@@ -689,7 +685,5 @@ class TestCheckPageExportStatus:
         img_file = img_dir / "proj_0.png"
         img_file.write_bytes(b"fake")
 
-        result = check_page_export_status(
-            tmp_path, "proj", 0, saved_json_path=saved_json
-        )
+        result = check_page_export_status(tmp_path, "proj", 0, saved_json_path=saved_json)
         assert result == ExportStatus.EXPORTED

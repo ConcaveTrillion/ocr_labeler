@@ -27,11 +27,9 @@ class SessionState:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SessionState":
+    def from_dict(cls, data: dict) -> SessionState:
         return cls(
-            schema_version=str(
-                data.get("schema_version", SESSION_STATE_SCHEMA_VERSION)
-            ),
+            schema_version=str(data.get("schema_version", SESSION_STATE_SCHEMA_VERSION)),
             last_project_path=data.get("last_project_path") or None,
             last_page_index=int(data.get("last_page_index", 0)),
         )

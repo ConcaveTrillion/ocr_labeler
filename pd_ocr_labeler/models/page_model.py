@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from pd_book_tools.ocr.page import Page
@@ -36,9 +37,7 @@ class PageModel:
         if image_path is not None:
             self.image_path = image_path
         else:
-            self._image_path = self._normalize_image_path(
-                getattr(self.page, "image_path", None)
-            )
+            self._image_path = self._normalize_image_path(getattr(self.page, "image_path", None))
 
         if name is not None:
             self.name = name
@@ -75,10 +74,8 @@ class PageModel:
     def image_path(self, value: str | None) -> None:
         normalized = self._normalize_image_path(value)
         self._image_path = normalized
-        try:
+        with contextlib.suppress(Exception):
             self.page.image_path = normalized  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     @property
     def name(self) -> str | None:
@@ -91,10 +88,8 @@ class PageModel:
     def name(self, value: str | None) -> None:
         normalized = str(value) if value is not None else None
         self._name = normalized
-        try:
+        with contextlib.suppress(Exception):
             self.page.name = normalized  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     @property
     def index(self) -> int | None:
@@ -107,10 +102,8 @@ class PageModel:
     def index(self, value: int | None) -> None:
         normalized = int(value) if isinstance(value, int) else None
         self._index = normalized
-        try:
+        with contextlib.suppress(Exception):
             self.page.index = normalized  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     @property
     def ocr_provenance(self) -> Any | None:
@@ -122,10 +115,8 @@ class PageModel:
     @ocr_provenance.setter
     def ocr_provenance(self, value: Any | None) -> None:
         self._ocr_provenance = value
-        try:
+        with contextlib.suppress(Exception):
             self.page.ocr_provenance = value  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     def to_dict(self) -> dict[str, Any]:
         return self.page.to_dict()

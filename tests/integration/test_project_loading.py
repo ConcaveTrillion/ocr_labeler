@@ -34,9 +34,7 @@ def mock_ocr_processing(monkeypatch):
             "pd_book_tools.ocr.doctr_support.get_default_doctr_predictor",
             return_value=mock_predictor,
         ),
-        patch(
-            "pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr"
-        ) as mock_ocr,
+        patch("pd_book_tools.ocr.document.Document.from_image_ocr_via_doctr") as mock_ocr,
         patch(
             "cv2.imread",
             mock_imread,
@@ -154,9 +152,7 @@ class TestProjectStructure:
         data = json.loads(pages_json.read_text(encoding="utf-8"))
         gt_map = project_state._normalize_ground_truth_entries(data)
         assert len(gt_map) == 392  # Should have entries for all 392 pages
-        assert (
-            "001.png" in gt_map
-        )  # Check that at least the first page has ground truth
+        assert "001.png" in gt_map  # Check that at least the first page has ground truth
         assert isinstance(gt_map["001.png"], str)  # Should be a string
         assert len(gt_map["001.png"]) > 0  # Should not be empty
 
@@ -166,9 +162,7 @@ class TestProjectStructure:
         data = json.loads(pages_json.read_text(encoding="utf-8"))
         gt_map = project_state._normalize_ground_truth_entries(data)
         assert len(gt_map) == 420  # Should have entries for all 420 pages
-        assert (
-            "001.png" in gt_map
-        )  # Check that at least the first page has ground truth
+        assert "001.png" in gt_map  # Check that at least the first page has ground truth
         assert isinstance(gt_map["001.png"], str)  # Should be a string
         assert len(gt_map["001.png"]) > 0  # Should not be empty
 
@@ -229,9 +223,7 @@ class TestNiceGuiIntegration:
         assert select_element.options == expected_projects
 
     @pytest.mark.nicegui_main_file(None)
-    async def test_project_selection_ui_elements(
-        self, user: User, test_projects_root: Path
-    ):
+    async def test_project_selection_ui_elements(self, user: User, test_projects_root: Path):
         """Test that project selection UI elements are present."""
         # Create the app instance
         labeler = NiceGuiLabeler(
@@ -322,9 +314,7 @@ class TestNiceGuiIntegration:
         await user.should_see("LOAD")
         logger.info("TEST STEP 11 COMPLETE: UI stable after repeated clicks")
 
-        logger.info(
-            "TEST STEP 12: Waiting for 'Loaded' notification - THIS IS WHERE IT MIGHT HANG"
-        )
+        logger.info("TEST STEP 12: Waiting for 'Loaded' notification - THIS IS WHERE IT MIGHT HANG")
         # Wait for loading to complete - confirm loaded notification first
         await user.should_see("Loaded projectID629292e7559a8", retries=30)
         logger.info("TEST STEP 12 COMPLETE: Loaded notification appeared")

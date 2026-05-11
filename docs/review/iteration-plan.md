@@ -13,7 +13,7 @@ These are bugs that either crash the application or silently produce wrong outpu
 They should be fixed before any structural work.
 
 | # | Task | Reference | File(s) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Fix `can_load_page` exception handler (`Path(None)` crash) | bugs.md B1 | `operations/ocr/page_operations.py` |
 | 2 | Fix `check_page_export_status` path mismatch | bugs.md B4 | `operations/export/doctr_export.py` |
 | 3 | Add `once=True` to session-init timer | bugs.md B2 | `app.py` |
@@ -28,7 +28,7 @@ They should be fixed before any structural work.
 ## Tier 2 — Fix memory leaks and major correctness bugs
 
 | # | Task | Reference | File(s) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 9 | Replace `_saved_provenance_by_page_id` with `WeakKeyDictionary` | bugs.md ML1 | `operations/ocr/page_operations.py` |
 | 10 | Wire `BaseView.teardown()` to session disconnect | bugs.md ML2 | `app.py`, `views/shared/base_view.py` |
 | 11 | Add `BaseViewModel.teardown()` to remove `on_change` listeners | bugs.md ML2 | `viewmodels/shared/base_viewmodel.py`, all VMs |
@@ -47,7 +47,7 @@ They should be fixed before any structural work.
 These are safe deletions with no functional impact. Do them as a batch.
 
 | # | Task | Reference | File(s) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 19 | Delete `operations/ocr/ocr_service.py`; remove from `operations/__init__.py` | dead-code.md D1 | `operations/ocr/ocr_service.py` |
 | 20 | Delete `services/notification_service.py`; update `services/__init__.py` | dead-code.md D2 | `services/notification_service.py` |
 | 21 | Delete `NavigationOperations.schedule_navigation` and its test | dead-code.md D3 | `operations/ocr/navigation_operations.py` |
@@ -66,7 +66,7 @@ These are larger refactors that improve long-term maintainability. Work through
 them one at a time, with tests before and after.
 
 | # | Task | Reference | File(s) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 28 | Consolidate image extension constant — replace 4 literals with `IMAGE_EXTS` | architecture.md A6 | `project_operations.py`, `project_discovery_operations.py`, `page_operations.py`, `doctr_export.py` |
 | 29 | Expose public `current_page` property on `PageStateViewModel`; eliminate all `._page_state` private accesses in views | architecture.md A2 | `page_state_view_model.py`, `image_tabs.py`, `content.py`, `text_tabs.py` |
 | 30 | Expose `rebind(new_project_state)` on `ProjectStateViewModel`; eliminate `MainViewModel` cross-VM private mutation | architecture.md A2 | `viewmodels/main_view_model.py`, `viewmodels/project/project_state_view_model.py` |

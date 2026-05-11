@@ -176,9 +176,7 @@ def test_selection_mode_radio_buttons(browser_app_url: str, browser_page) -> Non
 
 
 @pytest.mark.browser
-def test_erase_pixels_button_enables_erase_mode(
-    browser_app_url: str, browser_page
-) -> None:
+def test_erase_pixels_button_enables_erase_mode(browser_app_url: str, browser_page) -> None:
     """Clicking 'Erase Pixels' arms erase mode and surfaces an info notification.
 
     The button is in the image-tab toolbar (next to the Selection Mode radio)

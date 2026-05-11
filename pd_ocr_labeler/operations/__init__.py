@@ -6,8 +6,8 @@ from .persistence import ProjectOperations
 
 __all__ = [
     "DocTRExportOperations",
-    "PageOperations",
     "LineOperations",
-    "ProjectOperations",
     "OCRService",
+    "PageOperations",
+    "ProjectOperations",
 ]

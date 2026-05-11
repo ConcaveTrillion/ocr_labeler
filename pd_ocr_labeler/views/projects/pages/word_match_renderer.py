@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from nicegui import events, ui
 
@@ -68,9 +69,7 @@ class WordMatchRenderer:
             line_match.line_index for line_match in self._view.view_model.line_matches
         }
         if self._view.selection.selected_line_indices:
-            self._view.selection.selected_line_indices.intersection_update(
-                available_line_indices
-            )
+            self._view.selection.selected_line_indices.intersection_update(available_line_indices)
         if self._view.selection.selected_word_indices:
             valid_word_keys = {
                 (line_match.line_index, word_match.word_index)
@@ -165,14 +164,10 @@ class WordMatchRenderer:
 
         if not self._view.view_model.line_matches:
             logger.info("No line matches in view model")
-            with self._view.lines_container:
-                with ui.card():
-                    with ui.card_section():
-                        ui.icon("info")
-                        ui.label("No line matches found")
-                        ui.label(
-                            "Load a page with OCR and ground truth to see word comparisons"
-                        )
+            with self._view.lines_container, ui.card(), ui.card_section():
+                ui.icon("info")
+                ui.label("No line matches found")
+                ui.label("Load a page with OCR and ground truth to see word comparisons")
             self._display_update_render_count += 1
             self._last_display_signature = display_signature
             return
@@ -182,7 +177,7 @@ class WordMatchRenderer:
 
         if not lines_to_display:
             logger.info("No lines to display after filtering")
-            with self._view.lines_container:
+            with self._view.lines_container:  # noqa: SIM117  # NiceGUI nested with-contexts cannot be merged
                 with ui.card():
                     with ui.card_section():
                         ui.icon("filter_list_off")
@@ -193,7 +188,7 @@ class WordMatchRenderer:
                             )
                         elif self._view.filter_mode == "Mismatched Lines":
                             ui.label(
-                                "All lines have perfect matches. Try selecting 'All Lines' to see them."
+                                "All lines have perfect matches. Try selecting 'All Lines' to see them."  # noqa: E501
                             )
             self._display_update_render_count += 1
             self._last_display_signature = display_signature
@@ -216,9 +211,7 @@ class WordMatchRenderer:
                     self._paragraph_group_refs[paragraph_index] = paragraph_group
                     with (
                         ui.row()
-                        .classes(
-                            "items-center full-width no-wrap gap-1 q-my-none q-py-none"
-                        )
+                        .classes("items-center full-width no-wrap gap-1 q-my-none q-py-none")
                         .style(
                             "margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;"
                         )
@@ -245,13 +238,11 @@ class WordMatchRenderer:
                                     )
                                 )
                             )
-                            self._view.selection._paragraph_checkbox_refs[
-                                paragraph_index
-                            ] = paragraph_checkbox
+                            self._view.selection._paragraph_checkbox_refs[paragraph_index] = (
+                                paragraph_checkbox
+                            )
 
-                        toggle_icon = (
-                            "expand_more" if paragraph_is_expanded else "chevron_right"
-                        )
+                        toggle_icon = "expand_more" if paragraph_is_expanded else "chevron_right"
                         ui.button(
                             icon=toggle_icon,
                             on_click=lambda _event, index=paragraph_index: (
@@ -267,8 +258,7 @@ class WordMatchRenderer:
                                 self._toggle_paragraph_expanded(index)
                             ),
                         ).props(
-                            "flat dense no-caps align=left"
-                            ' data-testid="paragraph-label-button"'
+                            'flat dense no-caps align=left data-testid="paragraph-label-button"'
                         ).classes("grow justify-start text-left")
 
                     if paragraph_is_expanded:
@@ -278,18 +268,14 @@ class WordMatchRenderer:
                             .style("gap: 0; margin: 0; padding: 0;")
                         ):
                             for line_match in paragraph_line_matches:
-                                self._line_to_paragraph[line_match.line_index] = (
-                                    paragraph_index
-                                )
+                                self._line_to_paragraph[line_match.line_index] = paragraph_index
                                 with (
                                     ui.column()
                                     .classes("full-width")
                                     .style("gap: 0; margin: 0; padding: 0;")
                                     .props('data-testid="line-card"') as line_slot
                                 ):
-                                    self._line_card_refs[line_match.line_index] = (
-                                        line_slot
-                                    )
+                                    self._line_card_refs[line_match.line_index] = line_slot
                                     self._create_line_card(line_match)
 
         self._display_update_render_count += 1
@@ -308,9 +294,7 @@ class WordMatchRenderer:
                     word_match.match_status.value,
                     word_match.ocr_text,
                     word_match.ground_truth_text,
-                    round(word_match.fuzz_score, 6)
-                    if word_match.fuzz_score is not None
-                    else None,
+                    round(word_match.fuzz_score, 6) if word_match.fuzz_score is not None else None,
                     self._view._word_match_bbox_signature(word_match),
                     self._view._word_match_attribute_signature(word_match),
                 )
@@ -356,18 +340,14 @@ class WordMatchRenderer:
         """Filter lines based on current filter setting."""
         filter_mode = self._view.filter_mode
         logger.debug("Filtering lines. Filter mode: %s", filter_mode)
-        logger.debug(
-            "Total line matches available: %s", len(self._view.view_model.line_matches)
-        )
+        logger.debug("Total line matches available: %s", len(self._view.view_model.line_matches))
 
         if filter_mode == "All Lines":
             logger.debug("Returning all lines (no filtering)")
             return self._view.view_model.line_matches
         elif filter_mode == "Unvalidated Lines":
             filtered_lines = [
-                lm
-                for lm in self._view.view_model.line_matches
-                if not lm.is_fully_validated
+                lm for lm in self._view.view_model.line_matches if not lm.is_fully_validated
             ]
             logger.debug("Filtered to %s unvalidated lines", len(filtered_lines))
             return filtered_lines
@@ -381,9 +361,9 @@ class WordMatchRenderer:
             logger.debug("Filtered to %s lines with mismatches", len(filtered_lines))
             return filtered_lines
 
-    def _group_lines_by_paragraph(self, line_matches: list["LineMatch"]):
+    def _group_lines_by_paragraph(self, line_matches: list[LineMatch]):
         """Group line matches by paragraph index, keeping unassigned lines last."""
-        grouped: dict[int | None, list["LineMatch"]] = {}
+        grouped: dict[int | None, list[LineMatch]] = {}
         for line_match in line_matches:
             paragraph_index = getattr(line_match, "paragraph_index", None)
             grouped.setdefault(paragraph_index, []).append(line_match)
@@ -415,10 +395,8 @@ class WordMatchRenderer:
         )
         with ui.column().classes("full-width").style("gap: 0; margin: 0; padding: 0;"):
             # Color background bar based on overall match status
-            status_classes = self._view._get_status_classes(
-                line_match.overall_match_status.value
-            )
-            with ui.row().classes(f"full-width p-2 rounded {status_classes}"):
+            status_classes = self._view._get_status_classes(line_match.overall_match_status.value)
+            with ui.row().classes(f"full-width p-2 rounded {status_classes}"):  # noqa: SIM117  # NiceGUI nested with-contexts cannot be merged
                 # Header with line info and status
                 with ui.row().classes("items-center justify-between"):
                     # Left side: Line info and stats
@@ -426,9 +404,7 @@ class WordMatchRenderer:
                         line_checkbox = (
                             ui.checkbox(
                                 text="",
-                                value=self._view.selection.is_line_checked(
-                                    line_match.line_index
-                                ),
+                                value=self._view.selection.is_line_checked(line_match.line_index),
                             )
                             .props('size=sm aria-label="Select line"')
                             .tooltip("Select line")
@@ -441,9 +417,9 @@ class WordMatchRenderer:
                                 )
                             )
                         )
-                        self._view.selection._line_checkbox_refs[
-                            line_match.line_index
-                        ] = line_checkbox
+                        self._view.selection._line_checkbox_refs[line_match.line_index] = (
+                            line_checkbox
+                        )
                         ui.label(f"Line {line_match.line_index + 1}")
                         ui.label(
                             self._view._format_paragraph_label(
@@ -451,36 +427,28 @@ class WordMatchRenderer:
                             )
                         ).classes("text-caption")
                         ui.icon("bar_chart")
-                        ui.label(f"\u2713 {line_match.exact_match_count}").tooltip(
-                            "Exact matches"
-                        )
-                        ui.label(f"\u26a0 {line_match.fuzzy_match_count}").tooltip(
-                            "Fuzzy matches"
-                        )
-                        ui.label(f"\u2717 {line_match.mismatch_count}").tooltip(
-                            "Mismatches"
-                        )
+                        ui.label(f"\u2713 {line_match.exact_match_count}").tooltip("Exact matches")
+                        ui.label(f"\u26a0 {line_match.fuzzy_match_count}").tooltip("Fuzzy matches")
+                        ui.label(f"\u2717 {line_match.mismatch_count}").tooltip("Mismatches")
                         if line_match.unmatched_gt_count > 0:
-                            ui.label(
-                                f"\U0001f535 {line_match.unmatched_gt_count}"
-                            ).tooltip("Unmatched ground truth")
+                            ui.label(f"\U0001f535 {line_match.unmatched_gt_count}").tooltip(
+                                "Unmatched ground truth"
+                            )
                         if line_match.unmatched_ocr_count > 0:
-                            ui.label(
-                                f"\u26ab {line_match.unmatched_ocr_count}"
-                            ).tooltip("Unmatched OCR")
+                            ui.label(f"\u26ab {line_match.unmatched_ocr_count}").tooltip(
+                                "Unmatched OCR"
+                            )
 
                         # Validation rollup indicator
                         v_count = line_match.validated_word_count
                         v_total = line_match.total_word_count
                         if v_total > 0:
                             if line_match.is_fully_validated:
-                                ui.icon("verified").classes(
-                                    "text-green-600 text-sm"
-                                ).tooltip("All words validated")
-                            else:
-                                color = (
-                                    "text-blue-600" if v_count > 0 else "text-grey-400"
+                                ui.icon("verified").classes("text-green-600 text-sm").tooltip(
+                                    "All words validated"
                                 )
+                            else:
+                                color = "text-blue-600" if v_count > 0 else "text-grey-400"
                                 ui.label(f"\u2611 {v_count}/{v_total}").classes(
                                     f"text-xs {color}"
                                 ).tooltip(f"{v_count} of {v_total} words validated")
@@ -508,9 +476,7 @@ class WordMatchRenderer:
                             ).tooltip(
                                 "Copy ground truth text to OCR text for all words in this line"
                             )
-                            gt_to_ocr_button.props(
-                                'data-testid="line-gt-to-ocr-button"'
-                            )
+                            gt_to_ocr_button.props('data-testid="line-gt-to-ocr-button"')
                             style_action_button(gt_to_ocr_button)
                             gt_to_ocr_button.on_click(
                                 lambda: self._view.actions._handle_copy_gt_to_ocr(
@@ -532,9 +498,7 @@ class WordMatchRenderer:
                             ).tooltip(
                                 "Copy OCR text to ground truth text for all words in this line"
                             )
-                            ocr_to_gt_button.props(
-                                'data-testid="line-ocr-to-gt-button"'
-                            )
+                            ocr_to_gt_button.props('data-testid="line-ocr-to-gt-button"')
                             style_action_button(ocr_to_gt_button)
                             ocr_to_gt_button.on_click(
                                 lambda: self._view.actions._handle_copy_ocr_to_gt(
@@ -549,15 +513,11 @@ class WordMatchRenderer:
                             all_validated = line_match.is_fully_validated
                             validate_line_btn = ui.button(
                                 "Validate" if not all_validated else "Unvalidate",
-                                icon="check_circle"
-                                if not all_validated
-                                else "unpublished",
+                                icon="check_circle" if not all_validated else "unpublished",
                             ).tooltip(
-                                f"{'Unvalidate' if all_validated else 'Validate'} all words in this line ({v_count}/{v_total})"
+                                f"{'Unvalidate' if all_validated else 'Validate'} all words in this line ({v_count}/{v_total})"  # noqa: E501
                             )
-                            validate_line_btn.props(
-                                'data-testid="line-validate-button"'
-                            )
+                            validate_line_btn.props('data-testid="line-validate-button"')
                             style_action_button(validate_line_btn)
                             if all_validated:
                                 validate_line_btn.classes("text-green-600")
@@ -565,9 +525,7 @@ class WordMatchRenderer:
                                 lambda _e, lm=line_match: self._handle_validate_line(lm)
                             )
 
-                        delete_button = ui.button(icon="delete").tooltip(
-                            "Delete this line"
-                        )
+                        delete_button = ui.button(icon="delete").tooltip("Delete this line")
                         delete_button.props('data-testid="line-delete-button"')
                         style_word_icon_button(
                             delete_button,
@@ -583,7 +541,7 @@ class WordMatchRenderer:
                             delete_button.disabled = True
 
             # Card content with word comparison table
-            with ui.row():
+            with ui.row():  # noqa: SIM117  # NiceGUI nested with-contexts cannot be merged
                 # Word comparison table
                 with ui.column():
                     self._create_word_comparison_table(line_match)
@@ -601,9 +559,7 @@ class WordMatchRenderer:
 
         self._view.selection._line_checkbox_refs.pop(line_index, None)
         for key in [
-            key
-            for key in self._view.selection._word_checkbox_refs
-            if key[0] == line_index
+            key for key in self._view.selection._word_checkbox_refs if key[0] == line_index
         ]:
             self._view.selection._word_checkbox_refs.pop(key, None)
             self._view.gt_editing._word_style_button_refs.pop(key, None)
@@ -731,14 +687,12 @@ class WordMatchRenderer:
                 with ui.column().props('data-testid="word-column"') as word_column:
                     # Image cell
                     split_word_index = (
-                        word_match.word_index
-                        if word_match.word_index is not None
-                        else -1
+                        word_match.word_index if word_match.word_index is not None else -1
                     )
                     if split_word_index >= 0:
-                        self._word_column_refs[
-                            (line_match.line_index, split_word_index)
-                        ] = word_column
+                        self._word_column_refs[(line_match.line_index, split_word_index)] = (
+                            word_column
+                        )
                     self._create_word_selection_cell(
                         line_match.line_index,
                         word_idx,
@@ -791,15 +745,11 @@ class WordMatchRenderer:
                     text="",
                     value=selection_key in self._view.selection.selected_word_indices,
                 )
-                .props(
-                    'size=xs dense aria-label="Select word" data-testid="word-checkbox"'
-                )
+                .props('size=xs dense aria-label="Select word" data-testid="word-checkbox"')
                 .tooltip("Select word")
                 .on_value_change(
                     lambda event, key=selection_key: (
-                        self._view.selection.on_word_selection_change(
-                            key, bool(event.value)
-                        )
+                        self._view.selection.on_word_selection_change(key, bool(event.value))
                         if key[1] >= 0
                         else None
                     )
@@ -829,9 +779,7 @@ class WordMatchRenderer:
                         self._handle_toggle_word_validated(li, wi, _event)
                     ),
                 ).tooltip("Validated" if validated else "Mark as validated")
-                val_btn.props(
-                    'size=xs unelevated round data-testid="word-validate-button"'
-                )
+                val_btn.props('size=xs unelevated round data-testid="word-validate-button"')
                 if validated:
                     val_btn.props("color=green text-color=white")
                 else:
@@ -896,30 +844,16 @@ class WordMatchRenderer:
                         ui.icon("image_not_supported")
                         return
 
-                    image_width = float(
-                        word_image_slice.get("display_width", 1.0) or 1.0
-                    )
-                    image_height = float(
-                        word_image_slice.get("display_height", 1.0) or 1.0
-                    )
+                    image_width = float(word_image_slice.get("display_width", 1.0) or 1.0)
+                    image_height = float(word_image_slice.get("display_height", 1.0) or 1.0)
                     zoom = max(0.5, float(zoom_scale or 1.0))
                     render_width = image_width * zoom
                     render_height = image_height * zoom
-                    background_source = str(
-                        word_image_slice.get("background_source", "") or ""
-                    )
-                    background_width = float(
-                        word_image_slice.get("background_width", 1.0) or 1.0
-                    )
-                    background_height = float(
-                        word_image_slice.get("background_height", 1.0) or 1.0
-                    )
-                    background_x = float(
-                        word_image_slice.get("background_x", 0.0) or 0.0
-                    )
-                    background_y = float(
-                        word_image_slice.get("background_y", 0.0) or 0.0
-                    )
+                    background_source = str(word_image_slice.get("background_source", "") or "")
+                    background_width = float(word_image_slice.get("background_width", 1.0) or 1.0)
+                    background_height = float(word_image_slice.get("background_height", 1.0) or 1.0)
+                    background_x = float(word_image_slice.get("background_x", 0.0) or 0.0)
+                    background_y = float(word_image_slice.get("background_y", 0.0) or 0.0)
                     render_background_width = background_width * zoom
                     render_background_height = background_height * zoom
                     render_background_x = background_x * zoom
@@ -952,8 +886,8 @@ class WordMatchRenderer:
                             f"height: {render_height:.2f}px; "
                             f"background-image: url('{safe_bg}'); "
                             f"background-repeat: no-repeat; "
-                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "
-                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "
+                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "  # noqa: E501
+                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "  # noqa: E501
                             "cursor: crosshair;"
                         )
                         if split_word_index >= 0:
@@ -975,8 +909,8 @@ class WordMatchRenderer:
                             f"height: {render_height:.2f}px; "
                             f"background-image: url('{safe_bg}'); "
                             f"background-repeat: no-repeat; "
-                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "
-                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "
+                            f"background-size: {render_background_width:.2f}px {render_background_height:.2f}px; "  # noqa: E501
+                            f"background-position: -{render_background_x:.2f}px -{render_background_y:.2f}px; "  # noqa: E501
                             "cursor: default;"
                         )
                 else:
@@ -1033,9 +967,7 @@ class WordMatchRenderer:
                                 and split_word_index >= 0
                                 else None
                             ),
-                        ).props(
-                            'flat dense round size=xs data-testid="word-tag-clear-button"'
-                        )
+                        ).props('flat dense round size=xs data-testid="word-tag-clear-button"')
                         clear_button.classes("word-tag-clear-button")
                         clear_button.style("min-width: 0; width: 14px; height: 14px;")
                         clear_button.visible = False
@@ -1059,15 +991,12 @@ class WordMatchRenderer:
     def _create_status_cell(self, word_match) -> None:
         """Create status cell for a word."""
         status_icon = self._view._get_status_icon(word_match.match_status.value)
-        status_color_classes = self._view._get_status_color_classes(
-            word_match.match_status.value
-        )
+        status_color_classes = self._view._get_status_color_classes(word_match.match_status.value)
 
-        with ui.row():
-            with ui.column():
-                ui.icon(status_icon).classes(status_color_classes)
-                if word_match.fuzz_score is not None:
-                    ui.label(f"{word_match.fuzz_score:.2f}")
+        with ui.row(), ui.column():
+            ui.icon(status_icon).classes(status_color_classes)
+            if word_match.fuzz_score is not None:
+                ui.label(f"{word_match.fuzz_score:.2f}")
 
     def _create_word_text_display(self, word_matches, text_type) -> None:
         """Create a display of words with appropriate coloring."""
@@ -1077,10 +1006,7 @@ class WordMatchRenderer:
 
         with ui.row():
             for word_match in word_matches:
-                if text_type == "ocr":
-                    text = word_match.ocr_text
-                else:  # gt
-                    text = word_match.ground_truth_text
+                text = word_match.ocr_text if text_type == "ocr" else word_match.ground_truth_text
 
                 if not text.strip():
                     # Show placeholder for missing text
@@ -1123,9 +1049,7 @@ class WordMatchRenderer:
         if mode == "Unvalidated Lines":
             return line_match.is_fully_validated
         if mode == "Mismatched Lines":
-            return all(
-                wm.match_status == MatchStatus.EXACT for wm in line_match.word_matches
-            )
+            return all(wm.match_status == MatchStatus.EXACT for wm in line_match.word_matches)
         return False
 
     def _hide_line_card(self, line_index: int) -> None:
@@ -1211,9 +1135,7 @@ class WordMatchRenderer:
             targets = [
                 (line_match.line_index, wm.word_index)
                 for wm in line_match.word_matches
-                if wm.word_index is not None
-                and wm.word_index >= 0
-                and wm.is_validated != validate
+                if wm.word_index is not None and wm.word_index >= 0 and wm.is_validated != validate
             ]
         if not targets:
             return
@@ -1238,9 +1160,7 @@ class WordMatchRenderer:
         line_index = line_match.line_index
         refreshed_line_match = self._view._line_match_by_index(line_index)
         selection_changed = False
-        if refreshed_line_match is not None and self._should_hide_line(
-            refreshed_line_match
-        ):
+        if refreshed_line_match is not None and self._should_hide_line(refreshed_line_match):
             selection_changed = self._view.selection.deselect_lines({line_index})
         self._rerender_or_hide_line(line_index)
         if selection_changed:
@@ -1305,9 +1225,7 @@ class WordMatchRenderer:
             fuzz_score=fuzz_score,
             word_index=word_index,
             word_object=word_object,
-            is_validated=(
-                "validated" in set(getattr(word_object, "word_labels", []) or [])
-            ),
+            is_validated=("validated" in set(getattr(word_object, "word_labels", []) or [])),
         )
 
     def refresh_local_line_match_from_line_object(self, line_index: int) -> bool:
@@ -1326,9 +1244,7 @@ class WordMatchRenderer:
             for word_index, word_object in enumerate(words)
         ]
         line_match.ocr_line_text = str(getattr(line_object, "text", "") or "")
-        line_match.ground_truth_line_text = str(
-            getattr(line_object, "ground_truth_text", "") or ""
-        )
+        line_match.ground_truth_line_text = str(getattr(line_object, "ground_truth_text", "") or "")
 
         self._view.view_model._update_statistics()
         return True

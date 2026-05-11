@@ -57,9 +57,7 @@ def test_page_total_label_present(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_page_input_accepts_only_valid_numbers(
-    browser_app_url: str, browser_page
-) -> None:
+def test_page_input_accepts_only_valid_numbers(browser_app_url: str, browser_page) -> None:
     """Entering a non-numeric value does not navigate away from current page."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -131,9 +129,7 @@ def test_enter_in_gt_input_commits(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_enter_in_gt_input_unchanged_value_no_error(
-    browser_app_url: str, browser_page
-) -> None:
+def test_enter_in_gt_input_unchanged_value_no_error(browser_app_url: str, browser_page) -> None:
     """Negative-branch coverage symmetric to ``test_enter_in_gt_input_commits``.
 
     Iter-39's keyboard-shortcut review (ranked follow-up #5) called out the

@@ -149,9 +149,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
             logger.debug("ProjectView created and built during refresh")
         elif self.project_view and not show_project_view:
             # Hide project view if no project
-            logger.debug(
-                "Project unloaded, keeping ProjectView instance for potential reuse"
-            )
+            logger.debug("Project unloaded, keeping ProjectView instance for potential reuse")
             pass
 
         # Refresh project view if it exists and not loading
@@ -182,9 +180,7 @@ class LabelerView(BaseView[MainViewModel]):  # pragma: no cover - heavy UI wirin
                 return
 
             message, kind = notification
-            notify_type = (
-                kind if kind in {"positive", "negative", "warning", "info"} else "info"
-            )
+            notify_type = kind if kind in {"positive", "negative", "warning", "info"} else "info"
             ui.notify(message, type=notify_type)
 
     def _on_viewmodel_property_changed(self, property_name: str, value):

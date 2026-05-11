@@ -11,7 +11,7 @@ __all__ = [
     "LineOperations",
     "ModelSelectionOperations",
     "NavigationOperations",
-    "PageOperations",
     "OCRService",
+    "PageOperations",
     "TextOperations",
 ]

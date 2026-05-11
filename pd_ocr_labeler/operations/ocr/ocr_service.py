@@ -23,7 +23,7 @@ class OCRService:
     abstracting away the details of page processing and text recognition.
     """
 
-    def __init__(self, docTR_predictor=None, ocr_engine: OCREngine = OCREngine.DOCTR):
+    def __init__(self, docTR_predictor=None, ocr_engine: OCREngine = OCREngine.DOCTR):  # noqa: N803  # mirrors docTR library naming
         """Initialize the OCR service.
 
         Args:
@@ -53,13 +53,9 @@ class OCRService:
             if callable(reorganize_page):
                 reorganize_page()
         except Exception as e:
-            logger.debug(
-                "Page reorganization failed, continuing with raw OCR layout: %s", e
-            )
+            logger.debug("Page reorganization failed, continuing with raw OCR layout: %s", e)
 
-    async def _process_page_with_doctr(
-        self, image_path: Path, source_identifier: str
-    ) -> Page:
+    async def _process_page_with_doctr(self, image_path: Path, source_identifier: str) -> Page:
         """Process a page using DocTR OCR engine.
 
         Args:
@@ -79,9 +75,7 @@ class OCRService:
         )
         return doc.pages[0]
 
-    async def _process_page_with_tesseract(
-        self, image_path: Path, source_identifier: str
-    ) -> Page:
+    async def _process_page_with_tesseract(self, image_path: Path, source_identifier: str) -> Page:
         """Process a page using Tesseract OCR engine.
 
         Args:
@@ -114,13 +108,9 @@ class OCRService:
 
             # Process the image with the selected OCR engine
             if self.ocr_engine == OCREngine.DOCTR:
-                page_obj = await self._process_page_with_doctr(
-                    image_path, image_path.name
-                )
+                page_obj = await self._process_page_with_doctr(image_path, image_path.name)
             elif self.ocr_engine == OCREngine.TESSERACT:
-                page_obj = await self._process_page_with_tesseract(
-                    image_path, image_path.name
-                )
+                page_obj = await self._process_page_with_tesseract(image_path, image_path.name)
             else:
                 raise ValueError(f"Unsupported OCR engine: {self.ocr_engine}")
 

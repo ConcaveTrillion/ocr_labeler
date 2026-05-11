@@ -24,7 +24,7 @@ def test_next_button_advances_page(browser_app_url: str, browser_page) -> None:
     load_project(page, "browser-test-project")
 
     # Click Next
-    page.get_by_role("button", name="Next").click()
+    page.locator('[data-testid="nav-next-button"]').click()
     wait_for_page_loaded(page)
 
     # Wait for URL to update to page 2 (most reliable indicator)
@@ -37,10 +37,10 @@ def test_prev_button_goes_back(browser_app_url: str, browser_page) -> None:
     page = browser_page
     url = browser_app_url.rstrip("/") + "/project/browser-test-project/page/2"
     page.goto(url, wait_until="networkidle")
-    page.get_by_role("button", name="Prev").wait_for(state="visible", timeout=60_000)
+    page.locator('[data-testid="nav-prev-button"]').wait_for(state="visible", timeout=60_000)
     wait_for_page_loaded(page)
 
-    page.get_by_role("button", name="Prev").click()
+    page.locator('[data-testid="nav-prev-button"]').click()
     wait_for_page_loaded(page)
 
     page.wait_for_url("**/page/1", timeout=10_000)
@@ -54,7 +54,7 @@ def test_prev_disabled_on_first_page(browser_app_url: str, browser_page) -> None
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
 
-    prev_button = page.get_by_role("button", name="Prev")
+    prev_button = page.locator('[data-testid="nav-prev-button"]')
     # NiceGUI/Quasar disabled buttons get the 'disabled' CSS class.
     # Use a generous timeout since the binding propagates asynchronously.
     expect(prev_button).to_have_class(re.compile(r"\bdisabled\b"), timeout=10_000)
@@ -66,10 +66,10 @@ def test_next_disabled_on_last_page(browser_app_url: str, browser_page) -> None:
     page = browser_page
     url = browser_app_url.rstrip("/") + "/project/browser-test-project/page/3"
     page.goto(url, wait_until="networkidle")
-    page.get_by_role("button", name="Next").wait_for(state="visible", timeout=60_000)
+    page.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
     wait_for_page_loaded(page)
 
-    next_button = page.get_by_role("button", name="Next")
+    next_button = page.locator('[data-testid="nav-next-button"]')
     expect(next_button).to_have_class(re.compile(r"\bdisabled\b"), timeout=10_000)
 
 
@@ -94,7 +94,7 @@ def test_url_updates_on_navigation(browser_app_url: str, browser_page) -> None:
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
 
-    page.get_by_role("button", name="Next").click()
+    page.locator('[data-testid="nav-next-button"]').click()
     wait_for_page_loaded(page)
 
     page.wait_for_url("**/project/browser-test-project/page/2", timeout=10_000)

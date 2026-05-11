@@ -2,8 +2,9 @@
 
 import logging
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import field
-from typing import Any, Callable
+from typing import Any
 
 from nicegui import binding
 
@@ -16,7 +17,7 @@ _BENIGN_CALLBACK_ERROR_FRAGMENTS = (
 
 
 @binding.bindable_dataclass
-class BaseViewModel(ABC):
+class BaseViewModel(ABC):  # noqa: B024  # no abstract methods by design; it's a mixin base
     """Base class for all view models providing common functionality.
 
     This class provides:
@@ -25,13 +26,10 @@ class BaseViewModel(ABC):
     - Common initialization and cleanup patterns
     """
 
-    _property_changed_callbacks: list[Callable[[str, Any], None]] = field(
-        default_factory=list
-    )
+    _property_changed_callbacks: list[Callable[[str, Any], None]] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self):  # noqa: B027  # intentional empty hook; subclasses call super().__post_init__()
         """Initialize the view model after dataclass construction."""
-        pass
 
     def add_property_changed_listener(self, callback: Callable[[str, Any], None]):
         """Add a listener for property changes.
@@ -62,15 +60,11 @@ class BaseViewModel(ABC):
                 callback(property_name, value)
             except Exception as e:
                 message = str(e).lower()
-                if any(
-                    fragment in message for fragment in _BENIGN_CALLBACK_ERROR_FRAGMENTS
-                ):
+                if any(fragment in message for fragment in _BENIGN_CALLBACK_ERROR_FRAGMENTS):
                     logger.debug(
                         "Ignoring benign property change callback error for %s: %s",
                         property_name,
                         e,
                     )
                     continue
-                logger.exception(
-                    "Error in property change callback for %s", property_name
-                )
+                logger.exception("Error in property change callback for %s", property_name)

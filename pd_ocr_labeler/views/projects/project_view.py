@@ -77,9 +77,7 @@ class ProjectView(
             # Busy overlay for page-level actions
             self._busy_overlay = (
                 ui.column()
-                .classes(
-                    "fixed inset-0 bg-black/20 z-[100] items-center justify-center hidden"
-                )
+                .classes("fixed inset-0 bg-black/20 z-[100] items-center justify-center hidden")
                 .style("backdrop-filter: blur(2px)")
             )
             with self._busy_overlay:
@@ -198,9 +196,7 @@ class ProjectView(
                     f"Navigation prevented by viewmodel (prev): {reason}",
                     "warning",
                 )
-                logger.debug(
-                    "Previous page navigation prevented by viewmodel: %s", reason
-                )
+                logger.debug("Previous page navigation prevented by viewmodel: %s", reason)
             else:
                 logger.debug("Previous page navigation initiated successfully")
                 # Show success notification when navigation completes
@@ -341,9 +337,7 @@ class ProjectView(
         if not project_state or not project_state.project_root:
             return
 
-        sync_url_from_project_state(
-            project_state.project_root, project_state.current_page_index
-        )
+        sync_url_from_project_state(project_state.project_root, project_state.current_page_index)
 
     def _on_viewmodel_property_changed(self, property_name: str, value: Any):
         """Handle view model property changes by refreshing the view."""
@@ -352,9 +346,7 @@ class ProjectView(
         # UI operations and websocket sends. The build() method will apply a
         # deferred refresh after marking the view built.
         if not self.is_built:
-            logger.debug(
-                "View model change received but view is not built yet; deferring refresh"
-            )
+            logger.debug("View model change received but view is not built yet; deferring refresh")
             self._pending_refresh = True
             return
 

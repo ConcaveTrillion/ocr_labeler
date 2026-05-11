@@ -106,9 +106,7 @@ def test_backup_project_defaults_to_user_backup_root(monkeypatch, tmp_path):
     ok = ops.backup_project(source_dir, backup_name="backup_1")
 
     assert ok is True
-    assert (
-        xdg_data_home / "pd-ocr-labeler" / "project-backups" / "backup_1" / "page.png"
-    ).exists()
+    assert (xdg_data_home / "pd-ocr-labeler" / "project-backups" / "backup_1" / "page.png").exists()
 
 
 def test_list_saved_projects_defaults_to_user_data_root(monkeypatch, tmp_path):

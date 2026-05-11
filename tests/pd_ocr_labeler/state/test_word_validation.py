@@ -254,8 +254,8 @@ def test_structural_edit_clears_validation(monkeypatch):
     """Structural edits (via _finalize_structural_edit) clear all validation."""
     w1 = _word("hello", 0, gt="hello")
     w2 = _word("world", 20, gt="world")
-    w1.word_labels = list(w1.word_labels) + ["validated"]
-    w2.word_labels = list(w2.word_labels) + ["validated"]
+    w1.word_labels = [*list(w1.word_labels), "validated"]
+    w2.word_labels = [*list(w2.word_labels), "validated"]
     line = _line([w1, w2], 0)
     para = _paragraph([line], 0)
     page = _make_page([para])
@@ -283,8 +283,8 @@ def test_rematch_gt_preserves_validation_for_unchanged_words(monkeypatch):
     """rematch_ground_truth only clears validation for words whose GT changed."""
     w1 = _word("hello", 0, gt="hello")
     w2 = _word("world", 20, gt="world")
-    w1.word_labels = list(w1.word_labels) + ["validated"]
-    w2.word_labels = list(w2.word_labels) + ["validated"]
+    w1.word_labels = [*list(w1.word_labels), "validated"]
+    w2.word_labels = [*list(w2.word_labels), "validated"]
     line = _line([w1, w2], 0)
     para = _paragraph([line], 0)
     page = _make_page([para])

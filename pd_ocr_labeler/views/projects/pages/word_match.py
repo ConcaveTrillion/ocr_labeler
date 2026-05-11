@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Protocol, TypeAlias, runtime_checkable
+from collections.abc import Callable
+from typing import Protocol, runtime_checkable
 
 from nicegui import events, ui
 from pd_book_tools.ocr.page import Page
@@ -27,26 +28,24 @@ class _UiElementLike(Protocol):
     client: object | None
 
 
-WordKey: TypeAlias = tuple[int, int]
-NotifyCallback: TypeAlias = Callable[[str, str], None]
-SelectionChangeCallback: TypeAlias = Callable[[set[WordKey]], None]
-ParagraphSelectionCallback: TypeAlias = Callable[[set[int]], None]
-ReboxRequestCallback: TypeAlias = Callable[[int, int], None]
+type WordKey = tuple[int, int]
+type NotifyCallback = Callable[[str, str], None]
+type SelectionChangeCallback = Callable[[set[WordKey]], None]
+type ParagraphSelectionCallback = Callable[[set[int]], None]
+type ReboxRequestCallback = Callable[[int, int], None]
 
-SingleLineAction: TypeAlias = Callable[[int], bool]
-LineIndicesAction: TypeAlias = Callable[[list[int]], bool]
-ParagraphIndicesAction: TypeAlias = Callable[[list[int]], bool]
-WordKeysAction: TypeAlias = Callable[[list[WordKey]], bool]
-LineWordAction: TypeAlias = Callable[[int, int], bool]
-SetWordsValidatedAction: TypeAlias = Callable[[list[WordKey], bool], bool]
-SplitWordAction: TypeAlias = Callable[[int, int, float], bool]
-ReboxAction: TypeAlias = Callable[[int, int, float, float, float, float], bool]
-NudgeAction: TypeAlias = Callable[[int, int, float, float, float, float, bool], bool]
-EraseRectAction: TypeAlias = Callable[[float, float, float, float], bool]
-EditWordGroundTruthAction: TypeAlias = Callable[[int, int, str], bool]
-SetWordAttributesAction: TypeAlias = Callable[
-    [int, int, bool, bool, bool, bool, bool], bool
-]
+type SingleLineAction = Callable[[int], bool]
+type LineIndicesAction = Callable[[list[int]], bool]
+type ParagraphIndicesAction = Callable[[list[int]], bool]
+type WordKeysAction = Callable[[list[WordKey]], bool]
+type LineWordAction = Callable[[int, int], bool]
+type SetWordsValidatedAction = Callable[[list[WordKey], bool], bool]
+type SplitWordAction = Callable[[int, int, float], bool]
+type ReboxAction = Callable[[int, int, float, float, float, float], bool]
+type NudgeAction = Callable[[int, int, float, float, float, float, bool], bool]
+type EraseRectAction = Callable[[float, float, float, float], bool]
+type EditWordGroundTruthAction = Callable[[int, int, str], bool]
+type SetWordAttributesAction = Callable[[int, int, bool, bool, bool, bool, bool], bool]
 
 
 class WordMatchView:
@@ -93,7 +92,7 @@ class WordMatchView:
         original_image_source_provider: Callable[[], str] | None = None,
     ):
         logger.debug(
-            "Initializing WordMatchView with copy_gt_to_ocr_callback=%s, copy_ocr_to_gt_callback=%s",
+            "Initializing WordMatchView with copy_gt_to_ocr_callback=%s, copy_ocr_to_gt_callback=%s",  # noqa: E501
             copy_gt_to_ocr_callback is not None,
             copy_ocr_to_gt_callback is not None,
         )
@@ -106,9 +105,7 @@ class WordMatchView:
         self.filter_mode = "Unvalidated Lines"  # Default filter mode
         self.copy_gt_to_ocr_callback = copy_gt_to_ocr_callback
         self.copy_ocr_to_gt_callback = copy_ocr_to_gt_callback
-        self.copy_selected_words_ocr_to_gt_callback = (
-            copy_selected_words_ocr_to_gt_callback
-        )
+        self.copy_selected_words_ocr_to_gt_callback = copy_selected_words_ocr_to_gt_callback
         self.merge_lines_callback = merge_lines_callback
         self.delete_lines_callback = delete_lines_callback
         self.merge_paragraphs_callback = merge_paragraphs_callback
@@ -122,9 +119,7 @@ class WordMatchView:
         self.merge_word_left_callback = merge_word_left_callback
         self.merge_word_right_callback = merge_word_right_callback
         self.split_word_callback = split_word_callback
-        self.split_word_vertical_closest_line_callback = (
-            split_word_vertical_closest_line_callback
-        )
+        self.split_word_vertical_closest_line_callback = split_word_vertical_closest_line_callback
         self.rebox_word_callback = rebox_word_callback
         self.add_word_callback: Callable[[float, float, float, float], bool] | None = (
             add_word_callback
@@ -138,13 +133,9 @@ class WordMatchView:
         self.expand_then_refine_lines_callback = expand_then_refine_lines_callback
         self.expand_line_bboxes_callback = expand_line_bboxes_callback
         self.refine_paragraphs_callback = refine_paragraphs_callback
-        self.expand_then_refine_paragraphs_callback = (
-            expand_then_refine_paragraphs_callback
-        )
+        self.expand_then_refine_paragraphs_callback = expand_then_refine_paragraphs_callback
         self.expand_paragraph_bboxes_callback = expand_paragraph_bboxes_callback
-        self.split_line_with_selected_words_callback = (
-            split_line_with_selected_words_callback
-        )
+        self.split_line_with_selected_words_callback = split_line_with_selected_words_callback
         self.split_lines_into_selected_unselected_callback = (
             split_lines_into_selected_unselected_callback
         )
@@ -179,9 +170,7 @@ class WordMatchView:
         self._word_split_image_sizes: dict[WordKey, tuple[float, float]] = {}
         self._word_split_button_refs: dict[WordKey, object] = {}
         self._word_vertical_split_button_refs: dict[WordKey, object] = {}
-        self._word_crop_button_refs: dict[
-            WordKey, tuple[object, object, object, object]
-        ] = {}
+        self._word_crop_button_refs: dict[WordKey, tuple[object, object, object, object]] = {}
         self._word_box_erase_mode_keys: set[WordKey] = set()
         self._word_box_erase_drag_start: dict[WordKey, tuple[float, float]] = {}
         self._word_box_erase_drag_current: dict[WordKey, tuple[float, float]] = {}
@@ -250,15 +239,9 @@ class WordMatchView:
                 self.filter_selector.on_value_change(self._on_filter_change)
 
             # Scrollable container for word matches
-            with (
-                ui.column()
-                .classes("fit overflow-auto q-pa-none")
-                .style("padding: 0; margin: 0;")
-            ):
+            with ui.column().classes("fit overflow-auto q-pa-none").style("padding: 0; margin: 0;"):
                 self.lines_container = (
-                    ui.column()
-                    .classes("full-width")
-                    .style("gap: 0; padding: 0; margin: 0;")
+                    ui.column().classes("full-width").style("gap: 0; padding: 0; margin: 0;")
                 )
 
         self.container = container
@@ -270,9 +253,7 @@ class WordMatchView:
         try:
             # Defensive logging for test compatibility
             block_count = (
-                len(page.blocks)
-                if (page and hasattr(page, "blocks") and page.blocks)
-                else 0
+                len(page.blocks) if (page and hasattr(page, "blocks") and page.blocks) else 0
             )
             logger.debug(
                 "Updating WordMatchView from page with %d blocks",
@@ -350,11 +331,11 @@ class WordMatchView:
 
     def _word_match_attribute_signature(self, word_match: object) -> str:
         """Return a stable signature for word style attributes."""
-        italic, small_caps, blackletter, left_footnote, right_footnote = (
-            self._word_style_flags(word_match)
+        italic, small_caps, blackletter, left_footnote, right_footnote = self._word_style_flags(
+            word_match
         )
         is_validated = getattr(word_match, "is_validated", False)
-        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}:{int(is_validated)}"
+        return f"{int(italic)}:{int(small_caps)}:{int(blackletter)}:{int(left_footnote)}:{int(right_footnote)}:{int(is_validated)}"  # noqa: E501
 
     @staticmethod
     def _format_paragraph_label(paragraph_index: int | None) -> str:
@@ -431,10 +412,8 @@ class WordMatchView:
             type(checkbox).__name__,
         )
 
-    def _word_style_flags(
-        self, word_match: object
-    ) -> tuple[bool, bool, bool, bool, bool]:
-        """Return (italic, small_caps, blackletter, left_footnote, right_footnote) for a word match."""
+    def _word_style_flags(self, word_match: object) -> tuple[bool, bool, bool, bool, bool]:
+        """Return (italic, small_caps, blackletter, left_footnote, right_footnote) for a word match."""  # noqa: E501
         word_object = getattr(word_match, "word_object", None)
         if word_object is None:
             return False, False, False, False, False
@@ -503,9 +482,7 @@ class WordMatchView:
 
         return (line_index, word_index) in self._word_split_fractions
 
-    def _is_vertical_split_action_enabled(
-        self, line_index: int, word_index: int
-    ) -> bool:
+    def _is_vertical_split_action_enabled(self, line_index: int, word_index: int) -> bool:
         if self.split_word_vertical_closest_line_callback is None or word_index < 0:
             return False
 
@@ -533,23 +510,18 @@ class WordMatchView:
 
         if split_fraction <= 0.0 or split_fraction >= 1.0:
             return (
-                "Split marker is out of bounds; click again inside the word image "
-                "before splitting"
+                "Split marker is out of bounds; click again inside the word image before splitting"
             )
 
         word_match = self._line_word_match_by_ocr_index(line_index, word_index)
         if word_match is None:
-            return (
-                f"Selected word no longer exists on line {line_index + 1}; "
-                "refresh and try again"
-            )
+            return f"Selected word no longer exists on line {line_index + 1}; refresh and try again"
 
         word_text = str(getattr(word_match, "ocr_text", "") or "")
         if len(word_text) < 2:
             shown_word = word_text if word_text else "[empty]"
             return (
-                f"Cannot split {shown_word!r} {axis_label}: "
-                "word must contain at least 2 characters"
+                f"Cannot split {shown_word!r} {axis_label}: word must contain at least 2 characters"
             )
 
         word_object = getattr(word_match, "word_object", None)
@@ -569,8 +541,8 @@ class WordMatchView:
         """Create tooltip content for a word match."""
         lines = [f"Status: {word_match.match_status.value.title()}"]
 
-        italic, small_caps, blackletter, left_footnote, right_footnote = (
-            self._word_style_flags(word_match)
+        italic, small_caps, blackletter, left_footnote, right_footnote = self._word_style_flags(
+            word_match
         )
         active_attributes: list[str] = []
         if italic:
@@ -620,9 +592,7 @@ class WordMatchView:
         style_labels = list(getattr(word_object, "text_style_labels", []) or [])
         component_labels = list(getattr(word_object, "word_components", []) or [])
         try:
-            style_scopes = dict(
-                getattr(word_object, "text_style_label_scopes", {}) or {}
-            )
+            style_scopes = dict(getattr(word_object, "text_style_label_scopes", {}) or {})
         except Exception:
             style_scopes = {}
 
@@ -750,16 +720,12 @@ class WordMatchView:
     def _get_effective_selected_lines(self) -> list[int]:
         """Return selected lines from both line and word selections."""
         line_selection = set(self.selection.selected_line_indices)
-        line_selection.update(
-            line_index for line_index, _ in self.selection.selected_word_indices
-        )
+        line_selection.update(line_index for line_index, _ in self.selection.selected_word_indices)
         return sorted(line_selection)
 
     def _get_all_line_indices(self) -> list[int]:
         """Return all line indices currently displayed in the page model."""
-        return sorted(
-            {line_match.line_index for line_match in self.view_model.line_matches}
-        )
+        return sorted({line_match.line_index for line_match in self.view_model.line_matches})
 
     def _get_selected_paragraph_line_indices(self) -> list[int]:
         """Return line indices belonging to selected paragraphs."""
@@ -770,9 +736,7 @@ class WordMatchView:
 
     def _get_selected_word_line_indices(self) -> list[int]:
         """Return distinct line indices containing selected words."""
-        return sorted(
-            {line_index for line_index, _ in self.selection.selected_word_indices}
-        )
+        return sorted({line_index for line_index, _ in self.selection.selected_word_indices})
 
     def refresh_after_selection_change(self) -> None:
         """Centralized post-selection-change refresh."""

@@ -12,27 +12,35 @@ coverage and plan new tests.
 
 ### Main Controls
 
-| # | Label / Icon | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 1 | **LOAD** | `_load_selected_project` | Load selected project | Yes — click + assertions |
-| 2 | 📁 `folder_open` icon | `_open_source_folder_dialog` | Open source folder picker dialog | No |
+| # | Label / Icon | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Project select | `project-select` | n/a (binding) | Pick which project to load | Yes — selected via `.q-select` first; testid available |
+| 1 | **LOAD** | `load-project-button` | `_load_selected_project` | Load selected project | Yes — click + assertions |
+| 2 | `folder_open` icon | `source-folder-button` | `_open_source_folder_dialog` | Open source folder picker dialog | Yes — opens dialog (testid) |
 
 ### Source Folder Dialog
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 3 | **Home** | `_path_picker_go_home` | Navigate picker to home directory | No |
-| 4 | **Up** | `_path_picker_go_up` | Navigate picker to parent directory | No |
-| 5 | **Open Typed Path** | `_open_typed_source_path` | Open path typed in input field | No |
-| 6 | **Use Current** | `_use_current_folder` | Use current folder as source | No |
-| 7 | **Cancel** | `dialog.close` | Close dialog without saving | No |
-| 8 | **Apply** | `_apply_source_folder` | Apply selected source folder | No |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 3 | **Home** | `source-folder-home-button` | `_path_picker_go_home` | Navigate picker to home directory | Yes — click + path label |
+| 4 | **Up** | `source-folder-up-button` | `_path_picker_go_up` | Navigate picker to parent directory | Yes — click |
+| 5 | **Open Typed Path** | `source-folder-open-typed-button` | `_open_typed_source_path` | Open path typed in input field | Yes — click + path label |
+| 6 | **Use Current** | `source-folder-use-current-button` | `_use_current_folder` | Use current folder as source | Yes — click |
+| 7 | **Cancel** | `source-folder-cancel-button` | `dialog.close` | Close dialog without saving | Yes — click |
+| 8 | **Apply** | `source-folder-apply-button` | `_apply_source_folder` | Apply selected source folder | Yes — click + dropdown rescan |
+
+### Source Folder Dialog Inputs / Labels (non-button)
+
+| # | Element | `data-testid` | Description |
+| --- | --- | --- | --- |
+| 8a | Path input | `source-folder-path-input` | Path text input bound to picker |
+| 8b | Current path label | `source-folder-current-path-label` | Label showing currently browsed picker dir |
 
 ### Source Folder Dialog Keyboard Shortcuts
 
 | # | Event | Handler | Description | Browser-Tested |
 | --- | --- | --- | --- | --- |
-| 9 | `Enter` in path input | `_on_source_path_enter` | Navigate to typed path | No |
+| 9 | `Enter` in path input | `_on_source_path_enter` | Navigate to typed path | Yes — fill + press Enter |
 
 ---
 
@@ -47,25 +55,25 @@ The trigger is rendered alongside the project load controls
 
 ### Header Trigger
 
-| # | Label / Icon | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 109 | `tune` icon | `_open` | Open OCR Configuration dialog (rescans available models on open) | No |
+| # | Label / Icon | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 109 | `tune` icon | `ocr-config-trigger-button` | `_open` | Open OCR Configuration dialog (rescans available models on open) | No |
 
 ### Dialog Buttons
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 110 | **Rescan Models** | `_rescan_models` | Re-scan local trainer outputs and HF cache; refreshes both selects | No |
-| 111 | **Cancel** | `_close` | Close dialog without applying changes | No |
-| 112 | **Apply** | `_apply_selection` | Apply HF revision pin (if changed) then commit selected detection / recognition pair | No |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 110 | **Rescan Models** | `ocr-rescan-models-button` | `_rescan_models` | Re-scan local trainer outputs and HF cache; refreshes both selects | No |
+| 111 | **Cancel** | `ocr-config-cancel-button` | `_close` | Close dialog without applying changes | No |
+| 112 | **Apply** | `ocr-config-apply-button` | `_apply_selection` | Apply HF revision pin (if changed) then commit selected detection / recognition pair | No |
 
 ### Dialog Inputs (non-button)
 
-| # | Type | Handler / Binding | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 113 | **Detection model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_detection_model_options`; applied via `command_set_selected_ocr_models` | Pick detection weights (HF default + local trainer outputs) | No |
-| 114 | **Recognition model** (`ui.select`, `with_input=True`) | bound to `AppStateViewModel.ocr_recognition_model_options`; applied via `command_set_selected_ocr_models` | Pick recognition weights (HF default + local trainer outputs) | No |
-| 115 | **Hugging Face revision pin** (`ui.input`) | applied via `command_set_hf_pinned_revision` | Optional revision/tag/commit SHA pinning the HF download (empty = latest) | No |
+| # | Type | `data-testid` | Handler / Binding | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 113 | **Detection model** (`ui.select`, `with_input=True`) | `ocr-detection-model-select` | bound to `AppStateViewModel.ocr_detection_model_options`; applied via `command_set_selected_ocr_models` | Pick detection weights (HF default + local trainer outputs) | No |
+| 114 | **Recognition model** (`ui.select`, `with_input=True`) | `ocr-recognition-model-select` | bound to `AppStateViewModel.ocr_recognition_model_options`; applied via `command_set_selected_ocr_models` | Pick recognition weights (HF default + local trainer outputs) | No |
+| 115 | **Hugging Face revision pin** (`ui.input`) | `ocr-hf-revision-input` | applied via `command_set_hf_pinned_revision` | Optional revision/tag/commit SHA pinning the HF download (empty = latest) | No |
 
 ---
 
@@ -73,11 +81,18 @@ The trigger is rendered alongside the project load controls
 
 **Source:** `pd_ocr_labeler/views/projects/project_navigation_controls.py`
 
-| # | Label | Handler | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 10 | **Prev** | `_on_prev` | Navigate to previous page | Yes — click + disabled state |
-| 11 | **Next** | `_on_next` | Navigate to next page | Yes — click + disabled state |
-| 12 | **Go To:** | `_on_goto` | Navigate to specific page number | Yes — fill + click |
+| # | Label | `data-testid` | Handler | Description | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 10 | **Prev** | `nav-prev-button` | `_on_prev` | Navigate to previous page | Yes — click + disabled state |
+| 11 | **Next** | `nav-next-button` | `_on_next` | Navigate to next page | Yes — click + disabled state |
+| 12 | **Go To:** | `nav-goto-button` | `_on_goto` | Navigate to specific page number | Yes — fill + click |
+
+The page-number `ui.number` input and the `/ N` total-count `ui.label`
+that sit beside the Prev/Next/Go-to buttons in the navigation toolbar
+also expose stable testids for Playwright tests and the
+`pd-ocr-labeler-driver` agent: `nav-page-input` (the `<input>` itself,
+since `data-testid` lands on the inner element for `ui.number`) and
+`nav-page-total-label` (the `<div>` wrapping the total text).
 
 ### Navigation Keyboard Shortcuts
 
@@ -91,12 +106,14 @@ The trigger is rendered alongside the project load controls
 
 **Source:** `pd_ocr_labeler/views/projects/pages/page_actions.py`
 
-| # | Label | Handler | Tooltip | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 14 | **Reload OCR** | `_on_reload_ocr` | — | Visibility only |
-| 15 | **Save Page** | `_on_save_page` | — | Yes — click + notification |
-| 16 | **Load Page** | `_on_load_page` | — | Visibility only |
-| 17 | **Rematch GT** | `_on_rematch_gt` | "Re-run ground truth matching from source text, replacing any per-word GT edits" | No |
+| # | Label | `data-testid` | Handler | Tooltip | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 14 | **Reload OCR** | `reload-ocr-button` | `_on_reload_ocr` | — | Yes — click + reload |
+| 14a | **Reload OCR (Edited)** | `reload-ocr-edited-button` | `_on_reload_ocr_edited` | "Run OCR on the current edited image (after erase ops)" | No |
+| 15 | **Save Page** | `save-page-button` | `_on_save_page` | — | Yes — click + notification |
+| 15a | **Save Project** | `save-project-button` | `_on_save_project` | "Save all loaded pages in this project" | No |
+| 16 | **Load Page** | `load-page-button` | `_on_load_page` | — | Yes — click + reload |
+| 17 | **Rematch GT** | `rematch-gt-button` | `_on_rematch_gt` | "Re-run ground truth matching from source text, replacing any per-word GT edits" | Yes — click + revert |
 
 ---
 
@@ -179,9 +196,10 @@ operation is not applicable at that scope.
 
 ### Paragraph Expander
 
-| # | Icon | Handler | Browser-Tested |
-| --- | --- | --- | --- |
-| 57 | `expand_more` / `chevron_right` | `_toggle_paragraph_expanded` | No |
+| # | Icon / Label | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 57 | `expand_more` / `chevron_right` icon button | `_toggle_paragraph_expanded` | `paragraph-expander-button` | Yes — `test_paragraph_expander_toggle` |
+| 57b | Paragraph label text button (wide clickable label, same toggle) | `_toggle_paragraph_expanded` | `paragraph-label-button` | Yes — `test_paragraph_label_button_present_and_toggles` |
 
 ### Line Card Action Buttons (rendered per line)
 
@@ -205,6 +223,12 @@ operation is not applicable at that scope.
 | --- | --- | --- | --- | --- |
 | 64 | `close` | `_clear_word_tag` | `word-tag-clear-button` | No |
 
+The renderer's per-word tag chips are wrapped in a `ui.row()` that
+materializes only when at least one chip is present, tagged
+`word-tag-chips-row`. Individual chips inside it carry
+`word-tag-chip`. This mirrors the dialog-side `dialog-tag-chips-row`
+contract used by the word edit dialog.
+
 ---
 
 ## 6. Word Edit Dialog
@@ -218,19 +242,47 @@ operation is not applicable at that scope.
 | 65 | `check` ✓ | "Apply and close" | `_apply_and_close` | No |
 | 66 | `close` | "Close without saving" | `dialog.close` | No |
 
+The dialog's header text label ("Edit Line N, Word M") carries
+`dialog-header-label` so browser tests can assert the dialog opened on
+the expected line/word indices without scraping visible text via a
+regex over the whole dialog body.
+
 ### Style / Component Controls (in dialog)
 
-| # | Label | Handler | Browser-Tested |
-| --- | --- | --- | --- |
-| 67 | **Apply Style** | `_apply_selected_style_from_dialog` | Yes — click |
-| 68 | **Apply Component** | `_apply_selected_component_from_dialog(enabled=True)` | Yes — click |
-| 69 | **Clear Component** | `_apply_selected_component_from_dialog(enabled=False)` | No |
+| # | Label | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- |
+| 67 | **Apply Style** | `_apply_selected_style_from_dialog` | `dialog-apply-style-button` | Yes — click |
+| 68 | **Apply Component** | `_apply_selected_component_from_dialog(enabled=True)` | `dialog-apply-component-button` | Yes — click |
+| 69 | **Clear Component** | `_apply_selected_component_from_dialog(enabled=False)` | `dialog-clear-component-button` | No |
+
+The companion select widgets in this row also carry stable testids:
+`dialog-style-select` (Style dropdown), `dialog-scope-select` (Scope
+dropdown), `dialog-component-select` (Component dropdown). The GT
+edit input near the dialog header carries `dialog-gt-input` on the
+inner `<input>` element.
 
 ### Tag Chip Clear (in dialog)
 
 | # | Icon | Handler | `data-testid` | Browser-Tested |
 | --- | --- | --- | --- | --- |
 | 70 | `close` | `_clear_word_tag` | `word-edit-tag-clear-button` | Yes — click + chip count |
+
+The chip clear button lives inside a chip row tagged
+`word-edit-tag-chip`. The surrounding tag-chip container exposes
+`dialog-tag-chips-slot` (the always-rendered column slot) and, when at
+least one chip is present, an inner row tagged `dialog-tag-chips-row`.
+Browser tests use `[data-testid="word-edit-tag-chip"]` to count chips
+in lieu of the legacy `.word-edit-tag-chip` CSS-class selector. The
+zoom toggle above the current word image carries
+`dialog-current-zoom-toggle`.
+
+The three side-by-side preview columns at the top of the dialog
+(Previous / Current / Next word) carry stable `data-testid` props on
+their wrapping `ui.column()` containers:
+`dialog-previous-preview-column`, `dialog-current-preview-column`, and
+`dialog-next-preview-column`. The "Current" column always renders, while
+the Previous / Next columns render with a "No word" placeholder caption
+when the active word is the first / last in its line.
 
 ### Merge / Split / Delete Operations
 
@@ -260,16 +312,16 @@ operation is not applicable at that scope.
 
 ### Fine-Tune Nudge Buttons
 
-| # | Label | Edge | Direction | Handler | Browser-Tested |
-| --- | --- | --- | --- | --- | --- |
-| 82 | **X−** | Left | ← shrink | `_accumulate_bbox_nudge(left_units=-1)` | No |
-| 83 | **X+** | Left | → expand | `_accumulate_bbox_nudge(left_units=1)` | No |
-| 84 | **X−** | Right | ← shrink | `_accumulate_bbox_nudge(right_units=-1)` | No |
-| 85 | **X+** | Right | → expand | `_accumulate_bbox_nudge(right_units=1)` | No |
-| 86 | **Y−** | Top | ↑ shrink | `_accumulate_bbox_nudge(top_units=-1)` | No |
-| 87 | **Y+** | Top | ↓ expand | `_accumulate_bbox_nudge(top_units=1)` | No |
-| 88 | **Y−** | Bottom | ↑ shrink | `_accumulate_bbox_nudge(bottom_units=-1)` | No |
-| 89 | **Y+** | Bottom | ↓ expand | `_accumulate_bbox_nudge(bottom_units=1)` | No |
+| # | Label | Edge | Direction | Handler | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- | --- | --- |
+| 82 | **X−** | Left | ← shrink | `_accumulate_bbox_nudge(left_units=-1)` | `dialog-nudge-left-minus-button` | Visibility |
+| 83 | **X+** | Left | → expand | `_accumulate_bbox_nudge(left_units=1)` | `dialog-nudge-left-plus-button` | Yes — click |
+| 84 | **X−** | Right | ← shrink | `_accumulate_bbox_nudge(right_units=-1)` | `dialog-nudge-right-minus-button` | Visibility |
+| 85 | **X+** | Right | → expand | `_accumulate_bbox_nudge(right_units=1)` | `dialog-nudge-right-plus-button` | Visibility |
+| 86 | **Y−** | Top | ↑ shrink | `_accumulate_bbox_nudge(top_units=-1)` | `dialog-nudge-top-minus-button` | Visibility |
+| 87 | **Y+** | Top | ↓ expand | `_accumulate_bbox_nudge(top_units=1)` | `dialog-nudge-top-plus-button` | Visibility |
+| 88 | **Y−** | Bottom | ↑ shrink | `_accumulate_bbox_nudge(bottom_units=-1)` | `dialog-nudge-bottom-minus-button` | Visibility |
+| 89 | **Y+** | Bottom | ↓ expand | `_accumulate_bbox_nudge(bottom_units=1)` | `dialog-nudge-bottom-plus-button` | Visibility |
 
 ### Apply / Reset Bbox Edits
 
@@ -291,23 +343,23 @@ operation is not applicable at that scope.
 
 These are not buttons but have meaningful UI interactions.
 
-| # | Type | Location | Description | Browser-Tested |
-| --- | --- | --- | --- | --- |
-| 94 | **Project dropdown** (`ui.select`) | Header | Select project to load | Yes |
-| 95 | **Show Paragraphs** checkbox | Image Tabs | Toggle paragraph overlay layer | Yes — toggled |
-| 96 | **Show Lines** checkbox | Image Tabs | Toggle line overlay layer | Visibility only |
-| 97 | **Show Words** checkbox | Image Tabs | Toggle word overlay layer | Visibility only |
-| 98 | **Selection Mode** radio | Image Tabs | Switch selection mode | Visibility only |
-| 99 | **Matches** tab | Text Tabs | Show word match view | Yes — click + active state |
-| 100 | **Ground Truth** tab | Text Tabs | Show GT text editor | Yes — click + content |
-| 101 | **OCR** tab | Text Tabs | Show OCR text editor | Yes — click + content |
-| 102 | **Filter toggle** (Unvalidated / Mismatched / All) | Word Match | Filter displayed lines | Yes — toggle through |
-| 103 | **Style dropdown** (`ui.select`) | Toolbar | Select style to apply | Partial |
-| 104 | **Scope dropdown** (`ui.select`) | Toolbar | Select scope (whole/part) | No |
-| 105 | **Component dropdown** (`ui.select`) | Toolbar | Select component to apply | Yes — in dialog |
-| 106 | **Word checkbox** | Word Match Renderer | Toggle word selection | Yes — checked |
-| 107 | **Line checkbox** | Word Match Renderer | Toggle line selection | No |
-| 108 | **GT text input** | Word Match Renderer | Edit per-word ground truth | No |
+| # | Type | Location | Description | `data-testid` | Browser-Tested |
+| --- | --- | --- | --- | --- | --- |
+| 94 | **Project dropdown** (`ui.select`) | Header | Select project to load | `project-select` | Yes |
+| 95 | **Show Paragraphs** checkbox | Image Tabs | Toggle paragraph overlay layer | — | Yes — toggled |
+| 96 | **Show Lines** checkbox | Image Tabs | Toggle line overlay layer | — | Visibility only |
+| 97 | **Show Words** checkbox | Image Tabs | Toggle word overlay layer | — | Visibility only |
+| 98 | **Selection Mode** radio | Image Tabs | Switch selection mode | — | Visibility only |
+| 99 | **Matches** tab | Text Tabs | Show word match view | — | Yes — click + active state |
+| 100 | **Ground Truth** tab | Text Tabs | Show GT text editor | — | Yes — click + content |
+| 101 | **OCR** tab | Text Tabs | Show OCR text editor | — | Yes — click + content |
+| 102 | **Filter toggle** (Unvalidated / Mismatched / All) | Word Match | Filter displayed lines | — | Yes — toggle through |
+| 103 | **Style dropdown** (`ui.select`) | Toolbar | Select style to apply | `apply-style-select` | Partial |
+| 104 | **Scope dropdown** (`ui.select`) | Toolbar | Select scope (whole/part) | `scope-select` | No |
+| 105 | **Component dropdown** (`ui.select`) | Toolbar | Select component to apply | `apply-component-select` | Yes — in dialog |
+| 106 | **Word checkbox** | Word Match Renderer | Toggle word selection | `word-checkbox` | Yes — checked |
+| 107 | **Line checkbox** | Word Match Renderer | Toggle line selection | — | No |
+| 108 | **GT text input** | Word Match Renderer | Edit per-word ground truth | — | No |
 
 ---
 

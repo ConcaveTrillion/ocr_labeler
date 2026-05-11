@@ -55,9 +55,7 @@ class TestBboxOperations:
         page = Page(width=200, height=100, page_index=0, items=[line])
 
         dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
-        monkeypatch.setattr(
-            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
-        )
+        monkeypatch.setattr(type(page), "cv2_numpy_page_image", property(lambda self: dummy_image))
 
         second_word = page.lines[0].words[1]
         seen = []
@@ -103,9 +101,7 @@ class TestBboxOperations:
         word = page.lines[0].words[0]
 
         dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
-        monkeypatch.setattr(
-            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
-        )
+        monkeypatch.setattr(type(page), "cv2_numpy_page_image", property(lambda self: dummy_image))
 
         seen = []
         monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
@@ -116,18 +112,14 @@ class TestBboxOperations:
         assert result is True
         assert "crop" in seen
 
-    def test_expand_then_refine_words_iterates_until_bbox_stabilizes(
-        self, ops, monkeypatch
-    ):
+    def test_expand_then_refine_words_iterates_until_bbox_stabilizes(self, ops, monkeypatch):
         """Expand-then-refine runs multiple passes until bbox no longer changes."""
         line = _line([_word("alpha", "A", 0)], 0)
         page = Page(width=200, height=100, page_index=0, items=[line])
         word = page.lines[0].words[0]
 
         dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
-        monkeypatch.setattr(
-            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
-        )
+        monkeypatch.setattr(type(page), "cv2_numpy_page_image", property(lambda self: dummy_image))
 
         calls = {"crop": 0}
         monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
@@ -187,9 +179,7 @@ class TestBboxOperations:
         page = Page(width=200, height=100, page_index=0, items=[line1, line2])
 
         dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
-        monkeypatch.setattr(
-            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
-        )
+        monkeypatch.setattr(type(page), "cv2_numpy_page_image", property(lambda self: dummy_image))
         monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
 
         seen = []
@@ -208,9 +198,7 @@ class TestBboxOperations:
         page = Page(width=200, height=100, page_index=0, items=[para1, para2])
 
         dummy_image = np.zeros((100, 200, 3), dtype=np.uint8)
-        monkeypatch.setattr(
-            type(page), "cv2_numpy_page_image", property(lambda self: dummy_image)
-        )
+        monkeypatch.setattr(type(page), "cv2_numpy_page_image", property(lambda self: dummy_image))
         monkeypatch.setattr(BoundingBox, "refine", lambda *a, **kw: None)
 
         seen = []

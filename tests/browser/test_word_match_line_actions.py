@@ -18,6 +18,7 @@ LINE_DELETE = '[data-testid="line-delete-button"]'
 LINE_CARD = '[data-testid="line-card"]'
 WORD_VALIDATE = '[data-testid="word-validate-button"]'
 PARAGRAPH_EXPANDER = '[data-testid="paragraph-expander-button"]'
+PARAGRAPH_LABEL = '[data-testid="paragraph-label-button"]'
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,38 @@ def test_paragraph_expander_present(browser_app_url: str, browser_page) -> None:
 # ---------------------------------------------------------------------------
 # Paragraph expander
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_paragraph_label_button_present_and_toggles(browser_app_url: str, browser_page) -> None:
+    """Paragraph label button materializes and toggles expand state on click.
+
+    The label button is the wide clickable text rendered next to the
+    chevron expander. It triggers the same `_toggle_paragraph_expanded`
+    handler, so clicking it should collapse the paragraph body just like
+    clicking the chevron does.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    label_btn = page.locator(PARAGRAPH_LABEL).first
+    expect(label_btn).to_be_visible()
+
+    # Wait for line cards to render before counting.
+    page.locator(LINE_DELETE).first.wait_for(state="visible", timeout=15_000)
+    count_before = page.locator(LINE_DELETE).count()
+    assert count_before > 0, "Expected at least one line card to be visible"
+
+    # Clicking the label button should collapse the paragraph body — the
+    # rendered line-card count for this paragraph should decrease.
+    label_btn.click()
+    expect(page.locator(LINE_DELETE)).not_to_have_count(count_before, timeout=5_000)
+    count_after_collapse = page.locator(LINE_DELETE).count()
+    assert count_after_collapse < count_before
+
+    # Click again to re-expand and confirm the toggle is symmetric.
+    page.locator(PARAGRAPH_LABEL).first.click()
+    expect(page.locator(LINE_DELETE)).to_have_count(count_before)
 
 
 @pytest.mark.browser
@@ -234,7 +267,7 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
 
     # Navigate to page 3 first — the bug only manifested on pages other than
     # the initial page, since TextTabs.page_index defaulted to 0.
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.fill("3")
     page_input.press("Enter")
     expect(page_input).to_have_value("3", timeout=15_000)
@@ -304,9 +337,7 @@ def test_line_validate_validates_all_words(browser_app_url: str, browser_page) -
 
     # After clicking Validate, every word in the line must be marked validated
     # (Quasar applies bg-green when color=green is set on the button).
-    expect(target_card().locator(f"{WORD_VALIDATE}.bg-green")).to_have_count(
-        target_word_count
-    )
+    expect(target_card().locator(f"{WORD_VALIDATE}.bg-green")).to_have_count(target_word_count)
 
     # And the line-validate button should now read "Unvalidate".
     expect(target_card().locator(LINE_VALIDATE)).to_contain_text("Unvalidate")
@@ -344,17 +375,13 @@ def test_line_delete(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_validated_line_removed_from_unvalidated_filter(
-    browser_app_url: str, browser_page
-) -> None:
+def test_validated_line_removed_from_unvalidated_filter(browser_app_url: str, browser_page) -> None:
     """After validating a line in 'Unvalidated Lines' view it should disappear."""
     page = browser_page
     _setup(page, browser_app_url)
 
     # Default filter is "Unvalidated Lines"
-    page.get_by_text("Unvalidated Lines").first.wait_for(
-        state="visible", timeout=10_000
-    )
+    page.get_by_text("Unvalidated Lines").first.wait_for(state="visible", timeout=10_000)
 
     # Count line cards before validation
     page.locator(LINE_VALIDATE).first.wait_for(state="visible", timeout=15_000)

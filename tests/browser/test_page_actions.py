@@ -34,28 +34,28 @@ def _wait_for_notification(page, timeout: int = 15_000):
 
 @pytest.mark.browser
 def test_action_buttons_present(browser_app_url: str, browser_page) -> None:
-    """Verify Reload OCR, Save Page, Load Page buttons exist."""
+    """Verify Reload OCR, Save Page, Load Page buttons exist (selected by testid)."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    page.get_by_role("button", name="Reload OCR", exact=True).wait_for(state="visible")
-    page.get_by_role("button", name="Save Page").wait_for(state="visible")
-    page.get_by_role("button", name="Load Page").wait_for(state="visible")
+    page.locator('[data-testid="reload-ocr-button"]').wait_for(state="visible")
+    page.locator('[data-testid="save-page-button"]').wait_for(state="visible")
+    page.locator('[data-testid="load-page-button"]').wait_for(state="visible")
 
 
 @pytest.mark.browser
 def test_rematch_gt_button_present(browser_app_url: str, browser_page) -> None:
-    """Rematch GT button is visible with tooltip after project load."""
+    """Rematch GT button is visible (by testid) with tooltip after project load."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    rematch = page.get_by_role("button", name="Rematch GT")
+    rematch = page.locator('[data-testid="rematch-gt-button"]')
     expect(rematch).to_be_visible()
 
     # Hover to verify tooltip exists
@@ -70,7 +70,7 @@ def test_rematch_gt_button_not_on_home_page(browser_app_url: str, browser_page) 
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
 
-    rematch = page.get_by_role("button", name="Rematch GT")
+    rematch = page.locator('[data-testid="rematch-gt-button"]')
     expect(rematch).to_have_count(0)
 
 
@@ -101,7 +101,7 @@ def test_save_page_button_click(browser_app_url: str, browser_page) -> None:
     load_project(page, "browser-test-project")
     wait_for_page_loaded(page)
 
-    page.get_by_role("button", name="Save Page").click()
+    page.locator('[data-testid="save-page-button"]').click()
     _wait_for_notification(page)
 
 
@@ -124,13 +124,11 @@ def test_reload_ocr_button_click(browser_app_url: str, browser_page) -> None:
     gt_value_before = gt_input.input_value()
 
     # Click Reload OCR
-    page.get_by_role("button", name="Reload OCR", exact=True).click()
+    page.locator('[data-testid="reload-ocr-button"]').click()
     _wait_for_notification(page)
 
     # Wait for page to re-render — edit-word-button reappears
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # OCR label still present with same text
     first_ocr_after = _get_first_ocr_label(page)
@@ -157,13 +155,11 @@ def test_load_page_button_click(browser_app_url: str, browser_page) -> None:
     gt_value_before = gt_input.input_value()
 
     # Click Load Page
-    page.get_by_role("button", name="Load Page").click()
+    page.locator('[data-testid="load-page-button"]').click()
     _wait_for_notification(page)
 
     # Wait for page to re-render
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # GT input restored (should match saved value, same as before)
     gt_input_after = _get_first_gt_input(page)
@@ -188,13 +184,11 @@ def test_rematch_gt_button_click(browser_app_url: str, browser_page) -> None:
     page.wait_for_timeout(500)
 
     # Click Rematch GT
-    page.get_by_role("button", name="Rematch GT").click()
+    page.locator('[data-testid="rematch-gt-button"]').click()
     _wait_for_notification(page)
 
     # Wait for page to re-render
-    page.locator('[data-testid="edit-word-button"]').first.wait_for(
-        state="visible", timeout=15_000
-    )
+    page.locator('[data-testid="edit-word-button"]').first.wait_for(state="visible", timeout=15_000)
 
     # GT input should no longer contain the sentinel value
     gt_input_after = _get_first_gt_input(page)

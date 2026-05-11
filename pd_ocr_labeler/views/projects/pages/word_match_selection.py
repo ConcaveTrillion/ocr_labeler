@@ -54,9 +54,8 @@ class WordMatchSelection:
         return bool(line_indices) and line_indices.issubset(self.selected_line_indices)
 
     def is_line_checked(self, line_index: int) -> bool:
-        return (
-            line_index in self.selected_line_indices
-            or self.is_line_fully_word_selected(line_index)
+        return line_index in self.selected_line_indices or self.is_line_fully_word_selected(
+            line_index
         )
 
     def sync_line_selection_from_words(self, line_index: int) -> None:
@@ -91,9 +90,7 @@ class WordMatchSelection:
             self.selected_word_indices.update(self._view._line_word_keys(line_index))
         else:
             self.selected_line_indices.discard(line_index)
-            self.selected_word_indices.difference_update(
-                self._view._line_word_keys(line_index)
-            )
+            self.selected_word_indices.difference_update(self._view._line_word_keys(line_index))
         paragraph_index = self._view._line_paragraph_index(line_index)
         if paragraph_index is not None:
             self.sync_paragraph_selection_from_lines(paragraph_index)
@@ -105,9 +102,7 @@ class WordMatchSelection:
         )
         self._view.refresh_after_selection_change()
 
-    def on_word_selection_change(
-        self, selection_key: tuple[int, int], selected: bool
-    ) -> None:
+    def on_word_selection_change(self, selection_key: tuple[int, int], selected: bool) -> None:
         """Track selected words for box/checkbox-driven workflow."""
         if selected:
             self.selected_word_indices.add(selection_key)
@@ -125,9 +120,7 @@ class WordMatchSelection:
         )
         self._view.refresh_after_selection_change()
 
-    def on_paragraph_selection_change(
-        self, paragraph_index: int, selected: bool
-    ) -> None:
+    def on_paragraph_selection_change(self, paragraph_index: int, selected: bool) -> None:
         """Track selected paragraphs for paragraph actions."""
         paragraph_line_indices = self._view._paragraph_line_indices(paragraph_index)
         paragraph_word_keys = self._view._paragraph_word_keys(paragraph_index)
@@ -209,10 +202,12 @@ class WordMatchSelection:
         for paragraph_index in affected_paragraphs:
             if paragraph_index is None:
                 continue
-            if not self.is_paragraph_fully_line_selected(paragraph_index):
-                if paragraph_index in self.selected_paragraph_indices:
-                    self.selected_paragraph_indices.discard(paragraph_index)
-                    changed = True
+            if (
+                not self.is_paragraph_fully_line_selected(paragraph_index)
+                and paragraph_index in self.selected_paragraph_indices
+            ):
+                self.selected_paragraph_indices.discard(paragraph_index)
+                changed = True
         return changed
 
     def refresh_line_checkbox_states(self) -> None:

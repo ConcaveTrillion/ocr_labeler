@@ -71,9 +71,7 @@ def test_get_logging_configuration_enables_page_timing_logger():
 
     assert "page_timing_console" in cfg["handlers"]
     assert cfg["loggers"]["pd_ocr_labeler.page_timing"]["level"] == "INFO"
-    assert cfg["loggers"]["pd_ocr_labeler.page_timing"]["handlers"] == [
-        "page_timing_console"
-    ]
+    assert cfg["loggers"]["pd_ocr_labeler.page_timing"]["handlers"] == ["page_timing_console"]
     assert cfg["loggers"]["pd_ocr_labeler.page_timing"]["propagate"] is False
 
 

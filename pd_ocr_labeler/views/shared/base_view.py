@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 TViewModel = TypeVar("TViewModel", bound=BaseViewModel)
 
 
-class BaseView(ABC, Generic[TViewModel]):
+class BaseView(ABC, Generic[TViewModel]):  # noqa: UP046  # Generic[T] syntax kept for pyright compatibility
     """Base class for all views providing common functionality.
 
     This class provides:
@@ -35,9 +35,7 @@ class BaseView(ABC, Generic[TViewModel]):
         self._is_torn_down = False
 
         # Set up property change listening
-        self.viewmodel.add_property_changed_listener(
-            self._on_viewmodel_property_changed
-        )
+        self.viewmodel.add_property_changed_listener(self._on_viewmodel_property_changed)
 
     @abstractmethod
     def build(self) -> Any:
@@ -99,6 +97,4 @@ class BaseView(ABC, Generic[TViewModel]):
         if self._is_torn_down:
             return
         self._is_torn_down = True
-        self.viewmodel.remove_property_changed_listener(
-            self._on_viewmodel_property_changed
-        )
+        self.viewmodel.remove_property_changed_listener(self._on_viewmodel_property_changed)

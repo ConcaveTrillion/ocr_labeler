@@ -7,11 +7,15 @@ behavior that was previously split across multiple files.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import pytest
 
-from pd_ocr_labeler.operations.ocr.model_selection_operations import OCRModelOption
+from pd_ocr_labeler.operations.ocr.model_selection_operations import (
+    ModelSelectionOperations,
+    OCRModelOption,
+)
 from pd_ocr_labeler.state.app_state import AppState
 
 
@@ -31,9 +35,7 @@ class TestAppState:
 
         assert isinstance(state.available_projects, dict)
         assert isinstance(state.project_keys, list)
-        assert state.selected_project_key is None or isinstance(
-            state.selected_project_key, str
-        )
+        assert state.selected_project_key is None or isinstance(state.selected_project_key, str)
 
     def test_notify_method(self):
         """Test that notify method works without callback."""
@@ -68,9 +70,7 @@ class TestAppState:
 
 
 class DummyProject:
-    def __init__(
-        self, pages, image_paths, current_page_index, page_loader, ground_truth_map
-    ):
+    def __init__(self, pages, image_paths, current_page_index, page_loader, ground_truth_map):
         self.pages = pages
         self.image_paths = image_paths
         self.ground_truth_map = ground_truth_map
@@ -110,7 +110,7 @@ def _ensure_dummy_support_modules(monkeypatch):
         raising=False,
     )
 
-    def fake_build_initial_page_parser(self, docTR_predictor=None):
+    def fake_build_initial_page_parser(self, docTR_predictor=None):  # noqa: N803  # mirrors docTR library naming
         return object()
 
     monkeypatch.setattr(
@@ -147,9 +147,7 @@ def _patch_project_vm(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_load_project_success_sets_state_and_clears_loading(
-    monkeypatch, tmp_path
-):
+async def test_load_project_success_sets_state_and_clears_loading(monkeypatch, tmp_path):
     _ensure_dummy_support_modules(monkeypatch)
     _patch_project_vm(monkeypatch)
 
@@ -277,15 +275,15 @@ def test_list_available_projects_filters_image_dirs(monkeypatch, tmp_path):
     base = ConfigOperations.get_default_source_projects_root()
     base.mkdir(parents=True)
 
-    projA = base / "projA"
+    projA = base / "projA"  # noqa: N806  # capitalized to match project name
     projA.mkdir()
     (projA / "a.png").write_bytes(b"")
 
-    projB = base / "projB"
+    projB = base / "projB"  # noqa: N806  # capitalized to match project name
     projB.mkdir()
     (projB / "notes.txt").write_text("not an image")
 
-    projC = base / "projC"
+    projC = base / "projC"  # noqa: N806  # capitalized to match project name
     projC.mkdir()
     (projC / "scan.JPG").write_bytes(b"")
 
@@ -302,9 +300,7 @@ def test_list_available_projects_missing_base_returns_empty(monkeypatch, tmp_pat
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-    monkeypatch.setattr(
-        ConfigOperations, "CONFIG_PATH", tmp_path / "config" / "config.yaml"
-    )
+    monkeypatch.setattr(ConfigOperations, "CONFIG_PATH", tmp_path / "config" / "config.yaml")
     state = AppState()
     assert state.list_available_projects() == {}
 
@@ -326,6 +322,18 @@ def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
 
     HF probe is mocked to be unreachable, so the picker falls through to the
     latest local fine-tuned model (the historical behaviour for this case).
+
+    Note: This and the three sibling ``test_*ocr_models*`` /
+    ``test_*hf_pinned_revision*`` tests below monkeypatch
+    ``ModelSelectionOperations.discover_model_options`` by passing the
+    imported class object rather than the dotted-string path
+    ``"pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options"``.
+    The dotted-string form was observed to fail intermittently under
+    ``make ci`` with xdist (``AttributeError: 'module' object at
+    pd_ocr_labeler.state has no attribute 'state'`` from pytest's
+    dotted-path resolver in ``_pytest/monkeypatch.py:resolve``). The class
+    object is the same one ``app_state.py`` imports, so monkeypatching its
+    ``discover_model_options`` attribute affects both views.
     """
 
     def fake_discover_model_options(*args, **kwargs):
@@ -355,7 +363,8 @@ def test_refresh_ocr_models_defaults_to_all_profile_when_available(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -393,7 +402,8 @@ def test_set_selected_ocr_models_updates_detection_and_recognition(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -433,7 +443,8 @@ def test_set_hf_pinned_revision_triggers_refresh(monkeypatch):
         return options, labels
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -466,7 +477,8 @@ def test_set_hf_pinned_revision_clears_when_empty_string(monkeypatch):
         return options, {k: o.label for k, o in options.items()}
 
     monkeypatch.setattr(
-        "pd_ocr_labeler.state.app_state.ModelSelectionOperations.discover_model_options",
+        ModelSelectionOperations,
+        "discover_model_options",
         fake_discover_model_options,
     )
 
@@ -490,9 +502,7 @@ def test_get_source_projects_root_uses_monkeypatched_config_path(monkeypatch, tm
     assert "source_projects_root:" in contents
 
 
-def test_get_default_source_projects_root_linux_uses_xdg_data_home(
-    monkeypatch, tmp_path
-):
+def test_get_default_source_projects_root_linux_uses_xdg_data_home(monkeypatch, tmp_path):
     from pd_ocr_labeler.operations.persistence import persistence_paths_operations
     from pd_ocr_labeler.operations.persistence.config_operations import ConfigOperations
 
@@ -718,10 +728,8 @@ def test_navigate_async_path_schedules_task(monkeypatch, tmp_path):
     def mock_background_create(coro):
         nonlocal task_created
         task_created = True
-        try:
+        with contextlib.suppress(Exception):
             coro.close()
-        except Exception:
-            pass
 
     monkeypatch.setattr("nicegui.background_tasks.create", mock_background_create)
 

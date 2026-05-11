@@ -14,6 +14,8 @@ from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 # ---------------------------------------------------------------------------
 
 WORD_VALIDATE_BUTTON = '[data-testid="word-validate-button"]'
+WORD_TAG_CHIPS_ROW = '[data-testid="word-tag-chips-row"]'
+WORD_TAG_CHIP = '[data-testid="word-tag-chip"]'
 
 
 # ---------------------------------------------------------------------------
@@ -71,9 +73,7 @@ def test_filter_toggle_present(browser_app_url: str, browser_page) -> None:
     wait_for_page_loaded(page)
 
     # The filter toggle should have all three options
-    page.get_by_text("Unvalidated Lines").first.wait_for(
-        state="visible", timeout=10_000
-    )
+    page.get_by_text("Unvalidated Lines").first.wait_for(state="visible", timeout=10_000)
 
 
 @pytest.mark.browser
@@ -108,7 +108,7 @@ def test_stats_label_visible(browser_app_url: str, browser_page) -> None:
 
 @pytest.mark.browser
 def test_apply_style_toolbar_present(browser_app_url: str, browser_page) -> None:
-    """Verify the dedicated Apply Style toolbar is rendered with select, apply, and scope actions."""
+    """Verify the dedicated Apply Style toolbar is rendered with select, apply, and scope actions."""  # noqa: E501
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
     wait_for_app_ready(page)
@@ -123,9 +123,7 @@ def test_apply_style_toolbar_present(browser_app_url: str, browser_page) -> None
 
 
 @pytest.mark.browser
-def test_apply_style_buttons_disabled_without_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_apply_style_buttons_disabled_without_selection(browser_app_url: str, browser_page) -> None:
     """Apply Style toolbar renders core controls before interaction."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
@@ -139,9 +137,7 @@ def test_apply_style_buttons_disabled_without_selection(
 
 
 @pytest.mark.browser
-def test_apply_style_dropdown_select_then_apply(
-    browser_app_url: str, browser_page
-) -> None:
+def test_apply_style_dropdown_select_then_apply(browser_app_url: str, browser_page) -> None:
     """Apply selected style after selecting a word."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
@@ -161,9 +157,7 @@ def test_apply_style_dropdown_select_then_apply(
 
 
 @pytest.mark.browser
-def test_word_actions_use_single_footnote_toggle(
-    browser_app_url: str, browser_page
-) -> None:
+def test_word_actions_use_single_footnote_toggle(browser_app_url: str, browser_page) -> None:
     """Word edit dialog should support a unified Footnote Marker component."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
@@ -179,15 +173,11 @@ def test_word_actions_use_single_footnote_toggle(
     page.get_by_role("option", name="Footnote Marker").first.click()
     dialog.get_by_role("button", name="Apply Component").click()
 
-    expect(
-        page.locator(".word-edit-tag-chip").filter(has_text="Footnote Marker")
-    ).to_have_count(1)
+    expect(page.locator(".word-edit-tag-chip").filter(has_text="Footnote Marker")).to_have_count(1)
 
 
 @pytest.mark.browser
-def test_dialog_tag_chip_clear_rerenders_immediately(
-    browser_app_url: str, browser_page
-) -> None:
+def test_dialog_tag_chip_clear_rerenders_immediately(browser_app_url: str, browser_page) -> None:
     """Clearing a dialog tag chip should update the dialog chip list immediately."""
     page = browser_page
     page.goto(browser_app_url, wait_until="networkidle")
@@ -297,9 +287,7 @@ def test_word_tag_clear_in_renderer(browser_app_url: str, browser_page) -> None:
 
 
 @pytest.mark.browser
-def test_apply_style_shows_tag_chip_immediately(
-    browser_app_url: str, browser_page
-) -> None:
+def test_apply_style_shows_tag_chip_immediately(browser_app_url: str, browser_page) -> None:
     """Select word, apply style via toolbar, verify tag chip appears without view switch."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -326,6 +314,34 @@ def test_apply_style_shows_tag_chip_immediately(
     chip = page.locator('[data-testid="word-tag-chip"]').first
     expect(chip).to_be_visible(timeout=5_000)
     expect(chip).to_contain_text("Italics")
+
+
+@pytest.mark.browser
+def test_word_tag_chips_row_materializes_with_chip(browser_app_url: str, browser_page) -> None:
+    """Apply style; verify the chip-row container materializes and scopes the chip."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    # Initially no chips and no chip-row container.
+    expect(page.locator(WORD_TAG_CHIP)).to_have_count(0)
+    expect(page.locator(WORD_TAG_CHIPS_ROW)).to_have_count(0)
+
+    # Select the first word and apply Italics via the toolbar.
+    _select_first_word(page)
+    page.get_by_label("Style").click()
+    page.get_by_role("option", name="Italics").first.click()
+    page.wait_for_timeout(300)
+    apply_button = page.locator('[data-testid="apply-style-button"]')
+    expect(apply_button).to_be_enabled()
+    apply_button.click()
+    page.wait_for_timeout(1000)
+
+    # Chip-row container should now exist and contain at least one chip.
+    chip_row = page.locator(WORD_TAG_CHIPS_ROW).first
+    expect(chip_row).to_be_visible(timeout=5_000)
+    chip_in_row = chip_row.locator(WORD_TAG_CHIP).first
+    expect(chip_in_row).to_be_visible()
+    expect(chip_in_row).to_contain_text("Italics")
 
 
 # ---------------------------------------------------------------------------

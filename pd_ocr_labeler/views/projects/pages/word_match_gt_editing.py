@@ -31,9 +31,7 @@ class WordMatchGtEditing:
     def __init__(self, view: WordMatchView) -> None:
         self._view = view
         self._word_gt_input_refs: dict[WordKey, object] = {}
-        self._word_style_button_refs: dict[
-            WordKey, tuple[object, object, object, object]
-        ] = {}
+        self._word_style_button_refs: dict[WordKey, tuple[object, object, object, object]] = {}
 
     def create_gt_cell(self, line_index: int, word_index: int, word_match):
         """Create Ground Truth text cell for a word."""
@@ -61,33 +59,25 @@ class WordMatchGtEditing:
                 )
                 input_element.on(
                     "blur",
-                    lambda _event, li=line_index, wi=word_index: (
-                        self._commit_word_gt_input_change(
-                            li,
-                            wi,
-                            input_element,
-                        )
+                    lambda _event, li=line_index, wi=word_index: self._commit_word_gt_input_change(
+                        li,
+                        wi,
+                        input_element,
                     ),
                 )
                 input_element.on(
                     "keydown.enter",
-                    lambda _event, li=line_index, wi=word_index: (
-                        self._commit_word_gt_input_change(
-                            li,
-                            wi,
-                            input_element,
-                        )
+                    lambda _event, li=line_index, wi=word_index: self._commit_word_gt_input_change(
+                        li,
+                        wi,
+                        input_element,
                     ),
                 )
                 input_element.on(
                     "keydown",
-                    lambda event, key=current_key: self._handle_word_gt_keydown(
-                        event, key
-                    ),
+                    lambda event, key=current_key: self._handle_word_gt_keydown(event, key),
                 )
-                input_element.enabled = (
-                    self._view.edit_word_ground_truth_callback is not None
-                )
+                input_element.enabled = self._view.edit_word_ground_truth_callback is not None
                 tooltip_content = self._view._create_word_tooltip(word_match)
                 if tooltip_content:
                     input_element.tooltip(tooltip_content)
@@ -205,9 +195,7 @@ class WordMatchGtEditing:
     ) -> None:
         """Handle updates to per-word GT text from inline input fields."""
         if self._view.edit_word_ground_truth_callback is None:
-            self._view._safe_notify(
-                "Edit ground truth function not available", type_="warning"
-            )
+            self._view._safe_notify("Edit ground truth function not available", type_="warning")
             return
 
         try:
@@ -217,9 +205,7 @@ class WordMatchGtEditing:
                 ground_truth_text,
             )
             if not success:
-                self._view._safe_notify(
-                    "Failed to update word ground truth", type_="warning"
-                )
+                self._view._safe_notify("Failed to update word ground truth", type_="warning")
                 return
 
             self._view.renderer.apply_local_word_gt_update(
@@ -240,9 +226,7 @@ class WordMatchGtEditing:
                 word_index,
                 e,
             )
-            self._view._safe_notify(
-                f"Error updating word ground truth: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error updating word ground truth: {e}", type_="negative")
 
     def _handle_set_word_attributes(
         self,
@@ -256,15 +240,11 @@ class WordMatchGtEditing:
     ) -> None:
         """Persist per-word style attributes via callback."""
         if self._view.set_word_attributes_callback is None:
-            self._view._safe_notify(
-                "Set word attributes function not available", type_="warning"
-            )
+            self._view._safe_notify("Set word attributes function not available", type_="warning")
             return
 
         if word_index < 0:
-            self._view._safe_notify(
-                "Cannot set attributes for unmatched word", type_="warning"
-            )
+            self._view._safe_notify("Cannot set attributes for unmatched word", type_="warning")
             return
 
         try:
@@ -278,9 +258,7 @@ class WordMatchGtEditing:
                 bool(right_footnote),
             )
             if not success:
-                self._view._safe_notify(
-                    "Failed to update word attributes", type_="warning"
-                )
+                self._view._safe_notify("Failed to update word attributes", type_="warning")
                 return
             self._apply_local_word_style_update(
                 line_index=line_index,
@@ -308,9 +286,7 @@ class WordMatchGtEditing:
                 word_index,
                 e,
             )
-            self._view._safe_notify(
-                f"Error updating word attributes: {e}", type_="negative"
-            )
+            self._view._safe_notify(f"Error updating word attributes: {e}", type_="negative")
 
     def _handle_toggle_word_attribute(
         self,
@@ -322,9 +298,7 @@ class WordMatchGtEditing:
         """Toggle one style attribute using current runtime flags (no stale closure values)."""
         word_match = self._view._line_word_match_by_ocr_index(line_index, word_index)
         if word_match is None:
-            self._view._safe_notify(
-                "Cannot set attributes for unmatched word", type_="warning"
-            )
+            self._view._safe_notify("Cannot set attributes for unmatched word", type_="warning")
             return
 
         italic, small_caps, blackletter, left_footnote, right_footnote = (

@@ -7,6 +7,7 @@ are separated from state management to maintain clear architectural boundaries.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import shutil
@@ -96,7 +97,7 @@ class PageOperations:
     to avoid tight coupling with state management classes.
     """
 
-    def __init__(self, docTR_predictor: object | None = None):
+    def __init__(self, docTR_predictor: object | None = None):  # noqa: N803  # mirrors docTR library naming
         """Initialize PageOperations with its own page parser.
 
         Args:
@@ -148,9 +149,7 @@ class PageOperations:
         return PersistencePathsOperations.get_page_image_cache_root()
 
     @staticmethod
-    def _resolve_save_directory(
-        project_root: Path, save_directory: str | Path | None
-    ) -> Path:
+    def _resolve_save_directory(project_root: Path, save_directory: str | Path | None) -> Path:
         """Resolve save directory with user-local default and compatibility fallbacks."""
         if save_directory is None:
             return PersistencePathsOperations.get_saved_projects_root()
@@ -309,9 +308,7 @@ class PageOperations:
             if isinstance(page_obj, _ReorganizablePage):
                 page_obj.reorganize_page()
         except Exception as e:
-            logger.debug(
-                "Page reorganization failed, continuing with raw OCR layout: %s", e
-            )
+            logger.debug("Page reorganization failed, continuing with raw OCR layout: %s", e)
 
     @staticmethod
     def _is_geometry_normalization_error(error: Exception) -> bool:
@@ -506,9 +503,7 @@ class PageOperations:
 
             page_index = getattr(page_model, "index", None)
             if page_index is None:
-                logger.debug(
-                    "update_cached_images_in_json: no page index on model, skipping"
-                )
+                logger.debug("update_cached_images_in_json: no page index on model, skipping")
                 return False
             page_number = int(page_index) + 1
 
@@ -527,13 +522,12 @@ class PageOperations:
 
             if not json_path.exists():
                 logger.debug(
-                    "update_cached_images_in_json: %s not found (page not yet saved), "
-                    "skipping",
+                    "update_cached_images_in_json: %s not found (page not yet saved), skipping",
                     json_path,
                 )
                 return False
 
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 json_data = json.load(f)
 
             json_data["cached_images"] = dict(cached_filenames)
@@ -617,7 +611,7 @@ class PageOperations:
                 return None
 
             # Load JSON metadata
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 json_data = json.load(f)
 
             # Validate JSON structure
@@ -647,9 +641,7 @@ class PageOperations:
                 page.image_path = project_root / source_path  # type: ignore[attr-defined]
                 logger.debug("Restored image_path: %s", page.image_path)
             else:
-                logger.warning(
-                    "No source_path found in %s, checking for saved image", json_path
-                )
+                logger.warning("No source_path found in %s, checking for saved image", json_path)
 
             # Load the corresponding image file and attach it to the page
             # Try to find the image file (could be .png, .jpg, or .jpeg)
@@ -666,9 +658,7 @@ class PageOperations:
                     page.image_path = image_path  # type: ignore[attr-defined]
                     logger.debug("Using saved image as image_path: %s", image_path)
                 else:
-                    logger.warning(
-                        "No image_path available for loaded page from %s", json_path
-                    )
+                    logger.warning("No image_path available for loaded page from %s", json_path)
 
             if image_path:
                 try:
@@ -677,9 +667,7 @@ class PageOperations:
                     img = cv2_imread(str(image_path))
                     if img is not None:
                         page.cv2_numpy_page_image = img
-                        logger.debug(
-                            "Attached cv2 image for loaded page: %s", image_path
-                        )
+                        logger.debug("Attached cv2 image for loaded page: %s", image_path)
                     else:
                         logger.warning("Failed to load image from: %s", image_path)
                 except Exception as e:
@@ -770,9 +758,7 @@ class PageOperations:
             logger.exception("Failed to refine bboxes for page")
             return False
 
-    def expand_and_refine_all_bboxes(
-        self, page: PageModel | Page, padding_px: int = 2
-    ) -> bool:
+    def expand_and_refine_all_bboxes(self, page: PageModel | Page, padding_px: int = 2) -> bool:
         """Expand and refine all bounding boxes in a page.
 
         Iterates through all words in the page, calling crop_bottom() and expand_to_content()
@@ -790,9 +776,7 @@ class PageOperations:
             if page_obj is None:
                 logger.warning("No page provided to expand_and_refine_all_bboxes")
                 return False
-            logger.debug(
-                "Expanding and refining bboxes for page with padding_px=%s", padding_px
-            )
+            logger.debug("Expanding and refining bboxes for page with padding_px=%s", padding_px)
 
             # Iterate through all words and prefer BoundingBox.refine(expand_beyond_original=True)
             word_blocks = None
@@ -802,9 +786,7 @@ class PageOperations:
                 word_blocks = page_obj.lines
 
             if word_blocks is None:
-                logger.warning(
-                    "Page has no blocks/lines; skipping expand/refine word pass"
-                )
+                logger.warning("Page has no blocks/lines; skipping expand/refine word pass")
                 return False
 
             page_image = None
@@ -819,9 +801,7 @@ class PageOperations:
                 for word in words:
                     used_bbox_refine = False
                     bbox = getattr(word, "bounding_box", None)
-                    bbox_refine = (
-                        getattr(bbox, "refine", None) if bbox is not None else None
-                    )
+                    bbox_refine = getattr(bbox, "refine", None) if bbox is not None else None
                     if callable(bbox_refine) and page_image is not None:
                         refined_bbox = bbox_refine(
                             page_image,
@@ -936,16 +916,12 @@ class PageOperations:
                     json_data = json.loads(raw_text)
 
                     # Basic structure validation
-                    if not isinstance(json_data, dict) or not self._has_loadable_page(
-                        json_data
-                    ):
+                    if not isinstance(json_data, dict) or not self._has_loadable_page(json_data):
                         can_load = False
                         logger.warning("Invalid JSON structure in %s", json_path)
                 except Exception as e:
                     can_load = False
-                    logger.warning(
-                        "Cannot read or parse JSON file %s: %s", json_path, e
-                    )
+                    logger.warning("Cannot read or parse JSON file %s: %s", json_path, e)
 
             return PageLoadInfo(
                 can_load=can_load,
@@ -1088,9 +1064,7 @@ class PageOperations:
             logger.exception("Error resetting OCR for %s", image_path)
             return None
 
-    def find_ground_truth_text(
-        self, name: str, ground_truth_map: dict[str, str]
-    ) -> str | None:
+    def find_ground_truth_text(self, name: str, ground_truth_map: dict[str, str]) -> str | None:
         """Find ground truth text for a given page name using variant lookup.
 
         The normalization process adds multiple keys (with/without extension, lowercase).
@@ -1124,7 +1098,7 @@ class PageOperations:
                 basename.lower(),
             ]
         )
-        # If name has extension, add base name variants; else add ext variants (handled by normalization)
+        # If name has extension, add base name variants; else add ext variants (handled by normalization) # noqa: E501
         if "." in basename:
             base = basename.rsplit(".", 1)[0]
             candidates.extend([base, base.lower()])
@@ -1149,9 +1123,7 @@ class PageOperations:
     ) -> UserPageEnvelope:
         page_model = self._to_page_model(page)
         page_obj = page_model.page
-        source_fingerprint = self._build_image_fingerprint(
-            getattr(page_obj, "image_path", None)
-        )
+        source_fingerprint = self._build_image_fingerprint(getattr(page_obj, "image_path", None))
 
         cached_images = dict(getattr(page_model, "cached_image_filenames", None) or {})
         return UserPageEnvelope(
@@ -1163,9 +1135,7 @@ class PageOperations:
                     python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
                     pd_book_tools=self._safe_package_version("pd-book-tools"),
                 ),
-                ocr=self._resolve_ocr_provenance_for_save(
-                    page=page_model, source_lib=source_lib
-                ),
+                ocr=self._resolve_ocr_provenance_for_save(page=page_model, source_lib=source_lib),
             ),
             source=UserPageSource(
                 project_id=project_id,
@@ -1334,9 +1304,7 @@ class PageOperations:
                 labels_set.discard(WORD_LABEL_VALIDATED)
 
             ordered = [label for label in labels if label in labels_set]
-            ordered.extend(
-                sorted(label for label in labels_set if label not in set(ordered))
-            )
+            ordered.extend(sorted(label for label in labels_set if label not in set(ordered)))
             target_word.word_labels = ordered
 
     def _resolve_ocr_provenance_for_save(
@@ -1353,9 +1321,7 @@ class PageOperations:
             try:
                 return ProvenanceOCR.from_dict(page_model.ocr_provenance)
             except Exception:
-                logger.debug(
-                    "Ignoring invalid page model OCR provenance dict", exc_info=True
-                )
+                logger.debug("Ignoring invalid page model OCR provenance dict", exc_info=True)
 
         direct_provenance = self._coerce_page_ocr_provenance(page_obj)
         if direct_provenance is not None:
@@ -1375,9 +1341,7 @@ class PageOperations:
                 if isinstance(live_dict, dict):
                     return ProvenanceOCR.from_dict(live_dict)
             except Exception:
-                logger.debug(
-                    "Ignoring invalid live OCR provenance object", exc_info=True
-                )
+                logger.debug("Ignoring invalid live OCR provenance object", exc_info=True)
 
         provenance = self._resolve_saved_provenance(page_model)
         if isinstance(provenance, dict):
@@ -1386,9 +1350,7 @@ class PageOperations:
                 try:
                     return ProvenanceOCR.from_dict(ocr_data)
                 except Exception:
-                    logger.debug(
-                        "Ignoring invalid saved OCR provenance payload", exc_info=True
-                    )
+                    logger.debug("Ignoring invalid saved OCR provenance payload", exc_info=True)
 
         return self._build_live_ocr_provenance(source_lib)
 
@@ -1402,14 +1364,10 @@ class PageOperations:
             return ""
 
         saved_at = provenance.get("saved_at")
-        app_data = (
-            provenance.get("app") if isinstance(provenance.get("app"), dict) else {}
-        )
+        app_data = provenance.get("app") if isinstance(provenance.get("app"), dict) else {}
         app_version = app_data.get("version")
         toolchain_data = (
-            provenance.get("toolchain")
-            if isinstance(provenance.get("toolchain"), dict)
-            else {}
+            provenance.get("toolchain") if isinstance(provenance.get("toolchain"), dict) else {}
         )
         pd_book_tools_version = toolchain_data.get("pd_book_tools")
         ocr = provenance.get("ocr") if isinstance(provenance.get("ocr"), dict) else {}
@@ -1509,9 +1467,7 @@ class PageOperations:
         if detection_name is None and names:
             detection_name = names[0]
         if recognition_name is None:
-            recognition_name = (
-                detection_name if detection_name else UNKNOWN_METADATA_VALUE
-            )
+            recognition_name = detection_name if detection_name else UNKNOWN_METADATA_VALUE
 
         return (
             detection_name or UNKNOWN_METADATA_VALUE,
@@ -1523,9 +1479,7 @@ class PageOperations:
         detection_name, recognition_name = self.get_page_ocr_model_pair(page)
         return f"det: {detection_name} | rec: {recognition_name}"
 
-    def _resolve_saved_provenance(
-        self, page: PageModel | Page
-    ) -> dict[str, Any] | None:
+    def _resolve_saved_provenance(self, page: PageModel | Page) -> dict[str, Any] | None:
         page_model = self._to_page_model(page)
         if isinstance(page_model.saved_provenance, dict):
             return page_model.saved_provenance
@@ -1597,10 +1551,8 @@ class PageOperations:
         page_model.saved_provenance = provenance_data
         self._saved_provenance_by_page_id[id(page_model)] = provenance_data
         self._saved_provenance_by_page_id[id(page_obj)] = provenance_data
-        try:
+        with contextlib.suppress(Exception):
             setattr(page_obj, PAGE_SAVED_PROVENANCE_ATTR, provenance_data)
-        except Exception:
-            pass
 
     def _to_page(self, page: PageModel | Page | None) -> Page | None:
         if page is None:
@@ -1755,7 +1707,7 @@ class PageOperations:
         model_names = [model.name for model in self._extract_ocr_models() if model.name]
         if not model_names and not source_lib:
             return None
-        parts = [source_lib] + sorted(model_names)
+        parts = [source_lib, *sorted(model_names)]
         return "|".join(part for part in parts if part)
 
     def _extract_page_dict(self, json_data: dict) -> dict | None:

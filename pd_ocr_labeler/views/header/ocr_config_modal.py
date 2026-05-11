@@ -45,12 +45,14 @@ class OCRConfigModal(NotificationMixin):
                 value=self.app_state_model.selected_ocr_detection_model_key,
                 with_input=True,
             ).classes("w-full")
+            self._detection_model_select.props('data-testid="ocr-detection-model-select"')
             self._recognition_model_select = ui.select(
                 label="Recognition model",
                 options=self.app_state_model.ocr_recognition_model_options,
                 value=self.app_state_model.selected_ocr_recognition_model_key,
                 with_input=True,
             ).classes("w-full")
+            self._recognition_model_select.props('data-testid="ocr-recognition-model-select"')
 
             self._bind_from_safe(
                 self._detection_model_select,
@@ -74,14 +76,19 @@ class OCRConfigModal(NotificationMixin):
                 value=self.app_state_model.hf_pinned_revision or "",
                 placeholder="leave empty for latest (e.g. v1.2.0 or commit SHA)",
             ).classes("w-full")
+            self._hf_revision_input.props('data-testid="ocr-hf-revision-input"')
 
             with ui.row().classes("w-full justify-between pt-2"):
-                ui.button("Rescan Models", on_click=self._rescan_models).props("flat")
+                rescan_btn = ui.button("Rescan Models", on_click=self._rescan_models).props("flat")
+                rescan_btn.props('data-testid="ocr-rescan-models-button"')
                 with ui.row().classes("gap-2"):
-                    ui.button("Cancel", on_click=self._close).props("flat")
-                    ui.button("Apply", on_click=self._apply_selection)
+                    cancel_btn = ui.button("Cancel", on_click=self._close).props("flat")
+                    cancel_btn.props('data-testid="ocr-config-cancel-button"')
+                    apply_btn = ui.button("Apply", on_click=self._apply_selection)
+                    apply_btn.props('data-testid="ocr-config-apply-button"')
 
         self._trigger_button = ui.button(icon="tune", on_click=self._open)
+        self._trigger_button.props('data-testid="ocr-config-trigger-button"')
         style_action_button(self._trigger_button, size="md")
         self._bind_disabled_from_safe(
             self._trigger_button,
@@ -98,9 +105,7 @@ class OCRConfigModal(NotificationMixin):
     ) -> None:
         self.app_state_model.command_refresh_ocr_models()
         if self._detection_model_select is not None:
-            self._detection_model_select.options = (
-                self.app_state_model.ocr_detection_model_options
-            )
+            self._detection_model_select.options = self.app_state_model.ocr_detection_model_options
             self._detection_model_select.value = (
                 self.app_state_model.selected_ocr_detection_model_key
             )
@@ -114,9 +119,7 @@ class OCRConfigModal(NotificationMixin):
             )
             self._recognition_model_select.update()
         if self._hf_revision_input is not None:
-            self._hf_revision_input.value = (
-                self.app_state_model.hf_pinned_revision or ""
-            )
+            self._hf_revision_input.value = self.app_state_model.hf_pinned_revision or ""
             self._hf_revision_input.update()
         if self._dialog is not None:
             self._dialog.open()
@@ -134,9 +137,7 @@ class OCRConfigModal(NotificationMixin):
     ) -> None:
         success = self.app_state_model.command_refresh_ocr_models()
         if self._detection_model_select is not None:
-            self._detection_model_select.options = (
-                self.app_state_model.ocr_detection_model_options
-            )
+            self._detection_model_select.options = self.app_state_model.ocr_detection_model_options
             if (
                 self._detection_model_select.value
                 not in self.app_state_model.ocr_detection_model_options
@@ -167,18 +168,13 @@ class OCRConfigModal(NotificationMixin):
         self,
         _event: events.ClickEventArguments | None = None,
     ) -> None:
-        if (
-            self._detection_model_select is None
-            or self._recognition_model_select is None
-        ):
+        if self._detection_model_select is None or self._recognition_model_select is None:
             return
 
         detection_key = str(self._detection_model_select.value or "").strip()
         recognition_key = str(self._recognition_model_select.value or "").strip()
         if not detection_key or not recognition_key:
-            self._notify(
-                "Select both detection and recognition models first", "warning"
-            )
+            self._notify("Select both detection and recognition models first", "warning")
             return
 
         # Apply HF revision pin first so subsequent model selection sees the
@@ -208,8 +204,6 @@ class OCRConfigModal(NotificationMixin):
         """Force trigger button enabled state to the latest computed value."""
         if self._trigger_button is None:
             return
-        enabled = not bool(
-            getattr(self.project_state_model, "is_controls_disabled", False)
-        )
+        enabled = not bool(getattr(self.project_state_model, "is_controls_disabled", False))
         self._trigger_button.set_enabled(enabled)
         self._trigger_button.update()

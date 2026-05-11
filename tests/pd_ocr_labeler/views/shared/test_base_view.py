@@ -34,9 +34,7 @@ def test_teardown_removes_listener():
     vm = _StubViewModel()
     view = _StubView(vm)
     view.teardown()
-    assert not vm._property_changed_callbacks, (
-        "listener should be removed after teardown"
-    )
+    assert not vm._property_changed_callbacks, "listener should be removed after teardown"
 
 
 def test_teardown_is_idempotent():

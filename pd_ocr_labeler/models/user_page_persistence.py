@@ -22,16 +22,12 @@ except ImportError:
             return result
 
         @classmethod
-        def from_dict(cls, data: dict[str, Any]) -> "OCRModelProvenance":
+        def from_dict(cls, data: dict[str, Any]) -> OCRModelProvenance:
             return cls(
                 name=str(data.get("name", "unknown")),
-                version=(
-                    str(data["version"]) if data.get("version") is not None else None
-                ),
+                version=(str(data["version"]) if data.get("version") is not None else None),
                 weights_id=(
-                    str(data["weights_id"])
-                    if data.get("weights_id") is not None
-                    else None
+                    str(data["weights_id"]) if data.get("weights_id") is not None else None
                 ),
             )
 
@@ -54,7 +50,7 @@ except ImportError:
             return result
 
         @classmethod
-        def from_dict(cls, data: dict[str, Any]) -> "OCRProvenance":
+        def from_dict(cls, data: dict[str, Any]) -> OCRProvenance:
             raw_models = data.get("models", [])
             models: list[OCRModelProvenance] = []
             if isinstance(raw_models, list):
@@ -67,9 +63,7 @@ except ImportError:
             return cls(
                 engine=str(data.get("engine", "unknown")),
                 engine_version=(
-                    str(data["engine_version"])
-                    if data.get("engine_version") is not None
-                    else None
+                    str(data["engine_version"]) if data.get("engine_version") is not None else None
                 ),
                 models=models,
                 config_fingerprint=(
@@ -81,9 +75,7 @@ except ImportError:
 
 
 USER_PAGE_SCHEMA_NAME = "pd_ocr_labeler.user_page"
-USER_PAGE_SCHEMA_VERSION = (
-    "2.1"  # 2.1 adds cached_images for pre-rendered image filenames
-)
+USER_PAGE_SCHEMA_VERSION = "2.1"  # 2.1 adds cached_images for pre-rendered image filenames
 
 USER_PAGE_SOURCE_LANE_LABELED = "labeled"
 USER_PAGE_SAVED_BY_SAVE_PAGE = "Save Page"
@@ -99,7 +91,7 @@ class UserPageSchema:
         return {"name": self.name, "version": self.version}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UserPageSchema":
+    def from_dict(cls, data: dict[str, Any]) -> UserPageSchema:
         return cls(
             name=str(data.get("name", USER_PAGE_SCHEMA_NAME)),
             version=str(data.get("version", USER_PAGE_SCHEMA_VERSION)),
@@ -122,13 +114,11 @@ class ProvenanceApp:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ProvenanceApp":
+    def from_dict(cls, data: dict[str, Any]) -> ProvenanceApp:
         return cls(
             name=str(data.get("name", "pd_ocr_labeler")),
             version=str(data.get("version", UNKNOWN_METADATA_VALUE)),
-            git_commit=(
-                str(data["git_commit"]) if data.get("git_commit") is not None else None
-            ),
+            git_commit=(str(data["git_commit"]) if data.get("git_commit") is not None else None),
         )
 
 
@@ -148,14 +138,12 @@ class ProvenanceToolchain:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ProvenanceToolchain":
+    def from_dict(cls, data: dict[str, Any]) -> ProvenanceToolchain:
         return cls(
             python=str(data.get("python", UNKNOWN_METADATA_VALUE)),
             pd_book_tools=str(data.get("pd_book_tools", UNKNOWN_METADATA_VALUE)),
             opencv_python=(
-                str(data["opencv_python"])
-                if data.get("opencv_python") is not None
-                else None
+                str(data["opencv_python"]) if data.get("opencv_python") is not None else None
             ),
         )
 
@@ -184,7 +172,7 @@ class UserPageProvenance:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UserPageProvenance":
+    def from_dict(cls, data: dict[str, Any]) -> UserPageProvenance:
         return cls(
             saved_at=str(data.get("saved_at", "")),
             saved_by=str(data.get("saved_by", USER_PAGE_SAVED_BY_SAVE_PAGE)),
@@ -212,12 +200,10 @@ class SourceImageFingerprint:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SourceImageFingerprint":
+    def from_dict(cls, data: dict[str, Any]) -> SourceImageFingerprint:
         return cls(
             size=int(data["size"]) if data.get("size") is not None else None,
-            mtime_ns=(
-                int(data["mtime_ns"]) if data.get("mtime_ns") is not None else None
-            ),
+            mtime_ns=(int(data["mtime_ns"]) if data.get("mtime_ns") is not None else None),
             sha256=(str(data["sha256"]) if data.get("sha256") is not None else None),
         )
 
@@ -245,7 +231,7 @@ class UserPageSource:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UserPageSource":
+    def from_dict(cls, data: dict[str, Any]) -> UserPageSource:
         fingerprint_data = data.get("image_fingerprint")
         image_fingerprint = (
             SourceImageFingerprint.from_dict(fingerprint_data)
@@ -258,9 +244,7 @@ class UserPageSource:
             page_number=int(data.get("page_number", 0)),
             image_path=str(data.get("image_path", "")),
             project_root=(
-                str(data["project_root"])
-                if data.get("project_root") is not None
-                else None
+                str(data["project_root"]) if data.get("project_root") is not None else None
             ),
             image_fingerprint=image_fingerprint,
         )
@@ -281,7 +265,7 @@ class UserPagePayload:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UserPagePayload":
+    def from_dict(cls, data: dict[str, Any]) -> UserPagePayload:
         page_data = data.get("page")
         if not isinstance(page_data, dict):
             page_data = {}
@@ -332,7 +316,7 @@ class UserPageEnvelope:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UserPageEnvelope":
+    def from_dict(cls, data: dict[str, Any]) -> UserPageEnvelope:
         raw_cached = data.get("cached_images", {})
         cached_images: dict[str, str] = {}
         if isinstance(raw_cached, dict):

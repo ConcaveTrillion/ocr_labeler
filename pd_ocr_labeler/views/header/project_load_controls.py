@@ -53,29 +53,33 @@ class ProjectLoadControls(NotificationMixin):
             self._path_picker_current_label = ui.label("").classes(
                 "text-xs text-gray-600 font-mono break-all"
             )
-            self._path_picker_breadcrumbs = ui.row().classes(
-                "w-full items-center gap-1 flex-wrap"
-            )
+            self._path_picker_current_label.props('data-testid="source-folder-current-path-label"')
+            self._path_picker_breadcrumbs = ui.row().classes("w-full items-center gap-1 flex-wrap")
             self._source_path_input = ui.input("Path").classes("w-full font-mono")
+            self._source_path_input.props('data-testid="source-folder-path-input"')
             self._source_path_input.on("keydown.enter", self._on_source_path_enter)
             with ui.row().classes("w-full justify-between gap-2"):
-                ui.button("Home", on_click=self._path_picker_go_home).props("flat")
-                ui.button("Up", on_click=self._path_picker_go_up).props("flat")
-                ui.button(
+                home_btn = ui.button("Home", on_click=self._path_picker_go_home).props("flat")
+                home_btn.props('data-testid="source-folder-home-button"')
+                up_btn = ui.button("Up", on_click=self._path_picker_go_up).props("flat")
+                up_btn.props('data-testid="source-folder-up-button"')
+                open_typed_btn = ui.button(
                     "Open Typed Path", on_click=self._open_typed_source_path
                 ).props("flat")
+                open_typed_btn.props('data-testid="source-folder-open-typed-button"')
             with ui.scroll_area().classes("w-full h-64 border rounded"):
-                self._path_picker_list_container = ui.column().classes(
-                    "w-full gap-1 p-2"
-                )
+                self._path_picker_list_container = ui.column().classes("w-full gap-1 p-2")
             with ui.row().classes("w-full justify-end gap-2 pt-2"):
-                ui.button("Use Current", on_click=self._use_current_folder).props(
+                use_current_btn = ui.button("Use Current", on_click=self._use_current_folder).props(
                     "flat"
                 )
-                ui.button("Cancel", on_click=self._source_folder_dialog.close).props(
+                use_current_btn.props('data-testid="source-folder-use-current-button"')
+                cancel_btn = ui.button("Cancel", on_click=self._source_folder_dialog.close).props(
                     "flat"
                 )
-                ui.button("Apply", on_click=self._apply_source_folder)
+                cancel_btn.props('data-testid="source-folder-cancel-button"')
+                apply_btn = ui.button("Apply", on_click=self._apply_source_folder)
+                apply_btn.props('data-testid="source-folder-apply-button"')
 
         with ui.row().classes("w-full items-center gap-2") as row:
             # Bind select options and value to AppState model
@@ -90,16 +94,17 @@ class ProjectLoadControls(NotificationMixin):
                 value=selected_key,
                 with_input=False,
             )
+            self.select.props('data-testid="project-select"')
 
             # LOAD button bound disabled state to is_loading
-            self.load_project_button = ui.button(
-                "LOAD", on_click=self._load_selected_project
-            )
+            self.load_project_button = ui.button("LOAD", on_click=self._load_selected_project)
+            self.load_project_button.props('data-testid="load-project-button"')
             style_action_button(self.load_project_button, size="md")
 
             self.source_folder_button = ui.button(
                 icon="folder_open", on_click=self._open_source_folder_dialog
             )
+            self.source_folder_button.props('data-testid="source-folder-button"')
             style_action_button(self.source_folder_button, size="md")
 
             self.ocr_settings_button = self.ocr_config_modal.build()
@@ -108,9 +113,7 @@ class ProjectLoadControls(NotificationMixin):
 
             self.path_label = (
                 ui.label("")
-                .classes(
-                    "text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden"
-                )
+                .classes("text-xs text-gray-500 font-mono text-right flex-1 overflow-hidden")
                 .style("white-space:normal; word-break:break-all;")
             )
 
@@ -160,9 +163,7 @@ class ProjectLoadControls(NotificationMixin):
 
     def sync_control_states(self) -> None:
         """Apply the latest disabled state directly to all load controls."""
-        enabled = not bool(
-            getattr(self.project_state_model, "is_controls_disabled", False)
-        )
+        enabled = not bool(getattr(self.project_state_model, "is_controls_disabled", False))
 
         for control in (
             getattr(self, "select", None),
@@ -197,7 +198,7 @@ class ProjectLoadControls(NotificationMixin):
             url = build_project_url(key)
             ui.navigate.history.replace(url)
             logger.debug("Browser URL updated to: %s", url)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._notify(f"Load failed: {exc}", "negative")
             logger.error("Failed to load project '%s': %s", key, exc)
 
@@ -252,9 +253,7 @@ class ProjectLoadControls(NotificationMixin):
             for child in children:
                 ui.button(
                     f"{child.name}/",
-                    on_click=lambda _e=None, next_dir=child: self._open_child_directory(
-                        next_dir
-                    ),
+                    on_click=lambda _e=None, next_dir=child: self._open_child_directory(next_dir),
                 ).props("flat align=left").classes("w-full justify-start font-mono")
 
     def _path_picker_refresh_breadcrumbs(self) -> None:
@@ -271,9 +270,7 @@ class ProjectLoadControls(NotificationMixin):
             if not parts:
                 ui.button(
                     str(current),
-                    on_click=lambda _e=None, target=current: self._open_child_directory(
-                        target
-                    ),
+                    on_click=lambda _e=None, target=current: self._open_child_directory(target),
                 ).props("flat dense").classes("text-xs")
                 return
 
@@ -284,12 +281,8 @@ class ProjectLoadControls(NotificationMixin):
                 cumulative = Path(part) if idx == 0 else cumulative / part
                 ui.button(
                     part,
-                    on_click=lambda _e=None, target=cumulative: (
-                        self._open_child_directory(target)
-                    ),
-                ).props("flat dense no-caps").classes(
-                    "text-xs font-mono border rounded px-2"
-                )
+                    on_click=lambda _e=None, target=cumulative: self._open_child_directory(target),
+                ).props("flat dense no-caps").classes("text-xs font-mono border rounded px-2")
 
     def _open_child_directory(self, next_dir: Path) -> None:
         """Navigate picker to the selected child directory."""

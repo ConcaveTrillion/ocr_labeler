@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 class ContentArea:
     """Image & text tabs content area (actions separated into page actions)."""
 
-    def __init__(
-        self, page_state_view_model: PageStateViewModel, callbacks: PageActionCallbacks
-    ):
+    def __init__(self, page_state_view_model: PageStateViewModel, callbacks: PageActionCallbacks):
         logger.debug("Initializing ContentArea")
         self.page_state_view_model = page_state_view_model
         self.callbacks = callbacks
@@ -59,9 +57,7 @@ class ContentArea:
         )
         self.text_tabs.word_match_view.set_summary_callback(self._update_stats_label)
         if callbacks.refine_bboxes:
-            self.text_tabs.word_match_view.set_refine_bboxes_callback(
-                callbacks.refine_bboxes
-            )
+            self.text_tabs.word_match_view.set_refine_bboxes_callback(callbacks.refine_bboxes)
         if callbacks.expand_refine_bboxes:
             self.text_tabs.word_match_view.set_expand_refine_bboxes_callback(
                 callbacks.expand_refine_bboxes
@@ -76,8 +72,7 @@ class ContentArea:
     def _update_stats_label(self, text: str) -> None:
         if self._stats_label:
             model_summary = (
-                getattr(self.page_state_view_model, "current_page_ocr_models_text", "")
-                or ""
+                getattr(self.page_state_view_model, "current_page_ocr_models_text", "") or ""
             ).strip()
             if model_summary:
                 self._stats_label.set_text(f"{text} • {model_summary}")
@@ -196,17 +191,13 @@ class ContentArea:
             logger.debug("Adding page-level navigation spinner")
             # Page-level navigation spinner (smaller, inline)
             self.page_spinner = (
-                ui.spinner(size="lg")
-                .props("color=primary")
-                .classes("self-center my-6 hidden")
+                ui.spinner(size="lg").props("color=primary").classes("self-center my-6 hidden")
             )
             logger.debug("Creating main splitter with 50/50 split")
             # Start with a 50/50 split between image and text tabs as requested
-            with (
-                ui.splitter(value=50).classes(
-                    "w-full h-[calc(100vh-220px)]"  # Adjusted height since controls moved out
-                ) as main_split
-            ):
+            with ui.splitter(value=50).classes(
+                "w-full h-[calc(100vh-220px)]"  # Adjusted height since controls moved out
+            ) as main_split:
                 self.splitter = main_split
                 logger.debug("Building image tabs in splitter before section")
                 with main_split.before:

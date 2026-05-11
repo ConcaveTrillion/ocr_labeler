@@ -30,9 +30,7 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
     ):
         logger.debug("Initializing PageActions")
         self.project_viewmodel = project_viewmodel
-        self._app_state_view_model = getattr(
-            project_viewmodel, "_app_state_model", None
-        )
+        self._app_state_view_model = getattr(project_viewmodel, "_app_state_model", None)
         self.page_viewmodel = page_viewmodel
         self._on_save_page = on_save_page
         self._on_save_project = on_save_project
@@ -64,38 +62,41 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
 
         with ui.row().classes("items-center gap-2") as container:
             if self._on_reload_ocr:
-                self.reload_ocr_button = ui.button(
-                    "Reload OCR", on_click=self._on_reload_ocr
-                )
+                self.reload_ocr_button = ui.button("Reload OCR", on_click=self._on_reload_ocr)
+                self.reload_ocr_button.props('data-testid="reload-ocr-button"')
                 style_action_button(self.reload_ocr_button, size="md")
 
             if self._on_reload_ocr_edited:
                 self.reload_ocr_edited_button = ui.button(
                     "Reload OCR (Edited)", on_click=self._on_reload_ocr_edited
                 ).tooltip("Run OCR on the current edited image (after erase ops)")
+                self.reload_ocr_edited_button.props('data-testid="reload-ocr-edited-button"')
                 style_action_button(self.reload_ocr_edited_button, size="md")
 
             if self._on_save_page:
                 self.save_button = ui.button("Save Page", on_click=self._on_save_page)
+                self.save_button.props('data-testid="save-page-button"')
                 style_action_button(self.save_button, size="md")
 
             if self._on_save_project:
                 self.save_project_button = ui.button(
                     "Save Project", on_click=self._on_save_project
                 ).tooltip("Save all loaded pages in this project")
+                self.save_project_button.props('data-testid="save-project-button"')
                 style_action_button(self.save_project_button, size="md")
 
             if self._on_load_page:
                 self.load_button = ui.button("Load Page", on_click=self._on_load_page)
+                self.load_button.props('data-testid="load-page-button"')
                 style_action_button(self.load_button, size="md")
 
             if self._on_rematch_gt:
                 self.rematch_gt_button = ui.button(
                     "Rematch GT", on_click=self._on_rematch_gt
                 ).tooltip(
-                    "Re-run ground truth matching from source text, "
-                    "replacing any per-word GT edits"
+                    "Re-run ground truth matching from source text, replacing any per-word GT edits"
                 )
+                self.rematch_gt_button.props('data-testid="rematch-gt-button"')
                 style_action_button(self.rematch_gt_button, size="md")
 
             ui.separator().props("vertical")
@@ -110,9 +111,9 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
                 "pointer-events-none"
             )
 
-            self.page_source_label = ui.button(
-                "", on_click=lambda _event: None
-            ).classes("pointer-events-none")
+            self.page_source_label = ui.button("", on_click=lambda _event: None).classes(
+                "pointer-events-none"
+            )
             with self.page_source_label:
                 self.page_source_tooltip = ui.tooltip("")
             self._bind_from_safe(
@@ -167,9 +168,7 @@ class PageActions(NotificationMixin):  # pragma: no cover - UI wrapper file
 
     def sync_control_states(self) -> None:
         """Apply the latest disabled state directly to page action buttons."""
-        enabled = not bool(
-            getattr(self.project_viewmodel, "is_controls_disabled", False)
-        )
+        enabled = not bool(getattr(self.project_viewmodel, "is_controls_disabled", False))
 
         for button in (
             self.reload_ocr_button,

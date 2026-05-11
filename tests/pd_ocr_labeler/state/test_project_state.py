@@ -280,9 +280,7 @@ def test_ensure_page_checks_disk_before_cache(tmp_path):
     assert mock_can_load.call_count == 2
     workspace_save_dir = str(PersistencePathsOperations.get_saved_projects_root())
     cache_save_dir = str(PersistencePathsOperations.get_page_image_cache_root())
-    assert (
-        mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
-    )
+    assert mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     assert mock_can_load.call_args_list[1].kwargs["save_directory"] == cache_save_dir
     mock_load.assert_called_once_with(
         page_number=1,
@@ -329,9 +327,7 @@ def test_ensure_page_loads_workspace_labeled_before_cache(tmp_path):
     assert labeled_page.page_source == "filesystem"
     assert mock_can_load.call_count == 1
     workspace_save_dir = str(PersistencePathsOperations.get_saved_projects_root())
-    assert (
-        mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
-    )
+    assert mock_can_load.call_args_list[0].kwargs["save_directory"] == workspace_save_dir
     mock_load.assert_called_once_with(
         page_number=1,
         project_root=tmp_path,
@@ -457,8 +453,7 @@ def test_ensure_page_logs_timing_for_cached_ocr_load(tmp_path, caplog):
     ]
     assert timing_messages
     assert any(
-        "source=cached_ocr" in message and "status=loaded" in message
-        for message in timing_messages
+        "source=cached_ocr" in message and "status=loaded" in message for message in timing_messages
     )
 
 
@@ -502,8 +497,7 @@ def test_ensure_page_loader_failure_logs_warning_not_error(tmp_path, caplog):
     project_state_errors = [
         record
         for record in caplog.records
-        if record.name == "pd_ocr_labeler.state.project_state"
-        and record.levelno >= logging.ERROR
+        if record.name == "pd_ocr_labeler.state.project_state" and record.levelno >= logging.ERROR
     ]
     assert not project_state_errors
 
@@ -592,9 +586,7 @@ def test_save_current_page_updates_source_label(tmp_path):
     # Mock PageOperations globally at its source
     def mock_save_page(*args, **kwargs):
         save_directory = kwargs.get("save_directory", args[3] if len(args) > 3 else "")
-        if "cache" in str(save_directory):
-            return False  # Prevent auto-saving to cache
-        return True  # Allow user saves
+        return "cache" not in str(save_directory)  # Prevent auto-saving to cache; allow user saves
 
     with (
         patch(
@@ -733,9 +725,7 @@ def test_refine_all_bboxes_success(tmp_path):
 
     with (
         patch.object(state, "get_page_state") as mock_get_page_state,
-        patch.object(
-            state.page_ops, "refine_all_bboxes", return_value=True
-        ) as mock_refine,
+        patch.object(state.page_ops, "refine_all_bboxes", return_value=True) as mock_refine,
     ):
         mock_page_state = MagicMock()
         mock_page_state.get_page_model.return_value = mock_page
@@ -765,9 +755,7 @@ def test_reload_current_page_with_ocr_notifies_and_refreshes_cache():
     ):
         state.reload_current_page_with_ocr()
 
-    mock_page_state.reload_page_with_ocr.assert_called_once_with(
-        0, use_edited_image=False
-    )
+    mock_page_state.reload_page_with_ocr.assert_called_once_with(0, use_edited_image=False)
     mock_invalidate.assert_called_once()
     mock_update_cache.assert_called_once_with(force=True)
     mock_notify.assert_called_once()
@@ -788,9 +776,7 @@ def test_reload_current_page_with_ocr_edited_image_mode_passes_flag():
     ):
         state.reload_current_page_with_ocr(use_edited_image=True)
 
-    mock_page_state.reload_page_with_ocr.assert_called_once_with(
-        2, use_edited_image=True
-    )
+    mock_page_state.reload_page_with_ocr.assert_called_once_with(2, use_edited_image=True)
     mock_invalidate.assert_called_once()
     mock_update_cache.assert_called_once_with(force=True)
     mock_notify.assert_called_once()
@@ -847,9 +833,7 @@ def test_expand_and_refine_all_bboxes_success(tmp_path):
 
     with (
         patch.object(state, "get_page_state") as mock_get_page_state,
-        patch.object(
-            state.page_ops, "expand_and_refine_all_bboxes"
-        ) as mock_expand_refine,
+        patch.object(state.page_ops, "expand_and_refine_all_bboxes") as mock_expand_refine,
     ):
         mock_page_state = MagicMock()
         mock_page_state.get_page_model.return_value = mock_page

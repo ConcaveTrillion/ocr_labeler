@@ -11,7 +11,7 @@ iterate over the selected items applying Word/Block-level bbox operations.
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from pd_book_tools.ocr.block import Block
 from pd_book_tools.ocr.page import Page
@@ -28,9 +28,7 @@ class BboxOperations:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _recompute_lines_and_ancestors(
-        page: Page, affected_line_indices: set[int]
-    ) -> None:
+    def _recompute_lines_and_ancestors(page: Page, affected_line_indices: set[int]) -> None:
         """Recompute bboxes for affected lines, their parent items, and the page.
 
         Replaces the full ``page.finalize_page_structure()`` call with a
@@ -214,9 +212,7 @@ class BboxOperations:
                 try:
                     para.recompute_bounding_box()
                 except Exception:
-                    logger.warning(
-                        "Failed to recompute paragraph %s bbox", paragraph_index
-                    )
+                    logger.warning("Failed to recompute paragraph %s bbox", paragraph_index)
             try:
                 page.recompute_bounding_box()
             except Exception:
@@ -224,9 +220,7 @@ class BboxOperations:
             logger.info("%s %d selected paragraphs", label, len(unique_indices))
             return True
         except Exception as e:
-            logger.exception(
-                "Error in %s for paragraphs %s: %s", label, paragraph_indices, e
-            )
+            logger.exception("Error in %s for paragraphs %s: %s", label, paragraph_indices, e)
             return False
 
     # ------------------------------------------------------------------
@@ -242,9 +236,7 @@ class BboxOperations:
             "Refined",
         )
 
-    def expand_then_refine_words(
-        self, page: Page, word_keys: list[tuple[int, int]]
-    ) -> bool:
+    def expand_then_refine_words(self, page: Page, word_keys: list[tuple[int, int]]) -> bool:
         """Expand then refine selected word bounding boxes."""
         return self._apply_to_word_keys(
             page,
@@ -287,15 +279,11 @@ class BboxOperations:
         def _op(line: Block) -> bool:
             changed = False
             for word in line.words:
-                changed = (
-                    word.expand_then_refine_bbox(page.cv2_numpy_page_image) or changed
-                )
+                changed = word.expand_then_refine_bbox(page.cv2_numpy_page_image) or changed
             line.recompute_bounding_box()
             return changed
 
-        return self._apply_to_line_indices(
-            page, line_indices, _op, "Expand-then-refined"
-        )
+        return self._apply_to_line_indices(page, line_indices, _op, "Expand-then-refined")
 
     def expand_line_bboxes(
         self,
@@ -309,15 +297,11 @@ class BboxOperations:
         def _op(line: Block) -> bool:
             changed = False
             for word in line.words:
-                changed = (
-                    word.expand_bbox(padding_px, page_width, page_height) or changed
-                )
+                changed = word.expand_bbox(padding_px, page_width, page_height) or changed
             line.recompute_bounding_box()
             return changed
 
-        return self._apply_to_line_indices(
-            page, line_indices, _op, "Expanded bboxes in"
-        )
+        return self._apply_to_line_indices(page, line_indices, _op, "Expanded bboxes in")
 
     # ------------------------------------------------------------------
     # Paragraph-level bbox operations
@@ -335,26 +319,19 @@ class BboxOperations:
 
         return self._apply_to_paragraph_indices(page, paragraph_indices, _op, "Refined")
 
-    def expand_then_refine_paragraphs(
-        self, page: Page, paragraph_indices: list[int]
-    ) -> bool:
+    def expand_then_refine_paragraphs(self, page: Page, paragraph_indices: list[int]) -> bool:
         """Expand then refine all word bboxes in selected paragraphs."""
 
         def _op(paragraph: Block) -> bool:
             changed = False
             for line in paragraph.lines:
                 for word in line.words:
-                    changed = (
-                        word.expand_then_refine_bbox(page.cv2_numpy_page_image)
-                        or changed
-                    )
+                    changed = word.expand_then_refine_bbox(page.cv2_numpy_page_image) or changed
                 line.recompute_bounding_box()
             paragraph.recompute_bounding_box()
             return changed
 
-        return self._apply_to_paragraph_indices(
-            page, paragraph_indices, _op, "Expand-then-refined"
-        )
+        return self._apply_to_paragraph_indices(page, paragraph_indices, _op, "Expand-then-refined")
 
     def expand_paragraph_bboxes(
         self,
@@ -369,13 +346,9 @@ class BboxOperations:
             changed = False
             for line in paragraph.lines:
                 for word in line.words:
-                    changed = (
-                        word.expand_bbox(padding_px, page_width, page_height) or changed
-                    )
+                    changed = word.expand_bbox(padding_px, page_width, page_height) or changed
                 line.recompute_bounding_box()
             paragraph.recompute_bounding_box()
             return changed
 
-        return self._apply_to_paragraph_indices(
-            page, paragraph_indices, _op, "Expanded bboxes in"
-        )
+        return self._apply_to_paragraph_indices(page, paragraph_indices, _op, "Expanded bboxes in")

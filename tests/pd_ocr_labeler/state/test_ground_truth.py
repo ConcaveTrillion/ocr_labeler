@@ -56,9 +56,7 @@ def project_state():
         ("001.png", {"001.png": "text1", "001": "text2"}, "text1"),
     ],
 )
-def test_find_ground_truth_text_variants(
-    project_state, name, ground_truth_map, expected
-):
+def test_find_ground_truth_text_variants(project_state, name, ground_truth_map, expected):
     """Test find_ground_truth_text with various name variants and map contents."""
     result = project_state.find_ground_truth_text(name, ground_truth_map)
     assert result == expected
@@ -105,9 +103,7 @@ def test_find_ground_truth_text_case_insensitive_base(project_state):
 def test_find_ground_truth_text_full_path_uses_basename(project_state):
     """Lookup should succeed when page name is a full path string."""
     ground_truth_map = {"001.png": "text1"}
-    result = project_state.find_ground_truth_text(
-        "/tmp/project/images/001.png", ground_truth_map
-    )
+    result = project_state.find_ground_truth_text("/tmp/project/images/001.png", ground_truth_map)
     assert result == "text1"
 
 

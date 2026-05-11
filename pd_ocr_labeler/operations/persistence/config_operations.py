@@ -40,21 +40,15 @@ class ConfigOperations:
     def _ensure_config_file(path: Path) -> None:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(
-                ConfigOperations._default_config_contents(), encoding="utf-8"
-            )
+            path.write_text(ConfigOperations._default_config_contents(), encoding="utf-8")
             logger.info("Created default config file at %s", path)
         except Exception:
-            logger.warning(
-                "Failed to create default config file at %s", path, exc_info=True
-            )
+            logger.warning("Failed to create default config file at %s", path, exc_info=True)
 
     @staticmethod
     def set_source_projects_root(path: Path) -> None:
         """Persist a new source projects root to the config file."""
-        config_path = (
-            ConfigOperations.CONFIG_PATH or ConfigOperations.get_default_config_path()
-        )
+        config_path = ConfigOperations.CONFIG_PATH or ConfigOperations.get_default_config_path()
         try:
             config_path.parent.mkdir(parents=True, exist_ok=True)
             config_path.write_text(
@@ -65,9 +59,7 @@ class ConfigOperations:
             )
             logger.info("Updated source_projects_root to %s in %s", path, config_path)
         except Exception:
-            logger.warning(
-                "Failed to write source_projects_root to %s", config_path, exc_info=True
-            )
+            logger.warning("Failed to write source_projects_root to %s", config_path, exc_info=True)
 
     @staticmethod
     def get_source_projects_root(config_path: Path | None = None) -> Path:

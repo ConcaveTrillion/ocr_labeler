@@ -180,9 +180,7 @@ def test_apply_encoded_results_skips_duplicate_callback_payload(tmp_path):
     vm._apply_encoded_results(payload, current_page=SimpleNamespace(name="p1"))
     vm._apply_encoded_results(payload, current_page=SimpleNamespace(name="p1"))
 
-    callback.assert_called_once_with(
-        {"original_image_source": "data:image/png;base64,AAA"}
-    )
+    callback.assert_called_once_with({"original_image_source": "data:image/png;base64,AAA"})
 
 
 def test_schedule_image_update_skips_when_already_scheduled(tmp_path, monkeypatch):
@@ -292,9 +290,7 @@ def test_cache_image_to_disk_changes_url_for_small_pixel_differences(tmp_path):
     assert len(list(cache_dir.glob("*.png"))) == 2
 
 
-def test_update_image_sources_blocking_removes_old_unused_page_cache_files(
-    tmp_path, monkeypatch
-):
+def test_update_image_sources_blocking_removes_old_unused_page_cache_files(tmp_path, monkeypatch):
     project_state = ProjectState()
     project_state.project = type("P", (), {"pages": [None], "ground_truth_map": {}})()
     page_state = PageState()

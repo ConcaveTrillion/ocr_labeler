@@ -20,7 +20,7 @@ class Project:
     pages: list[Page | None] = field(default_factory=list)
     image_paths: list[Path] = field(default_factory=list)
 
-    # Ground Truth mapping loaded from a project-level pages.json file: {"001.png": "Ground truth text"}
+    # Ground Truth mapping loaded from a project-level pages.json file: {"001.png": "Ground truth text"} # noqa: E501
     ground_truth_map: dict[str, str] = field(default_factory=dict)
 
     # Project metadata
@@ -54,7 +54,7 @@ class Project:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Project":
+    def from_dict(cls, data: dict) -> Project:
         """Create Project instance from metadata dictionary."""
         # Create instance with metadata fields
         project = cls(

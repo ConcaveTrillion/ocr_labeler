@@ -12,9 +12,7 @@ from ..shared.view_helpers import NotificationMixin
 logger = logging.getLogger(__name__)
 
 
-class ProjectNavigationControls(
-    NotificationMixin
-):  # pragma: no cover - UI wrapper file
+class ProjectNavigationControls(NotificationMixin):  # pragma: no cover - UI wrapper file
     """Project-level page navigation and page metadata controls."""
 
     def __init__(
@@ -37,16 +35,19 @@ class ProjectNavigationControls(
 
     def build(self) -> ui.element:
         logger.debug("Building ProjectNavigationControls UI")
-        with ui.column().classes("gap-2") as container:
+        with ui.column().classes("gap-2") as container:  # noqa: SIM117  # NiceGUI nested with-contexts cannot be merged
             with ui.row().classes("items-center gap-2"):
                 self.prev_button = ui.button("Prev", on_click=self._on_prev)
+                self.prev_button.props('data-testid="nav-prev-button"')
                 style_action_button(self.prev_button, size="md")
                 self.next_button = ui.button("Next", on_click=self._on_next)
+                self.next_button.props('data-testid="nav-next-button"')
                 style_action_button(self.next_button, size="md")
                 self.goto_button = ui.button(
                     "Go To:",
                     on_click=lambda event: self._on_goto(self.page_input.value, event),
                 )
+                self.goto_button.props('data-testid="nav-goto-button"')
                 style_action_button(self.goto_button, size="md")
                 self.page_input = (
                     ui.number(label="Page", value=1, min=1, format="%d")
@@ -54,9 +55,10 @@ class ProjectNavigationControls(
                         "keydown.enter",
                         lambda event: self._on_goto(self.page_input.value, event),
                     )
-                    .props("autocomplete=off")
+                    .props('autocomplete=off data-testid="nav-page-input"')
                 )
                 self.page_total = ui.label("")
+                self.page_total.props('data-testid="nav-page-total-label"')
                 self._bind_disabled_from_safe(
                     self.prev_button,
                     self.viewmodel,
@@ -111,19 +113,13 @@ class ProjectNavigationControls(
         aligned with the view model.
         """
         if getattr(self, "prev_button", None) is not None:
-            self.prev_button.set_enabled(
-                not bool(getattr(self.viewmodel, "prev_disabled", False))
-            )
+            self.prev_button.set_enabled(not bool(getattr(self.viewmodel, "prev_disabled", False)))
             self.prev_button.update()
         if getattr(self, "next_button", None) is not None:
-            self.next_button.set_enabled(
-                not bool(getattr(self.viewmodel, "next_disabled", False))
-            )
+            self.next_button.set_enabled(not bool(getattr(self.viewmodel, "next_disabled", False)))
             self.next_button.update()
         if getattr(self, "goto_button", None) is not None:
-            self.goto_button.set_enabled(
-                not bool(getattr(self.viewmodel, "goto_disabled", False))
-            )
+            self.goto_button.set_enabled(not bool(getattr(self.viewmodel, "goto_disabled", False)))
             self.goto_button.update()
         if self.page_input is not None:
             self.page_input.set_enabled(

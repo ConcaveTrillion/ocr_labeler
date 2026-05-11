@@ -33,9 +33,7 @@ def test_project_state_direct_access_and_delegation_removal():
     # Test setters work
     state.is_loading = True
     assert state.project_state.is_project_loading is True
-    assert (
-        state.is_loading is True
-    )  # Should be True because project_state.is_loading is True
+    assert state.is_loading is True  # Should be True because project_state.is_loading is True
 
     state.is_loading = False
     assert state.project_state.is_project_loading is False

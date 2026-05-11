@@ -7,8 +7,9 @@ import os
 import platform
 import re
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class ModelSelectionOperations:
     HF_LATEST_KEY = "huggingface"
     HF_PINNED_KEY_PREFIX = "huggingface@"
     MODEL_STORE_DIRNAME = "pd-ml-models"
-    PREFERRED_ALL_PROFILES = {"all", "base-ocr"}
+    PREFERRED_ALL_PROFILES: ClassVar[set[str]] = {"all", "base-ocr"}
     TIMESTAMP_SUFFIX_PATTERN = re.compile(r"(\d{10})$")
 
     @classmethod
@@ -131,9 +132,7 @@ class ModelSelectionOperations:
         if system_name == "Linux":
             data_home = os.getenv("XDG_DATA_HOME")
             base_dir = (
-                Path(data_home).expanduser()
-                if data_home
-                else Path.home() / ".local" / "share"
+                Path(data_home).expanduser() if data_home else Path.home() / ".local" / "share"
             )
         elif system_name == "Darwin":
             base_dir = Path.home() / "Library" / "Application Support"
@@ -201,13 +200,11 @@ class ModelSelectionOperations:
         if last_modified is None:
             return None
         if isinstance(last_modified, datetime) and last_modified.tzinfo is None:
-            last_modified = last_modified.replace(tzinfo=timezone.utc)
+            last_modified = last_modified.replace(tzinfo=UTC)
         return last_modified
 
     @classmethod
-    def download_hf_weights(
-        cls, option: OCRModelOption
-    ) -> tuple[Path, Path, str | None]:
+    def download_hf_weights(cls, option: OCRModelOption) -> tuple[Path, Path, str | None]:
         """Download HF detection + recognition weights and any vocab sidecar.
 
         Returns ``(detection_path, recognition_path, vocab_text)``. Raises
@@ -215,13 +212,9 @@ class ModelSelectionOperations:
         fails (caller is expected to surface a notification).
         """
         if not option.is_huggingface:
-            raise ValueError(
-                f"download_hf_weights called on non-HF option {option.key!r}"
-            )
+            raise ValueError(f"download_hf_weights called on non-HF option {option.key!r}")
         if not option.hf_detection_filename or not option.hf_recognition_filename:
-            raise ValueError(
-                f"HF option {option.key!r} is missing detection/recognition filenames"
-            )
+            raise ValueError(f"HF option {option.key!r} is missing detection/recognition filenames")
 
         try:
             from pd_book_tools.hf import OCR_MODEL_SIDECARS, hf_download
@@ -271,14 +264,10 @@ class ModelSelectionOperations:
                 continue
 
             detection_by_signature = {
-                cls._stem_signature(p.stem): p
-                for p in detection_dir.glob("*.pt")
-                if p.is_file()
+                cls._stem_signature(p.stem): p for p in detection_dir.glob("*.pt") if p.is_file()
             }
             recognition_by_signature = {
-                cls._stem_signature(p.stem): p
-                for p in recognition_dir.glob("*.pt")
-                if p.is_file()
+                cls._stem_signature(p.stem): p for p in recognition_dir.glob("*.pt") if p.is_file()
             }
 
             for signature in sorted(
@@ -317,9 +306,7 @@ class ModelSelectionOperations:
                 if path is None or not path.is_file():
                     continue
                 try:
-                    mtime = datetime.fromtimestamp(
-                        path.stat().st_mtime, tz=timezone.utc
-                    )
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
                 except OSError:
                     continue
                 if latest is None or mtime > latest:
@@ -398,9 +385,7 @@ class ModelSelectionOperations:
         return updated
 
     @classmethod
-    def find_preferred_all_model_key(
-        cls, options: dict[str, OCRModelOption]
-    ) -> str | None:
+    def find_preferred_all_model_key(cls, options: dict[str, OCRModelOption]) -> str | None:
         """Return the latest preferred fine-tuned local key for the all profile."""
         keys = [
             key
@@ -414,25 +399,17 @@ class ModelSelectionOperations:
         return cls._latest_key(keys)
 
     @classmethod
-    def find_latest_detection_model_key(
-        cls, options: dict[str, OCRModelOption]
-    ) -> str | None:
+    def find_latest_detection_model_key(cls, options: dict[str, OCRModelOption]) -> str | None:
         """Return the latest available local detection model key."""
         return cls._latest_key(cls._candidate_keys_for_component(options, "detection"))
 
     @classmethod
-    def find_latest_recognition_model_key(
-        cls, options: dict[str, OCRModelOption]
-    ) -> str | None:
+    def find_latest_recognition_model_key(cls, options: dict[str, OCRModelOption]) -> str | None:
         """Return the latest available local recognition model key."""
-        return cls._latest_key(
-            cls._candidate_keys_for_component(options, "recognition")
-        )
+        return cls._latest_key(cls._candidate_keys_for_component(options, "recognition"))
 
     @classmethod
-    def pick_default_keys(
-        cls, options: dict[str, OCRModelOption]
-    ) -> tuple[str, str, str]:
+    def pick_default_keys(cls, options: dict[str, OCRModelOption]) -> tuple[str, str, str]:
         """Pick default detection / recognition keys plus a status reason.
 
         Priority (per user spec):

@@ -15,9 +15,7 @@ class TextOperations:
     """
 
     @staticmethod
-    def get_page_texts(
-        page: Page | None, ground_truth_map: dict | None = None
-    ) -> tuple[str, str]:
+    def get_page_texts(page: Page | None, ground_truth_map: dict | None = None) -> tuple[str, str]:
         """Get OCR and ground truth text for a page.
 
         Args:
@@ -32,19 +30,13 @@ class TextOperations:
 
         # Get OCR text from page
         ocr_text = getattr(page, "text", "") or ""
-        if isinstance(ocr_text, str):
-            ocr_text = ocr_text if ocr_text.strip() else ""
-        else:
-            ocr_text = ""
+        ocr_text = (ocr_text if ocr_text.strip() else "") if isinstance(ocr_text, str) else ""
 
         # Get ground truth text from mapping
         gt_text = ""
         if ground_truth_map and hasattr(page, "name") and page.name:
             gt_text = ground_truth_map.get(page.name, "")
-            if isinstance(gt_text, str):
-                gt_text = gt_text if gt_text.strip() else ""
-            else:
-                gt_text = ""
+            gt_text = (gt_text if gt_text.strip() else "") if isinstance(gt_text, str) else ""
 
         return ocr_text, gt_text
 

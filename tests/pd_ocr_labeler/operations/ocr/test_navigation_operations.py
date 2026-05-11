@@ -89,9 +89,7 @@ class TestNavigationOperations:
         assert result.success is True
         assert result.message == ""
         assert target_index == 2  # 0-based index
-        assert (
-            "goto_page_number: called with page_number=3, max_pages=10" in caplog.text
-        )
+        assert "goto_page_number: called with page_number=3, max_pages=10" in caplog.text
         assert "goto_page_number: navigating to index=2" in caplog.text
 
     def test_goto_page_number_too_low(self, caplog):
@@ -102,9 +100,7 @@ class TestNavigationOperations:
         assert result.success is False
         assert result.message == "Invalid page number 0"
         assert target_index == -1
-        assert (
-            "goto_page_number: invalid page number 0 (valid range: 1-10)" in caplog.text
-        )
+        assert "goto_page_number: invalid page number 0 (valid range: 1-10)" in caplog.text
 
     def test_goto_page_number_too_high(self, caplog):
         """Test navigation to page number above maximum."""
@@ -114,10 +110,7 @@ class TestNavigationOperations:
         assert result.success is False
         assert result.message == "Invalid page number 15"
         assert target_index == -1
-        assert (
-            "goto_page_number: invalid page number 15 (valid range: 1-10)"
-            in caplog.text
-        )
+        assert "goto_page_number: invalid page number 15 (valid range: 1-10)" in caplog.text
 
     def test_goto_page_index_valid(self, caplog):
         """Test navigation to valid page index."""
@@ -126,9 +119,7 @@ class TestNavigationOperations:
 
         assert result.success is True
         assert clamped_index == 3
-        assert (
-            "goto_page_index: called with target_index=3, max_index=10" in caplog.text
-        )
+        assert "goto_page_index: called with target_index=3, max_index=10" in caplog.text
         assert "goto_page_index: clamped to index=3" in caplog.text
 
     def test_goto_page_index_clamp_low(self, caplog):

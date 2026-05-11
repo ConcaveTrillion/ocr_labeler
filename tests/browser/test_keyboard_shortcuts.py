@@ -37,21 +37,32 @@ def test_page_input_present(browser_app_url: str, browser_page) -> None:
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     expect(page_input).to_be_visible()
     # Initial value should be 1
     expect(page_input).to_have_value("1")
 
 
 @pytest.mark.browser
-def test_page_input_accepts_only_valid_numbers(
-    browser_app_url: str, browser_page
-) -> None:
+def test_page_total_label_present(browser_app_url: str, browser_page) -> None:
+    """The '/ N' total-count label is reachable via testid and shows the total."""
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    total_label = page.locator('[data-testid="nav-page-total-label"]')
+    expect(total_label).to_be_visible()
+    # Browser-test fixture has 3 pages; allow any positive count to keep this
+    # robust if the fixture grows. The format is `/ N`.
+    expect(total_label).to_have_text(re.compile(r"^\s*/\s*\d+\s*$"))
+
+
+@pytest.mark.browser
+def test_page_input_accepts_only_valid_numbers(browser_app_url: str, browser_page) -> None:
     """Entering a non-numeric value does not navigate away from current page."""
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     # Fill with 0 (below minimum of 1) and press Enter
     page_input.fill("0")
     page_input.press("Enter")
@@ -72,7 +83,7 @@ def test_enter_in_page_input_navigates(browser_app_url: str, browser_page) -> No
     page = browser_page
     _setup(page, browser_app_url)
 
-    page_input = page.get_by_label("Page")
+    page_input = page.locator('[data-testid="nav-page-input"]')
     page_input.fill("2")
     page.wait_for_timeout(200)
     page_input.press("Enter")
@@ -81,7 +92,7 @@ def test_enter_in_page_input_navigates(browser_app_url: str, browser_page) -> No
     wait_for_page_loaded(page)
 
     # Verify page content has changed (page input now shows 2)
-    expect(page.get_by_label("Page")).to_have_value("2")
+    expect(page.locator('[data-testid="nav-page-input"]')).to_have_value("2")
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +124,62 @@ def test_enter_in_gt_input_commits(browser_app_url: str, browser_page) -> None:
     expect(gt_input).to_have_value("XYZZY_KSC")
 
     # Clean up: close dialog without saving
+    page.locator('[data-testid="dialog-close-button"]').click()
+    page.wait_for_timeout(500)
+
+
+@pytest.mark.browser
+def test_enter_in_gt_input_unchanged_value_no_error(browser_app_url: str, browser_page) -> None:
+    """Negative-branch coverage symmetric to ``test_enter_in_gt_input_commits``.
+
+    Iter-39's keyboard-shortcut review (ranked follow-up #5) called out the
+    missing unchanged-value case for the dialog GT input Enter handler. The
+    success-path test covers "fill new value + Enter -> value persists"; this
+    test pins the invariant for "Enter without editing":
+
+    - The as-opened GT value is preserved (no spurious mutation).
+    - No ``bg-negative`` or ``bg-warning`` Quasar notification fires (the
+      handler chain ``_commit_word_gt_input_change -> _handle_word_gt_edit``
+      only emits warnings on a missing callback / failed callback / raised
+      exception; an unchanged-value commit must remain silent).
+
+    A regression that made the unchanged commit short-circuit *but* surfaced
+    a stray notification, or that mutated the input value via an unintended
+    rerender, would fail this test while passing the existing success-path
+    test.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+
+    edit_btn = page.locator('[data-testid="edit-word-button"]').first
+    edit_btn.click()
+    page.get_by_text("Merge / Split").first.wait_for(state="visible", timeout=10_000)
+
+    dialog = page.locator(".q-dialog").last
+    gt_input = dialog.get_by_label("GT")
+    expect(gt_input).to_be_visible()
+
+    # Capture the as-opened GT value (could be empty or non-empty depending
+    # on the fixture word). We assert the same value persists, so the test
+    # works regardless of which word the dialog opened on.
+    original_value = gt_input.input_value()
+
+    gt_input.focus()
+    page.wait_for_timeout(100)
+    gt_input.press("Enter")
+    page.wait_for_timeout(500)
+
+    # Invariant 1: input value unchanged.
+    expect(gt_input).to_have_value(original_value)
+
+    # Invariant 2: no negative or warning notification surfaced. The success
+    # path of _handle_word_gt_edit is silent — only the missing-callback,
+    # failed-callback, and exception paths emit notifications, and none of
+    # those should trigger on an unchanged-value commit.
+    assert page.locator(".q-notification.bg-negative").count() == 0
+    assert page.locator(".q-notification.bg-warning").count() == 0
+
+    # Clean up: close dialog without saving.
     page.locator('[data-testid="dialog-close-button"]').click()
     page.wait_for_timeout(500)
 

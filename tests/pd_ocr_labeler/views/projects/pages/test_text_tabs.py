@@ -466,7 +466,7 @@ def test_text_tabs_set_word_attributes_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        update_word_attributes=lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (
+        update_word_attributes=lambda line_index, word_index, italic, small_caps, blackletter, left_footnote, right_footnote: (  # noqa: E501
             calls.append(
                 (
                     line_index,
@@ -790,9 +790,7 @@ def test_text_tabs_merge_paragraphs_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        merge_paragraphs=lambda paragraph_indices: (
-            calls.append((paragraph_indices,)) or True
-        ),
+        merge_paragraphs=lambda paragraph_indices: calls.append((paragraph_indices,)) or True,
         split_paragraph_after_line=lambda *_: False,
     )
 
@@ -819,9 +817,7 @@ def test_text_tabs_split_paragraph_after_line_callback_invokes_page_state_method
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
         merge_paragraphs=lambda *_: False,
-        split_paragraph_after_line=lambda line_index: (
-            calls.append((line_index,)) or True
-        ),
+        split_paragraph_after_line=lambda line_index: calls.append((line_index,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=6)
@@ -854,9 +850,7 @@ def test_text_tabs_split_paragraph_with_selected_lines_callback_invokes_page_sta
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=7)
-    result = text_tabs.word_match_view.split_paragraph_with_selected_lines_callback(
-        [0, 2]
-    )
+    result = text_tabs.word_match_view.split_paragraph_with_selected_lines_callback([0, 2])
 
     assert result is True
     assert calls == [([0, 2],)]
@@ -943,9 +937,7 @@ def test_text_tabs_delete_paragraphs_callback_invokes_page_state_method():
         merge_paragraphs=lambda *_: False,
         split_paragraph_after_line=lambda *_: False,
         split_paragraph_with_selected_lines=lambda *_: False,
-        delete_paragraphs=lambda paragraph_indices: (
-            calls.append((paragraph_indices,)) or True
-        ),
+        delete_paragraphs=lambda paragraph_indices: calls.append((paragraph_indices,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=8)
@@ -1232,9 +1224,7 @@ def test_text_tabs_refine_paragraphs_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        refine_paragraphs=lambda paragraph_indices: (
-            calls.append((paragraph_indices,)) or True
-        ),
+        refine_paragraphs=lambda paragraph_indices: calls.append((paragraph_indices,)) or True,
     )
 
     text_tabs = TextTabs(page_state=page_state, page_index=16)
@@ -1259,7 +1249,7 @@ def test_text_tabs_nudge_word_bbox_callback_invokes_page_state_method():
         current_page=None,
         _current_page_index=0,
         copy_ground_truth_to_ocr=lambda *_: False,
-        nudge_word_bbox=lambda line_index, word_index, left_delta, right_delta, top_delta, bottom_delta, refine_after=True: (
+        nudge_word_bbox=lambda line_index, word_index, left_delta, right_delta, top_delta, bottom_delta, refine_after=True: (  # noqa: E501
             calls.append(
                 (
                     line_index,

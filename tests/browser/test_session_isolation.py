@@ -27,7 +27,7 @@ def test_two_tabs_independent_state(browser_app_url: str, browser_context) -> No
     load_project(tab1, "browser-test-project")
 
     # Tab1 should have the project loaded
-    tab1.get_by_role("button", name="Next").wait_for(state="visible")
+    tab1.locator('[data-testid="nav-next-button"]').wait_for(state="visible")
 
     # Tab2 should still show the placeholder
     tab2.get_by_text("No Project Loaded").first.wait_for(state="visible")
@@ -45,24 +45,20 @@ def test_two_tabs_different_pages(browser_app_url: str, browser_context) -> None
 
     # Tab1 goes to page 1
     tab1 = context.new_page()
-    tab1.goto(
-        f"{base_url}/project/browser-test-project/page/1", wait_until="networkidle"
-    )
-    tab1.get_by_role("button", name="Next").wait_for(state="visible", timeout=60_000)
+    tab1.goto(f"{base_url}/project/browser-test-project/page/1", wait_until="networkidle")
+    tab1.locator('[data-testid="nav-next-button"]').wait_for(state="visible", timeout=60_000)
 
     # Tab2 goes to page 3
     tab2 = context.new_page()
-    tab2.goto(
-        f"{base_url}/project/browser-test-project/page/3", wait_until="networkidle"
-    )
-    tab2.get_by_role("button", name="Prev").wait_for(state="visible", timeout=60_000)
+    tab2.goto(f"{base_url}/project/browser-test-project/page/3", wait_until="networkidle")
+    tab2.locator('[data-testid="nav-prev-button"]').wait_for(state="visible", timeout=60_000)
 
     # Verify tab1 is on page 1
-    tab1_page_input = tab1.get_by_label("Page")
+    tab1_page_input = tab1.locator('[data-testid="nav-page-input"]')
     assert tab1_page_input.input_value() == "1"
 
     # Verify tab2 is on page 3
-    tab2_page_input = tab2.get_by_label("Page")
+    tab2_page_input = tab2.locator('[data-testid="nav-page-input"]')
     assert tab2_page_input.input_value() == "3"
 
     tab1.close()

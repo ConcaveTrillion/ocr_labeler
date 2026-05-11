@@ -31,19 +31,17 @@ class LineOperations:
     # Line-level GT copy/clear (delegate to Block methods)
     # ------------------------------------------------------------------
 
-    def _validated_line(self, page: "Page", line_index: int):
+    def _validated_line(self, page: Page, line_index: int):
         """Return the line at *line_index* or None if invalid."""
         if not page:
             return None
         lines = page.lines
         if line_index < 0 or line_index >= len(lines):
-            logger.warning(
-                "Line index %s out of range (0-%s)", line_index, len(lines) - 1
-            )
+            logger.warning("Line index %s out of range (0-%s)", line_index, len(lines) - 1)
             return None
         return lines[line_index]
 
-    def copy_ground_truth_to_ocr(self, page: "Page", line_index: int) -> bool:
+    def copy_ground_truth_to_ocr(self, page: Page, line_index: int) -> bool:
         """Copy ground truth text to OCR text for all words in the specified line."""
         line = self._validated_line(page, line_index)
         if line is None:
@@ -53,7 +51,7 @@ class LineOperations:
             logger.info("No ground truth text found to copy in line %s", line_index)
         return result
 
-    def copy_ocr_to_ground_truth(self, page: "Page", line_index: int) -> bool:
+    def copy_ocr_to_ground_truth(self, page: Page, line_index: int) -> bool:
         """Copy OCR text to ground truth text for all words in the specified line."""
         line = self._validated_line(page, line_index)
         if line is None:
@@ -63,7 +61,7 @@ class LineOperations:
             logger.info("No OCR text found to copy in line %s", line_index)
         return result
 
-    def clear_ground_truth_for_line(self, page: "Page", line_index: int) -> bool:
+    def clear_ground_truth_for_line(self, page: Page, line_index: int) -> bool:
         """Clear ground truth text for all words in the specified line."""
         line = self._validated_line(page, line_index)
         if line is None:
@@ -79,7 +77,7 @@ class LineOperations:
 
     def copy_selected_words_ocr_to_ground_truth(
         self,
-        page: "Page",
+        page: Page,
         word_keys: list[tuple[int, int]],
     ) -> bool:
         """Copy OCR text to GT for only the selected word keys.
@@ -103,11 +101,7 @@ class LineOperations:
         for line_index, word_index in sorted(set(word_keys)):
             try:
                 line_words = page.validated_line_words(line_index)
-                if (
-                    line_words is None
-                    or word_index < 0
-                    or word_index >= len(line_words)
-                ):
+                if line_words is None or word_index < 0 or word_index >= len(line_words):
                     continue
 
                 target_word = line_words[word_index]
@@ -134,7 +128,7 @@ class LineOperations:
 
     def update_word_ground_truth(
         self,
-        page: "Page",
+        page: Page,
         line_index: int,
         word_index: int,
         ground_truth_text: str,
@@ -213,7 +207,7 @@ class LineOperations:
 
     def update_word_attributes(
         self,
-        page: "Page",
+        page: Page,
         line_index: int,
         word_index: int,
         italic: bool,
@@ -264,19 +258,12 @@ class LineOperations:
             desired_right_footnote = bool(right_footnote)
 
             if (
-                target_word.read_style_attribute("italic", aliases=("is_italic",))
-                == desired_italic
-                and target_word.read_style_attribute(
-                    "small_caps", aliases=("is_small_caps",)
-                )
+                target_word.read_style_attribute("italic", aliases=("is_italic",)) == desired_italic
+                and target_word.read_style_attribute("small_caps", aliases=("is_small_caps",))
                 == desired_small_caps
-                and target_word.read_style_attribute(
-                    "blackletter", aliases=("is_blackletter",)
-                )
+                and target_word.read_style_attribute("blackletter", aliases=("is_blackletter",))
                 == desired_blackletter
-                and target_word.read_style_attribute(
-                    "left_footnote", aliases=("is_left_footnote",)
-                )
+                and target_word.read_style_attribute("left_footnote", aliases=("is_left_footnote",))
                 == desired_left_footnote
                 and target_word.read_style_attribute(
                     "right_footnote", aliases=("is_right_footnote",)

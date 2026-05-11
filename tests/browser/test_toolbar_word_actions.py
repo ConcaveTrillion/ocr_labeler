@@ -92,9 +92,7 @@ def _get_ocr_labels(page: Page):
 
 
 @pytest.mark.browser
-def test_word_scope_buttons_disabled_without_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_word_scope_buttons_disabled_without_selection(browser_app_url: str, browser_page) -> None:
     """All word-scope buttons are disabled when no word is selected."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -106,9 +104,7 @@ def test_word_scope_buttons_disabled_without_selection(
 
 
 @pytest.mark.browser
-def test_word_scope_buttons_enabled_with_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_word_scope_buttons_enabled_with_selection(browser_app_url: str, browser_page) -> None:
     """Selecting a word enables most word-scope buttons."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -133,9 +129,7 @@ def test_word_scope_buttons_enabled_with_selection(
 
 
 @pytest.mark.browser
-def test_word_merge_disabled_with_single_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_word_merge_disabled_with_single_selection(browser_app_url: str, browser_page) -> None:
     """Merge is disabled when only 1 word is selected (need 2+)."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -146,9 +140,7 @@ def test_word_merge_disabled_with_single_selection(
 
 
 @pytest.mark.browser
-def test_word_delete_disabled_without_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_word_delete_disabled_without_selection(browser_app_url: str, browser_page) -> None:
     """Delete is disabled when nothing is selected."""
     page = browser_page
     _setup(page, browser_app_url)

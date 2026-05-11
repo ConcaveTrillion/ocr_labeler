@@ -70,10 +70,8 @@ class ProjectDiscoveryOperations:
                         if f.is_file()
                     ):
                         projects[d.name] = d
-                except Exception:  # noqa: BLE001 - skip unreadable child
-                    logger.warning(
-                        "Failed to read project directory %s", d, exc_info=True
-                    )
+                except Exception:
+                    logger.warning("Failed to read project directory %s", d, exc_info=True)
                     continue
         except Exception:  # pragma: no cover - defensive
             logger.warning("Project discovery failed", exc_info=True)

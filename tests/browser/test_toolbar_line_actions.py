@@ -16,6 +16,7 @@ from .helpers import load_project, wait_for_app_ready, wait_for_page_loaded
 LINE_MERGE = '[data-testid="line-merge-button"]'
 LINE_REFINE = '[data-testid="line-refine-bboxes-button"]'
 LINE_EXPAND_REFINE = '[data-testid="line-expand-refine-bboxes-button"]'
+LINE_EXPAND_BBOXES = '[data-testid="line-expand-bboxes-button"]'
 LINE_SPLIT_AFTER_WORD = '[data-testid="line-split-after-word-button"]'
 LINE_SPLIT_BY_SELECTION = '[data-testid="line-split-by-selection-button"]'
 LINE_FORM_PARAGRAPH = '[data-testid="line-form-paragraph-button"]'
@@ -35,6 +36,7 @@ ALL_LINE_BUTTONS = [
     LINE_MERGE,
     LINE_REFINE,
     LINE_EXPAND_REFINE,
+    LINE_EXPAND_BBOXES,
     LINE_SPLIT_AFTER_WORD,
     LINE_SPLIT_BY_SELECTION,
     LINE_FORM_PARAGRAPH,
@@ -103,9 +105,7 @@ def _get_ocr_labels(page: Page):
 
 
 @pytest.mark.browser
-def test_line_scope_buttons_disabled_without_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_scope_buttons_disabled_without_selection(browser_app_url: str, browser_page) -> None:
     """All line-scope buttons are disabled when no line is selected."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -117,9 +117,7 @@ def test_line_scope_buttons_disabled_without_selection(
 
 
 @pytest.mark.browser
-def test_line_scope_buttons_enabled_with_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_scope_buttons_enabled_with_selection(browser_app_url: str, browser_page) -> None:
     """Selecting a line enables most line-scope buttons."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -131,6 +129,7 @@ def test_line_scope_buttons_enabled_with_selection(
     for selector in [
         LINE_REFINE,
         LINE_EXPAND_REFINE,
+        LINE_EXPAND_BBOXES,
         LINE_GT_TO_OCR,
         LINE_OCR_TO_GT,
         LINE_VALIDATE,
@@ -144,9 +143,7 @@ def test_line_scope_buttons_enabled_with_selection(
 
 
 @pytest.mark.browser
-def test_line_merge_disabled_with_single_selection(
-    browser_app_url: str, browser_page
-) -> None:
+def test_line_merge_disabled_with_single_selection(browser_app_url: str, browser_page) -> None:
     """Merge is disabled when only 1 line is selected (need 2+)."""
     page = browser_page
     _setup(page, browser_app_url)
@@ -166,6 +163,7 @@ def test_line_scope_buttons_have_tooltips(browser_app_url: str, browser_page) ->
         (LINE_MERGE, "Merge selected lines"),
         (LINE_REFINE, "Refine selected lines"),
         (LINE_EXPAND_REFINE, "Expand then refine selected lines"),
+        (LINE_EXPAND_BBOXES, "Expand selected line bboxes"),
         (LINE_SPLIT_AFTER_WORD, "Split the selected line"),
         (LINE_SPLIT_BY_SELECTION, "Split line"),
         (LINE_FORM_PARAGRAPH, "Select lines to form a new paragraph"),
@@ -211,6 +209,25 @@ def test_line_expand_refine(browser_app_url: str, browser_page) -> None:
 
     _select_line(page, 0)
     page.locator(LINE_EXPAND_REFINE).click()
+    _wait_for_notification(page)
+
+
+@pytest.mark.browser
+def test_line_expand_bboxes(browser_app_url: str, browser_page) -> None:
+    """Select line, click Expand bboxes: success notification appears.
+
+    Pure-padding bbox expansion (no refine pass).  Same enable invariant
+    as Refine / Expand+Refine: ``callback is not None and >= 1 line
+    selected``.  The handler reports ``Expanded bboxes in N lines`` on
+    success or a warning notification on failure — either way a Quasar
+    notification fires, which is what we assert.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    _select_line(page, 0)
+    page.locator(LINE_EXPAND_BBOXES).click()
     _wait_for_notification(page)
 
 
@@ -390,3 +407,231 @@ def test_line_form_paragraph(browser_app_url: str, browser_page) -> None:
 
     # Paragraph count should increase by 1 (back to original since merge was -1)
     expect(page.locator(PARA_EXPANDER)).to_have_count(paras_before)
+
+
+@pytest.mark.browser
+def test_line_split_after_word(browser_app_url: str, browser_page) -> None:
+    """Select one word, click Split-after-word: line count increases by 1.
+
+    The split-after-word handler enables when ``split_line_after_word_callback
+    is not None and exactly 1 word is selected``
+    (``word_match_toolbar.py`` ll. 824-828).  It dispatches to
+    ``page_state.split_line_after_word(line_index, word_index)`` which splits
+    the line into two new lines after the selected word and returns True on
+    success.  The browser-test-project page 1 fresh OCR materializes 7 lines
+    with multiple words each, so selecting word 0 lands inside a multi-word
+    line and the split completes successfully (verified manually: notification
+    reads "Split line 1 after word 1" and line count goes from 7 to 8).
+    Mirrors ``test_line_delete``'s line-count delta pattern, swapping the
+    ``-1`` invariant for ``+1``.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    # Count line cards before — need at least 1 multi-word line for the
+    # split to succeed.  Page 1 has 7 lines / 21 words via fresh OCR.
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    _select_word(page, 0)
+
+    split_btn = page.locator(LINE_SPLIT_AFTER_WORD)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Line count should increase by 1 (one line became two).
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection(browser_app_url: str, browser_page) -> None:
+    """Select one word, click Split-by-selection: line count increases by 1.
+
+    The split-by-selection handler enables when
+    ``split_lines_into_selected_unselected_callback is not None and
+    >= 1 word selected`` (``word_match_toolbar.py`` ll. 842-846).  It
+    dispatches to
+    ``page_state.split_lines_into_selected_and_unselected_words(keys)``
+    which partitions each affected line into a "selected words" line and
+    an "unselected words" line.  With word 0 selected on a multi-word
+    line, this means the first word becomes its own line and the
+    remaining words stay together — net +1 line (verified by
+    ``pd-book-tools`` unit test
+    ``TestSplitLinesIntoSelectedAndUnselected::test_split_with_valid_selection``
+    on a six-word page: ``[a]`` + ``[b, c]`` from ``[a, b, c]``).
+    The browser-test-project page 1 fresh OCR materializes 7 lines with
+    multiple words each, matching iter-19's split-after-word fixture, so
+    selecting word 0 reliably produces a +1 line delta.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    # Page 1 has 7 lines / 21 words via fresh OCR — line 0 is multi-word
+    # so partitioning into selected (word 0) and unselected (rest)
+    # yields 2 lines.
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    _select_word(page, 0)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Line count should increase by 1 (one line became two).
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection_cross_line(browser_app_url: str, browser_page) -> None:
+    """Cross-line split-by-selection: line count increases by 2.
+
+    The distinguishing semantic of
+    ``split_lines_into_selected_and_unselected_words`` (vs
+    ``split_line_with_selected_words`` / "form-line") is that it
+    partitions **each affected source line** into a selected + unselected
+    pair.  When the selection spans two source lines, the operation
+    therefore produces *two* additional lines (each source line splits
+    into two).  See
+    ``docs/review-notes/2026-05-06-toolbar-split-family.md`` for the full
+    distinguishing-coverage analysis.
+
+    This test selects word 0 on line 0 *and* word 0 on line 1, then
+    clicks ``line-split-by-selection-button`` and asserts a ``+2`` delta
+    on the line-card count.  Pairs with the iter-20
+    ``test_line_split_by_selection`` (which exercised the degenerate
+    single-line ``+1`` case) to lock in both the per-line and cross-line
+    contracts.
+
+    To find word 0 of line 1 in the *flat* word-checkbox list, we count
+    how many word-checkboxes precede the second ``line-delete-button`` in
+    DOM order — that is line 0's word count, and the global checkbox
+    index for line 1 / word 0.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 2, "Expected at least 2 line cards on page 1"
+
+    # Compute the global flat-list index of line 1's first word checkbox.
+    # Word-checkboxes for line N appear between line-delete-button N and
+    # line-delete-button N+1 in DOM order, so the count of word-checkboxes
+    # that precede line-delete-button[1] equals line 0's word count, which
+    # is the global index of line 1 / word 0.
+    line_1_word_0_index = page.evaluate(
+        """() => {
+            const ldbs = Array.from(
+                document.querySelectorAll('[data-testid="line-delete-button"]')
+            );
+            if (ldbs.length < 2) return -1;
+            const second = ldbs[1];
+            const wcbs = Array.from(
+                document.querySelectorAll('[data-testid="word-checkbox"]')
+            );
+            let count = 0;
+            for (const w of wcbs) {
+                if (w.compareDocumentPosition(second) &
+                    Node.DOCUMENT_POSITION_FOLLOWING) {
+                    count += 1;
+                }
+            }
+            return count;
+        }"""
+    )
+    assert line_1_word_0_index >= 1, (
+        f"Expected line 0 to have at least 1 word; got index {line_1_word_0_index}"
+    )
+
+    _select_word(page, 0)
+    _select_word(page, line_1_word_0_index)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Each of the two affected source lines splits into a (selected,
+    # unselected) pair, so line count increases by 2.
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 2)
+
+
+@pytest.mark.browser
+def test_line_split_by_selection_non_contiguous(browser_app_url: str, browser_page) -> None:
+    """Non-contiguous same-line split-by-selection: line count increases by 1.
+
+    Distinguishing-coverage test from the iter-21 review (item 3 in
+    ``docs/review-notes/2026-05-06-toolbar-split-family.md``). Selects
+    words 0 and 2 of line 0 (skipping word 1), clicks
+    ``line-split-by-selection-button``, and asserts a ``+1`` delta on
+    the line-card count: the source line splits into a "selected" line
+    (``[w_0, w_2]``) and an "unselected" line (``[w_1]``).  This proves
+    the selected partition is *not* required to be contiguous on the
+    source line — both `split_line_after_word` (which requires exactly
+    one selection and produces a contiguous cut) and the unit-test-style
+    contiguous selection on `split_lines_into_selected_and_unselected`
+    fail to exercise this invariant.
+
+    The browser-test-project page 1 fresh OCR materializes 7 lines with
+    multiple words (line 0 has 3 words / global flat-list indices 0, 1,
+    2), so global indices 0 and 2 reliably map to words 0 and 2 of
+    line 0 with word 1 left unselected.
+
+    The empirical line-count delta on the live fixture matches the
+    iter-21 review's predicted ``+1``: word 1 stays in its own
+    "unselected" line and words 0 + 2 form a new "selected" line, net
+    one extra line card.
+    """
+    page = browser_page
+    _setup(page, browser_app_url)
+    _switch_to_all_lines(page)
+
+    lines_before = page.locator(LINE_DELETE_CARD).count()
+    assert lines_before >= 1, "Expected at least 1 line card on page 1"
+
+    # Sanity-check: line 0 must have at least 3 words for words 0 and 2
+    # to both live on line 0 (with word 1 in between, unselected).
+    # Global flat-list indices are guaranteed to map 1:1 to line 0's
+    # word 0 / 1 / 2 because word checkboxes appear in DOM order
+    # grouped by line card.
+    line_0_word_count = page.evaluate(
+        """() => {
+            const ldbs = Array.from(
+                document.querySelectorAll('[data-testid="line-delete-button"]')
+            );
+            if (ldbs.length < 1) return 0;
+            const first_boundary = ldbs.length >= 2 ? ldbs[1] : null;
+            const wcbs = Array.from(
+                document.querySelectorAll('[data-testid="word-checkbox"]')
+            );
+            if (first_boundary === null) return wcbs.length;
+            let count = 0;
+            for (const w of wcbs) {
+                if (w.compareDocumentPosition(first_boundary) &
+                    Node.DOCUMENT_POSITION_FOLLOWING) {
+                    count += 1;
+                }
+            }
+            return count;
+        }"""
+    )
+    assert line_0_word_count >= 3, (
+        f"Expected line 0 to have >=3 words for non-contiguous selection; got {line_0_word_count}"
+    )
+
+    _select_word(page, 0)
+    _select_word(page, 2)
+
+    split_btn = page.locator(LINE_SPLIT_BY_SELECTION)
+    expect(split_btn).to_be_enabled(timeout=10_000)
+    split_btn.click()
+    _wait_for_notification(page)
+
+    # Single source line affected; splits into selected ([w_0, w_2]) and
+    # unselected ([w_1]) partitions — net +1 line.
+    expect(page.locator(LINE_DELETE_CARD)).to_have_count(lines_before + 1)

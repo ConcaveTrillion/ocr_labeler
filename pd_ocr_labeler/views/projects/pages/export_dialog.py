@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from nicegui import ui
 
@@ -21,7 +22,7 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
 
     def __init__(
         self,
-        project_viewmodel: "ProjectStateViewModel",
+        project_viewmodel: ProjectStateViewModel,
         notify: Callable[[str, str], None],
     ):
         self._vm = project_viewmodel
@@ -43,9 +44,9 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
             ui.card().classes("min-w-[28rem] max-w-[90vw]"),
         ):
             ui.label("Export to DocTR Training Format").classes("text-lg font-bold")
-            ui.label(
-                "All exports require every word on the page to be validated."
-            ).classes("text-sm text-gray-500")
+            ui.label("All exports require every word on the page to be validated.").classes(
+                "text-sm text-gray-500"
+            )
 
             ui.separator()
             ui.label("Export Scope").classes("text-sm font-semibold")
@@ -140,9 +141,7 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
 
         styles = self._vm.get_available_styles()
         current_page_styles = self._vm.get_current_page_styles()
-        scope_is_current = (
-            self._scope_radio is not None and self._scope_radio.value == "current"
-        )
+        scope_is_current = self._scope_radio is not None and self._scope_radio.value == "current"
 
         with self._style_checkboxes_container:
             self._all_checkbox = ui.checkbox(
@@ -251,7 +250,7 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
             self._show_results(scope, style, stats)
         except ValueError as exc:
             self._show_error(str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Export failed: %s", exc)
             self._show_error(f"Export failed: {exc}")
 
@@ -271,8 +270,7 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
                 ).classes("text-sm text-green-700")
                 if stats.pages_skipped_not_validated:
                     ui.label(
-                        f"⚠️ {stats.pages_skipped_not_validated} page(s) skipped "
-                        f"(not validated)"
+                        f"⚠️ {stats.pages_skipped_not_validated} page(s) skipped (not validated)"
                     ).classes("text-sm text-orange-600")
                 self._notify(
                     f"Exported {stats.pages_exported} page(s) to '{style}/'",
@@ -286,9 +284,7 @@ class ExportDialog:  # pragma: no cover - UI wrapper file
                 ).classes("text-sm text-orange-600")
                 self._notify("No pages exported", "warning")
             else:
-                ui.label(f"⚠️ {label}: No pages available").classes(
-                    "text-sm text-orange-600"
-                )
+                ui.label(f"⚠️ {label}: No pages available").classes("text-sm text-orange-600")
 
     def _show_error(self, message: str) -> None:
         """Display an error in the dialog results area."""

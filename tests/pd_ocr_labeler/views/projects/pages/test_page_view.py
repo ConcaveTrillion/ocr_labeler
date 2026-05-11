@@ -44,15 +44,9 @@ class TestPageView:
         assert page_view.project_view_model is project_view_model
         assert page_view.page_state_view_model is not None
         assert page_view.page_action_callbacks.save_page == page_view._save_page_async
-        assert (
-            page_view.page_action_callbacks.save_project
-            == page_view._save_project_async
-        )
+        assert page_view.page_action_callbacks.save_project == page_view._save_project_async
         assert page_view.page_action_callbacks.load_page == page_view._load_page_async
-        assert (
-            page_view.page_action_callbacks.refine_bboxes
-            == page_view._refine_bboxes_async
-        )
+        assert page_view.page_action_callbacks.refine_bboxes == page_view._refine_bboxes_async
         assert (
             page_view.page_action_callbacks.expand_refine_bboxes
             == page_view._expand_refine_bboxes_async
@@ -240,8 +234,6 @@ async def test_reload_ocr_edited_async_forces_text_and_image_sync(monkeypatch):
 
     await page_view._reload_ocr_edited_async()
 
-    project_view_model.command_reload_page_with_ocr.assert_called_once_with(
-        use_edited_image=True
-    )
+    project_view_model.command_reload_page_with_ocr.assert_called_once_with(use_edited_image=True)
     page_view._sync_text_tabs.assert_called_once_with(page)
     page_state_view_model.command_refresh_images.assert_called_once()

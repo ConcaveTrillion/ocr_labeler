@@ -65,9 +65,3 @@ Other runtime paths (same `get_*_root()` helpers):
 ## Sibling repos
 
 - `../pd-book-tools/` — shared OCR/layout/image primitives (upstream dependency).
-
-## Spec lifecycle
-
-Design spec files (`docs/specs/<date>-<topic>-design.md`) live in `docs/specs/` while the
-milestone's chore issues are open. When the last chore closes and the implementation ships,
-move the file to `docs/architecture/` and commit. See workspace `docs/conventions.md`.

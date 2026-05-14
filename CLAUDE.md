@@ -9,29 +9,29 @@ page-model primitives.
 
 | target | does |
 | --- | --- |
-| `setup` | dev venv + pre-commit + Playwright |
-| `install` | `uv tool install` (puts `pd-ocr-labeler-ui` on PATH) |
-| `test` | `uv run pytest -n auto` |
-| `test-k K='pat'` | targeted pytest with `-n auto` |
-| `test-single TEST='...'` | single test file/function |
-| `test-browser` | Playwright browser regression tests |
-| `lint` / `lint-fix` | ruff + markdownlint (with --fix) |
-| `format` | ruff format |
-| `build` | build wheel |
-| `run` | start the app |
-| `ci` | format + lint + test |
-| `coverage` | coverage report |
-| `clean-cache` / `clean-logs` | clear page-image cache / runtime logs |
+| `make setup AI=1` | dev venv + pre-commit + Playwright |
+| `make install` | `uv tool install` (puts `pd-ocr-labeler-ui` on PATH) |
+| `make test AI=1` | `uv run pytest -n auto` |
+| `make test-k K='pat' AI=1` | targeted pytest with `-n auto` |
+| `make test-single TEST='...' AI=1` | single test file/function |
+| `make test-browser AI=1` | Playwright browser regression tests |
+| `make lint AI=1` / `make lint-fix AI=1` | ruff + markdownlint (with --fix) |
+| `make format AI=1` | ruff format |
+| `make build AI=1` | build wheel |
+| `make run` | start the app |
+| `make ci AI=1` | format + lint + test |
+| `make coverage AI=1` | coverage report |
+| `make clean-cache` / `make clean-logs` | clear page-image cache / runtime logs |
 
-Always pass `AI=1` to make targets: `make ci AI=1`, `make test AI=1`, etc.
-This captures verbose output to `.ci-ai.log` and prints only `✅ <target>
-passed` on success or filtered failure sections on error. Remove `AI=1` only
-if you need full verbose output for debugging.
+`AI=1` captures verbose output to `.ci-ai.log`; stdout shows `✅` on pass or
+filtered failure sections on error. Remove `AI=1` only if you need full verbose
+output for debugging.
 
 Always include `-n auto` on pytest invocations.
 
 ## Rules
 
+- Always run `make ci AI=1` before committing.
 - Make targets first; fall back to `uv run …` only when no target exists.
 - Never `python -m pytest` / `python3 -m pytest`. Always `uv run pytest -n auto`
   or `make test` (include `-n auto`). Bare `python`/`python3`/`.venv/bin/python`

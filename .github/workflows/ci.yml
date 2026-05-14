@@ -1,41 +1,24 @@
-name: CI
+name: ci
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [main]
   pull_request:
-    branches: [ master, main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   ci:
+    name: ci
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.13"
+      CUDA_VISIBLE_DEVICES: ""
     steps:
-    - uses: actions/checkout@v4
-      with:
-        path: pd_ocr_labeler
-
-    - name: Checkout pd-book-tools dependency
-      uses: actions/checkout@v4
-      with:
-        repository: ConcaveTrillion/pd-book-tools
-        path: pd-book-tools
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
-
-    - name: Install dependencies and setup
-      run: make install
-      working-directory: pd_ocr_labeler
-
-    - name: Run CI pipeline
-      run: make ci
-      working-directory: pd_ocr_labeler
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: distribution-packages
-        path: pd_ocr_labeler/dist/
-        retention-days: 30
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+      - run: make ci

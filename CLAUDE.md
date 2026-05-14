@@ -23,6 +23,11 @@ page-model primitives.
 | `coverage` | coverage report |
 | `clean-cache` / `clean-logs` | clear page-image cache / runtime logs |
 
+Append `AI=1` to any target for agent-friendly output — verbose output is
+captured to `.ci-ai.log`; stdout shows `✅ <target> passed` on success or
+filtered failure sections on error. Works for every target: `make ci AI=1`,
+`make test AI=1`, etc.
+
 Always include `-n auto` on pytest invocations.
 
 ## Rules

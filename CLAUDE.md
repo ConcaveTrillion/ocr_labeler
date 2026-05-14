@@ -23,10 +23,10 @@ page-model primitives.
 | `coverage` | coverage report |
 | `clean-cache` / `clean-logs` | clear page-image cache / runtime logs |
 
-AI output capture is **on by default** — verbose output goes to `.ci-ai.log`;
-stdout shows `✅ <target> passed` on success or filtered failure sections on
-error. Pass `AI=` explicitly only if you need full verbose output for
-debugging: `make ci AI=`.
+Always pass `AI=1` to make targets: `make ci AI=1`, `make test AI=1`, etc.
+This captures verbose output to `.ci-ai.log` and prints only `✅ <target>
+passed` on success or filtered failure sections on error. Remove `AI=1` only
+if you need full verbose output for debugging.
 
 Always include `-n auto` on pytest invocations.
 

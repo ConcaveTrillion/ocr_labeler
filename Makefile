@@ -1,3 +1,17 @@
+AI ?=
+LOG := .ci-ai.log
+
+ifdef AI
+_goals := $(or $(MAKECMDGOALS),ci)
+.PHONY: $(_goals)
+$(_goals):
+	@rm -f $(LOG)
+	@$(MAKE) --no-print-directory AI= $@ > $(LOG) 2>&1 \
+		&& echo "✅ $@ passed (log: $(LOG))" \
+		|| (echo "❌ $@ failed:"; uv run scripts/ai-filter-log.py $(LOG); echo "(full log: $(LOG))"; exit 1)
+
+else
+
 .PHONY: help setup install uninstall reset reset-full remove-venv reinstall \
 	upgrade-deps upgrade-pd-book-tools prefetch-models \
 	test test-verbose test-single test-k test-browser coverage \
@@ -318,3 +332,5 @@ _do-release:
 	git commit -m "chore: release v$$VERSION"; \
 	git tag "v$$VERSION"; \
 	echo "🏷️  Tagged v$$VERSION - push with: git push && git push --tags"
+
+endif

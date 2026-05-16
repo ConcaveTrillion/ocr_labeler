@@ -1,6 +1,10 @@
 OCR Labeler (NiceGUI UI)
 ========================
 
+> **⚠ Superseded.** This NiceGUI labeler is being replaced by
+> [`pd-ocr-labeler-spa`](../pd-ocr-labeler-spa/) (FastAPI + React). New
+> development happens there. This repo is kept for reference only.
+
 Web UI for navigating OCR page images, reviewing overlays, and editing
 OCR output against ground truth text. Built with
 [NiceGUI](https://nicegui.io/) and a lightweight state layer that
